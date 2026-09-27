@@ -487,6 +487,15 @@ function controlsSection() {
       ['4 / R', 'Ultimate (when fully charged)'],
       ['Mouse / tap', 'Every action is clickable: ITEM, PARTY, CATCH, RUN'],
     ]),
+    h3('Shortcuts', 'shortcuts keys cheat coins'),
+    table([
+      ['Esc', 'Player menu (also the ☰ button). Esc also closes any panel or dialogue.'],
+      ['Del', 'Cheat menu — instantly adds 100 / 1,000 / 100,000 / 1,000,000 Wildcoins.'],
+      ['Shift (held)', 'Run while moving in the overworld.'],
+    ]),
+    p('Defeating a wild Mythling drops <b>Wildcoins</b>: the reward grows with its level and EXP '
+      + 'yield and shrinks when you out-level it, so early areas cannot be farmed forever. '
+      + 'Trainer battles pay their own bounty instead.'),
     h3('Menu tabs', 'menu tabs party bag'),
     table([
       ['PARTY', 'Your team: reorder, inspect, evolve. Click a Mythling for full details.'],

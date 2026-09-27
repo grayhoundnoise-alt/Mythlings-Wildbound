@@ -103,6 +103,14 @@ class Game {
       if (this.mode === 'overworld' && !Dialogue.open) this.openMenu();
       return;
     }
+    // DEL anywhere in the game opens the cheat menu (never while typing).
+    if (k === 'delete') {
+      const ae = document.activeElement;
+      if (ae && /input|textarea|select/i.test(ae.tagName || '')) return;
+      e.preventDefault();
+      this.openCheatMenu();
+      return;
+    }
     if (modalOpen()) return;
     if (Dialogue.open) { if (k === ' ' || k === 'enter' || k === 'e') { e.preventDefault(); Dialogue.advance(); } return; }
     if (this.mode === 'overworld') {
@@ -417,6 +425,13 @@ class Game {
 
     if (outcome === 'lost') { await this.handleWhiteout(); return; }
 
+    // Wildcoins dropped by defeated wild Mythlings (trainer bounties are paid below).
+    if (battle.rewards.coins > 0) {
+      PlayerManager.addCoins(battle.rewards.coins);
+      toast(`+${battle.rewards.coins} Wildcoins`, 'ok');
+      this.updateHud();
+    }
+
     if (levelEntries.length) {
       await new Promise((res) => levelUpSummary(levelEntries, res));
     }
@@ -485,6 +500,42 @@ class Game {
     await this.enterWorld(healMap, point);
     toast('Your team was fully healed.', 'ok');
     await this.autosave();
+  }
+
+  // ------------------------------------------------------------ cheat menu
+  /** Press DEL any time during play. Adds Wildcoins instantly. */
+  openCheatMenu() {
+    if (this.mode === 'menu') return;
+    const layer = document.getElementById('modal');
+    if (layer && !layer.classList.contains('hidden')) return;   // never stack on a modal
+    AudioManager.sfx('confirm');
+
+    const bal = el('b', { style: { color: '#ffe08a', fontSize: '1.15rem' }, text: GameState.player.wildcoins.toLocaleString() });
+    const add = (n) => {
+      PlayerManager.addCoins(n);
+      AudioManager.sfx('coin');
+      bal.textContent = GameState.player.wildcoins.toLocaleString();
+      this.updateHud();
+      toast(`+${n.toLocaleString()} Wildcoins`, 'ok');
+    };
+    const coinBtn = (n) => button(`+${n.toLocaleString()}`, {
+      class: 'small primary', sfx: 'coin',
+      title: `Add ${n.toLocaleString()} Wildcoins`,
+      onclick: () => add(n),
+    });
+
+    const body = el('div', {}, [
+      el('p', { class: 'sub', text: 'Cheat menu — press DEL again any time to reopen it. Wildcoins are added instantly.' }),
+      el('div', { class: 'coin-pill', style: { display: 'inline-flex', marginBottom: '14px' } }, [
+        icon('coin', 'gold'), el('span', { text: 'Wildcoins:' }), bal,
+      ]),
+      el('div', { class: 'row', style: { gap: '8px' } }, [100, 1000, 100000, 1000000].map(coinBtn)),
+      el('div', { style: { height: '12px' } }),
+      el('p', { class: 'sub', style: { margin: 0 }, text: 'Spend them in any region shop: balls, potions, revive herbs and EXP food.' }),
+    ]);
+
+    modal({ title: 'CHEAT MENU', body, buttons: [{ label: 'CLOSE', value: true, primary: true }] })
+      .then(() => this.autosave());
   }
 
   // ------------------------------------------------------------ saving

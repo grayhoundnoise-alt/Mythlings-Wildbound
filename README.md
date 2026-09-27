@@ -31,7 +31,7 @@ npm run build:offline   # regenerates MythlingsWildbound-Offline.html
 ```
 
 ```bash
-npm test             # 39 headless rule tests (levels, crits, capture, evolution, save/load, maps…)
+npm test             # 58 headless rule tests (levels, crits, capture, evolution, save/load, maps, rig, VFX…)
 ```
 
 ## Controls
@@ -43,6 +43,7 @@ npm test             # 39 headless rule tests (levels, crits, capture, evolution
 | `Esc` | Player menu (also the ☰ button) |
 | `1` `2` `3` | Normal / Special / Buff skill in battle |
 | `4` or `R` | Ultimate (when 8/8) |
+| `Del` | Cheat menu (adds Wildcoins) — available anywhere in the game |
 | Mouse / touch | Everything — the whole UI is clickable; a touch stick appears on touch devices |
 
 ---
@@ -74,6 +75,61 @@ npm test             # 39 headless rule tests (levels, crits, capture, evolution
   `LAST MYTHLING!` when you are down to the trainer's final Mythling.
 * **Level ups** — a whole party levelling at once collapses into one entry per Mythling
   (`Lv.12 → Lv.15`) in a scrollable summary.
+
+### Wildcoins from winning
+
+Defeating a **wild** Mythling drops Wildcoins: the reward scales with its level and EXP yield
+(`coinReward()` in `src/data/config.js`) and falls off when you are heavily over-levelled, so low
+areas cannot be farmed forever. Trainer battles still pay their own bounty — a defeated trainer
+Mythling never double-pays. Need coins right now? Press **`Del`** anywhere for the cheat menu
+(`+100`, `+1,000`, `+100,000`, `+1,000,000`).
+
+### Creature rig — Mythlings are puppets, not pictures
+
+Every Mythling is still drawn procedurally (this project ships **zero external art**), but the
+renderer is now a lightweight **2D puppet rig** instead of one monolithic drawing pass:
+
+```
+src/render/creatureArt.js    the artwork, authored as 8-12 animatable layers per species
+src/render/creatureRig.js    asset baking/cache, animation controller, compositor
+src/render/creatures.js      drawMythling() — the entry point every game system calls
+```
+
+* **8-12 transforms per creature** — `ROOT · BODY · HEAD · FRONT_LEG_L/R · BACK_LEG_L/R · TAIL`
+  plus `EAR_L/R` (Spriggo, Aquini, Rivruff), `WING_L/R` (Emberu, Leaflet) and Rivruff's water
+  `MANE`. Fur tufts, leaf veins, claws, scales, feathers and markings are **baked into the layer
+  they belong to** — no bone is ever spent on a detail.
+* **Layers are baked once** into cached offscreen canvases (`CreatureAssetLoader`, LRU-capped,
+  keyed by species | stage | mutation | size bucket) and re-composited with ~10 `drawImage` calls
+  per frame instead of hundreds of paths. Layers are authored so they read as **one seamless
+  creature** at rest — the split exists only so parts can move.
+* **`CreatureAnimationController`** drives 12 states — `idle, walk, run, battleIdle, normalAttack,
+  specialAttack, buff, ultimate, hit, faint, capture, evolve` — with simple easing and procedural
+  interpolation, no keyframe tables. Idle breathes and flicks an ear every few seconds instead of
+  shaking; attacks anticipate → strike → recover with squash & stretch; hits recoil without
+  distorting the model; faints lower and fade.
+* **The face stays live** (eyes, brows, mouth are drawn on top of the baked head), so expressions,
+  blinking and eye shape cost nothing to bake and can change at any time.
+* Shiny and Darkness reuse **the same rig** — palette + aura + particles only.
+
+### Skill VFX
+
+`src/render/vfx/SkillVFX.js` + `src/data/skillVfx.js` turn every skill into a data-driven
+sequence: **CAST → ATTACK MOTION → PROJECTILE → IMPACT → AFTERMATH → DAMAGE NUMBER**. Cast
+100-250 ms, travel 150-500 ms, impact 100-300 ms, aftermath 200-700 ms, ultimates 0.8-1.8 s.
+
+* Element identity is baked into the palettes and shapes: **nature** grows leaves, vines, petals,
+  roots and pollen; **water** throws droplets, splash arcs, ribbons, bubbles, foam and wave rings;
+  **fire** is alive with flame tongues, embers, smoke and sparks. No generic colour clouds.
+* Buffs read as a stat rising (`↑P.ATK` + upward energy), defensive buffs get a shield ring, speed
+  buffs get wind trails. Debuffs stay subtle and never cover the target.
+* Ultimates are cinematic — camera emphasis → charge → big sequence → impact → aftermath — and
+  `ocean_guard` is flagged `defensive` so it raises a barrier instead of looking like an attack.
+  A Mythling sitting on 8/8 charge keeps a soft elemental aura.
+* Camera: a nudge for normals, a small shake on special impacts, a controlled one for ultimates.
+  Never constant, never enough to lose track of the battle.
+* Performance: a pooled particle system (hard cap 340), cached gradients, zero per-frame
+  allocation, no DOM elements. A fireball is one glow + one core + one trail + ~20 sparks, not 500.
 
 ### Game Wiki
 
@@ -119,6 +175,7 @@ src/
     config.js              level cap, EXP curve, growth, damage constants
     species.js             the 5 Mythlings + full 4-stage evolution lines (Lv.60/80 marked future)
     skills.js              skills, buffs, debuff riders, Ultimates (base → I → II → III)
+    skillVfx.js            per-skill VFX data (element, category, cast/projectile/impact/aftermath)
     moods.js  rarity.js  mutations.js  elements.js  items.js
     config.js also owns the Counter->dodge curve and the crit caps
     maps.js                3 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
@@ -134,9 +191,14 @@ src/
     SaveManager.js         IndexedDB with localStorage fallback — save/load/hasSave/deleteSlot/listSlots
     SettingsManager.js  AudioManager.js (procedural music + SFX, no copyrighted audio)
   render/
-    creatures.js           original procedural Mythling art (fox/feline/dragon/wolf/avian body plans),
-                           per-species faces with 7 expressions, evolution growth, mutation palettes
+    creatureArt.js         original procedural Mythling art (fox/feline/dragon/wolf/avian body plans),
+                           authored as 8-12 rig layers per species + per-species faces (7 expressions)
+    creatureRig.js         layer baking/LRU cache, animation controller, compositor, drawMythling()
+    creatures.js           the public entry point every game system imports
     worldRenderer.js       terrain, water, props, buildings, weather
+    vfx/
+      particles.js         pooled particle + effect system (rings, slashes, bursts, columns)
+      SkillVFX.js          data-driven skill sequences: cast → projectile → impact → aftermath
   scenes/
     MenuScene.js  OverworldScene.js  BattleScene.js
   ui/

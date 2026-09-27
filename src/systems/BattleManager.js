@@ -11,7 +11,7 @@ import { getItem } from '../data/items.js';
 import { getRarity } from '../data/rarity.js';
 import {
   DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, COUNTER_MAX_PERCENT, expReward, LEVEL_CAP,
-  counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT,
+  counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT, coinReward,
 } from '../data/config.js';
 import { clamp, randInt } from '../core/utils.js';
 
@@ -235,6 +235,7 @@ export class Battle {
   _resolve(attacker, defender, action, events) {
     if (!action) return;
     const atkSide = this.party.includes(attacker) ? 'player' : 'enemy';
+    const defSide = atkSide === 'player' ? 'enemy' : 'player';
 
     if (action.type === 'ultimate') {
       const ult = ultimateMove(attacker);
@@ -245,7 +246,10 @@ export class Battle {
       attacker.ultCharge = 0;
       events.push({ type: 'charge', side: atkSide, value: 0 });
       events.push({ type: 'log', text: `${displayName(attacker)} unleashes ${ult.name}!`, emphasis: true });
-      events.push({ type: 'ultimate-cast', side: atkSide, element: ult.element, name: ult.name });
+      events.push({
+        type: 'ultimate-cast', side: atkSide, element: ult.element, name: ult.name,
+        skillId: ult.id, category: 'ultimate', target: defSide,
+      });
       this._dealDamage(attacker, defender, ult, events, { isUltimate: true, logPrefix: `${ult.name} strikes` });
       if (ult.selfBuff) {
         for (const eff of ult.selfBuff) this._applyBuff(attacker, eff, events, atkSide);
@@ -267,13 +271,19 @@ export class Battle {
 
     if (skill.category === 'buff') {
       events.push({ type: 'log', text: `${displayName(attacker)} used ${skill.name}!` });
-      events.push({ type: 'cast', side: atkSide, kind: 'buff', element: null, name: skill.name });
+      events.push({
+        type: 'cast', side: atkSide, kind: 'buff', element: null, name: skill.name,
+        skillId: skill.id, category: 'buff', target: atkSide,
+      });
       for (const eff of skill.effects) this._applyBuff(attacker, eff, events, atkSide);
       // Buff skills never grant Ultimate Charge.
       return;
     }
 
-    events.push({ type: 'cast', side: atkSide, kind: skill.damageType, element: skill.element, name: skill.name });
+    events.push({
+      type: 'cast', side: atkSide, kind: skill.damageType, element: skill.element, name: skill.name,
+      skillId: skill.id, category: skill.category, target: defSide,
+    });
     // The "used <skill>" line is written by _dealDamage so the damage (or the dodge)
     // can be reported in the very same sentence.
     this._dealDamage(attacker, defender, skill, events, {
@@ -345,6 +355,9 @@ export class Battle {
     events.push({
       type: 'damage', side: defSide, uid: defender.uid, amount: dmg, effectiveness: mult,
       isUltimate: !!isUltimate, crit, critBonus, mythling: this.snapshot(defender),
+      // VFX routing: which skill produced this hit, and where it came from.
+      skillId: move.id, category: isUltimate ? 'ultimate' : move.category,
+      element: atkElement, source: atkSide,
     });
     const eff = effectivenessLabel(mult);
     if (eff) events.push({ type: 'log', text: eff });
@@ -441,6 +454,14 @@ export class Battle {
 
   _awardExp(defeated, events) {
     const yieldV = speciesOf(defeated).expYield;
+
+    // Defeating a wild Mythling pays Wildcoins (trainers pay their own bounty).
+    if (this.type === BattleType.WILD) {
+      const coins = coinReward({ enemyLevel: defeated.level, enemyYield: yieldV, winnerLevel: this.player?.level });
+      this.rewards.coins += coins;
+      events.push({ type: 'coins', amount: coins });
+    }
+
     for (const m of this.party) {
       if (isFainted(m)) continue;
       const participated = this.participants.has(m.uid);

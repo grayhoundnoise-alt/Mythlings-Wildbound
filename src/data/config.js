@@ -67,6 +67,18 @@ export function expReward({ enemyLevel, enemyYield, winnerLevel, isTrainer }) {
 
 export const DEFEAT_COIN_PENALTY = 0.08; // lose 8% of Wildcoins when whited out
 
+/**
+ * Wildcoins dropped by a DEFEATED WILD Mythling (trainers pay their own reward).
+ * Scales with the enemy's level and how much EXP it was worth, and falls off when
+ * you are heavily over-levelled so low areas cannot be farmed forever.
+ */
+export function coinReward({ enemyLevel, enemyYield, winnerLevel }) {
+  const diff = (winnerLevel ?? enemyLevel) - enemyLevel;
+  let scale = 1;
+  if (diff > 0) scale = Math.max(0.25, 1 - diff * 0.06);
+  return Math.max(1, Math.floor((2.2 * enemyLevel + enemyYield * 0.55) * scale));
+}
+
 export const DEFAULT_SETTINGS = {
   masterVolume: 0.7,
   musicVolume: 0.5,

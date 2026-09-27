@@ -411,7 +411,7 @@ export function evolutionCinematic(mythling, result, onDone) {
       stage: showNew ? mythling.stage : Math.max(0, mythling.stage - 1),
       mutation: mythling.mutation,
       x: 0, y: 0, size: 190, t, facing: 1,
-      pose: { alpha: 1 },
+      pose: { alpha: 1, anim: { name: 'evolve', phase: p } },
     });
     ctx.restore();
 

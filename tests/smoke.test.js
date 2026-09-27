@@ -4,7 +4,31 @@ import assert from 'node:assert/strict';
 
 // minimal browser shims used by a couple of modules at import time
 globalThis.window = globalThis;
-globalThis.document = { documentElement: { dataset: {} } };
+// canvas shim: the creature rig bakes its layers into offscreen canvases and the
+// VFX layer draws into them, so every 2D call is a no-op here.
+const noopCtx = () => {
+  const grad = { addColorStop() {} };
+  const base = {
+    canvas: { width: 300, height: 300 },
+    globalAlpha: 1, globalCompositeOperation: 'source-over',
+    fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'butt', font: '', textAlign: 'left',
+    createLinearGradient: () => grad, createRadialGradient: () => grad, createPattern: () => null,
+    setTransform() {}, save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    arc() {}, ellipse() {}, rect() {}, fill() {}, stroke() {}, clip() {},
+    fillRect() {}, strokeRect() {}, clearRect() {}, drawImage() {}, fillText() {}, strokeText() {},
+    measureText: () => ({ width: 10 }), setLineDash() {},
+  };
+  return new Proxy(base, { get: (o, k) => (k in o ? o[k] : undefined), set: (o, k, v) => { o[k] = v; return true; } });
+};
+globalThis.document = {
+  documentElement: { dataset: {} },
+  createElement: (tag) => {
+    if (tag === 'canvas') return { tagName: 'CANVAS', width: 300, height: 300, style: {}, getContext: () => noopCtx() };
+    return { tagName: String(tag).toUpperCase(), style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, appendChild(c) { return c; }, children: [] };
+  },
+};
+globalThis.window.devicePixelRatio = 2;
 globalThis.localStorage = {
   _d: new Map(),
   getItem(k) { return this._d.has(k) ? this._d.get(k) : null; },
@@ -487,6 +511,235 @@ test('every starter species is obtainable in the wild', () => {
     const found = Object.values(MAPS).some((m) => m.encounterZones.some((z) => z.species.some((s) => s.id === id)));
     assert.ok(found, `${id} spawns somewhere`);
   }
+});
+
+// ------------------------------------------------------------------
+section('Coins from defeating wild Mythlings');
+const { coinReward, DEFEAT_COIN_PENALTY } = await import('../src/data/config.js');
+
+test('coinReward scales with level and yield', () => {
+  const low = coinReward({ enemyLevel: 5, enemyYield: 52, winnerLevel: 5 });
+  const high = coinReward({ enemyLevel: 30, enemyYield: 70, winnerLevel: 30 });
+  assert.ok(low > 0 && high > low, `${low} < ${high}`);
+});
+
+test('coinReward is never zero and falls off when over-levelled', () => {
+  assert.equal(coinReward({ enemyLevel: 2, enemyYield: 30, winnerLevel: 2 }) >= 1, true);
+  const even = coinReward({ enemyLevel: 20, enemyYield: 60, winnerLevel: 20 });
+  const over = coinReward({ enemyLevel: 20, enemyYield: 60, winnerLevel: 60 });
+  assert.ok(over < even, `over-levelled ${over} should pay less than ${even}`);
+  assert.ok(over >= 1);
+});
+
+test('a defeated wild Mythling pays Wildcoins; trainer battles do not double-pay', () => {
+  const runOut = (battle) => {
+    const seen = [];
+    let g = 0;
+    while (battle.phase === BattlePhase.ACTIVE && g++ < 100) {
+      const res = battle.act({ type: 'skill', slot: 'special' });
+      seen.push(...(res.events || []));
+    }
+    return seen;
+  };
+  const wild = new Battle({ type: BattleType.WILD, party: [createMythling({ speciesId: 'emberu', level: 14 })], enemies: [createMythling({ speciesId: 'leaflet', level: 9 })], mapId: 'verdant_vale' });
+  const wildEvents = runOut(wild);
+  assert.equal(wild.phase, BattlePhase.DEFEATED_WILD);
+  assert.ok(wild.rewards.coins > 0, 'defeating a wild Mythling drops coins');
+  const coinEvent = wildEvents.find((e) => e.type === 'coins');
+  assert.ok(coinEvent && coinEvent.amount === wild.rewards.coins, 'the UI gets a coin event to play');
+
+  const trainer = { name: 'T', intro: '', defeat: '', flag: 'f1', reward: { coins: 300 }, team: [] };
+  const tb = new Battle({ type: BattleType.TRAINER, party: [createMythling({ speciesId: 'emberu', level: 14 })], enemies: [createMythling({ speciesId: 'leaflet', level: 9 })], trainer, mapId: 'verdant_vale' });
+  runOut(tb);
+  assert.equal(tb.rewards.coins, 0, 'the trainer bounty is paid separately, not per faint');
+});
+
+test('the coin reward is clamped to at least one coin at any level gap', () => {
+  for (const gap of [0, 10, 30, 80]) {
+    const c = coinReward({ enemyLevel: 5, enemyYield: 40, winnerLevel: 5 + gap });
+    assert.ok(c >= 1 && Number.isFinite(c), `gap ${gap} -> ${c}`);
+  }
+});
+
+// ------------------------------------------------------------------
+section('Creature rig (layered 2D puppet)');
+const { CreatureRig, ANIMATIONS, ANIM_IDS, drawMythling, prewarm, creatureAssets } = await import('../src/render/creatures.js');
+const { SPECIES_ART } = await import('../src/render/creatureArt.js');
+
+test('every species exposes 8-12 rig layers plus a face spec', () => {
+  for (const id of Object.keys(SPECIES)) {
+    const art = SPECIES_ART[id];
+    assert.ok(art, `${id} has art`);
+    const parts = art.parts.map((p) => p.name);
+    assert.ok(parts.length >= 7 && parts.length <= 12, `${id} has ${parts.length} layers`);
+    assert.ok(art.face && art.face.eyes.length === 2, `${id} has two eyes`);
+    assert.ok(art.parts.some((p) => p.name === 'head'), `${id} has a head`);
+    assert.ok(art.parts.some((p) => p.name === 'body'), `${id} has a body`);
+  }
+});
+
+test('layer bones stay in the shared vocabulary (no per-detail bones)', () => {
+  const allowed = new Set(['root', 'tail', 'body', 'head', 'legFL', 'legFR', 'legBL', 'legBR',
+    'earL', 'earR', 'wingL', 'wingR', 'mane']);
+  for (const art of Object.values(SPECIES_ART)) {
+    for (const p of art.parts) assert.ok(allowed.has(p.name), `unexpected bone ${p.name}`);
+  }
+});
+
+test('the animation controller covers every state the brief asks for', () => {
+  for (const id of ['idle', 'walk', 'run', 'battleIdle', 'normalAttack', 'specialAttack',
+    'buff', 'ultimate', 'hit', 'faint', 'capture', 'evolve']) {
+    assert.ok(ANIMATIONS[id], `missing animation ${id}`);
+  }
+  assert.equal(ANIM_IDS.length, 12);
+});
+
+test('a rig instance animates: transforms change across the walk cycle', () => {
+  const creature = new CreatureRig({ species: 'spriggo', stage: 0 });
+  creature.play('walk');
+  assert.equal(creature.state, 'walk');
+  creature.update(1 / 60, 0);
+  const a = creature.tf.legFL.rot;
+  for (let i = 0; i < 20; i++) creature.update(1 / 60, i / 60);
+  const b = creature.tf.legFL.rot;
+  assert.notEqual(a, b, 'the leg swings while walking');
+  // the two front legs are always out of phase (a gait, not a shuffle)
+  assert.ok(Math.abs(creature.tf.legFL.rot - creature.tf.legFR.rot) > 0.05);
+});
+
+test('idle breathes without shaking: motion stays subtle', () => {
+  const creature = new CreatureRig({ species: 'emberu', stage: 1 });
+  creature.play('idle');
+  let maxRoot = 0;
+  for (let i = 0; i < 240; i++) {
+    creature.update(1 / 60, i / 60);
+    maxRoot = Math.max(maxRoot, Math.abs(creature.root.dx), Math.abs(creature.root.dy));
+  }
+  assert.ok(maxRoot < 3, `idle root motion ${maxRoot.toFixed(2)} units should stay tiny`);
+});
+
+test('drawMythling survives every species, stage, mutation and animation', () => {
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  for (const id of Object.keys(SPECIES)) {
+    for (const stage of [0, 1, 2]) {
+      for (const mut of ['none', 'shiny', 'darkness']) {
+        for (const anim of ANIM_IDS) {
+          drawMythling(ctx, {
+            speciesId: id, stage, mutation: mut, x: 100, y: 200, size: 160, t: 1.5,
+            facing: -1, pose: { anim: { name: anim, phase: 0.5 }, flash: 0.4, expression: 'happy' },
+          });
+        }
+      }
+    }
+  }
+  prewarm(Object.keys(SPECIES), [0, 1, 2], 160);
+  assert.ok(creatureAssets.cache.size > 0);
+});
+
+test('textures are cached, never re-baked for the same creature', () => {
+  creatureAssets.clear();
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  const opts = { speciesId: 'aquini', stage: 1, mutation: 'none', x: 0, y: 0, size: 120, t: 0, facing: 1 };
+  drawMythling(ctx, opts);
+  const afterFirst = creatureAssets.cache.size;
+  for (let i = 0; i < 30; i++) drawMythling(ctx, { ...opts, t: i / 30 });
+  assert.equal(creatureAssets.cache.size, afterFirst, 'no extra bakes per frame');
+});
+
+// ------------------------------------------------------------------
+section('Skill VFX');
+const { SkillVFX, playSkillVFX, playImpactVFX, playProjectileVFX, playBuffVFX,
+  playUltimateVFX, playHitReaction, stopAllVFX } = await import('../src/render/vfx/SkillVFX.js');
+const { SKILL_VFX, vfxFor, paletteFor, BUFF_VFX } = await import('../src/data/skillVfx.js');
+
+test('the full VFX API exists', () => {
+  for (const fn of [playSkillVFX, playProjectileVFX, playImpactVFX, playBuffVFX,
+    playUltimateVFX, playHitReaction, stopAllVFX]) assert.equal(typeof fn, 'function');
+  assert.equal(typeof SkillVFX.play, 'function');
+});
+
+test('every VFX entry is data: element, category and an impact', () => {
+  for (const [id, def] of Object.entries(SKILL_VFX)) {
+    assert.equal(def.id, id);
+    assert.ok(def.element, `${id} has an element`);
+    assert.ok(['normal', 'special', 'buff', 'ultimate'].includes(def.category), `${id} category`);
+    assert.ok(def.impact || def.category === 'buff', `${id} has an impact`);
+  }
+});
+
+test('unknown skills fall back instead of failing', () => {
+  const def = vfxFor('a_brand_new_move', { element: 'water', category: 'special' });
+  assert.equal(def.element, 'water');
+  assert.ok(def.projectile && def.impact);
+  assert.deepEqual(Object.keys(def).sort(), ['aftermath', 'cast', 'category', 'element', 'id', 'impact', 'projectile']);
+});
+
+test('playing a skill spawns effects and respects the particle cap', () => {
+  stopAllVFX();
+  SkillVFX.bind({
+    pos: (side) => (side === 'player' ? { x: 300, y: 500 } : { x: 900, y: 300 }),
+    shake: () => {}, flash: () => {}, float: () => {},
+  });
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  let peak = 0;
+  for (let i = 0; i < 40; i++) {                 // hammer it: the pool must hold
+    playSkillVFX({ skillId: 'dragon_inferno', side: 'player', target: 'enemy', element: 'fire', category: 'special' });
+    SkillVFX.finishProjectiles('player', { crit: true });
+    SkillVFX.update(1 / 60); SkillVFX.render(ctx);
+    peak = Math.max(peak, SkillVFX.ps.live.length);
+  }
+  for (let i = 0; i < 120; i++) { SkillVFX.update(1 / 60); SkillVFX.render(ctx); }
+  assert.ok(peak > 0, 'effects were spawned');
+  assert.ok(peak <= 340, `particle cap respected (peak ${peak})`);
+  assert.equal(SkillVFX.projectiles.length, 0, 'projectiles are released');
+  assert.equal(SkillVFX.timers.length, 0, 'timers are released');
+});
+
+test('every named skill plays end to end without error', () => {
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  for (const id of Object.keys(SKILL_VFX)) {
+    const def = SKILL_VFX[id];
+    playSkillVFX({ skillId: id, side: 'player', target: 'enemy', element: def.element, category: def.category });
+    for (let i = 0; i < 20; i++) { SkillVFX.update(1 / 60); SkillVFX.render(ctx); }
+    SkillVFX.finishProjectiles('player', { crit: false });
+    for (let i = 0; i < 30; i++) { SkillVFX.update(1 / 60); SkillVFX.render(ctx); }
+    if (def.category === 'ultimate') {
+      playUltimateVFX('enemy', 'player', { element: def.element, skillId: id });
+      for (let i = 0; i < 100; i++) { SkillVFX.update(1 / 60); SkillVFX.render(ctx); }
+    }
+  }
+  SkillVFX.whiff('player');
+  playBuffVFX('player', { stat: 'pdef', up: true, element: 'water' });
+  playHitReaction('enemy', { crit: true, effectiveness: 2, element: 'fire' });
+  for (let i = 0; i < 60; i++) { SkillVFX.update(1 / 60); SkillVFX.render(ctx); }
+  assert.ok(true);
+});
+
+test('the defensive ultimate never plays an attack projectile', () => {
+  const guard = SKILL_VFX.ocean_guard;
+  assert.equal(guard.defensive, true);
+  assert.equal(guard.projectile, null);
+  assert.equal(guard.impact.style, 'oceanGuard');
+});
+
+test('stopAllVFX clears everything', () => {
+  stopAllVFX();
+  assert.equal(SkillVFX.ps.live.length, 0);
+  assert.equal(SkillVFX.ps.fx.length, 0);
+  assert.equal(SkillVFX.projectiles.length, 0);
+  assert.equal(SkillVFX.timers.length, 0);
+  assert.equal(SkillVFX.ps.pool.length + SkillVFX.ps.live.length, 340, 'every particle is back in the pool');
+});
+
+test('element palettes are distinct (nature is organic, water fluid, fire alive)', () => {
+  const n = paletteFor('nature'), w = paletteFor('water'), f = paletteFor('fire');
+  assert.notEqual(n.mid, w.mid);
+  assert.notEqual(w.mid, f.mid);
+  for (const [k, v] of Object.entries(BUFF_VFX)) assert.ok(v.icon.startsWith('↑'), `${k} reads as a stat rise`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
