@@ -12,6 +12,13 @@ export const ITEMS = {
   revive_herb:    { id: 'revive_herb',    name: 'Revive Herb',    category: 'healing', price: 600,  revive: 0.5, desc: 'Revives a fainted Mythling with half HP.' },
   skill_tonic:    { id: 'skill_tonic',    name: 'Skill Tonic',    category: 'healing', price: 320,  restoreUses: 8, desc: 'Restores 8 uses to every limited skill.' },
 
+  // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
+  sweet_berry:  { id: 'sweet_berry',  name: 'Sweet Berry',  category: 'food', price: 90,   exp: 40,   desc: 'A sugary forest berry. Feeding it grants 40 EXP.' },
+  honey_nut:    { id: 'honey_nut',    name: 'Honey Nut',    category: 'food', price: 240,  exp: 130,  desc: 'A sticky, energy-packed nut. Grants 130 EXP.' },
+  river_jerky:  { id: 'river_jerky',  name: 'River Jerky',  category: 'food', price: 620,  exp: 400,  desc: 'Salt-cured coast fish. Grants 400 EXP.' },
+  ember_roast:  { id: 'ember_roast',  name: 'Ember Roast',  category: 'food', price: 1400, exp: 1000, desc: 'Slow-roasted over volcanic vents. Grants 1000 EXP.' },
+  mythic_feast: { id: 'mythic_feast', name: 'Mythic Feast', category: 'food', price: 3200, exp: 2600, desc: 'A legendary banquet for one. Grants 2600 EXP.' },
+
   vale_charm:  { id: 'vale_charm',  name: 'Vale Charm',  category: 'key', desc: 'Proof that the Verdant Guardian was bested. Opens the Verdant Gate.' },
   coast_pass:  { id: 'coast_pass',  name: 'Coast Pass',  category: 'key', desc: 'Granted at Tidecrest Port. Opens the Emberwild Gate.' },
   ember_sigil: { id: 'ember_sigil', name: 'Ember Sigil', category: 'key', desc: 'Awarded for completing the current Emberwild challenge.' },
@@ -20,8 +27,11 @@ export const ITEMS = {
 export const ITEM_CATEGORIES = [
   { id: 'balls',   name: 'Balls' },
   { id: 'healing', name: 'Healing' },
+  { id: 'food',    name: 'Food' },
   { id: 'key',     name: 'Key Items' },
 ];
+
+export const FOOD_IDS = Object.values(ITEMS).filter((i) => i.category === 'food').map((i) => i.id);
 
 export const BALL_IDS = Object.values(ITEMS).filter((i) => i.category === 'balls').map((i) => i.id);
 
@@ -33,6 +43,7 @@ export const STARTING_INVENTORY = {
   basic_ball: 8,
   normal_ball: 2,
   potion: 4,
+  sweet_berry: 3,
 };
 
 export const STARTING_WILDCOINS = 900;

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mythlings: Wildbound — Creature Design Bible</title>
+<style>
+  :root { --gold:#f2c761; --muted:#9fb3c9; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px clamp(14px,4vw,60px) 80px;
+    background: radial-gradient(ellipse at 50% -10%, #1d3b5c, #0b1522 60%);
+    color: #eaf3ff; font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+  h1 { font-size: clamp(1.6rem,4vw,2.6rem); letter-spacing:.14em; color: var(--gold); margin:0; text-transform: uppercase; }
+  .lede { color: var(--muted); max-width: 70ch; line-height:1.6; }
+  h2 { margin: 46px 0 6px; font-size: 1.5rem; letter-spacing:.1em; color: var(--gold); text-transform: uppercase; }
+  h3 { margin: 22px 0 8px; font-size: .95rem; letter-spacing:.16em; color:#bcd3ea; text-transform: uppercase; }
+  .sheet { border:1.5px solid rgba(255,255,255,.12); border-radius:18px; padding:20px 22px 26px;
+           background: linear-gradient(180deg, rgba(28,48,74,.55), rgba(10,18,30,.6)); margin-top:14px; }
+  .row { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+  .cell { text-align:center; }
+  .cell canvas { display:block; border-radius:12px; background: rgba(8,16,28,.55); border:1px solid rgba(255,255,255,.07); }
+  .cell span { display:block; font-size:.72rem; color:var(--muted); letter-spacing:.08em; margin-top:5px; text-transform:uppercase; }
+  .facts { display:grid; grid-template-columns: repeat(auto-fit,minmax(215px,1fr)); gap:10px 22px; margin:10px 0 4px; }
+  .facts div { font-size:.88rem; color:#cfe0f2; }
+  .facts b { color:var(--gold); }
+  .sig { border-left:3px solid var(--gold); padding:6px 0 6px 12px; margin:12px 0; color:#dce9f7; font-size:.92rem; line-height:1.55; }
+  .sig em { color: var(--gold); font-style: normal; font-weight: 700; }
+  .locked { opacity:.5; }
+  footer { margin-top:56px; color:var(--muted); font-size:.85rem; border-top:1px solid rgba(255,255,255,.1); padding-top:16px; }
+  a { color: var(--gold); }
+</style>
+</head>
+<body>
+<h1>Mythlings: Wildbound</h1>
+<p class="lede">
+  <b>Creature Design Bible.</b> Every frame on this page is rendered live by
+  <code>src/render/creatures.js</code> — the exact code the game runs. Nothing here is
+  concept art that the game cannot reproduce: what you see is what you catch.
+</p>
+<p class="lede">
+  Design rules enforced by the renderer: a readable silhouette built from 3&ndash;5 signature
+  forms, layered anatomy (haunch, chest, neck, muzzle, articulated paws), a species-specific
+  eye shape with six playable expressions, element expressed through anatomy rather than hue,
+  and evolution that grows the body and the signature feature instead of scaling the sprite.
+</p>
+
+<div id="out"></div>
+
+<footer>
+  All creatures, names, markings and colour scripts are original work for Mythlings: Wildbound.
+  Lv.60 / Lv.80 stages are shown as locked because they are defined in data but deliberately
+  unreachable in this build.
+</footer>
+
+<script type="module">
+import { SPECIES, SPECIES_IDS } from './src/data/species.js';
+import { MOODS } from './src/data/moods.js';
+import { ELEMENTS } from './src/data/elements.js';
+import { drawMythling, EXPRESSION_IDS } from './src/render/creatures.js';
+import { drawTrainerAvatar } from './src/render/worldRenderer.js';
+
+const out = document.getElementById('out');
+const anims = [];
+
+function cell(label, w, h, paint) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cell';
+  const cv = document.createElement('canvas');
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = w * dpr; cv.height = h * dpr;
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  anims.push((t) => { ctx.clearRect(0, 0, w, h); paint(ctx, t); });
+  wrap.append(cv, Object.assign(document.createElement('span'), { textContent: label }));
+  return wrap;
+}
+
+function row(parent, cells) {
+  const r = document.createElement('div');
+  r.className = 'row';
+  cells.forEach((c) => c && r.appendChild(c));
+  parent.appendChild(r);
+  return r;
+}
+
+function head(parent, tag, text, cls) {
+  const h = document.createElement(tag);
+  h.textContent = text;
+  if (cls) h.className = cls;
+  parent.appendChild(h);
+  return h;
+}
+
+// ------------------------------------------------------------------ roster
+head(out, 'h2', 'The Roster');
+const roster = document.createElement('div');
+roster.className = 'sheet';
+out.appendChild(roster);
+row(roster, SPECIES_IDS.map((id) => cell(`${SPECIES[id].displayName} · ${ELEMENTS[SPECIES[id].element].name}`, 200, 200, (ctx, t) => {
+  ctx.save(); ctx.translate(100, 176);
+  drawMythling(ctx, { speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0, size: 130, t, facing: 1 });
+  ctx.restore();
+})));
+
+// ------------------------------------------------------------------ per species
+// where each species' head sits in the renderer's local space (feet at 0,0)
+const HEAD_ANCHOR = {
+  spriggo: [23, -52], aquini: [22, -50], emberu: [24, -52], rivruff: [21, -52], leaflet: [12, -50],
+};
+
+const SIGNATURES = {
+  spriggo: ['Broad leaf-blade tail on a woody stalk', 'Vine bracers coiled around both forelegs', 'Leaf sprouts growing from the shoulders', 'Tall notched ears with an inner leaf', 'Seed pendant at the chest'],
+  aquini:  ['Translucent fin-ears with visible struts', 'S-curved tail ending in a two-lobed fluke', 'Gill flashes across the cheeks', 'Dorsal fin along the spine', 'Splash ring under the forepaws'],
+  emberu:  ['Thick horns swept back over the skull, ember-lit at the tips', 'Forehead ember gem', 'Chest ember gem set in plated belly scales', 'Flame tail that grows when excited', 'Membraned wings (full span from Flamero on)'],
+  rivruff: ['Living water mane pouring over the shoulders', 'Slab paws with four toes', 'Curling wave tail capped with foam', 'Layered storm-cloud fur along the back', 'Heavy droopy ears'],
+  leaflet: ['Three-leaf crest', 'Leaf-feather wing primaries', 'Curled stem tail with a triple leaf fan', 'Twig legs with three toes', 'Feather shingles layered down the back'],
+};
+
+for (const id of SPECIES_IDS) {
+  const sp = SPECIES[id];
+  head(out, 'h2', `${sp.displayName} — ${sp.breed} · ${ELEMENTS[sp.element].name}`);
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet';
+  out.appendChild(sheet);
+
+  const facts = document.createElement('div');
+  facts.className = 'facts';
+  facts.innerHTML = `
+    <div><b>Element</b> ${ELEMENTS[sp.element].name}</div>
+    <div><b>Breed</b> ${sp.breed}</div>
+    <div><b>Role</b> ${sp.role}</div>
+    <div><b>Default mood</b> ${MOODS[sp.defaultMood].name}</div>
+    <div><b>Ultimate</b> ${sp.ultimate.replace(/_/g, ' ')}</div>
+    <div><b>Found in</b> ${sp.spawnMaps.join(', ').replace(/_/g, ' ')}</div>`;
+  sheet.appendChild(facts);
+
+  const sig = document.createElement('div');
+  sig.className = 'sig';
+  sig.innerHTML = `<em>Signature forms</em><br>${SIGNATURES[id].join(' · ')}<br><em>Personality</em> ${sp.description}`;
+  sheet.appendChild(sig);
+
+  // turnaround — exactly the rotation the starter showcase uses in game
+  head(sheet, 'h3', 'Turnaround');
+  const views = [['Side', 1, 1], ['Three-quarter', 1, 0.62], ['Narrow', 1, 0.3], ['Reverse three-quarter', -1, 0.62], ['Opposite side', -1, 1]];
+  row(sheet, views.map(([label, facing, squeeze]) => cell(label, 150, 170, (ctx, t) => {
+    ctx.save(); ctx.translate(75, 152); ctx.scale(squeeze, 1);
+    drawMythling(ctx, { speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0, size: 112, t, facing });
+    ctx.restore();
+  })));
+
+  head(sheet, 'h3', 'Expressions');
+  const anchor = HEAD_ANCHOR[id];
+  row(sheet, EXPRESSION_IDS.map((e) => cell(e, 124, 140, (ctx, t) => {
+    const z = 2.1, s = 1.0;             // zoom, and drawMythling's own unit scale at size 100
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, 124, 140); ctx.clip();
+    // frame the head: put the muzzle-centre anchor in the middle of the cell
+    ctx.translate(62 - z * anchor[0] * s, 76 - z * anchor[1] * s);
+    ctx.scale(z, z);
+    drawMythling(ctx, { speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0, size: 100, t, facing: 1, shadow: false, pose: { expression: e, bob: 0 } });
+    ctx.restore();
+  })));
+
+  head(sheet, 'h3', 'Evolution line');
+  row(sheet, sp.evolutions.map((ev, stage) => {
+    const c = cell(`${ev.name} · Lv.${ev.level}${ev.future ? ' (locked)' : ''}`, 170, 190, (ctx, t) => {
+      ctx.save(); ctx.translate(85, 172);
+      drawMythling(ctx, { speciesId: id, stage: Math.min(stage, 1), mutation: 'none', x: 0, y: 0, size: 104, t, facing: 1 });
+      ctx.restore();
+      if (ev.future) {
+        ctx.fillStyle = 'rgba(8,14,24,.72)';
+        ctx.fillRect(0, 0, 170, 190);
+        ctx.fillStyle = '#9fb3c9';
+        ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('FUTURE CONTENT', 85, 96);
+        ctx.fillText('(not in this build)', 85, 114);
+      }
+    });
+    if (ev.future) c.classList.add('locked');
+    return c;
+  }));
+
+  head(sheet, 'h3', 'Mutations (cosmetic only) & scale');
+  row(sheet, [
+    ...['none', 'shiny', 'darkness'].map((mut) => cell(mut === 'none' ? 'Normal' : mut, 150, 170, (ctx, t) => {
+      ctx.save(); ctx.translate(75, 152);
+      drawMythling(ctx, { speciesId: id, stage: 0, mutation: mut, x: 0, y: 0, size: 108, t, facing: 1 });
+      ctx.restore();
+    })),
+    cell('Scale vs trainer', 240, 170, (ctx, t) => {
+      ctx.strokeStyle = 'rgba(255,255,255,.14)';
+      ctx.beginPath(); ctx.moveTo(10, 152.5); ctx.lineTo(230, 152.5); ctx.stroke();
+      drawTrainerAvatar(ctx, 60, 152, '#6d8fb8', t, { phase: 0 });
+      ctx.save(); ctx.translate(150, 152);
+      drawMythling(ctx, { speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0, size: 96, t, facing: 1 });
+      ctx.restore();
+      ctx.save(); ctx.translate(205, 152);
+      drawMythling(ctx, { speciesId: id, stage: 1, mutation: 'none', x: 0, y: 0, size: 96, t, facing: 1 });
+      ctx.restore();
+    }),
+  ]);
+}
+
+let t0 = performance.now();
+const loop = (now) => {
+  const t = (now - t0) / 1000;
+  for (const a of anims) a(t);
+  requestAnimationFrame(loop);
+};
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

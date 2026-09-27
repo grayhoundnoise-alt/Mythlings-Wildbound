@@ -19,22 +19,26 @@ import { ELEMENTS } from '../data/elements.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
 import { drawMythling } from '../render/creatures.js';
 import {
-  el, button, bar, hpClass, elementChip, rarityChip, mutationChip, toast, modal, confirmDialog, Screens,
+  el, button, bar, hpClass, elementChip, rarityChip, mutationChip, toast, modal, confirmDialog,
+  Screens, panelHeader, closeButton,
 } from './ui.js';
+import { icon, iconSvg, iconLabel } from './icons.js';
+import { buffSummary } from '../data/skills.js';
+import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { formatTime } from '../core/utils.js';
 
 const TABS = [
-  ['party', 'PARTY'],
-  ['mythlings', 'MYTHLINGS'],
-  ['skills', 'SKILLS'],
-  ['bag', 'BAG'],
-  ['map', 'MAP'],
-  ['collection', 'COLLECTION'],
-  ['stats', 'STATS'],
-  ['save', 'SAVE'],
-  ['settings', 'SETTINGS'],
+  ['party', 'PARTY', 'dna'],
+  ['mythlings', 'MYTHLINGS', 'box'],
+  ['skills', 'SKILLS', 'strike'],
+  ['bag', 'BAG', 'bag'],
+  ['map', 'MAP', 'map'],
+  ['collection', 'COLLECTION', 'book'],
+  ['stats', 'STATS', 'user'],
+  ['save', 'SAVE', 'save'],
+  ['settings', 'SETTINGS', 'settings'],
 ];
 
 export function mythCanvas(m, size = 66, animated = false) {
@@ -70,7 +74,7 @@ export class PlayerMenu {
   open(tab = 'party') {
     this.tab = tab;
     this.node = el('div', { class: 'menu-screen panel screen-inner' });
-    Screens.push(this.node, 'player-menu');
+    Screens.push(this.node, 'player-menu', () => this.close());
     this.render();
   }
 
@@ -82,23 +86,38 @@ export class PlayerMenu {
   render() {
     this.node.innerHTML = '';
     const tabs = el('div', { class: 'menu-tabs' });
-    for (const [id, label] of TABS) {
-      const b = el('button', { class: `menu-tab ${this.tab === id ? 'active' : ''}`, text: label });
+    for (const [id, label, ico] of TABS) {
+      const b = el('button', { class: `menu-tab ${this.tab === id ? 'active' : ''}` }, [icon(ico), el('span', { text: label })]);
       b.addEventListener('click', () => { AudioManager.sfx('click'); this.tab = id; this.render(); });
       tabs.appendChild(b);
     }
     tabs.appendChild(el('div', { class: 'spacer', style: { flex: '1' } }));
-    tabs.appendChild(button('▶ RETURN TO GAME', { class: 'primary small', onclick: () => this.close() }));
+    const back = button('', { class: 'primary small', onclick: () => this.close() });
+    back.appendChild(iconLabel('chevronRight', 'RETURN TO GAME'));
+    tabs.appendChild(back);
 
     const body = el('div', { class: 'menu-body' });
     this.body = body;
-    this.node.append(tabs, body);
+    // Every panel in the game carries the same header: title left, X right.
+    this.head = el('div', { class: 'panel-head sticky' }, [
+      el('div', { class: 'panel-head-text' }, [el('h2', { class: 'panel-title', text: 'Party' })]),
+      closeButton(() => this.close(), 'Close menu (ESC)'),
+    ]);
+    const col = el('div', { class: 'menu-col' }, [this.head, body]);
+    this.node.append(tabs, col);
     this.renderTab();
+  }
+
+  /** Sets the shared header title and returns the body root. */
+  setTitle(text) {
+    const h = this.head?.querySelector('.panel-title');
+    if (h) h.textContent = text;
   }
 
   renderTab() {
     const b = this.body;
     b.innerHTML = '';
+    this.setTitle((TABS.find((t) => t[0] === this.tab) || [, 'Menu'])[1]);
     switch (this.tab) {
       case 'party': this.renderParty(b); break;
       case 'mythlings': this.renderStorage(b); break;
@@ -115,15 +134,15 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- PARTY
   renderParty(root) {
-    root.appendChild(el('h2', { text: `Party  (${PartyManager.count()}/${PARTY_MAX})` }));
-    root.appendChild(el('p', { class: 'sub', text: 'Click a Mythling for full details. Use ▲▼ to reorder — the first Mythling leads every battle.' }));
+    this.setTitle(`Party  (${PartyManager.count()}/${PARTY_MAX})`);
+    root.appendChild(el('p', { class: 'sub', text: 'Click a Mythling for full details. Use the arrows to reorder — the first Mythling leads every battle.' }));
     const grid = el('div', { class: 'grid-cards' });
     PartyManager.list().forEach((m, i) => {
       grid.appendChild(this.mythCard(m, {
         extra: el('div', { class: 'row', style: { gap: '4px', marginTop: '4px' } }, [
-          button('▲', { class: 'small ghost', disabled: i === 0, onclick: (e) => { e.stopPropagation(); PartyManager.swap(i, i - 1); this.renderTab(); } }),
-          button('▼', { class: 'small ghost', disabled: i === PartyManager.count() - 1, onclick: (e) => { e.stopPropagation(); PartyManager.swap(i, i + 1); this.renderTab(); } }),
-          button('→ Storage', { class: 'small ghost', disabled: PartyManager.count() <= 1, onclick: (e) => { e.stopPropagation(); if (StorageManager.fromParty(m.uid)) { toast(`${displayName(m)} sent to storage`); this.renderTab(); } else toast('You must keep at least one Mythling!', 'bad'); } }),
+          iconBtn('up', 'Move up', { class: 'small ghost', disabled: i === 0, onclick: (e) => { e.stopPropagation(); PartyManager.swap(i, i - 1); this.renderTab(); } }),
+          iconBtn('down', 'Move down', { class: 'small ghost', disabled: i === PartyManager.count() - 1, onclick: (e) => { e.stopPropagation(); PartyManager.swap(i, i + 1); this.renderTab(); } }),
+          iconTextBtn('box', 'Storage', { class: 'small ghost', disabled: PartyManager.count() <= 1, onclick: (e) => { e.stopPropagation(); if (StorageManager.fromParty(m.uid)) { toast(`${displayName(m)} sent to storage`); this.renderTab(); } else toast('You must keep at least one Mythling!', 'bad'); } }),
         ]),
       }));
     });
@@ -140,7 +159,7 @@ export class PlayerMenu {
         el('div', { class: 'mc-name' }, [
           displayName(m),
           m.level >= LEVEL_CAP ? el('span', { class: 'chip max', text: 'MAX' }) : null,
-          evoReady ? el('span', { class: 'chip', style: { borderColor: '#ffd76a', color: '#ffd76a' }, text: '✦ EVOLVE' }) : null,
+          evoReady ? el('span', { class: 'chip evolve' }, [icon('levelup'), el('span', { text: 'EVOLVE' })]) : null,
           mutationChip(m.mutation),
         ]),
         el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${MOODS[m.mood].name} · ${getRarity(m.rarity).name}` }),
@@ -168,7 +187,7 @@ export class PlayerMenu {
       const isDown = MOODS[m.mood].down === k;
       const maxRef = k === 'hp' ? 600 : k === 'counter' ? 35 : 90;
       return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}` }, [
-        el('span', { text: `${STAT_LABELS[k]}${isUp ? ' ▲' : isDown ? ' ▼' : ''}` }),
+        el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), isUp ? icon('up', 'tiny') : isDown ? icon('down', 'tiny') : null]),
         el('div', { class: 'sbar' }, [el('i', { style: { width: `${Math.min(100, (stats[k] / maxRef) * 100)}%` } })]),
         el('b', { text: String(stats[k]) }),
       ]);
@@ -184,12 +203,12 @@ export class PlayerMenu {
         ]),
         el('p', { class: 'sub', style: { marginTop: '10px', fontSize: '.85rem' }, text: sp.description }),
         el('div', { class: 'row', style: { gap: '6px' } }, [
-          button('✎ Nickname', { class: 'small ghost', onclick: async () => {
+          iconTextBtn('pencil', 'Nickname', { class: 'small ghost', onclick: async () => {
             const input = el('input', { type: 'text', value: m.nickname || '', maxlength: 12 });
             const ok = await modal({ title: 'NICKNAME', body: el('div', {}, [el('p', { class: 'sub', text: 'Leave blank to use the species name.' }), input]), buttons: [{ label: 'CANCEL', value: false }, { label: 'SAVE', value: true, primary: true }] });
             if (ok) { m.nickname = input.value.trim().slice(0, 12) || null; toast('Nickname updated'); this.renderTab(); }
           } }),
-          EvolutionManager.isReady(m) ? button('✦ EVOLVE NOW', { class: 'small primary', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.game.runEvolution(m, () => this.renderTab()); } }) : null,
+          EvolutionManager.isReady(m) ? iconTextBtn('levelup', 'EVOLVE NOW', { class: 'small primary', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.game.runEvolution(m, () => this.renderTab()); } }) : null,
         ]),
       ]),
       el('div', {}, [
@@ -201,7 +220,7 @@ export class PlayerMenu {
         ]),
         el('h3', { text: 'Stats' }),
         el('div', { class: 'stat-rows' }, statRows),
-        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, text: `Mood ${MOODS[m.mood].name}: ▲ ${mood.up.join(', ')} · ▼ ${mood.down} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
+        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} &nbsp; ${iconSvg('down', 'tiny')} ${mood.down} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
 
         el('h3', { text: 'Equipped Skills' }),
         ...['normal', 'special', 'buff'].map((slot) => {
@@ -209,17 +228,17 @@ export class PlayerMenu {
           return el('div', { class: 'skill-row equipped' }, [
             el('div', { style: { flex: '1' } }, [
               el('div', { class: 'sk-name', text: sk ? sk.name : '—' }),
-              el('div', { class: 'sk-meta', text: sk ? `${slot.toUpperCase()} · ${sk.category === 'buff' ? sk.effects.map((e) => `${e.stat.toUpperCase()}+${e.amount}`).join(' ') : `Power ${sk.power}`} · ${Number.isFinite(sk.uses) ? `${m.uses[sk.id] ?? 0}/${sk.uses} uses` : '∞ uses'}` : '' }),
+              el('div', { class: 'sk-meta', html: sk ? `${slot.toUpperCase()} · ${sk.category === 'buff' ? buffSummary(sk) : `Power ${sk.power}`} · ${Number.isFinite(sk.uses) ? `${m.uses[sk.id] ?? 0}/${sk.uses} uses` : `${iconSvg('infinity', 'tiny')} unlimited`}` : '—' }),
             ]),
           ]);
         }),
         el('div', { class: 'skill-row', style: { borderColor: '#ffd76a' } }, [
           el('div', { style: { flex: '1' } }, [
-            el('div', { class: 'sk-name', text: `★ ${ult.name}` }),
+            el('div', { class: 'sk-name', html: `${iconSvg('ultimate', 'gold')} ${ult.name}` }),
             el('div', { class: 'sk-meta', text: ultimateUnlocked(m) ? `ULTIMATE · Power ${ult.power} · Charge ${m.ultCharge}/8 · cannot be replaced` : `ULTIMATE · locked until Lv.${ULTIMATE_UNLOCK_LEVEL}` }),
           ]),
         ]),
-        button('⚔ Open Skill Library', { class: 'small ghost', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.tab = 'skills'; this.selected = m.uid; this.render(); } }),
+        iconTextBtn('strike', 'Open Skill Library', { class: 'small ghost', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.tab = 'skills'; this.selected = m.uid; this.render(); } }),
 
         el('h3', { text: 'Evolution' }),
         el('div', { class: 'mc-sub', html: evoNext
@@ -227,7 +246,7 @@ export class PlayerMenu {
             ? `Next: <b>${evoNext.name}</b> at Lv.${evoNext.level} — <span style="color:#ff9aa2">LOCKED (future update)</span>`
             : `Next: <b>${evoNext.name}</b> at Lv.${evoNext.level} — ${evoNext.reached ? '<span style="color:#6de89a">READY!</span>' : `${evoNext.level - m.level} levels to go`}`)
           : 'Final form available in this version.' }),
-        ...locked.map((s) => el('div', { class: 'mc-sub', style: { opacity: .6 }, text: `🔒 ${s.name} — Lv.${s.level} (future content)` })),
+        ...locked.map((s) => el('div', { class: 'mc-sub locked-row', style: { opacity: .6 }, html: `${iconSvg('lock', 'tiny')} ${s.name} — Lv.${s.level} (future content)` })),
 
         el('h3', { text: 'Capture Info' }),
         el('div', { class: 'mc-sub', text: m.meta?.isStarter
@@ -243,7 +262,7 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- STORAGE
   renderStorage(root) {
-    root.appendChild(el('h2', { text: `Mythling Storage  (${StorageManager.list().length})` }));
+    this.setTitle(`Mythling Storage  (${StorageManager.list().length})`);
     const f = this.storageFilters;
     const filters = el('div', { class: 'filters' }, [
       el('input', { type: 'text', placeholder: 'Search…', style: { width: '160px', fontSize: '.9rem', letterSpacing: 'normal', textTransform: 'none' }, oninput: (e) => { f.query = e.target.value; this.renderStorageList(); } }),
@@ -277,7 +296,7 @@ export class PlayerMenu {
     }
     for (const m of list) {
       this.storageList.appendChild(this.mythCard(m, {
-        extra: button('→ Party', {
+        extra: iconTextBtn('dna', 'Party', {
           class: 'small primary', disabled: PartyManager.isFull(),
           onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
         }),
@@ -287,7 +306,7 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- SKILLS
   renderSkills(root) {
-    root.appendChild(el('h2', { text: 'Skill Library' }));
+    this.setTitle('Skill Library');
     root.appendChild(el('p', { class: 'sub', text: 'Each Mythling equips 1 Normal, 1 Special and 1 Buff skill. Everything it has learned stays in its library — nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.' }));
     const party = PartyManager.list();
     const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
@@ -302,7 +321,7 @@ export class PlayerMenu {
     const ult = ultimateMove(sel);
     root.appendChild(el('div', { class: 'skill-row', style: { borderColor: '#ffd76a' } }, [
       el('div', { style: { flex: '1' } }, [
-        el('div', { class: 'sk-name', text: `★ ${ult.name} (ULTIMATE — fixed)` }),
+        el('div', { class: 'sk-name', html: `${iconSvg('ultimate', 'gold')} ${ult.name} (ULTIMATE — fixed)` }),
         el('div', { class: 'sk-meta', text: ultimateUnlocked(sel) ? `Power ${ult.power} · Charge ${sel.ultCharge}/8 · upgrades with evolution` : `Locked until Lv.${ULTIMATE_UNLOCK_LEVEL}` }),
       ]),
     ]));
@@ -315,8 +334,8 @@ export class PlayerMenu {
         const equipped = sel.skills[cat] === sk.id;
         root.appendChild(el('div', { class: `skill-row ${equipped ? 'equipped' : ''}` }, [
           el('div', { style: { flex: '1' } }, [
-            el('div', { class: 'sk-name', text: `${sk.element ? ELEMENTS[sk.element].icon : '⚔'} ${sk.name}` }),
-            el('div', { class: 'sk-meta', text: `${sk.category === 'buff' ? sk.effects.map((e) => `${e.stat.toUpperCase()} +${e.amount}`).join(', ') : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`} · ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : 'Unlimited uses'} — ${sk.desc}` }),
+            el('div', { class: 'sk-name', html: `${iconSvg(sk.element || 'strike', sk.element || '')} ${sk.name}` }),
+            el('div', { class: 'sk-meta', text: `${sk.category === 'buff' ? buffSummary(sk, ' ') : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`} · ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : 'Unlimited uses'} — ${sk.desc}` }),
           ]),
           equipped ? el('span', { class: 'chip', text: 'EQUIPPED' })
             : button('EQUIP', { class: 'small primary', onclick: () => { equipSkill(sel, cat, sk.id); AudioManager.sfx('confirm'); this.renderTab(); } }),
@@ -327,38 +346,85 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- BAG
   renderBag(root) {
-    root.appendChild(el('h2', { text: 'Bag' }));
-    root.appendChild(el('div', { class: 'coin-pill', style: { display: 'inline-flex', marginBottom: '12px' } }, [`🪙 ${GameState.player.wildcoins} Wildcoins`]));
+    this.setTitle('Bag');
+    root.appendChild(el('div', { class: 'coin-pill', style: { display: 'inline-flex', marginBottom: '12px' } },
+      [icon('coin', 'gold'), el('span', { text: `${GameState.player.wildcoins} Wildcoins` })]));
     for (const cat of ITEM_CATEGORIES) {
       const entries = InventoryManager.byCategory(cat.id);
       root.appendChild(el('h3', { text: cat.name }));
+      if (cat.id === 'food') {
+        root.appendChild(el('p', { class: 'sub', text: 'Feed food to a Mythling to convert it straight into EXP — a faster way to train than battling. Food cannot push a Mythling past the level cap.' }));
+      }
       if (!entries.length) { root.appendChild(el('p', { class: 'sub', text: '— empty —' })); continue; }
       for (const e of entries) {
+        const isFood = e.item.category === 'food';
         const usable = e.item.heal || e.item.revive || e.item.restoreUses;
         root.appendChild(el('div', { class: 'item-row' }, [
+          icon(isFood ? 'food' : cat.id === 'balls' ? 'orb' : cat.id === 'key' ? 'key' : 'heal', 'item-ico'),
           el('div', { class: 'ir-main' }, [
             el('div', { class: 'ir-name', text: e.item.name }),
             el('div', { class: 'ir-desc', text: e.item.desc }),
           ]),
           el('div', { class: 'ir-qty', text: `x${e.qty}` }),
-          usable ? button('USE', { class: 'small primary', onclick: () => this.useItemFromBag(e.id) }) : null,
+          isFood
+            ? iconTextBtn('food', 'FEED', { class: 'small primary', onclick: () => this.feedFromBag(e.id) })
+            : usable ? button('USE', { class: 'small primary', onclick: () => this.useItemFromBag(e.id) }) : null,
         ]));
       }
     }
   }
 
-  async useItemFromBag(itemId) {
+  /** Feed a food item to a chosen party Mythling and play the level-up flow. */
+  async feedFromBag(itemId) {
     const item = getItem(itemId);
+    const pick = await this.pickPartyTarget(`FEED ${item.name.toUpperCase()}`, (m) => {
+      const need = FeedManager.toNextLevel(m, itemId);
+      return m.level >= LEVEL_CAP
+        ? 'MAX LEVEL — cannot gain EXP'
+        : `+${item.exp} EXP · ${need} to reach Lv.${m.level + 1}`;
+    });
+    if (!pick) return;
+    const res = FeedManager.feed(pick, itemId);
+    if (!res.ok) { toast(res.reason, 'bad'); AudioManager.sfx('cancel'); return; }
+    AudioManager.sfx('heal');
+    toast(`${displayName(pick)} ate the ${item.name} — +${res.exp} EXP`, 'ok');
+    this.renderTab();
+    if (res.result.levels.length) {
+      const entries = res.result.levels.map((lv) => ({ name: displayName(pick), ...lv }));
+      await new Promise((done) => levelUpSummaryRef(entries, done));
+      this.renderTab();
+    }
+    // Feeding can push a Mythling over its evolution level.
+    await this.game.checkEvolutions();
+    this.renderTab();
+    await this.game.autosave();
+  }
+
+  /** Shared party picker used by items and food. `note` adds a per-Mythling line. */
+  pickPartyTarget(title, note = null) {
     const list = el('div', { class: 'grid-cards' });
-    const pick = await new Promise((resolve) => {
+    return new Promise((resolve) => {
       let done = false;
-      const finish = (v) => { if (done) return; done = true; document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').innerHTML = ''; resolve(v); };
+      const finish = (v) => {
+        if (done) return; done = true;
+        const layer = document.getElementById('modal');
+        layer.classList.add('hidden'); layer.innerHTML = '';
+        resolve(v);
+      };
       PartyManager.list().forEach((m) => {
-        const card = this.mythCard(m, { onClick: () => finish(m) });
+        const card = this.mythCard(m, {
+          onClick: () => finish(m),
+          extra: note ? el('div', { class: 'mc-sub feed-note', text: note(m) }) : null,
+        });
         list.appendChild(card);
       });
-      modal({ title: `USE ${item.name.toUpperCase()}`, body: list, buttons: [{ label: 'CANCEL', value: null }] }).then(() => finish(null));
+      modal({ title, body: list, buttons: [{ label: 'CANCEL', value: null }] }).then(() => finish(null));
     });
+  }
+
+  async useItemFromBag(itemId) {
+    const item = getItem(itemId);
+    const pick = await this.pickPartyTarget(`USE ${item.name.toUpperCase()}`);
     if (!pick) return;
     if (item.heal) {
       if (isFainted(pick)) { toast('That Mythling has fainted — use a Revive Herb.', 'bad'); return; }
@@ -383,7 +449,7 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- MAP
   renderMap(root) {
-    root.appendChild(el('h2', { text: 'World Map' }));
+    this.setTitle('World Map');
     const cur = GameState.player.map;
     for (const id of MAP_ORDER) {
       const map = MAPS[id];
@@ -391,7 +457,7 @@ export class PlayerMenu {
       const visited = GameState.world.visitedMaps[id];
       root.appendChild(el('div', { class: 'item-row', style: { borderColor: cur === id ? '#f2c761' : undefined } }, [
         el('div', { class: 'ir-main' }, [
-          el('div', { class: 'ir-name' }, [`${ELEMENTS[map.element].icon} ${map.displayName}`, cur === id ? el('span', { class: 'chip', style: { marginLeft: '8px' }, text: 'YOU ARE HERE' }) : null]),
+          el('div', { class: 'ir-name' }, [icon(map.element), el('span', { text: map.displayName }), cur === id ? el('span', { class: 'chip', style: { marginLeft: '8px' }, text: 'YOU ARE HERE' }) : null]),
           el('div', { class: 'ir-desc', text: `Wild Mythlings Lv.${map.levelRange[0]}–${map.levelRange[1]} · Routes: ${map.regions.map((r) => r.name).join(' → ')}` }),
           el('div', { class: 'ir-desc', text: visited ? 'Explored' : 'Not yet visited' }),
         ]),
@@ -403,8 +469,8 @@ export class PlayerMenu {
   // ---------------------------------------------------- COLLECTION
   renderCollection(root) {
     const s = CollectionManager.stats();
-    root.appendChild(el('h2', { text: `Mythling Collection — ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen` }));
-    root.appendChild(el('p', { class: 'sub', text: `Mutations discovered: ✧ Shiny ${s.shiny} · ☾ Darkness ${s.darkness}` }));
+    this.setTitle(`Collection — ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen`);
+    root.appendChild(el('p', { class: 'sub', html: `Mutations discovered: ${iconSvg('shiny', 'tiny')} Shiny ${s.shiny} · ${iconSvg('darkness', 'tiny')} Darkness ${s.darkness}` }));
     const grid = el('div', { class: 'collection-grid' });
     for (const id of SPECIES_IDS) {
       const sp = SPECIES[id];
@@ -413,11 +479,11 @@ export class PlayerMenu {
       const card = el('div', { class: `col-card ${known ? '' : 'unknown'} ${e.caught ? 'caught' : ''}` }, [
         mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 90),
         el('div', { class: 'cc-name', text: known ? sp.displayName : '???' }),
-        el('div', { class: 'cc-status', text: e.caught ? 'Caught ✓' : e.seen ? 'Seen' : 'Undiscovered' }),
+        el('div', { class: 'cc-status' }, e.caught ? [icon('check', 'tiny'), el('span', { text: 'Caught' })] : [el('span', { text: e.seen ? 'Seen' : 'Undiscovered' })]),
         known ? el('div', { class: 'row', style: { justifyContent: 'center', gap: '4px', marginTop: '4px' } }, [
           elementChip(sp.element),
-          e.mutations.shiny ? el('span', { class: 'chip shiny', text: '✧' }) : null,
-          e.mutations.darkness ? el('span', { class: 'chip darkness', text: '☾' }) : null,
+          e.mutations.shiny ? el('span', { class: 'chip shiny' }, [icon('shiny')]) : null,
+          e.mutations.darkness ? el('span', { class: 'chip darkness' }, [icon('darkness')]) : null,
         ]) : null,
       ]);
       if (known) card.addEventListener('click', () => this.showSpeciesInfo(id));
@@ -439,7 +505,9 @@ export class PlayerMenu {
         ]),
       ]),
       el('h3', { text: 'Evolution line' }),
-      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev, i) => el('div', { class: 'chip', style: ev.future ? { opacity: .55 } : {}, text: `${ev.name} (Lv.${ev.level})${ev.future ? ' 🔒' : ''}` }))),
+      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev) => el('div', { class: 'chip', style: ev.future ? { opacity: .55 } : {} }, [
+        el('span', { text: `${ev.name} (Lv.${ev.level})` }), ev.future ? icon('lock', 'tiny') : null,
+      ]))),
     ]);
     modal({ title: sp.displayName.toUpperCase(), body, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
   }
@@ -447,10 +515,10 @@ export class PlayerMenu {
   // ---------------------------------------------------- STATS
   renderStats(root) {
     const s = CollectionManager.stats();
-    root.appendChild(el('h2', { text: 'Trainer Record' }));
+    this.setTitle('Trainer Record');
     const rows = [
       ['Trainer', GameState.player.name],
-      ['Wildcoins', `🪙 ${GameState.player.wildcoins}`],
+      ['Wildcoins', String(GameState.player.wildcoins)],
       ['Play time', formatTime(PlayerManager.playTime())],
       ['Current region', MAPS[GameState.player.map].displayName],
       ['Starter', GameState.player.starter ? SPECIES[GameState.player.starter].displayName : '—'],
@@ -472,20 +540,20 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- SAVE
   renderSave(root) {
-    root.appendChild(el('h2', { text: 'Save Game' }));
+    this.setTitle('Save Game');
     root.appendChild(el('p', { class: 'sub', text: `You are playing on Save Slot ${GameState.slot}. Saving writes your full state — party, storage, bag, collection, world progress and position.` }));
-    root.appendChild(button('💾 SAVE TO SLOT ' + GameState.slot, {
+    root.appendChild(iconTextBtn('save', 'SAVE TO SLOT ' + GameState.slot, {
       class: 'primary', onclick: async () => {
         await this.game.saveGame(GameState.slot, true);
         this.renderTab();
       },
     }));
     root.appendChild(el('div', { style: { height: '14px' } }));
-    root.appendChild(button('📂 SAVE TO A DIFFERENT SLOT…', {
+    root.appendChild(iconTextBtn('folder', 'SAVE TO A DIFFERENT SLOT', {
       class: 'ghost', onclick: () => this.game.openSlotPicker('save'),
     }));
     root.appendChild(el('div', { style: { height: '14px' } }));
-    root.appendChild(button('🏠 QUIT TO MAIN MENU', {
+    root.appendChild(iconTextBtn('home', 'QUIT TO MAIN MENU', {
       class: 'danger', onclick: async () => {
         const ok = await confirmDialog('QUIT TO MENU', 'Unsaved progress since your last save will be lost. Save first?', 'SAVE & QUIT', 'QUIT WITHOUT SAVING');
         if (ok) await this.game.saveGame(GameState.slot, true);
@@ -499,10 +567,29 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- SETTINGS
   renderSettings(root) {
-    root.appendChild(el('h2', { text: 'Settings' }));
+    this.setTitle('Settings');
     root.appendChild(settingsPanel());
   }
 }
+
+/** Small square icon-only button. */
+export function iconBtn(name, title, opts = {}) {
+  const b = button('', { ...opts, class: `icon-btn ${opts.class || ''}`, title });
+  b.appendChild(icon(name));
+  return b;
+}
+
+/** Button with a leading icon and a text label. */
+export function iconTextBtn(name, text, opts = {}) {
+  const b = button('', opts);
+  b.appendChild(iconLabel(name, text));
+  return b;
+}
+
+// levelUpSummary lives in screens.js which imports this module; resolve lazily
+// to keep the two modules free of a hard circular dependency at load time.
+let levelUpSummaryRef = (entries, done) => done();
+export function _bindLevelUpSummary(fn) { levelUpSummaryRef = fn; }
 
 export function settingsPanel() {
   const wrap = el('div', {});

@@ -293,8 +293,8 @@ export class WorldRenderer {
     ctx.globalAlpha = 1;
 
     const themes = {
-      center: { wall: '#fdf6e6', roof: '#f0607a', trim: '#e04a66', sign: '✚' },
-      shop:   { wall: '#fff3dc', roof: '#4fb0e8', trim: '#2f88c8', sign: '🛍' },
+      center: { wall: '#fdf6e6', roof: '#f0607a', trim: '#e04a66', sign: 'heal' },
+      shop:   { wall: '#fff3dc', roof: '#4fb0e8', trim: '#2f88c8', sign: 'shop' },
       house:  { wall: '#f6ead3', roof: '#c58b5c', trim: '#a06f45', sign: '' },
       dock:   { wall: '#c39a63', roof: '#8a6437', trim: '#6f5029', sign: '' },
       tower:  { wall: '#d8cbb4', roof: '#7b5a4a', trim: '#5c4236', sign: '' },
@@ -322,12 +322,8 @@ export class WorldRenderer {
     ctx.fillStyle = '#9fd8f5';
     roundRect(ctx, x + 12, y + h * 0.5, 22, 18, 4); ctx.fill();
     roundRect(ctx, x + w - 34, y + h * 0.5, 22, 18, 4); ctx.fill();
-    // sign
-    if (th.sign) {
-      ctx.font = '20px serif'; ctx.textAlign = 'center';
-      ctx.fillStyle = '#fff';
-      ctx.fillText(th.sign, x + w / 2, y + h * 0.3);
-    }
+    // sign — drawn from our own vector marks, never a font emoji
+    if (th.sign) drawSignMark(ctx, th.sign, x + w / 2, y + h * 0.26, 13);
     // name plate
     ctx.font = 'bold 13px "Trebuchet MS", sans-serif';
     ctx.textAlign = 'center';
@@ -389,7 +385,8 @@ export class WorldRenderer {
     ctx.fillStyle = locked ? '#ff6b6b' : '#8ef0a8';
     ctx.font = 'bold 15px "Trebuchet MS", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(locked ? '🔒 LOCKED' : conn.label || 'GATE', x + w / 2, y - 100);
+    ctx.fillText(locked ? 'LOCKED' : conn.label || 'GATE', x + w / 2, y - 100);
+    if (locked) drawSignMark(ctx, 'lock', x + w / 2 - ctx.measureText('LOCKED').width / 2 - 13, y - 105, 8);
     ctx.restore();
   }
 
@@ -494,5 +491,44 @@ export function drawTrainerAvatar(ctx, x, y, color, time, opts = {}) {
   ctx.fillStyle = '#2a2a33';
   ctx.beginPath(); ctx.arc(-3.4, -42, 1.5, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(3.4, -42, 1.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+
+/**
+ * Small vector marks used on world signage (shop / center / locked gate).
+ * Drawn with paths so the world never depends on emoji font coverage.
+ */
+export function drawSignMark(ctx, kind, cx, cy, r) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (kind === 'heal') {
+    ctx.fillStyle = '#ffffff';
+    const t = r * 0.42;
+    ctx.fillRect(-t, -r, t * 2, r * 2);
+    ctx.fillRect(-r, -t, r * 2, t * 2);
+  } else if (kind === 'shop') {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.6, r * 0.22);
+    ctx.beginPath();                       // basket
+    ctx.moveTo(-r, -r * 0.25);
+    ctx.lineTo(r, -r * 0.25);
+    ctx.lineTo(r * 0.7, r * 0.8);
+    ctx.lineTo(-r * 0.7, r * 0.8);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();                       // handle
+    ctx.arc(0, -r * 0.25, r * 0.5, Math.PI, 0);
+    ctx.stroke();
+  } else if (kind === 'lock') {
+    ctx.fillStyle = '#ff6b6b';
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = Math.max(1.4, r * 0.24);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.15, r * 0.52, Math.PI, 0);
+    ctx.stroke();
+    roundRect(ctx, -r * 0.8, -r * 0.15, r * 1.6, r * 1.15, r * 0.28);
+    ctx.fill();
+  }
   ctx.restore();
 }

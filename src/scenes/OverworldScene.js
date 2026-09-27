@@ -319,7 +319,8 @@ export class OverworldScene {
       const defeated = WorldManager.isTrainerDefeated(t.flag);
       drawables.push({ y: t.y, fn: () => {
         drawTrainerAvatar(ctx, t.x, t.y, t.color, this.time, { phase: t.y, cap: t.guardian ? '#ffd76a' : null });
-        this.nameTag(ctx, t.x, t.y - 62, defeated ? `${t.name} ✓` : `⚔ ${t.name}`, defeated ? '#9fdca8' : '#ffd0d0');
+        this.nameTag(ctx, t.x, t.y - 62, t.name, defeated ? '#9fdca8' : '#ffd0d0', null,
+          { mark: defeated ? 'check' : 'battle' });
       } });
     }
     for (const w of this.wild) {
@@ -375,11 +376,11 @@ export class OverworldScene {
     }
   }
 
-  nameTag(ctx, x, y, text, color, mutation) {
+  nameTag(ctx, x, y, text, color, mutation, opts = {}) {
     ctx.save();
     ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
     ctx.textAlign = 'center';
-    const tw = ctx.measureText(text).width + 16;
+    const tw = ctx.measureText(text).width + 16 + (opts.mark ? 14 : 0);
     ctx.fillStyle = 'rgba(10,18,28,0.6)';
     roundRect(ctx, x - tw / 2, y - 12, tw, 18, 8); ctx.fill();
     if (mutation && mutation !== 'none') {
@@ -387,7 +388,8 @@ export class OverworldScene {
       ctx.lineWidth = 1.5; ctx.stroke();
     }
     ctx.fillStyle = color;
-    ctx.fillText(text, x, y + 1);
+    ctx.fillText(text, x + (opts.mark ? 7 : 0), y + 1);
+    if (opts.mark) drawTagMark(ctx, opts.mark, x - tw / 2 + 10, y - 3, color);
     ctx.restore();
   }
 
@@ -448,4 +450,25 @@ export class OverworldScene {
       conns: (map.connections || []).map((c) => c.rect),
     };
   }
+}
+
+
+/** Tiny vector marks for world name tags (no emoji fonts involved). */
+function drawTagMark(ctx, kind, x, y, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  if (kind === 'check') {
+    ctx.beginPath();
+    ctx.moveTo(-4, 0); ctx.lineTo(-1, 3.4); ctx.lineTo(4.4, -3.6);
+    ctx.stroke();
+  } else { // crossed blades = an undefeated trainer
+    ctx.beginPath();
+    ctx.moveTo(-4, 4); ctx.lineTo(4, -4);
+    ctx.moveTo(4, 4); ctx.lineTo(-4, -4);
+    ctx.stroke();
+  }
+  ctx.restore();
 }

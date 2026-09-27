@@ -30,7 +30,7 @@ export const MAPS = {
     buildings: [
       { id: 'vale_center', type: 'center', x: 250, y: 520, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'vale_shop',   type: 'shop',   x: 620, y: 530, w: 190, h: 150, name: 'Leafrest Supplies',
-        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'skill_tonic'] },
+        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'skill_tonic', 'sweet_berry', 'honey_nut'] },
       { id: 'vale_house1', type: 'house',  x: 120, y: 900, w: 170, h: 130, name: 'Cottage' },
       { id: 'vale_house2', type: 'house',  x: 700, y: 950, w: 170, h: 130, name: 'Cottage' },
     ],
@@ -119,7 +119,7 @@ export const MAPS = {
     buildings: [
       { id: 'coast_center', type: 'center', x: 300, y: 560, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'coast_shop',   type: 'shop',   x: 660, y: 570, w: 190, h: 150, name: 'Tidecrest Trading Post',
-        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'revive_herb', 'skill_tonic'] },
+        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'revive_herb', 'skill_tonic', 'honey_nut', 'river_jerky'] },
       { id: 'coast_dock1',  type: 'dock',   x: 180, y: 250, w: 300, h: 110, name: 'Docks' },
       { id: 'coast_dock2',  type: 'dock',   x: 720, y: 250, w: 260, h: 110, name: 'Docks' },
       { id: 'coast_house',  type: 'house',  x: 150, y: 1050, w: 180, h: 130, name: 'Fisher Hut' },
@@ -209,7 +209,7 @@ export const MAPS = {
     buildings: [
       { id: 'ember_center', type: 'center', x: 280, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'ember_shop',   type: 'shop',   x: 640, y: 550, w: 190, h: 150, name: 'Emberwatch Quartermaster',
-        stock: ['normal_ball', 'advanced_ball', 'absolute_ball', 'god_ball', 'greater_potion', 'revive_herb', 'skill_tonic'] },
+        stock: ['normal_ball', 'advanced_ball', 'absolute_ball', 'god_ball', 'greater_potion', 'revive_herb', 'skill_tonic', 'river_jerky', 'ember_roast', 'mythic_feast'] },
       { id: 'ember_tower',  type: 'tower',  x: 140, y: 1020, w: 160, h: 200, name: 'Watchtower' },
     ],
     landmarks: [

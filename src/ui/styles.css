@@ -273,6 +273,10 @@ select {
   backdrop-filter: blur(4px); box-shadow: var(--shadow);
 }
 .combatant-card.enemy { top: 18px; left: 18px; }
+@media (max-width: 1100px) {
+  .battle-log.top { top: 10px; width: min(560px, 86vw); }
+  .combatant-card.enemy { top: 132px; }
+}
 .combatant-card.player { bottom: 210px; right: 18px; }
 .cc-top { display: flex; align-items: center; gap: 8px; }
 .cc-name { font-weight: 900; letter-spacing: .04em; font-size: 1.02rem; }
@@ -285,12 +289,16 @@ select {
 .ult-label.ready { color: #ffd76a; animation: blink 0.8s infinite; }
 
 .battle-log {
-  position: absolute; left: 50%; transform: translateX(-50%); bottom: 196px;
-  width: min(720px, 92vw); max-height: 96px; overflow: hidden;
-  padding: 10px 16px; border-radius: 12px;
-  background: rgba(6,12,22,0.86); border: 1.5px solid rgba(255,255,255,0.14);
-  font-size: .95rem; line-height: 1.45;
+  position: absolute; left: 50%; transform: translateX(-50%);
+  width: min(660px, 54vw); max-height: 124px; overflow: hidden;
+  padding: 10px 18px; border-radius: 14px;
+  background: rgba(6,12,22,0.9); border: 1.5px solid rgba(255,255,255,0.16);
+  box-shadow: var(--shadow); font-size: .95rem; line-height: 1.45; text-align: center;
 }
+/* Announcements live at the TOP of the battle screen so both Mythlings stay visible. */
+.battle-log.top { top: 16px; bottom: auto; }
+.battle-log div { animation: logIn .22s ease; }
+@keyframes logIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .battle-log .emph { color: var(--gold); font-weight: 800; }
 
 .battle-actions {
@@ -416,4 +424,83 @@ select {
   .battle-log { bottom: 236px; }
   .party-chip { width: 66px; }
   .menu-tabs { width: 120px; }
+}
+
+
+/* ================= Icons & unified panel chrome ================= */
+.ico {
+  width: 1.05em; height: 1.05em; display: inline-block; vertical-align: -0.16em;
+  fill: currentColor; flex: none;
+}
+.ico.tiny { width: .95em; height: .95em; }
+.ico.gold { color: var(--gold); }
+.ico.good { color: var(--ok); }
+.ico.nature { color: #6fe08a; }
+.ico.water  { color: #6fc9ff; }
+.ico.fire   { color: #ff9a55; }
+.ico-label { display: inline-flex; align-items: center; gap: 7px; justify-content: center; }
+.ico-wrap { display: inline-flex; }
+.item-ico { width: 22px; height: 22px; color: var(--gold); opacity: .85; }
+.stat-name { display: inline-flex; align-items: center; gap: 5px; }
+.stat-row.up .ico { color: var(--ok); }
+.stat-row.down .ico { color: var(--danger); }
+.chip .ico { width: .9em; height: .9em; margin-right: 4px; }
+.chip.evolve { border-color: #ffd76a; color: #ffd76a; }
+.coin-line { display: flex; align-items: center; gap: 6px; }
+.ir-qty.price { display: inline-flex; align-items: center; gap: 5px; }
+.locked-row { display: flex; align-items: center; gap: 6px; }
+
+/* Icon-only buttons (the X on every panel, party reorder arrows, +/-) */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; padding: 0; flex: none;
+  border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06); color: #cfe0f2; cursor: pointer;
+  transition: .14s; box-shadow: none;
+}
+.icon-btn:hover { background: rgba(255,255,255,0.14); color: #fff; border-color: var(--gold); transform: none; }
+.icon-btn:active { transform: scale(.94); }
+.icon-btn .ico { width: 18px; height: 18px; }
+.btn.small.icon-btn { width: 32px; height: 32px; }
+.close-btn:hover { border-color: var(--danger); color: #ffb3b9; background: rgba(255,90,90,.14); }
+
+/* One header for every panel: title left, close X right. */
+.panel-head {
+  display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px;
+}
+.panel-head-text { flex: 1; min-width: 0; }
+.panel-head h2, .panel-head h3 {
+  margin: 0; color: var(--gold); letter-spacing: .08em; text-transform: uppercase;
+  font-size: 1.3rem; line-height: 1.2;
+}
+.panel-head h3 { font-size: 1.15rem; }
+.panel-head .sub { margin: 6px 0 0; color: var(--muted); }
+.panel-head.sticky {
+  position: sticky; top: 0; z-index: 3; margin: 0;
+  padding: 16px 24px 12px; background: linear-gradient(180deg, rgba(12,22,36,.98), rgba(12,22,36,.86));
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.menu-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.menu-col .menu-body { padding-top: 14px; }
+.menu-tab { display: flex; align-items: center; gap: 9px; }
+.menu-tab .ico { width: 17px; height: 17px; opacity: .85; }
+.menu-tab.active .ico { color: var(--gold); opacity: 1; }
+.modal .panel-head { margin-bottom: 8px; }
+.feed-note { color: #ffe08a; }
+
+/* battle action buttons with icons */
+.action-btn .ab-name {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-weight: 800;
+}
+.action-btn .ico { width: 16px; height: 16px; }
+.action-btn small .ico { width: 13px; height: 13px; vertical-align: -.12em; }
+
+@media (max-width: 720px) {
+  .battle-log.top { top: 8px; width: 94vw; }
+  .combatant-card.enemy { top: 118px; }
+  .panel-head.sticky { padding: 12px 14px 10px; }
+  .menu-tab span { display: none; }
+  .menu-tabs { width: 62px; align-items: center; }
+  .menu-tab { justify-content: center; }
 }

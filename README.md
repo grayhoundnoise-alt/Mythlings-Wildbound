@@ -109,18 +109,41 @@ src/
     SaveManager.js         IndexedDB with localStorage fallback — save/load/hasSave/deleteSlot/listSlots
     SettingsManager.js  AudioManager.js (procedural music + SFX, no copyrighted audio)
   render/
-    creatures.js           original procedural Mythling art (fox/feline/dragon/wolf/avian body plans)
+    creatures.js           original procedural Mythling art (fox/feline/dragon/wolf/avian body plans),
+                           per-species faces with 7 expressions, evolution growth, mutation palettes
     worldRenderer.js       terrain, water, props, buildings, weather
   scenes/
     MenuScene.js  OverworldScene.js  BattleScene.js
   ui/
     ui.js  styles.css  screens.js  PlayerMenu.js
+    icons.js               hand-built SVG icon set — the game ships zero emoji
 tests/smoke.test.js        headless rule tests
+design-bible.html          live creature design bible (see below)
 ```
 
 Systems talk through a small event bus and shared managers rather than direct references, so a
 **Map 4**, a new element, a sixth Mythling or the Lv.60 evolution stage can be added by editing
 `src/data/*` alone.
+
+### Creature design bible
+
+`design-bible.html` (run `npm start`, then open <http://localhost:3000/design-bible.html>) is a
+living style guide rendered by the **same** `src/render/creatures.js` the game uses — roster line-up,
+per-species turnaround, the seven expressions, the full evolution line with the Lv.60/Lv.80 stages
+marked as locked future content, both mutations, and a scale comparison against the trainer.
+It needs the dev server because it imports ES modules (the double-click offline build is the game
+only). Design rules the renderer enforces:
+
+* **Silhouette first** — each species is built from 3-5 signature forms that survive at 24 px:
+  Spriggo's leaf-blade tail, Aquini's fin-ears and fluked tail, Emberu's back-swept ember horns and
+  wings, Rivruff's water mane and wave tail, Leaflet's three-leaf crest and leaf-feather wing.
+* **Real anatomy** — haunch, chest, neck, muzzle and articulated limbs are separate volumes with
+  their own shading, not a ball with stickers.
+* **Element through anatomy**, not hue: water flows through Rivruff's mane, fire lives in Emberu's
+  gems and tail, growth sprouts from Spriggo's shoulders.
+* **Controlled palette** — three body colours per species plus a shared belly tone and one accent.
+* **Evolution = growth**, never a rescale: limbs lengthen, the torso thickens, the head shrinks in
+  proportion and the signature feature gets bigger and more elaborate.
 
 ### Saving
 

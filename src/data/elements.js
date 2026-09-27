@@ -1,8 +1,9 @@
 // Element definitions & effectiveness chart (data-driven, extensible).
+// `icon` names an entry in src/ui/icons.js — the UI never uses emoji.
 export const ELEMENTS = {
-  nature: { id: 'nature', name: 'Nature', icon: '🌿', color: '#4fc76a', glow: '#9cff9c' },
-  water:  { id: 'water',  name: 'Water',  icon: '💧', color: '#3fa9f5', glow: '#a5e6ff' },
-  fire:   { id: 'fire',   name: 'Fire',   icon: '🔥', color: '#ff7a3d', glow: '#ffd08a' },
+  nature: { id: 'nature', name: 'Nature', icon: 'nature', color: '#4fc76a', glow: '#9cff9c' },
+  water:  { id: 'water',  name: 'Water',  icon: 'water', color: '#3fa9f5', glow: '#a5e6ff' },
+  fire:   { id: 'fire',   name: 'Fire',   icon: 'fire', color: '#ff7a3d', glow: '#ffd08a' },
   // Future elements can simply be appended here.
 };
 
@@ -34,5 +35,5 @@ export function effectivenessLabel(mult) {
 }
 
 export function elementOf(id) {
-  return ELEMENTS[id] || { id, name: id, icon: '✦', color: '#bbb', glow: '#fff' };
+  return ELEMENTS[id] || { id, name: id, icon: 'spark', color: '#bbb', glow: '#fff' };
 }

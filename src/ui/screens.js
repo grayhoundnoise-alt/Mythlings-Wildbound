@@ -1,7 +1,11 @@
 // Title screen, save-slot screens, new-game flow, starter selection, shops,
 // Mythling Centers and the evolution cinematic.
-import { el, button, Screens, toast, modal, confirmDialog, elementChip, rarityChip, mutationChip, bar, hpClass, Dialogue } from './ui.js';
-import { settingsPanel, mythCanvas } from './PlayerMenu.js';
+import {
+  el, button, Screens, toast, modal, confirmDialog, elementChip, rarityChip, mutationChip,
+  bar, hpClass, Dialogue, panelHeader, closeButton,
+} from './ui.js';
+import { settingsPanel, mythCanvas, iconTextBtn, _bindLevelUpSummary } from './PlayerMenu.js';
+import { icon, iconSvg } from './icons.js';
 import { SPECIES, STARTER_IDS, getSpecies } from '../data/species.js';
 import { MOODS } from '../data/moods.js';
 import { STAT_SHORT } from '../data/moods.js';
@@ -65,12 +69,11 @@ export function slotScreen({ title, subtitle, slots, mode, onPick, onBack }) {
     list.appendChild(row);
   }
   const node = el('div', { class: 'dialog panel screen-inner' }, [
-    el('h2', { text: title }),
-    el('p', { class: 'sub', text: subtitle }),
+    panelHeader(title, onBack, subtitle),
     list,
     el('div', { class: 'row end', style: { marginTop: '18px' } }, [button('BACK', { class: 'ghost', onclick: onBack, sfx: 'cancel' })]),
   ]);
-  return Screens.replace(node, 'slots');
+  return Screens.replace(node, 'slots', onBack);
 }
 
 function portraitFor(s) {
@@ -203,15 +206,15 @@ export function starterScreen({ onChoose, onBack }) {
   });
 
   const node = el('div', { class: 'dialog panel screen-inner', style: { maxWidth: '1080px' } }, [
-    el('h2', { text: 'Choose Your First Mythling' }),
-    el('p', { class: 'sub', text: 'Drag a Mythling to turn it around. Choose carefully — but do not worry, the others can still be found in the wild later.' }),
+    panelHeader('Choose Your First Mythling', onBack,
+      'Drag a Mythling to turn it around. Choose carefully — but do not worry, the others can still be found in the wild later.'),
     grid,
     el('div', { class: 'row end', style: { marginTop: '18px' } }, [
       button('BACK', { class: 'ghost', onclick: onBack, sfx: 'cancel' }),
       confirmBtn,
     ]),
   ]);
-  Screens.replace(node, 'starter');
+  Screens.replace(node, 'starter', onBack);
 }
 
 function elementGlow(e) { return e === 'nature' ? '#8fe06a' : e === 'water' ? '#7fd8ff' : '#ffb347'; }
@@ -223,12 +226,11 @@ function ultimateName(sp) {
 // ------------------------------------------------------------------ SETTINGS SCREEN
 export function settingsScreen({ onBack }) {
   const node = el('div', { class: 'dialog panel screen-inner' }, [
-    el('h2', { text: 'Settings' }),
-    el('p', { class: 'sub', text: 'Settings are saved automatically and persist between sessions.' }),
+    panelHeader('Settings', onBack, 'Settings are saved automatically and persist between sessions.'),
     settingsPanel(),
     el('div', { class: 'row end', style: { marginTop: '16px' } }, [button('BACK', { class: 'primary', onclick: onBack, sfx: 'cancel' })]),
   ]);
-  Screens.replace(node, 'settings');
+  Screens.replace(node, 'settings', onBack);
 }
 
 // ------------------------------------------------------------------ SHOP
@@ -238,23 +240,24 @@ export function shopScreen(building, { onClose }) {
     for (const id of building.stock) {
       const item = getItem(id);
       let qty = 1;
-      const totalLabel = el('div', { class: 'ir-qty', text: `🪙 ${item.price}` });
+      const totalLabel = el('div', { class: 'ir-qty price' }, [icon('coin', 'gold'), el('span', { text: String(item.price) })]);
       const qtyLabel = el('b', { text: '1' });
       const setQty = (n) => {
         qty = Math.max(1, Math.min(99, n));
         qtyLabel.textContent = String(qty);
-        totalLabel.textContent = `🪙 ${item.price * qty}`;
+        totalLabel.lastChild.textContent = String(item.price * qty);
       };
       rows.appendChild(el('div', { class: 'item-row' }, [
+        icon(item.category === 'balls' ? 'orb' : item.category === 'food' ? 'food' : item.category === 'key' ? 'key' : 'heal', 'item-ico'),
         el('div', { class: 'ir-main' }, [
           el('div', { class: 'ir-name', text: item.name }),
           el('div', { class: 'ir-desc', text: item.desc }),
           el('div', { class: 'ir-desc', text: `Owned: ${InventoryManager.count(id)}` }),
         ]),
         el('div', { class: 'qty-ctl' }, [
-          el('button', { text: '−', onclick: () => setQty(qty - 1) }),
+          el('button', { html: iconSvg('minus'), title: 'Less', onclick: () => setQty(qty - 1) }),
           qtyLabel,
-          el('button', { text: '+', onclick: () => setQty(qty + 1) }),
+          el('button', { html: iconSvg('plus'), title: 'More', onclick: () => setQty(qty + 1) }),
         ]),
         totalLabel,
         button('BUY', {
@@ -262,7 +265,7 @@ export function shopScreen(building, { onClose }) {
           onclick: async () => {
             const total = item.price * qty;
             if (GameState.player.wildcoins < total) { toast('Not enough Wildcoins!', 'bad'); AudioManager.sfx('cancel'); return; }
-            const ok = await confirmDialog('CONFIRM PURCHASE', `Buy <b>${qty}× ${item.name}</b> for <b>🪙 ${total}</b>?`, 'BUY', 'CANCEL');
+            const ok = await confirmDialog('CONFIRM PURCHASE', `Buy <b>${qty}× ${item.name}</b> for <b>${total} Wildcoins</b>?`, 'BUY', 'CANCEL');
             if (!ok) return;
             if (!PlayerManager.spendCoins(total)) { toast('Not enough Wildcoins!', 'bad'); return; }
             InventoryManager.add(id, qty);
@@ -279,13 +282,16 @@ export function shopScreen(building, { onClose }) {
 
   let node;
   const refresh = () => {
-    const content = el('div', { class: 'dialog panel screen-inner', style: { maxWidth: '820px' } }, [
-      el('h2', { text: building.name }),
-      el('p', { class: 'sub' }, [`Wildcoins: `, el('b', { style: { color: '#ffe08a' }, text: `🪙 ${GameState.player.wildcoins}` })]),
+    const content = el('div', { class: 'dialog panel screen-inner', style: { maxWidth: '860px' } }, [
+      panelHeader(building.name, onClose),
+      el('p', { class: 'sub coin-line' }, [
+        el('span', { text: 'Wildcoins:' }), icon('coin', 'gold'),
+        el('b', { style: { color: '#ffe08a' }, text: String(GameState.player.wildcoins) }),
+      ]),
       render(),
       el('div', { class: 'row end', style: { marginTop: '16px' } }, [button('LEAVE SHOP', { class: 'primary', onclick: onClose, sfx: 'cancel' })]),
     ]);
-    node = Screens.replace(content, 'shop');
+    node = Screens.replace(content, 'shop', onClose);
   };
   refresh();
 }
@@ -305,19 +311,19 @@ export function centerScreen({ onHeal, onParty, onStorage, onSave, onClose }) {
     ]));
   }
   const node = el('div', { class: 'dialog panel screen-inner', style: { maxWidth: '760px' } }, [
-    el('h2', { text: 'Mythling Center' }),
-    el('p', { class: 'sub', text: 'Rest your team here. Healing is free and instant: HP, skill uses, Ultimate Charge and battle status are all restored.' }),
+    panelHeader('Mythling Center', onClose,
+      'Rest your team here. Healing is free and instant: HP, skill uses, Ultimate Charge and battle status are all restored.'),
     party,
     el('div', { class: 'row', style: { marginTop: '18px', gap: '10px' } }, [
-      button('💚 HEAL ALL', { class: 'primary', onclick: onHeal, sfx: 'heal' }),
-      button('🧬 PARTY', { class: 'ghost', onclick: onParty }),
-      button('📦 STORAGE', { class: 'ghost', onclick: onStorage }),
-      button('💾 SAVE GAME', { class: 'ghost', onclick: onSave }),
+      iconTextBtn('heal', 'HEAL ALL', { class: 'primary', onclick: onHeal, sfx: 'heal' }),
+      iconTextBtn('dna', 'PARTY', { class: 'ghost', onclick: onParty }),
+      iconTextBtn('box', 'STORAGE', { class: 'ghost', onclick: onStorage }),
+      iconTextBtn('save', 'SAVE GAME', { class: 'ghost', onclick: onSave }),
       el('div', { class: 'spacer', style: { flex: 1 } }),
       button('LEAVE', { class: 'ghost', onclick: onClose, sfx: 'cancel' }),
     ]),
   ]);
-  Screens.replace(node, 'center');
+  Screens.replace(node, 'center', onClose);
 }
 
 // ------------------------------------------------------------------ EVOLUTION CINEMATIC
@@ -408,8 +414,8 @@ export function levelUpSummary(entries, onDone) {
       .filter(([, v]) => v !== 0)
       .map(([k, v]) => el('div', { class: 'gain', text: `${STAT_SHORT[k]} ${v > 0 ? '+' : ''}${v}` }))));
     for (const ms of e.milestones) {
-      if (ms === 'ultimate') body.appendChild(el('p', { html: '<b style="color:#ffd76a">★ ULTIMATE UNLOCKED!</b> Charge it by attacking — 8 charges to unleash it.' }));
-      if (ms === 'evolution') body.appendChild(el('p', { html: '<b style="color:#6de89a">✦ EVOLUTION AVAILABLE!</b>' }));
+      if (ms === 'ultimate') body.appendChild(el('p', { html: `${iconSvg('ultimate', 'gold')} <b style="color:#ffd76a">ULTIMATE UNLOCKED!</b> Charge it by attacking — 8 charges to unleash it.` }));
+      if (ms === 'evolution') body.appendChild(el('p', { html: `${iconSvg('levelup', 'good')} <b style="color:#6de89a">EVOLUTION AVAILABLE!</b>` }));
       if (ms === 'maxlevel') body.appendChild(el('p', { html: `<b style="color:#ffd76a">MAX LEVEL Lv.${LEVEL_CAP} REACHED!</b> Further levels arrive in a future update.` }));
     }
   }
@@ -430,3 +436,7 @@ export function versionCompleteScreen(onDone) {
   document.getElementById('app').appendChild(layer);
   AudioManager.sfx('levelup');
 }
+
+
+// Give PlayerMenu access to the level-up summary without a circular import.
+_bindLevelUpSummary(levelUpSummary);

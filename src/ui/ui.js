@@ -4,6 +4,7 @@ import { SettingsManager } from '../systems/SettingsManager.js';
 import { ELEMENTS } from '../data/elements.js';
 import { getRarity } from '../data/rarity.js';
 import { getMutation } from '../data/mutations.js';
+import { icon, iconSvg } from './icons.js';
 
 export function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -34,18 +35,49 @@ export const Screens = {
   root: null,
   stack: [],
   init() { this.root = document.getElementById('screens'); },
-  push(node, id) {
+  /** @param onClose optional handler making the screen closable with ESC / the X button. */
+  push(node, id, onClose = null) {
     const wrap = el('div', { class: 'screen', 'data-id': id || '' }, [node]);
+    wrap._onClose = onClose;
     this.root.appendChild(wrap);
     this.stack.push(wrap);
     return wrap;
   },
-  replace(node, id) { this.clear(); return this.push(node, id); },
+  replace(node, id, onClose = null) { this.clear(); return this.push(node, id, onClose); },
   pop() { const w = this.stack.pop(); if (w) w.remove(); },
   clear() { this.stack.forEach((w) => w.remove()); this.stack = []; },
   top() { return this.stack[this.stack.length - 1]; },
   get count() { return this.stack.length; },
+  /** Close the topmost screen through its own handler. Returns true if something closed. */
+  closeTop() {
+    const w = this.top();
+    if (!w || typeof w._onClose !== 'function') return false;
+    AudioManager.sfx('cancel');
+    w._onClose();
+    return true;
+  },
 };
+
+/**
+ * Standard header for every panel: title on the left, an X close button on the right.
+ * Using this everywhere is what keeps the panels visually consistent.
+ */
+export function panelHeader(title, onClose, subtitle = '') {
+  return el('div', { class: 'panel-head' }, [
+    el('div', { class: 'panel-head-text' }, [
+      el('h2', { text: title }),
+      subtitle ? el('p', { class: 'sub', text: subtitle }) : null,
+    ]),
+    onClose ? closeButton(onClose) : null,
+  ]);
+}
+
+export function closeButton(onClose, title = 'Close (ESC)') {
+  const b = el('button', { class: 'icon-btn close-btn', title, 'aria-label': title, html: iconSvg('close') });
+  b.addEventListener('mouseenter', () => AudioManager.sfx('hover'));
+  b.addEventListener('click', () => { AudioManager.sfx('cancel'); onClose(); });
+  return b;
+}
 
 export function toast(text, kind = '') {
   const layer = document.getElementById('toast-layer');
@@ -55,20 +87,55 @@ export function toast(text, kind = '') {
   setTimeout(() => t.remove(), 2300);
 }
 
-export function modal({ title, body, buttons }) {
+/** Currently open modal's dismiss handler (used by the global ESC handler). */
+let activeModalClose = null;
+export function modalOpen() { return !!activeModalClose; }
+export function dismissModal() {
+  if (!activeModalClose) return false;
+  AudioManager.sfx('cancel');
+  activeModalClose();
+  return true;
+}
+
+export function modal({ title, body, buttons, dismissible = true, cancelValue }) {
   return new Promise((resolve) => {
     const layer = document.getElementById('modal');
     layer.innerHTML = '';
     layer.classList.remove('hidden');
-    const close = (v) => { layer.classList.add('hidden'); layer.innerHTML = ''; resolve(v); };
+    const btns = buttons || [{ label: 'OK', value: true, primary: true }];
+    const close = (v) => {
+      layer.classList.add('hidden'); layer.innerHTML = '';
+      if (activeModalClose === dismiss) activeModalClose = null;
+      resolve(v);
+    };
+    // Dismissing (X / ESC) resolves with the explicit cancel value, else the first
+    // non-primary button's value, else false — never a silently ignored promise.
+    const fallback = cancelValue !== undefined
+      ? cancelValue
+      : (btns.find((b) => !b.primary) || {}).value ?? false;
+    const dismiss = () => close(fallback);
+    if (dismissible) activeModalClose = dismiss;
     const box = el('div', { class: 'modal panel' }, [
-      el('h3', { text: title || '' }),
+      el('div', { class: 'panel-head' }, [
+        el('div', { class: 'panel-head-text' }, [el('h3', { text: title || '' })]),
+        dismissible ? closeButton(dismiss) : null,
+      ]),
       typeof body === 'string' ? el('p', { html: body }) : body,
-      el('div', { class: 'row end' }, (buttons || [{ label: 'OK', value: true, primary: true }]).map((b) =>
+      el('div', { class: 'row end' }, btns.map((b) =>
         button(b.label, { class: b.primary ? 'primary' : b.danger ? 'danger' : 'ghost', onclick: () => close(b.value) }))),
     ]);
     layer.appendChild(box);
   });
+}
+
+/**
+ * Single ESC policy for the whole game: modal first, then the topmost closable
+ * panel. Returns true when it consumed the key.
+ */
+export function handleGlobalEscape() {
+  if (dismissModal()) return true;
+  if (Screens.closeTop()) return true;
+  return false;
 }
 
 export function confirmDialog(title, text, yes = 'YES', no = 'NO') {
@@ -134,7 +201,7 @@ export function fade(on) {
 // ---------------- chips ----------------
 export function elementChip(elementId) {
   const e = ELEMENTS[elementId];
-  return el('span', { class: `chip ${elementId}`, text: `${e.icon} ${e.name}` });
+  return el('span', { class: `chip ${elementId}` }, [icon(elementId), el('span', { text: e.name })]);
 }
 
 export function rarityChip(rarityId) {
@@ -145,7 +212,7 @@ export function rarityChip(rarityId) {
 export function mutationChip(mutationId) {
   if (!mutationId || mutationId === 'none') return null;
   const m = getMutation(mutationId);
-  return el('span', { class: `chip ${m.id}`, text: `${m.short} ${m.name}` });
+  return el('span', { class: `chip ${m.id}` }, [icon(m.id === 'shiny' ? 'shiny' : 'darkness'), el('span', { text: m.name })]);
 }
 
 export function bar(kind, pct, extraClass = '') {

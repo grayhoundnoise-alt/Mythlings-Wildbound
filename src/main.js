@@ -21,7 +21,11 @@ import {
   mainMenuScreen, slotScreen, nameEntryScreen, starterScreen, settingsScreen,
   shopScreen, centerScreen, evolutionCinematic, levelUpSummary, versionCompleteScreen, INTRO_LINES,
 } from './ui/screens.js';
-import { el, button, Screens, Dialogue, toast, modal, confirmDialog, fade, bar, hpClass } from './ui/ui.js';
+import {
+  el, button, Screens, Dialogue, toast, modal, confirmDialog, fade, bar, hpClass,
+  handleGlobalEscape, modalOpen,
+} from './ui/ui.js';
+import { icon, iconSvg } from './ui/icons.js';
 import { clamp, formatTime } from './core/utils.js';
 
 class Game {
@@ -92,9 +96,16 @@ class Game {
 
   onKeyDown(e) {
     const k = e.key.toLowerCase();
+    // ESC closes whatever is on top — modal first, then any panel — in every mode.
+    if (k === 'escape') {
+      e.preventDefault();
+      if (handleGlobalEscape()) return;
+      if (this.mode === 'overworld' && !Dialogue.open) this.openMenu();
+      return;
+    }
+    if (modalOpen()) return;
     if (Dialogue.open) { if (k === ' ' || k === 'enter' || k === 'e') { e.preventDefault(); Dialogue.advance(); } return; }
     if (this.mode === 'overworld') {
-      if (k === 'escape') { e.preventDefault(); if (Screens.count) { Screens.clear(); this.resumeOverworld(); } else this.openMenu(); return; }
       if (Screens.count) return;
       if (k === 'e' || k === 'enter') { e.preventDefault(); this.overworld.interact(); return; }
       this.overworld.onKeyDown(e);
@@ -419,7 +430,7 @@ class Game {
         if (rw.coins) PlayerManager.addCoins(rw.coins);
         for (const [id, qty] of Object.entries(rw.items || {})) InventoryManager.add(id, qty);
         AudioManager.sfx('coin');
-        await Dialogue.show([t.defeat, `You received 🪙 ${rw.coins || 0} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}× ${i.replace(/_/g, ' ')}`).join(', ')}` : ''}!`], t.name);
+        await Dialogue.show([t.defeat, `You received ${rw.coins || 0} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}× ${i.replace(/_/g, ' ')}`).join(', ')}` : ''}!`], t.name);
         if (t.guardian) toast(`${t.name} defeated — a new path has opened!`, 'ok');
         await this.autosave();
         if (t.finalBoss) {
@@ -460,7 +471,7 @@ class Game {
     PlayerManager.addCoins(-penalty);
     await modal({
       title: 'YOU WERE DEFEATED',
-      body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>🪙 ${penalty}</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
+      body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${penalty} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
       buttons: [{ label: 'CONTINUE', value: true, primary: true }],
     });
     PartyManager.healAll();
@@ -532,27 +543,28 @@ class Game {
 
     const obj = document.getElementById('objective');
     const objective = this.currentObjective();
-    obj.textContent = objective || '';
+    obj.innerHTML = objective ? `${iconSvg(objective.done ? 'check' : 'objective', objective.done ? 'good' : 'gold')} <span>${objective.text}</span>` : '';
     obj.classList.toggle('show', !!objective);
 
     this.drawMinimap();
   }
 
   currentObjective() {
-    if (WorldManager.getFlag('version_complete')) return '✓ Current version complete — free exploration!';
+    const goal = (text) => ({ text, done: false });
+    if (WorldManager.getFlag('version_complete')) return { text: 'Current version complete — free exploration!', done: true };
     const mapId = this.overworld.mapId;
     if (mapId === 'verdant_vale') {
-      if (!WorldManager.isTrainerDefeated('vale_guardian')) return '◈ Defeat the Verdant Guardian at the Verdant Gate';
-      return '◈ Travel east to Azure Coast';
+      if (!WorldManager.isTrainerDefeated('vale_guardian')) return goal('Defeat the Verdant Guardian at the Verdant Gate');
+      return goal('Travel east to Azure Coast');
     }
     if (mapId === 'azure_coast') {
-      if (!WorldManager.isTrainerDefeated('coast_guardian')) return '◈ Defeat the Cavern Guardian in Azure Caverns';
-      return '◈ Travel east to Emberwild';
+      if (!WorldManager.isTrainerDefeated('coast_guardian')) return goal('Defeat the Cavern Guardian in Azure Caverns');
+      return goal('Travel east to Emberwild');
     }
     if (mapId === 'emberwild') {
-      if (!WorldManager.isTrainerDefeated('flame_warden')) return '◈ Challenge the Flame Warden in the Volcanic Ruins';
+      if (!WorldManager.isTrainerDefeated('flame_warden')) return goal('Challenge the Flame Warden in the Volcanic Ruins');
     }
-    return '';
+    return null;
   }
 
   drawMinimap() {

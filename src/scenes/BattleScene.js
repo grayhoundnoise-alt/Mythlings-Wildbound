@@ -13,6 +13,8 @@ import { BALL_IDS, getItem } from '../data/items.js';
 import { drawMythling } from '../render/creatures.js';
 import { roundRect, circle } from '../render/worldRenderer.js';
 import { el, button, bar, hpClass, elementChip, mutationChip, rarityChip, toast, confirmDialog, modal } from '../ui/ui.js';
+import { icon, iconSvg, iconLabel } from '../ui/icons.js';
+import { buffSummary } from '../data/skills.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { clamp, randInt } from '../core/utils.js';
@@ -73,15 +75,17 @@ export class BattleScene {
     this.ui = el('div', { class: 'battle-ui' });
     this.enemyCard = el('div', { class: 'combatant-card enemy' });
     this.playerCard = el('div', { class: 'combatant-card player' });
-    this.logBox = el('div', { class: 'battle-log' });
+    // Announcements sit at the TOP of the battle screen so the creatures and
+    // both status cards stay visible while text scrolls.
+    this.logBox = el('div', { class: 'battle-log top' });
     this.actions = el('div', { class: 'battle-actions panel' });
-    this.ui.append(this.enemyCard, this.playerCard, this.logBox, this.actions);
+    this.ui.append(this.logBox, this.enemyCard, this.playerCard, this.actions);
     document.getElementById('app').appendChild(this.ui);
   }
 
   pushLog(text, emph = false) {
     this.logLines.push({ text, emph });
-    if (this.logLines.length > 3) this.logLines.shift();
+    if (this.logLines.length > 4) this.logLines.shift();
     if (this.logBox) {
       this.logBox.innerHTML = '';
       for (const l of this.logLines) this.logBox.appendChild(el('div', { class: l.emph ? 'emph' : '', text: l.text }));
@@ -149,11 +153,12 @@ export class BattleScene {
       const left = usesLeft(p, sk.id);
       const disabled = Number.isFinite(left) && left <= 0;
       const power = sk.category === 'buff'
-        ? sk.effects.map((e) => `${e.stat.toUpperCase()}+${e.amount}`).join(' ')
+        ? buffSummary(sk, ' ')
         : `PWR ${sk.power} · ${sk.damageType === 'physical' ? 'P.ATK' : 'S.ATK'}`;
-      const elIcon = sk.element ? ELEMENTS[sk.element].icon : '⚔';
+      const glyph = sk.element || (sk.category === 'buff' ? 'shield' : 'strike');
       const btn = button('', { class: `action-btn ${slot}`, disabled, onclick: () => this.doAction({ type: 'skill', slot }) });
-      btn.innerHTML = `<div>${elIcon} ${sk.name}</div><small>${power} · ${Number.isFinite(left) ? `${left} uses` : '∞ uses'}</small>`;
+      btn.innerHTML = `<div class="ab-name">${iconSvg(glyph, sk.element || '')}<span>${sk.name}</span></div>`
+        + `<small>${power} · ${Number.isFinite(left) ? `${left} uses` : `${iconSvg('infinity', 'tiny')} unlimited`}</small>`;
       btn.title = sk.desc;
       return btn;
     };
@@ -170,26 +175,31 @@ export class BattleScene {
       onclick: () => this.doAction({ type: 'ultimate' }),
     });
     ultBtn.innerHTML = unlocked
-      ? `<div>★ ${ult.name}</div><small>${p.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? '— READY' : 'charge'}</small>`
-      : `<div>★ ULTIMATE</div><small>Unlocks at Lv.10</small>`;
+      ? `<div class="ab-name">${iconSvg('ultimate')}<span>${ult.name}</span></div><small>${p.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? '— READY' : 'charge'}</small>`
+      : `<div class="ab-name">${iconSvg('lock')}<span>ULTIMATE</span></div><small>Unlocks at Lv.10</small>`;
     const fill = el('div', { class: 'ult-fill', style: { width: `${(p.ultCharge / ULTIMATE_MAX_CHARGE) * 100}%` } });
     ultBtn.appendChild(fill);
     this.actions.appendChild(ultBtn);
 
-    this.actions.appendChild(button('🎒 ITEM', { class: 'ghost', onclick: () => this.openItems() }));
-    this.actions.appendChild(button('🔄 PARTY', { class: 'ghost', onclick: () => this.openSwitch() }));
-    const catchBtn = button('⭕ CATCH', {
+    const itemBtn = button('', { class: 'ghost', onclick: () => this.openItems() });
+    itemBtn.appendChild(iconLabel('bag', 'ITEM'));
+    this.actions.appendChild(itemBtn);
+    const partyBtn = button('', { class: 'ghost', onclick: () => this.openSwitch() });
+    partyBtn.appendChild(iconLabel('swap', 'PARTY'));
+    this.actions.appendChild(partyBtn);
+    const catchBtn = button('', {
       class: 'ghost', disabled: true,
       onclick: () => toast('Defeat the wild Mythling first!', 'bad'),
     });
+    catchBtn.appendChild(iconLabel('orb', 'CATCH'));
     catchBtn.title = this.battle.type === BattleType.WILD
       ? 'You must defeat the wild Mythling before catching it.'
       : 'You cannot catch another trainer\'s Mythling.';
     this.actions.appendChild(catchBtn);
-    this.actions.appendChild(button(this.battle.type === BattleType.WILD ? '🏃 RUN' : '🚫 NO ESCAPE', {
-      class: 'ghost', disabled: this.battle.type !== BattleType.WILD,
-      onclick: () => this.doAction({ type: 'run' }),
-    }));
+    const wild = this.battle.type === BattleType.WILD;
+    const runBtn = button('', { class: 'ghost', disabled: !wild, onclick: () => this.doAction({ type: 'run' }) });
+    runBtn.appendChild(iconLabel(wild ? 'run' : 'block', wild ? 'RUN' : 'NO ESCAPE'));
+    this.actions.appendChild(runBtn);
   }
 
   renderCaptureActions() {
@@ -207,11 +217,13 @@ export class BattleScene {
       const item = getItem(ballId);
       const chance = Math.round(CaptureManager.chanceFor(target, ballId) * 100);
       const btn = button('', { class: 'action-btn', disabled: qty <= 0, onclick: () => this.tryCapture(ballId) });
-      btn.innerHTML = `<div>⭕ ${item.name}</div><small>x${qty} · ${chance}% catch</small>`;
+      btn.innerHTML = `<div class="ab-name">${iconSvg('orb')}<span>${item.name}</span></div><small>x${qty} · ${chance}% catch</small>`;
       this.actions.appendChild(btn);
       if (qty > 0) any = true;
     }
-    this.actions.appendChild(button('➡ LEAVE IT', { class: 'ghost', onclick: () => this.finishWild(false) }));
+    const leaveBtn = button('', { class: 'ghost', onclick: () => this.finishWild(false) });
+    leaveBtn.appendChild(iconLabel('arrowRight', 'LEAVE IT'));
+    this.actions.appendChild(leaveBtn);
     if (!any) this.pushLog('You have no balls left! Buy more at a shop.', true);
   }
 

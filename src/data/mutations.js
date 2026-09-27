@@ -1,19 +1,19 @@
 // Mutations are (currently) purely cosmetic. Architecture supports more types later.
 export const MUTATIONS = {
   none: {
-    id: 'none', name: 'Normal', short: '', color: '#cfd8e3',
+    id: 'none', name: 'Normal', icon: null, color: '#cfd8e3',
     chance: 1, // remainder
     palette: null,
     aura: null,
   },
   shiny: {
-    id: 'shiny', name: 'Shiny', short: '✧', color: '#ffe680',
+    id: 'shiny', name: 'Shiny', icon: 'shiny', color: '#ffe680',
     chance: 0.035,
     palette: { hueShift: 40, saturate: 1.25, lighten: 1.12 },
     aura: { color: 'rgba(255,240,150,0.85)', particles: 'sparkle' },
   },
   darkness: {
-    id: 'darkness', name: 'Darkness', short: '☾', color: '#b07cff',
+    id: 'darkness', name: 'Darkness', icon: 'darkness', color: '#b07cff',
     chance: 0.02,
     palette: { hueShift: -25, saturate: 0.55, lighten: 0.48 },
     aura: { color: 'rgba(150,90,255,0.8)', particles: 'shadow' },
