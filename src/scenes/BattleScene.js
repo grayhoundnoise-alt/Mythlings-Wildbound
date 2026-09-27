@@ -901,7 +901,7 @@ export class BattleScene {
 
   /**
    * Throw → open → absorb → drop → wobble → lock (or burst), drawn with the
-   * actual ball the player picked, so a King Ball throw looks like a King Ball.
+   * actual ball the player picked, so a God Ball throw looks like a God Ball.
    */
   async captureAnimation(ballId, success) {
     const from = this.screenPos('player'), to = this.screenPos('enemy');
@@ -1153,6 +1153,7 @@ export class BattleScene {
       nature: { sky: ['#9fe8ff', '#e8ffd9'], ground: ['#7ecb6a', '#4f9b52'], accent: '#3f8f42' },
       water:  { sky: ['#8fd8ff', '#d7f3ff'], ground: ['#f0e0b4', '#7fc4d8'], accent: '#3fa9f5' },
       fire:   { sky: ['#5a1f18', '#ff9a4a'], ground: ['#5b3c34', '#33211d'], accent: '#ff7a3d' },
+      rock:   { sky: ['#3b3f4e', '#d8c7a4'], ground: ['#9a8f78', '#5e574c'], accent: '#7d7a72' },
     };
     const p = palettes[theme] || palettes.nature;
     const sky = ctx.createLinearGradient(0, 0, 0, H * 0.7);

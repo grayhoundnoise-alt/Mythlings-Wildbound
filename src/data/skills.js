@@ -1,7 +1,14 @@
-// DESIGN RULE: a Buff skill raises exactly ONE stat and a Debuff skill lowers
-// exactly ONE enemy stat. `effects` stays an array so the battle engine (and
-// future multi-effect content) needs no changes, but every buff/debuff in this
-// build ships with a single entry — see buffSummary() in ui code.
+// DESIGN RULE: a regular Buff skill raises exactly ONE stat and a regular Debuff
+// skill lowers exactly ONE enemy stat. `effects` is an array, and the ELITE
+// support skills (Lv.60 / Lv.80, few uses) and the support Ultimates use two
+// entries. An effect may carry `target: 'self' | 'foe'`: on the foe it is always
+// a debuff, on self always a buff — see buffSummary() in ui code.
+//
+// Extra skill riders the battle engine understands:
+//   drain: 0.5      heal 50% of the damage this hit dealt (crits heal more)
+//   healPct: 0.2    heal 20% of max HP after a successful hit (fixed heal)
+//   reflect: 2      deal 2x the damage the LAST enemy attack did to you (no
+//                   damage taken this round -> the skill fizzles)
 //
 // Skill definitions. Categories: 'normal' (infinite uses), 'special', 'buff',
 // 'debuff' (lowers a stat of the FOE) and 'ultimate'.
@@ -110,6 +117,60 @@ export const SKILLS = {
   magma_brand:     { id: 'magma_brand',     name: 'Magma Brand',     category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'A searing brand. Lowers the foe\'s Physical Defense sharply.' },
   cinder_curse:    { id: 'cinder_curse',    name: 'Cinder Curse',    category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'Smouldering cinders cling to the foe. Lowers its Special Defense sharply.' },
 
+  // ---------- ROCK pool (Stonehollow Crags) ----------
+  pebble_toss:     { id: 'pebble_toss',     name: 'Pebble Toss',     category: 'normal', damageType: 'physical', element: null,   power: 10, uses: Infinity, desc: 'A flick of loose gravel. Unlimited uses.' },
+  rock_jab:        { id: 'rock_jab',        name: 'Rock Jab',        category: 'normal', damageType: 'physical', element: 'rock', power: 18, uses: Infinity, desc: 'A stone-hard headbutt. Unlimited uses.' },
+  boulder_smash:   { id: 'boulder_smash',   name: 'Boulder Smash',   category: 'normal', damageType: 'physical', element: 'rock', power: 31, uses: Infinity, desc: 'Brings a boulder down on the foe. Unlimited uses.' },
+  tectonic_slam:   { id: 'tectonic_slam',   name: 'Tectonic Slam',   category: 'normal', damageType: 'physical', element: 'rock', power: 42, uses: Infinity, desc: 'The ground itself lurches. Unlimited uses.' },
+  stone_shard:     { id: 'stone_shard',     name: 'Stone Shard',     category: 'special', damageType: 'physical', element: 'rock', power: 17, uses: 20, desc: 'Hurls a jagged shard of flint.' },
+  crag_lance:      { id: 'crag_lance',      name: 'Crag Lance',      category: 'special', damageType: 'physical', element: 'rock', power: 28, uses: 18, desc: 'A spear of stone erupts from the ground.' },
+  crystal_ray:     { id: 'crystal_ray',     name: 'Crystal Ray',     category: 'special', damageType: 'special',  element: 'rock', power: 27, uses: 18, desc: 'Light focused through a living crystal.' },
+  meteor_fist:     { id: 'meteor_fist',     name: 'Meteor Fist',     category: 'special', damageType: 'physical', element: 'rock', power: 42, uses: 15, desc: 'A punch that lands like a falling star.', future: true },
+  quartz_storm:    { id: 'quartz_storm',    name: 'Quartz Storm',    category: 'special', damageType: 'special',  element: 'rock', power: 40, uses: 15, desc: 'A blizzard of razor crystal.', future: true },
+  titan_quake:     { id: 'titan_quake',     name: 'Titan Quake',     category: 'special', damageType: 'physical', element: 'rock', power: 56, uses: 12, desc: 'The mountain answers. Everything shakes.', future: true },
+  core_beam:       { id: 'core_beam',       name: 'Core Beam',       category: 'special', damageType: 'special',  element: 'rock', power: 54, uses: 12, desc: 'A beam of pressure from the planet\'s heart.', future: true },
+  stone_skin:      { id: 'stone_skin',      name: 'Stone Skin',      category: 'buff', effects: [{ stat: 'pdef', amount: 4 }], uses: 10, desc: 'Raises Physical Defense.' },
+  granite_might:   { id: 'granite_might',   name: 'Granite Might',   category: 'buff', effects: [{ stat: 'patk', amount: 4 }], uses: 10, desc: 'Raises Physical Attack.' },
+  quartz_focus:    { id: 'quartz_focus',    name: 'Quartz Focus',    category: 'buff', effects: [{ stat: 'satk', amount: 4 }], uses: 10, desc: 'Raises Special Attack.' },
+  bedrock_will:    { id: 'bedrock_will',    name: 'Bedrock Will',    category: 'buff', effects: [{ stat: 'sdef', amount: 4 }], uses: 10, desc: 'Raises Special Defense.' },
+  landslide_pace:  { id: 'landslide_pace',  name: 'Landslide Pace',  category: 'buff', effects: [{ stat: 'spd', amount: 5 }], uses: 8, desc: 'Raises Speed.', future: true },
+  mountain_heart:  { id: 'mountain_heart',  name: 'Mountain Heart',  category: 'buff', effects: [{ stat: 'hp', amount: 9 }], uses: 10, desc: 'Raises max HP.' },
+  obsidian_edge:   { id: 'obsidian_edge',   name: 'Obsidian Edge',   category: 'buff', effects: [{ stat: 'patk', amount: 6 }], uses: 8, desc: 'Raises Physical Attack sharply.', future: true },
+  geode_mind:      { id: 'geode_mind',      name: 'Geode Mind',      category: 'buff', effects: [{ stat: 'satk', amount: 6 }], uses: 8, desc: 'Raises Special Attack sharply.', future: true },
+  // -- rock debuffs (same ladder as the other elements) --
+  grit_blind:      { id: 'grit_blind',      name: 'Grit Blind',      category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, desc: 'Grit in the eyes. Lowers the foe\'s Special Attack.' },
+  petrify:         { id: 'petrify',         name: 'Petrify',         category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, desc: 'Stiffens the foe\'s limbs. Lowers its Physical Attack.' },
+  sandstorm:       { id: 'sandstorm',       name: 'Sandstorm',       category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 12, desc: 'A wall of blowing sand. Lowers the foe\'s Speed.' },
+  crush_armor:     { id: 'crush_armor',     name: 'Crush Armor',     category: 'debuff', effects: [{ stat: 'pdef', amount: 5 }], uses: 10, desc: 'Cracks the foe\'s plating. Lowers its Physical Defense.' },
+  quake_shock:     { id: 'quake_shock',     name: 'Quake Shock',     category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, desc: 'A tremor that rattles focus. Lowers the foe\'s Special Defense.' },
+  fault_line:      { id: 'fault_line',      name: 'Fault Line',      category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'Splits the ground under the foe. Lowers its Physical Defense sharply.' },
+  stone_curse:     { id: 'stone_curse',     name: 'Stone Curse',     category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'An ancient curse of the crags. Lowers the foe\'s Special Defense sharply.' },
+
+  // ---------- LIFE STEAL: attack and heal in the same move ----------
+  // "drain" heals a share of the damage dealt (a crit heals more), "healPct" is a
+  // fixed heal that lands after any successful hit.
+  sap_bite:        { id: 'sap_bite',        name: 'Sap Bite',        category: 'special', damageType: 'physical', element: 'nature', power: 22, uses: 12, drain: 0.5, desc: 'Bites deep and drinks the sap. Heals 50% of the damage dealt.' },
+  siphon_tide:     { id: 'siphon_tide',     name: 'Siphon Tide',     category: 'special', damageType: 'special',  element: 'water',  power: 22, uses: 12, drain: 0.5, desc: 'Pulls the foe\'s strength out with the tide. Heals 50% of the damage dealt.' },
+  ember_leech:     { id: 'ember_leech',     name: 'Ember Leech',     category: 'special', damageType: 'special',  element: 'fire',   power: 22, uses: 12, drain: 0.5, desc: 'Steals the foe\'s warmth. Heals 50% of the damage dealt.' },
+  crystal_leech:   { id: 'crystal_leech',   name: 'Crystal Leech',   category: 'special', damageType: 'special',  element: 'rock',   power: 22, uses: 12, drain: 0.5, desc: 'Crystals drink the foe\'s vigour. Heals 50% of the damage dealt.' },
+  vampiric_maw:    { id: 'vampiric_maw',    name: 'Vampiric Maw',    category: 'special', damageType: 'physical', element: null,     power: 34, uses: 8,  drain: 0.75, desc: 'A ravenous bite. Heals 75% of the damage dealt — a crit heals a fortune.', future: true },
+  mending_strike:  { id: 'mending_strike',  name: 'Mending Strike',  category: 'special', damageType: 'physical', element: null,     power: 18, uses: 10, healPct: 0.2, desc: 'A measured strike that steadies the body. Heals 20% of max HP after it lands.' },
+  restoring_pulse: { id: 'restoring_pulse', name: 'Restoring Pulse', category: 'special', damageType: 'special',  element: null,     power: 26, uses: 8,  healPct: 0.3, desc: 'A pulse that hurts the foe and knits your wounds. Heals 30% of max HP after it lands.', future: true },
+
+  // ---------- REFLECT: pay the last hit back double ----------
+  retaliate:       { id: 'retaliate',       name: 'Retaliate',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 6, reflect: 2, desc: 'Returns the LAST hit you took at double strength. You still take the hit first — and if the foe only buffed, there is nothing to return.' },
+  vengeance:       { id: 'vengeance',       name: 'Vengeance',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 4, reflect: 3, desc: 'Returns the LAST hit you took at triple strength. Risky: a buffing foe leaves you nothing to return.', future: true },
+
+  // ---------- ELITE support skills: two effects, few uses ----------
+  // Foe-side entries are always debuffs, self-side entries always buffs.
+  war_cry:         { id: 'war_cry',         name: 'War Cry',         category: 'buff',   effects: [{ stat: 'patk', amount: 8 }, { stat: 'spd', amount: 6 }], uses: 4, desc: 'A roar that quickens the blood. Raises Physical Attack AND Speed.', future: true },
+  arcane_surge:    { id: 'arcane_surge',    name: 'Arcane Surge',    category: 'buff',   effects: [{ stat: 'satk', amount: 8 }, { stat: 'sdef', amount: 6 }], uses: 4, desc: 'Power floods every sense. Raises Special Attack AND Special Defense.', future: true },
+  bulwark:         { id: 'bulwark',         name: 'Bulwark',         category: 'buff',   effects: [{ stat: 'pdef', amount: 8 }, { stat: 'sdef', amount: 8 }], uses: 4, desc: 'Becomes a living wall. Raises both Defenses.', future: true },
+  intimidate:      { id: 'intimidate',      name: 'Intimidate',      category: 'debuff', effects: [{ stat: 'patk', amount: 7 }, { stat: 'satk', amount: 7 }], uses: 4, desc: 'A stare that drains the will to fight. Lowers the foe\'s Physical AND Special Attack.', future: true },
+  shatter:         { id: 'shatter',         name: 'Shatter',         category: 'debuff', effects: [{ stat: 'pdef', amount: 8 }, { stat: 'sdef', amount: 8 }], uses: 4, desc: 'Breaks every guard at once. Lowers both of the foe\'s Defenses.', future: true },
+  predator_focus:  { id: 'predator_focus',  name: 'Predator Focus',  category: 'buff',   effects: [{ stat: 'patk', amount: 7 }, { stat: 'pdef', amount: 6, target: 'foe' }], uses: 4, desc: 'Locks onto the prey. Raises your Physical Attack and lowers the foe\'s Physical Defense.', future: true },
+  mind_break:      { id: 'mind_break',      name: 'Mind Break',      category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }, { stat: 'satk', amount: 6, target: 'self' }], uses: 4, desc: 'Cracks the foe\'s focus and feeds on it. Lowers the foe\'s Special Defense and raises your Special Attack.', future: true },
+
 };
 
 // ---------- Ultimates ----------
@@ -165,6 +226,61 @@ export const ULTIMATES = {
     ],
     desc: 'A cyclone of razor leaves engulfs the field.',
   },
+  // ---------- ROCK ----------
+  stone_avalanche: {
+    id: 'stone_avalanche', baseName: 'Stone Avalanche', element: 'rock', damageType: 'physical',
+    tiers: [
+      { suffix: '',    power: 35, unlockLevel: 10 },
+      { suffix: ' I',  power: 51, unlockLevel: 20 },
+      { suffix: ' II', power: 75, unlockLevel: 60, future: true },
+      { suffix: ' III',power: 105, unlockLevel: 80, future: true },
+    ],
+    desc: 'Half a mountainside comes down on the foe.',
+  },
+  crystal_cannon: {
+    id: 'crystal_cannon', baseName: 'Crystal Cannon', element: 'rock', damageType: 'special',
+    tiers: [
+      { suffix: '',    power: 34, unlockLevel: 10 },
+      { suffix: ' I',  power: 50, unlockLevel: 20 },
+      { suffix: ' II', power: 74, unlockLevel: 60, future: true },
+      { suffix: ' III',power: 104, unlockLevel: 80, future: true },
+    ],
+    desc: 'Every crystal on its body fires at once.',
+  },
+  // ---------- SUPPORT ULTIMATES (kind: 'support') ----------
+  // No damage: two effects that grow with the tier. Foe-side effects are ALWAYS
+  // debuffs, self-side effects ALWAYS buffs — an Ultimate-grade buff or debuff.
+  granite_bastion: {
+    id: 'granite_bastion', baseName: 'Granite Bastion', element: 'rock', damageType: null, kind: 'support',
+    tiers: [
+      { suffix: '',    unlockLevel: 10, effects: [{ stat: 'pdef', amount: 8,  target: 'self' }, { stat: 'sdef', amount: 8,  target: 'self' }] },
+      { suffix: ' I',  unlockLevel: 20, effects: [{ stat: 'pdef', amount: 11, target: 'self' }, { stat: 'sdef', amount: 11, target: 'self' }] },
+      { suffix: ' II', unlockLevel: 60, effects: [{ stat: 'pdef', amount: 15, target: 'self' }, { stat: 'sdef', amount: 15, target: 'self' }], future: true },
+      { suffix: ' III',unlockLevel: 80, effects: [{ stat: 'pdef', amount: 20, target: 'self' }, { stat: 'sdef', amount: 20, target: 'self' }], future: true },
+    ],
+    desc: 'Buff Ultimate: the Mythling turns to living granite. Raises BOTH of its Defenses by far more than any buff skill.',
+  },
+  quake_curse: {
+    id: 'quake_curse', baseName: 'Quake Curse', element: 'rock', damageType: null, kind: 'support',
+    tiers: [
+      { suffix: '',    unlockLevel: 10, effects: [{ stat: 'pdef', amount: 8,  target: 'foe' }, { stat: 'spd', amount: 6,  target: 'foe' }] },
+      { suffix: ' I',  unlockLevel: 20, effects: [{ stat: 'pdef', amount: 11, target: 'foe' }, { stat: 'spd', amount: 8,  target: 'foe' }] },
+      { suffix: ' II', unlockLevel: 60, effects: [{ stat: 'pdef', amount: 15, target: 'foe' }, { stat: 'spd', amount: 11, target: 'foe' }], future: true },
+      { suffix: ' III',unlockLevel: 80, effects: [{ stat: 'pdef', amount: 20, target: 'foe' }, { stat: 'spd', amount: 14, target: 'foe' }], future: true },
+    ],
+    desc: 'Debuff Ultimate: the ground swallows the foe\'s footing. Lowers the foe\'s Physical Defense AND Speed.',
+  },
+  crystal_resonance: {
+    id: 'crystal_resonance', baseName: 'Crystal Resonance', element: 'rock', damageType: null, kind: 'support',
+    tiers: [
+      { suffix: '',    unlockLevel: 10, effects: [{ stat: 'satk', amount: 8,  target: 'self' }, { stat: 'sdef', amount: 6,  target: 'foe' }] },
+      { suffix: ' I',  unlockLevel: 20, effects: [{ stat: 'satk', amount: 11, target: 'self' }, { stat: 'sdef', amount: 8,  target: 'foe' }] },
+      { suffix: ' II', unlockLevel: 60, effects: [{ stat: 'satk', amount: 15, target: 'self' }, { stat: 'sdef', amount: 11, target: 'foe' }], future: true },
+      { suffix: ' III',unlockLevel: 80, effects: [{ stat: 'satk', amount: 20, target: 'self' }, { stat: 'sdef', amount: 14, target: 'foe' }], future: true },
+    ],
+    desc: 'Buff + Debuff Ultimate: a resonance that empowers the caster and shatters the foe. Raises your Special Attack and lowers the foe\'s Special Defense.',
+  },
+
 };
 
 export const ULTIMATE_MAX_CHARGE = 8;
@@ -176,20 +292,38 @@ export const SKILL_CATEGORY_LABEL = { normal: 'Normal', special: 'Special', buff
 /** Sort order of the categories in the Skill Library and the wiki. */
 export const SKILL_CATEGORY_ORDER = ['normal', 'special', 'buff', 'debuff', 'ultimate'];
 
-/** True when a skill deals damage (Normal / Special / Ultimate). */
+/** True when a skill deals damage (Normal / Special / damage Ultimate). */
 export function isDamageSkill(sk) {
-  return !!sk && sk.category !== 'buff' && sk.category !== 'debuff';
+  return !!sk && sk.category !== 'buff' && sk.category !== 'debuff' && sk.kind !== 'support';
+}
+
+/** Which side an effect lands on: explicit `target`, else the skill's own category. */
+export function effectTarget(sk, eff) {
+  if (eff.target) return eff.target;
+  return sk.category === 'debuff' ? 'foe' : 'self';
 }
 
 /**
- * Human-readable summary of a buff or debuff skill (always exactly one stat).
- * Buffs read "P.ATK +4", debuffs read "P.DEF -5" (they lower the FOE's stat).
+ * Human-readable summary of a buff / debuff skill or a support Ultimate.
+ * Self-side effects read "P.ATK +4", foe-side effects read "foe P.DEF -5".
  */
 export function buffSummary(sk, joiner = ' ') {
   if (!sk || !sk.effects) return '';
   const short = { hp: 'HP', patk: 'P.ATK', satk: 'S.ATK', pdef: 'P.DEF', sdef: 'S.DEF', spd: 'SPD', counter: 'CNT' };
-  const sign = sk.category === 'debuff' ? '-' : '+';
-  return sk.effects.map((e) => `${short[e.stat] || e.stat.toUpperCase()}${joiner}${sign}${e.amount}`).join(', ');
+  return sk.effects.map((e) => {
+    const foe = effectTarget(sk, e) === 'foe';
+    return `${foe ? 'foe ' : ''}${short[e.stat] || e.stat.toUpperCase()}${joiner}${foe ? '-' : '+'}${e.amount}`;
+  }).join(', ');
+}
+
+/** Short text for the extra riders of a skill (life steal, fixed heal, reflect). */
+export function riderSummary(sk) {
+  if (!sk) return '';
+  const out = [];
+  if (sk.drain) out.push(`heals ${Math.round(sk.drain * 100)}% of damage dealt`);
+  if (sk.healPct) out.push(`heals ${Math.round(sk.healPct * 100)}% max HP on hit`);
+  if (sk.reflect) out.push(`returns the last hit taken x${sk.reflect}`);
+  return out.join(' · ');
 }
 
 /**
@@ -199,8 +333,9 @@ export function buffSummary(sk, joiner = ' ') {
  */
 export function skillStrength(sk) {
   if (!sk) return 0;
-  if (sk.category === 'buff' || sk.category === 'debuff') return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
-  return sk.power || 0;
+  if (sk.category === 'buff' || sk.category === 'debuff' || sk.kind === 'support') return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+  if (sk.reflect) return 30 * sk.reflect;      // ranks between the mid and late specials
+  return (sk.power || 0) + (sk.drain ? 6 : 0) + (sk.healPct ? 6 : 0);
 }
 
 export function getSkill(id) {
@@ -223,11 +358,18 @@ export function resolveUltimate(ultId, tierIndex) {
     tierIndex: idx,
     name: ult.baseName + tier.suffix,
     category: 'ultimate',
+    kind: ult.kind || 'damage',
     damageType: ult.damageType,
     element: ult.element,
-    power: tier.power,
+    power: tier.power || 0,
+    effects: tier.effects || null,
     selfBuff: tier.selfBuff || null,
     desc: ult.desc,
     future: !!tier.future,
   };
+}
+
+/** True for the buff / debuff Ultimates (no damage, two effects). */
+export function isSupportUltimate(u) {
+  return !!u && (u.kind === 'support');
 }

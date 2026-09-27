@@ -3,7 +3,7 @@
 import { getMap, regionAt } from '../data/maps.js';
 import { GameState, PartyManager, PlayerManager, WorldManager, InventoryManager, CollectionManager, bus } from '../systems/GameState.js';
 import { EncounterManager } from '../systems/EncounterManager.js';
-import { WorldRenderer, drawTrainerAvatar, roundRect } from '../render/worldRenderer.js';
+import { WorldRenderer, drawTrainerAvatar, roundRect, terrainColor } from '../render/worldRenderer.js';
 import { drawMythling } from '../render/creatures.js';
 import { displayName, speciesOf } from '../core/mythling.js';
 import { getSpecies } from '../data/species.js';
@@ -444,10 +444,16 @@ export class OverworldScene {
   minimapData() {
     const map = this.map;
     return {
+      mapId: map.id,
       w: map.width, h: map.height,
       px: this.player.x, py: this.player.y,
+      regions: map.regions.map((r) => [...r.rect, terrainColor(r.terrain)]),
+      water: (map.water || []).map((w) => [w.x, w.y, w.w, w.h, w.kind]),
+      bridges: (map.bridges || []).map((b) => [b.x, b.y, b.w, b.h]),
       zones: map.encounterZones.map((z) => z.rect),
-      buildings: map.buildings.map((b) => [b.x, b.y, b.w, b.h]),
+      buildings: map.buildings.map((b) => [b.x, b.y, b.w, b.h, b.type]),
+      npcs: (map.npcs || []).map((n) => [n.x, n.y]),
+      trainers: (map.trainers || []).map((t) => [t.x, t.y, WorldManager.isTrainerDefeated(t.flag)]),
       wild: this.wild.map((w) => [w.x, w.y, getSpecies(w.m.speciesId).element]),
       conns: (map.connections || []).map((c) => c.rect),
     };

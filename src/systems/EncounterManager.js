@@ -12,17 +12,14 @@ export const EncounterManager = {
   /**
    * Roll a wild Mythling for a given zone.
    *
-   * `modifiers.partyLevel` lets the world keep pace with the party: once you
-   * out-level a zone's range the whole range shifts up by the difference, so
-   * grinding past the story content to the Lv.100 cap stays possible instead
-   * of paying nothing.
+   * Level bands are FIXED per zone (Verdant Vale 1-20, Azure Coast 15-30,
+   * Emberwild 30-45, Stonehollow Crags 45-60): the world never scales up to the
+   * party, so out-levelling an area is the signal to move on to the next one.
    */
   spawnForZone(zone, mapId, rng = Math.random, modifiers = {}) {
     const pick = weightedChoice(rng, zone.species);
     const [lo, hi] = zone.levelRange;
     let level = randInt(rng, lo, hi);
-    const top = Number(modifiers.partyLevel) || 0;
-    if (top > hi) level += top - hi;
     level = clamp(level, 1, LEVEL_CAP);
     return createMythling({
       speciesId: pick.id,

@@ -43,7 +43,11 @@ export const CaptureManager = {
 
     resetToLevelOne(caught);                     // <<< ALWAYS Lv.1
 
-    CollectionManager.markCaught(caught.speciesId, caught.mutation);
+    // Shiny Ball / Dark Ball: the Mythling ALWAYS emerges with that mutation.
+    const ball = getItem(ballId);
+    if (ball?.forceMutation) caught.mutation = ball.forceMutation;
+
+    CollectionManager.markCaught(caught.speciesId, caught.mutation, caught.stage);
 
     return { ok: true, success: true, chance, mythling: caught, destination: 'pending' };
   },

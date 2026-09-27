@@ -2,6 +2,7 @@
 // Lv.60 / Lv.80 stay locked but remain described in the data for future updates.
 import { canEvolve, evolve, futureEvolutionInfo, nextEvolution } from '../core/mythling.js';
 import { MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE } from '../data/config.js';
+import { CollectionManager } from './GameState.js';
 
 export const EvolutionManager = {
   isReady(m) { return canEvolve(m); },
@@ -11,7 +12,10 @@ export const EvolutionManager = {
   /** Perform the evolution. Returns the transformation record (or null). */
   perform(m) {
     if (!canEvolve(m)) return null;
-    return evolve(m);
+    const rec = evolve(m);
+    // The Index reveals an evolution only once the player has actually owned it.
+    CollectionManager.markForm(m.speciesId, m.stage);
+    return rec;
   },
 
   /** Locked future stages, for the detail screen (never shown as usable buttons). */

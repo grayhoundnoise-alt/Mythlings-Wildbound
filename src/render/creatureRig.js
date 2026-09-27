@@ -464,18 +464,20 @@ function acquireRig(speciesId, stage, mutation, size, animTag) {
 // =============================================================================
 // RENDERER
 // =============================================================================
-const AMBIENT_ELEMENT = {
-  spriggo: 'nature', leaflet: 'nature',
-  aquini: 'water', rivruff: 'water',
-  emberu: 'fire',
-};
-
 /** A few ambient motes in creature space — element identity, ~5 shapes max. */
 function drawAmbient(ctx, c, speciesId, t, r, excite) {
-  const el = AMBIENT_ELEMENT[speciesId] || 'nature';
+  const el = getSpecies(speciesId)?.element || 'nature';
   const n = el === 'fire' ? 4 : 3;
   ctx.save();
-  if (el === 'nature') {
+  if (el === 'rock') {                            // drifting grit + a slow-orbiting pebble
+    ctx.globalAlpha *= 0.55;
+    for (let i = 0; i < 4; i++) {
+      const p = (t * 0.5 + i * 0.25) % 1;
+      ell(ctx, (r.hipX ?? -10) - 30 - p * 10 + Math.sin(t * 1.5 + i) * 4, (r.bodyY ?? -34) - 14 + p * 22, 1.6, 1.4, i % 2 ? c.accent : c.belly);
+    }
+    const a = t * 1.2;
+    ell(ctx, (r.hipX ?? -10) - 22 + Math.cos(a) * 14, (r.bodyY ?? -34) - 28 + Math.sin(a) * 4, 2.6, 2.2, c.secondary);
+  } else if (el === 'nature') {
     ctx.globalAlpha *= 0.5;
     for (let i = 0; i < n; i++) {
       const p = (t * 0.6 + i * 0.33) % 1;

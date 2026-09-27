@@ -8,17 +8,18 @@ import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, stageData,
   libraryByLevel, equippedSkills, equipSkill, unequipSkill, moveSkill, canEquipMore,
   MAX_EQUIPPED_SKILLS, ultimateMove, ultimateUnlocked, expNeeded, applyItemEffects,
+  rerollMood, rerollRational,
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
-import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat } from '../data/moods.js';
+import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat, getMood, getRational, rationalSummary, RATIONALS } from '../data/moods.js';
 import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE } from '../data/config.js';
 import { openWiki } from './wiki.js';
 import { RARITY_ORDER, getRarity } from '../data/rarity.js';
-import { MUTATIONS } from '../data/mutations.js';
+import { MUTATIONS, getMutation } from '../data/mutations.js';
 import { ITEM_CATEGORIES, getItem } from '../data/items.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
-import { ELEMENTS } from '../data/elements.js';
+import { ELEMENTS, ELEMENT_ORDER } from '../data/elements.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
 import { drawMythling } from '../render/creatures.js';
 import {
@@ -27,7 +28,7 @@ import {
 } from './ui.js';
 import { icon, iconSvg, iconLabel } from './icons.js';
 import { ballCanvas, ballLook } from '../render/balls.js';
-import { buffSummary, getSkill, SKILL_CATEGORY_LABEL, isDamageSkill } from '../data/skills.js';
+import { buffSummary, getSkill, SKILL_CATEGORY_LABEL, isDamageSkill, riderSummary, isSupportUltimate } from '../data/skills.js';
 import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { AudioManager } from '../systems/AudioManager.js';
@@ -61,9 +62,23 @@ export function skillMetaText(sk, m = null) {
     ? `${m ? `${m.uses[sk.id] ?? 0}/` : ''}${sk.uses} uses`
     : 'Unlimited uses';
   const what = isDamageSkill(sk)
-    ? `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`
-    : `${buffSummary(sk, ' ')} ${sk.category === 'debuff' ? 'on the foe' : 'on self'}`;
-  return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} · ${what} · ${uses}`;
+    ? (sk.reflect ? `Returns the last hit x${sk.reflect} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}` : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`)
+    : `${buffSummary(sk, ' ')}${(sk.effects || []).some((e) => e.target) ? '' : (sk.category === 'debuff' ? ' on the foe' : ' on self')}`;
+  const rider = !sk.reflect ? riderSummary(sk) : '';
+  return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} · ${what}${rider ? ` · ${rider}` : ''} · ${uses}`;
+}
+
+/**
+ * Portrait with an element badge in the corner, so the element is readable at a
+ * glance on every card (party, storage, index).
+ */
+export function portrait(m, size = 66, animated = false) {
+  const sp = getSpecies(m.speciesId);
+  const elId = sp?.element || 'nature';
+  const wrap = el('div', { class: 'portrait', style: { width: `${size}px`, height: `${size}px` } }, [mythCanvas(m, size, animated)]);
+  const badge = el('span', { class: `el-badge ${elId}`, title: `${ELEMENTS[elId]?.name || elId} type` }, [icon(ELEMENTS[elId]?.icon || 'spark')]);
+  wrap.appendChild(badge);
+  return wrap;
 }
 
 export function mythCanvas(m, size = 66, animated = false) {
@@ -228,7 +243,7 @@ export class PlayerMenu {
     const pct = hpPercent(m);
     const evoReady = EvolutionManager.isReady(m);
     const card = el('div', { class: `myth-card ${isFainted(m) ? 'fainted' : ''}` }, [
-      mythCanvas(m, 66),
+      portrait(m, 66),
       el('div', { class: 'mc-main' }, [
         el('div', { class: 'mc-name' }, [
           displayName(m),
@@ -236,7 +251,7 @@ export class PlayerMenu {
           evoReady ? el('span', { class: 'chip evolve icon-only', title: 'Ready to evolve! Open the card and press EVOLVE NOW.', 'aria-label': 'Ready to evolve' }, [icon('levelup')]) : null,
           mutationChip(m.mutation),
         ]),
-        el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${MOODS[m.mood].name} · ${getRarity(m.rarity).name}` }),
+        el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${getMood(m.mood).name} · ${rationalSummary(m.rational).name} · ${getRarity(m.rarity).name}` }),
         labeledBar('hp', 'HP', `${m.currentHp}/${maxHp(m)}`, pct, hpClass(pct)),
         labeledBar('exp', 'EXP',
           m.level >= LEVEL_CAP ? 'MAX LEVEL' : `${m.exp} / ${expNeeded(m)}`,
@@ -258,12 +273,16 @@ export class PlayerMenu {
     const locked = EvolutionManager.lockedStages(m);
     const ult = ultimateMove(m);
 
+    const rational = getRational(m.rational);
     const statRows = STAT_KEYS.map((k) => {
-      const isUp = MOODS[m.mood].up.includes(k);
-      const isDown = MOODS[m.mood].down === k;
+      const moodUp = getMood(m.mood).up.includes(k);
+      const ratUp = rational?.up === k;
+      const isDown = rational?.down === k;
+      const isUp = moodUp || ratUp;
       const maxRef = STAT_BAR_MAX[k] || 90;
-      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}`, title: STAT_INFO[k] }, [
-        el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), isUp ? icon('up', 'tiny') : isDown ? icon('down', 'tiny') : null]),
+      const why = [moodUp ? `Mood ${getMood(m.mood).name}` : '', ratUp ? `Rational ${rational.name} +10` : '', isDown ? `Rational ${rational.name} -10` : ''].filter(Boolean).join(' · ');
+      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}`, title: `${STAT_INFO[k]}${why ? ` (${why})` : ''}` }, [
+        el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), moodUp ? icon('up', 'tiny') : null, ratUp ? icon('up', 'tiny') : null, isDown ? icon('down', 'tiny') : null]),
         el('div', { class: 'sbar' }, [el('i', { style: { width: `${Math.min(100, (stats[k] / maxRef) * 100)}%` } })]),
         el('b', { text: formatStat(k, stats[k]) }),
       ]);
@@ -274,7 +293,8 @@ export class PlayerMenu {
         el('div', { class: 'detail-art' }, [mythCanvas(m, 240, true)]),
         el('div', { class: 'row', style: { gap: '6px', marginTop: '10px', justifyContent: 'center' } }, [
           elementChip(sp.element), rarityChip(m.rarity),
-          el('span', { class: 'chip', text: MOODS[m.mood].name }),
+          el('span', { class: 'chip', title: 'Mood', text: getMood(m.mood).name }),
+          el('span', { class: 'chip', title: 'Rational', text: rationalSummary(m.rational).name }),
           mutationChip(m.mutation),
         ]),
         el('p', { class: 'sub', style: { marginTop: '10px', fontSize: '.85rem' }, text: sp.description }),
@@ -301,7 +321,29 @@ export class PlayerMenu {
         el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html:
           `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) · `
           + `<b>${stats.crit}%</b> crit chance · crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
-        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} &nbsp; ${iconSvg('down', 'tiny')} ${mood.down} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
+        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood <b>${getMood(m.mood).name}</b>: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity}) · Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg('up', 'tiny')} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg('down', 'tiny')} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` · ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ''}` }),
+        el('div', { class: 'row', style: { gap: '6px', marginTop: '6px' } }, [
+          iconTextBtn('swap', `Re-roll Mood (Mood Tonic ×${InventoryManager.count('mood_tonic')})`, { class: 'small ghost', disabled: !InventoryManager.has('mood_tonic', 1), title: InventoryManager.has('mood_tonic', 1) ? 'Uses one Mood Tonic: the Mood becomes a different one at random.' : 'Buy a Mood Tonic at a shop (Azure Coast onward).', onclick: async () => {
+            const ok = await confirmDialog('RE-ROLL MOOD', `Use a Mood Tonic on ${displayName(m)}? Its Mood (${getMood(m.mood).name}) becomes a different one at random. This cannot be undone.`);
+            if (!ok) return;
+            if (!InventoryManager.has('mood_tonic', 1)) { toast('You have no Mood Tonic left.', 'bad'); return; }
+            InventoryManager.remove('mood_tonic', 1);
+            const r = rerollMood(m);
+            AudioManager.sfx('heal');
+            toast(`${displayName(m)}'s Mood: ${getMood(r.before).name} → ${getMood(r.after).name}`, 'ok');
+            closeModal(true); this.renderTab(); this.openDetail(m);
+          } }),
+          iconTextBtn('swap', `Re-roll Rational (Temper Tonic ×${InventoryManager.count('temper_tonic')})`, { class: 'small ghost', disabled: !InventoryManager.has('temper_tonic', 1), title: InventoryManager.has('temper_tonic', 1) ? 'Uses one Temper Tonic: the Rational (+10 / -10 trait) becomes a different one at random.' : 'Buy a Temper Tonic at a shop (Azure Coast onward).', onclick: async () => {
+            const ok = await confirmDialog('RE-ROLL RATIONAL', `Use a Temper Tonic on ${displayName(m)}? Its Rational (${rationalSummary(m.rational).name}: ${rationalSummary(m.rational).up} +10 / ${rationalSummary(m.rational).down} -10) becomes a different one at random. This cannot be undone.`);
+            if (!ok) return;
+            if (!InventoryManager.has('temper_tonic', 1)) { toast('You have no Temper Tonic left.', 'bad'); return; }
+            InventoryManager.remove('temper_tonic', 1);
+            const r = rerollRational(m);
+            AudioManager.sfx('heal');
+            toast(`${displayName(m)}'s Rational: ${rationalSummary(r.before).name} → ${rationalSummary(r.after).name}`, 'ok');
+            closeModal(true); this.renderTab(); this.openDetail(m);
+          } }),
+        ]),
 
         el('h3', { text: `Equipped Skills (${equippedSkills(m).length}/${MAX_EQUIPPED_SKILLS})` }),
         ...Array.from({ length: MAX_EQUIPPED_SKILLS }, (_, i) => {
@@ -382,12 +424,12 @@ export class PlayerMenu {
     }
     for (const m of list) {
       this.storageList.appendChild(this.mythCard(m, {
-        extra: el('div', { class: 'row', style: { gap: '6px' } }, [
+        extra: el('div', { class: 'mc-actions' }, [
           iconTextBtn('dna', 'Party', {
             class: 'small primary', disabled: PartyManager.isFull(),
             onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
           }),
-          button('RELEASE', {
+          iconTextBtn('close', 'Release', {
             class: 'small ghost',
             onclick: (e) => { e.stopPropagation(); this.releaseFromStorage(m); },
           }),
@@ -503,6 +545,9 @@ export class PlayerMenu {
     for (const cat of ITEM_CATEGORIES) {
       const entries = InventoryManager.byCategory(cat.id);
       root.appendChild(el('h3', { text: cat.name }));
+      if (cat.id === 'tonics') {
+        root.appendChild(el('p', { class: 'sub', text: 'Tonics re-roll a Mythling\'s personality traits. Open a Mythling\'s profile (PARTY or MYTHLINGS tab) and press RE-ROLL MOOD / RE-ROLL RATIONAL to use one.' }));
+      }
       if (cat.id === 'food') {
         root.appendChild(el('p', { class: 'sub', text: `Feed food to a Mythling to convert it straight into EXP — a faster way to train than battling. You can feed a whole stack at once; the amount is capped at what it takes to reach Lv.${LEVEL_CAP}, so no food is ever wasted.` }));
       }
@@ -511,7 +556,7 @@ export class PlayerMenu {
         const isFood = e.item.category === 'food';
         const usable = e.item.heal || e.item.healFull || e.item.revive || e.item.restoreUses || e.item.restoreAllUses;
         root.appendChild(el('div', { class: 'item-row' }, [
-          cat.id === 'balls' ? ballCanvas(e.item.id, 30, 'item-ico ball-icon') : icon(isFood ? 'food' : cat.id === 'key' ? 'key' : 'heal', 'item-ico'),
+          cat.id === 'balls' ? ballCanvas(e.item.id, 30, 'item-ico ball-icon') : icon(isFood ? 'food' : cat.id === 'key' ? 'key' : cat.id === 'tonics' ? 'swap' : 'heal', 'item-ico'),
           el('div', { class: 'ir-main' }, [
             el('div', { class: 'ir-name', text: e.item.name }),
             el('div', { class: 'ir-desc', text: e.item.desc }),
@@ -519,6 +564,7 @@ export class PlayerMenu {
           el('div', { class: 'ir-qty', text: `x${e.qty}` }),
           isFood
             ? iconTextBtn('food', 'FEED', { class: 'small primary', onclick: () => this.feedFromBag(e.id) })
+            : cat.id === 'tonics' ? button('USE ON…', { class: 'small primary', onclick: () => this.useTonicFromBag(e.id) })
             : usable ? button('USE', { class: 'small primary', onclick: () => this.useItemFromBag(e.id) }) : null,
         ]));
       }
@@ -641,6 +687,39 @@ export class PlayerMenu {
     this.renderTab();
   }
 
+  /** Tonics from the bag: pick a party Mythling, then re-roll its Mood or Rational. */
+  async useTonicFromBag(itemId) {
+    const item = getItem(itemId);
+    const pick = await this.pickPartyTarget(`${item.name.toUpperCase()} — CHOOSE A MYTHLING`, (m) => item.rerollMood
+      ? `Mood: ${getMood(m.mood).name}` : `Rational: ${rationalSummary(m.rational).name} (${rationalSummary(m.rational).up} +10 / ${rationalSummary(m.rational).down} -10)`);
+    if (!pick) return;
+    if (!InventoryManager.has(itemId, 1)) { toast(`You have no ${item.name} left.`, 'bad'); return; }
+    InventoryManager.remove(itemId, 1);
+    const r = item.rerollMood ? rerollMood(pick) : rerollRational(pick);
+    AudioManager.sfx('heal');
+    toast(item.rerollMood
+      ? `${displayName(pick)}'s Mood: ${getMood(r.before).name} → ${getMood(r.after).name}`
+      : `${displayName(pick)}'s Rational: ${rationalSummary(r.before).name} → ${rationalSummary(r.after).name}`, 'ok');
+    this.renderTab();
+  }
+
+  /** Species ids grouped by element, in ELEMENT_ORDER (Nature, Water, Fire, Rock …). */
+  speciesByElement() {
+    const groups = [];
+    for (const elId of [...ELEMENT_ORDER, ...Object.keys(ELEMENTS).filter((e) => !ELEMENT_ORDER.includes(e))]) {
+      const ids = SPECIES_IDS.filter((id) => SPECIES[id].element === elId);
+      if (ids.length) groups.push({ element: elId, ids });
+    }
+    return groups;
+  }
+
+  elementHeader(elId, sub = '') {
+    const e = ELEMENTS[elId];
+    return el('div', { class: `element-group-head ${elId}` }, [
+      icon(e?.icon || 'spark', elId), el('b', { text: `${e?.name || elId} type` }), sub ? el('span', { class: 'sub', text: sub }) : null,
+    ]);
+  }
+
   // ---------------------------------------------------- MAP
   renderMap(root) {
     this.setTitle('World Map');
@@ -671,36 +750,41 @@ export class PlayerMenu {
     this.setTitle(`Mythling Index — ${seen}/${SPECIES_IDS.length} discovered`);
     root.appendChild(el('p', {
       class: 'sub',
-      text: 'Every Mythling and all four of its forms. Stages unlock at Lv.20, Lv.60 and Lv.80 — raise a Mythling to the level and it evolves on its own.',
+      text: 'Every Mythling, grouped by type. An evolution stays hidden until you have actually owned that form — catch the base form, raise it to Lv.20 / Lv.60 / Lv.80 and each new form is revealed as it evolves.',
     }));
 
     const list = el('div', { class: 'index-list' });
-    for (const id of SPECIES_IDS) {
-      const sp = SPECIES[id];
-      const entry = CollectionManager.entry(id);
-      const known = !!(entry && (entry.seen || entry.caught));
-      const card = el('div', { class: `index-card ${known ? '' : 'locked'}` }, [
-        el('div', { class: 'index-head' }, [
-          el('b', { text: known ? sp.displayName : '???' }),
-          elementChip(sp.element),
-          el('span', { class: 'role', text: sp.role }),
-          el('span', { class: 'role', text: `· ${sp.breed} · ${sp.spawnMaps?.[0]?.replace(/_/g, ' ') || ''}` }),
-        ]),
-        el('div', { class: 'index-stages' }, sp.evolutions.map((ev, stage) => {
-          const unlocked = known;
-          return el('div', { class: `index-stage ${unlocked ? '' : 'locked'}` }, [
-            unlocked
-              ? mythCanvas({ speciesId: id, stage, mutation: 'none' }, 96)
-              : el('div', { class: 'index-blank', text: '?' }),
-            el('div', { class: 'is-name', text: unlocked ? ev.name : '???' }),
-            el('div', { class: 'is-lv', text: stage === 0 ? 'Base form' : `Lv.${ev.level}` }),
-            ev.art?.horns || ev.art?.wings
-              ? el('div', { class: 'is-tag', text: [ev.art.horns ? 'Horns' : '', ev.art.wings ? 'Wings' : ''].filter(Boolean).join(' + ') })
-              : null,
-          ]);
-        })),
-      ]);
-      list.appendChild(card);
+    for (const group of this.speciesByElement()) {
+      const owned = group.ids.filter((id) => CollectionManager.entry(id)?.caught).length;
+      list.appendChild(this.elementHeader(group.element, `${owned}/${group.ids.length} caught`));
+      for (const id of group.ids) {
+        const sp = SPECIES[id];
+        const entry = CollectionManager.entry(id);
+        const known = !!(entry && (entry.seen || entry.caught));
+        const card = el('div', { class: `index-card ${known ? '' : 'locked'}` }, [
+          el('div', { class: 'index-head' }, [
+            el('b', { text: known ? sp.displayName : '???' }),
+            elementChip(sp.element),
+            el('span', { class: 'role', text: known ? sp.role : '???' }),
+            el('span', { class: 'role', text: `· ${known ? sp.breed : '???'} · ${MAPS[sp.spawnMaps?.[0]]?.displayName || ''}` }),
+          ]),
+          el('div', { class: 'index-stages' }, sp.evolutions.map((ev, stage) => {
+            // base form: revealed once seen; evolutions: only once OWNED
+            const unlocked = stage === 0 ? known : CollectionManager.hasForm(id, stage);
+            return el('div', { class: `index-stage ${unlocked ? '' : 'locked'}`, title: unlocked ? ev.name : (stage === 0 ? 'Not discovered yet' : `Locked — evolve a ${known ? sp.displayName : '???'} to Lv.${ev.level} to reveal this form`) }, [
+              unlocked
+                ? mythCanvas({ speciesId: id, stage, mutation: 'none' }, 96)
+                : el('div', { class: 'index-blank' }, [icon('lock')]),
+              el('div', { class: 'is-name', text: unlocked ? ev.name : '???' }),
+              el('div', { class: 'is-lv', text: stage === 0 ? 'Base form' : `Lv.${ev.level}` }),
+              !unlocked && stage > 0 ? el('div', { class: 'is-tag', text: 'LOCKED' }) : (unlocked && (ev.art?.horns || ev.art?.wings)
+                ? el('div', { class: 'is-tag', text: [ev.art.horns ? 'Horns' : '', ev.art.wings ? 'Wings' : ''].filter(Boolean).join(' + ') })
+                : null),
+            ]);
+          })),
+        ]);
+        list.appendChild(card);
+      }
     }
     root.appendChild(list);
   }
@@ -709,25 +793,29 @@ export class PlayerMenu {
     const s = CollectionManager.stats();
     this.setTitle(`Collection — ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen`);
     root.appendChild(el('p', { class: 'sub', html: `Mutations discovered: ${iconSvg('shiny', 'tiny')} Shiny ${s.shiny} · ${iconSvg('darkness', 'tiny')} Darkness ${s.darkness}` }));
-    const grid = el('div', { class: 'collection-grid' });
-    for (const id of SPECIES_IDS) {
-      const sp = SPECIES[id];
-      const e = CollectionManager.entry(id);
-      const known = e.seen || e.caught;
-      const card = el('div', { class: `col-card ${known ? '' : 'unknown'} ${e.caught ? 'caught' : ''}` }, [
-        mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 90),
-        el('div', { class: 'cc-name', text: known ? sp.displayName : '???' }),
-        el('div', { class: 'cc-status' }, e.caught ? [icon('check', 'tiny'), el('span', { text: 'Caught' })] : [el('span', { text: e.seen ? 'Seen' : 'Undiscovered' })]),
-        known ? el('div', { class: 'row', style: { justifyContent: 'center', gap: '4px', marginTop: '4px' } }, [
-          elementChip(sp.element),
-          e.mutations.shiny ? el('span', { class: 'chip shiny' }, [icon('shiny')]) : null,
-          e.mutations.darkness ? el('span', { class: 'chip darkness' }, [icon('darkness')]) : null,
-        ]) : null,
-      ]);
-      if (known) card.addEventListener('click', () => this.showSpeciesInfo(id));
-      grid.appendChild(card);
+    for (const group of this.speciesByElement()) {
+      const caught = group.ids.filter((id) => CollectionManager.entry(id)?.caught).length;
+      root.appendChild(this.elementHeader(group.element, `${caught}/${group.ids.length} caught`));
+      const grid = el('div', { class: 'collection-grid' });
+      for (const id of group.ids) {
+        const sp = SPECIES[id];
+        const e = CollectionManager.entry(id);
+        const known = e.seen || e.caught;
+        const forms = sp.evolutions.filter((ev, st) => CollectionManager.hasForm(id, st)).length;
+        const card = el('div', { class: `col-card ${known ? '' : 'unknown'} ${e.caught ? 'caught' : ''}` }, [
+          known ? portrait({ speciesId: id, stage: 0, mutation: 'none' }, 90) : mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 90),
+          el('div', { class: 'cc-name', text: known ? sp.displayName : '???' }),
+          el('div', { class: 'cc-status' }, e.caught ? [icon('check', 'tiny'), el('span', { text: `Caught · ${forms}/${sp.evolutions.length} forms` })] : [el('span', { text: e.seen ? 'Seen' : 'Undiscovered' })]),
+          known ? el('div', { class: 'row', style: { justifyContent: 'center', gap: '4px', marginTop: '4px' } }, [
+            e.mutations.shiny ? el('span', { class: 'chip shiny' }, [icon('shiny')]) : null,
+            e.mutations.darkness ? el('span', { class: 'chip darkness' }, [icon('darkness')]) : null,
+          ]) : null,
+        ]);
+        if (known) card.addEventListener('click', () => this.showSpeciesInfo(id));
+        grid.appendChild(card);
+      }
+      root.appendChild(grid);
     }
-    root.appendChild(grid);
   }
 
   showSpeciesInfo(id) {
@@ -743,9 +831,16 @@ export class PlayerMenu {
         ]),
       ]),
       el('h3', { text: 'Evolution line' }),
-      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev) => el('div', { class: 'chip', style: ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE ? { opacity: .55 } : {} }, [
-        el('span', { text: `${ev.name} (Lv.${ev.level})` }), ev.future ? icon('lock', 'tiny') : null,
-      ]))),
+      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev, st) => {
+        const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
+        return el('div', { class: 'chip', style: owned ? {} : { opacity: .55 }, title: owned ? ev.name : `Locked — evolve ${sp.displayName} to Lv.${ev.level} to reveal this form` }, [
+          el('span', { text: owned ? `${ev.name} (Lv.${ev.level})` : `??? (Lv.${ev.level})` }), owned ? null : icon('lock', 'tiny'),
+        ]);
+      })),
+      el('div', { class: 'row', style: { gap: '8px', marginTop: '8px' } }, sp.evolutions.map((ev, st) => {
+        const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
+        return owned ? mythCanvas({ speciesId: id, stage: st, mutation: 'none' }, 84) : el('div', { class: 'index-blank', style: { width: '84px', height: '84px' } }, [icon('lock')]);
+      })),
     ]);
     modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
   }

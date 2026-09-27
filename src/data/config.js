@@ -25,15 +25,20 @@ export const FUTURE_CONTENT_LIVE = true;
 
 export const COUNTER_MAX_PERCENT = 35; // Counter can never make something untouchable
 /**
- * Counter is the EVASION stat: every point of Counter used to be a full 1% dodge,
- * which made attacks miss far too often. Each point is now worth half a percent and
- * the dodge chance is hard-capped, so a maxed Counter dodges 18% of hits, not 35%.
+ * Counter is the EVASION stat. A miss should be a rare surprise, never a routine
+ * annoyance: each point is now worth 0.15% dodge and the chance is hard-capped,
+ * so even a maxed Counter (35) dodges only about 5% of hits.
  */
-export const COUNTER_DODGE_SCALE = 0.5;
-export const COUNTER_MAX_DODGE = 18;
+export const COUNTER_DODGE_SCALE = 0.15;
+export const COUNTER_MAX_DODGE = 6;
 
-/** Crit Chance is a percentage (0-60). Crit Damage is a BONUS percentage (0-200 => up to x3). */
-export const CRIT_MAX_PERCENT = 60;
+/**
+ * Crit Chance is a percentage. It used to grow 3% per level and cap at 60%, so a
+ * maxed Mythling crit on every other hit. Growth is now slow (see STAT_GROWTH) and
+ * the cap is 25%: a crit stays a highlight even at Lv.100.
+ * Crit Damage is a BONUS percentage (0-200 => up to x3).
+ */
+export const CRIT_MAX_PERCENT = 25;
 export const CRIT_MAX_MULT = 200;
 
 export const DAMAGE_RANDOM_MIN = 0.85;
@@ -41,8 +46,14 @@ export const DAMAGE_RANDOM_MAX = 1.0;
 
 export const STAT_GROWTH = {
   hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
-  crit: 0.030, critMult: 0.008,
+  crit: 0.006, critMult: 0.008,
 };
+
+/**
+ * Rational (the second personality trait): a fixed +10 to one stat and -10 to
+ * another, flat, on top of level growth, Mood, Rarity and mutation bonuses.
+ */
+export const RATIONAL_AMOUNT = 10;
 
 /** Counter (evasion stat) -> actual dodge chance in percent. Single source of truth. */
 export function counterDodgePercent(counter) {

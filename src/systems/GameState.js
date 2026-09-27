@@ -1,7 +1,8 @@
 // Central mutable game state + Player/Party/Storage/Inventory/Collection managers.
 // Serialisation is validated & migrated on load so old saves never break.
 import { GAME_VERSION, PARTY_MAX, LEVEL_CAP, STARTER_RARITY } from '../data/config.js';
-import { STARTING_INVENTORY, STARTING_WILDCOINS, getItem } from '../data/items.js';
+import { STARTING_INVENTORY, STARTING_WILDCOINS, getItem, LEGACY_ITEMS } from '../data/items.js';
+import { normalizeMoodId, getRational, rollRational } from '../data/moods.js';
 import { SPECIES_IDS, getSpecies } from '../data/species.js';
 import { MAPS, getMap } from '../data/maps.js';
 import {
@@ -14,7 +15,9 @@ export const bus = new EventBus();
 
 function blankCollection() {
   const c = {};
-  for (const id of SPECIES_IDS) c[id] = { seen: false, caught: false, mutations: { shiny: false, darkness: false } };
+  // `forms` = evolution stages the player has actually OWNED (stage index -> true).
+  // The Index only reveals a form once it is owned; seeing a wild evolved Mythling is not enough.
+  for (const id of SPECIES_IDS) c[id] = { seen: false, caught: false, mutations: { shiny: false, darkness: false }, forms: {} };
   return c;
 }
 
@@ -200,12 +203,26 @@ export const CollectionManager = {
     if (mutation !== 'none') e.mutations[mutation] = true;
     bus.emit('collection:changed');
   },
-  markCaught(speciesId, mutation = 'none') {
+  markCaught(speciesId, mutation = 'none', stage = 0) {
     const e = GameState.collection[speciesId];
     if (!e) return;
     e.seen = true; e.caught = true;
     if (mutation !== 'none') e.mutations[mutation] = true;
+    this.markForm(speciesId, stage);
     bus.emit('collection:changed');
+  },
+  /** Record that a form (evolution stage) of a species is owned — and every stage below it. */
+  markForm(speciesId, stage = 0) {
+    const e = GameState.collection[speciesId];
+    if (!e) return;
+    e.forms = e.forms || {};
+    for (let st = 0; st <= (stage || 0); st++) e.forms[st] = true;
+    bus.emit('collection:changed');
+  },
+  /** True when the player has owned this evolution stage of the species. */
+  hasForm(speciesId, stage) {
+    const e = GameState.collection[speciesId];
+    return !!(e && e.forms && e.forms[stage]);
   },
   entry(id) { return GameState.collection[id]; },
   stats() {
@@ -302,7 +319,8 @@ function migrateMythling(raw) {
     exp: Math.max(0, raw.exp ?? 0),
     stage: raw.stage ?? 0,
     rarity: raw.rarity ?? getSpecies(raw.speciesId).defaultRarity,
-    mood: raw.mood ?? getSpecies(raw.speciesId).defaultMood,
+    mood: normalizeMoodId(raw.mood ?? getSpecies(raw.speciesId).defaultMood),   // old 3-up moods map onto the new single-stat ones
+    rational: getRational(raw.rational) ? raw.rational : rollRational(),         // migration: old saves had no Rational
     mutation: raw.mutation ?? 'none',          // migration: old saves had no mutation
     currentHp: raw.currentHp ?? null,   // null => restore to full below (old saves)
     ultCharge: clamp(raw.ultCharge ?? 0, 0, 8),
@@ -311,6 +329,7 @@ function migrateMythling(raw) {
     uses: { ...(raw.uses || {}) },
     meta: { caughtAt: null, caughtWith: null, caughtLevel: null, originMap: null, isStarter: false, ...(raw.meta || {}) },
   };
+  if (m.meta.caughtWith && LEGACY_ITEMS[m.meta.caughtWith]) m.meta.caughtWith = LEGACY_ITEMS[m.meta.caughtWith];
   // clamp stage to what this build allows for the stored level
   const maxStage = stageForLevel(m.speciesId, m.level);
   if (m.stage > maxStage) m.stage = maxStage;
@@ -357,8 +376,9 @@ export function deserialize(data) {
   }
 
   const inv = {};
-  for (const [id, qty] of Object.entries(data.inventory || {})) {
-    if (getItem(id) && Number.isFinite(qty) && qty > 0) inv[id] = Math.floor(qty);
+  for (const [rawId, qty] of Object.entries(data.inventory || {})) {
+    const id = LEGACY_ITEMS[rawId] || rawId;   // e.g. the retired King Ball becomes a God Ball
+    if (getItem(id) && Number.isFinite(qty) && qty > 0) inv[id] = (inv[id] || 0) + Math.floor(qty);
   }
   GameState.inventory = Object.keys(inv).length ? inv : { ...STARTING_INVENTORY };
 
@@ -368,9 +388,18 @@ export function deserialize(data) {
     col[id] = {
       seen: !!e.seen, caught: !!e.caught,
       mutations: { shiny: !!e?.mutations?.shiny, darkness: !!e?.mutations?.darkness },
+      forms: { ...(e.forms || {}) },
     };
   }
   GameState.collection = col;
+  // Saves that predate the forms record: everything the player owns right now
+  // (and every stage below it) counts as an owned form.
+  for (const m of [...GameState.party, ...GameState.storage]) {
+    const e = col[m.speciesId];
+    if (!e) continue;
+    e.caught = true; e.seen = true;
+    for (let st = 0; st <= (m.stage || 0); st++) e.forms[st] = true;
+  }
 
   const w = data.world || {};
   GameState.world = {

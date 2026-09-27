@@ -1,13 +1,13 @@
 // The Mythling model: creation, stats, EXP/leveling, skills, evolution eligibility.
 import { getSpecies, getEvolutionStage, skillsUnlockedAt, skillLearnLevel } from '../data/species.js';
 import { getSkill, resolveUltimate, skillStrength, ULTIMATE_MAX_CHARGE } from '../data/skills.js';
-import { moodModifiers, STAT_KEYS, MOOD_IDS } from '../data/moods.js';
+import { moodModifiers, STAT_KEYS, MOOD_IDS, normalizeMoodId, rationalModifiers, rollRational, rerollRational as rerollRationalId, rerollMood as rerollMoodId, getRational } from '../data/moods.js';
 import { rarityMagnitude, rollRarity } from '../data/rarity.js';
 import { rollMutation, getMutation } from '../data/mutations.js';
 import {
   LEVEL_CAP, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, STAT_GROWTH,
   expToNextLevel, ULTIMATE_UNLOCK_LEVEL, COUNTER_MAX_PERCENT,
-  CRIT_MAX_PERCENT, CRIT_MAX_MULT,
+  CRIT_MAX_PERCENT, CRIT_MAX_MULT, RATIONAL_AMOUNT,
 } from '../data/config.js';
 import { clamp, uid, choice } from './utils.js';
 
@@ -30,8 +30,10 @@ export function createMythling(opts = {}) {
 
   const level = clamp(opts.level ?? 1, 1, LEVEL_CAP);
   const rarity = opts.rarity || (opts.rollRarity ? rollRarity(rand, opts.luck || 0) : sp.defaultRarity);
-  const mood = opts.mood || (opts.randomMood ? choice(rand, MOOD_IDS) : sp.defaultMood);
+  const mood = normalizeMoodId(opts.mood || (opts.randomMood ? choice(rand, MOOD_IDS) : sp.defaultMood));
   const mutation = opts.mutation || (opts.rollMutation ? rollMutation(rand, opts.mutationLuck || 1) : 'none');
+  // Rational: the +10 / -10 trait. Always rolled (there is no "neutral" Rational).
+  const rational = getRational(opts.rational) ? opts.rational : rollRational(rand);
 
   // Evolution stage: wild/trainer Mythlings appear at the stage matching their level.
   const stage = opts.stage != null ? opts.stage : stageForLevel(speciesId, level);
@@ -45,6 +47,7 @@ export function createMythling(opts = {}) {
     stage,
     rarity,
     mood,
+    rational,
     mutation,
     currentHp: 0,
     ultCharge: 0,
@@ -148,12 +151,16 @@ export function displayName(m) {
 
 export function formName(m) { return stageData(m).name; }
 
-/** Full computed stats (species base -> level growth -> stage multiplier -> mood/rarity). */
+/**
+ * Full computed stats: species base -> level growth -> stage multiplier ->
+ * Mood (x rarity magnitude) -> Rational (+10 / -10) -> caps -> mutation bonus.
+ */
 export function computeStats(m) {
   const sp = speciesOf(m);
   const st = stageData(m);
   const mag = rarityMagnitude(m.rarity);
   const mods = moodModifiers(m.mood, mag);
+  const rat = rationalModifiers(m.rational, RATIONAL_AMOUNT);
   const out = {};
   // Shiny +1 and Darkness +2 to every stat, added AFTER the caps so the bonus
   // is never swallowed by them.
@@ -161,7 +168,7 @@ export function computeStats(m) {
   for (const k of STAT_KEYS) {
     const base = sp.baseStats[k];
     const grown = base * (1 + STAT_GROWTH[k] * (m.level - 1));
-    let v = Math.floor(grown * st.statMult) + (mods[k] || 0);
+    let v = Math.floor(grown * st.statMult) + (mods[k] || 0) + (rat[k] || 0);
     if (k === 'counter') v = clamp(v, 0, COUNTER_MAX_PERCENT);
     if (k === 'crit') v = clamp(v, 0, CRIT_MAX_PERCENT);
     if (k === 'critMult') v = clamp(v, 0, CRIT_MAX_MULT);
@@ -172,6 +179,24 @@ export function computeStats(m) {
 }
 
 export function maxHp(m) { return computeStats(m).hp; }
+
+/** Re-roll the Mood into a different one (Mood Tonic). Current HP is kept in proportion. */
+export function rerollMood(m, rng = Math.random) {
+  const before = m.mood;
+  const ratio = maxHp(m) > 0 ? m.currentHp / maxHp(m) : 1;
+  m.mood = rerollMoodId(normalizeMoodId(m.mood), rng);
+  m.currentHp = Math.max(m.currentHp > 0 ? 1 : 0, Math.round(maxHp(m) * ratio));
+  return { before, after: m.mood };
+}
+
+/** Re-roll the Rational into a different one (Temper Tonic). Current HP is kept in proportion. */
+export function rerollRational(m, rng = Math.random) {
+  const before = m.rational;
+  const ratio = maxHp(m) > 0 ? m.currentHp / maxHp(m) : 1;
+  m.rational = rerollRationalId(m.rational, rng);
+  m.currentHp = Math.max(m.currentHp > 0 ? 1 : 0, Math.round(maxHp(m) * ratio));
+  return { before, after: m.rational };
+}
 
 export function restoreAll(m) {
   m.currentHp = maxHp(m);

@@ -5,7 +5,7 @@ import {
   equippedSkill, equippedSkills, usesLeft, consumeUse, ultimateMove, ultimateReady, ultimateUnlocked, basicAttack,
   addUltimateCharge, gainExp, hpPercent, applyItemEffects,
 } from '../core/mythling.js';
-import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE } from '../data/skills.js';
+import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE, effectTarget, isSupportUltimate } from '../data/skills.js';
 import { elementMultiplier, effectivenessLabel } from '../data/elements.js';
 import { getItem } from '../data/items.js';
 import { getRarity } from '../data/rarity.js';
@@ -31,6 +31,7 @@ class Combatant {
     this.m = mythling;
     this.side = side;
     this.buffs = {}; // stat -> { stacks, total }
+    this.lastHit = 0; // damage of the most recent enemy attack (0 after a foe's buff / debuff / miss)
   }
   base() { return computeStats(this.m); }
   stat(key) {
@@ -230,6 +231,18 @@ export class Battle {
       attacker.ultCharge = 0;
       events.push({ type: 'charge', side: atkSide, value: 0 });
       events.push({ type: 'log', text: `${displayName(attacker)} unleashes ${ult.name}!`, emphasis: true });
+      if (isSupportUltimate(ult)) {
+        // Buff / debuff Ultimate: no damage, two effects. Foe-side effects are
+        // always debuffs, self-side effects always buffs. Never dodged.
+        const hitsFoe = (ult.effects || []).some((e) => effectTarget(ult, e) === 'foe');
+        events.push({
+          type: 'ultimate-cast', side: atkSide, element: ult.element, name: ult.name,
+          skillId: ult.id, category: 'ultimate', kind: 'support', target: hitsFoe ? defSide : atkSide,
+        });
+        this._applyEffects(ult, attacker, defender, events, atkSide, defSide);
+        this.cb(defender).lastHit = 0;   // nothing to retaliate against
+        return;
+      }
       events.push({
         type: 'ultimate-cast', side: atkSide, element: ult.element, name: ult.name,
         skillId: ult.id, category: 'ultimate', target: defSide,
@@ -254,25 +267,36 @@ export class Battle {
     }
     if (Number.isFinite(skill.uses)) consumeUse(attacker, skillId);
 
-    if (skill.category === 'buff') {
+    if (skill.category === 'buff' || skill.category === 'debuff') {
+      // Support skills never miss and never grant Ultimate Charge. Each effect
+      // lands on its own side: foe-side entries are debuffs, self-side buffs
+      // (an elite skill may carry one of each).
       events.push({ type: 'log', text: `${displayName(attacker)} used ${skill.name}!` });
       events.push({
-        type: 'cast', side: atkSide, kind: 'buff', element: null, name: skill.name,
-        skillId: skill.id, category: 'buff', target: atkSide,
+        type: 'cast', side: atkSide, kind: skill.category, element: skill.element || null, name: skill.name,
+        skillId: skill.id, category: skill.category, target: skill.category === 'debuff' ? defSide : atkSide,
       });
-      for (const eff of skill.effects) this._applyBuff(attacker, eff, events, atkSide);
-      // Buff skills never grant Ultimate Charge.
+      this._applyEffects(skill, attacker, defender, events, atkSide, defSide);
+      this.cb(defender).lastHit = 0;   // a foe that only buffed / debuffed leaves nothing to retaliate against
       return;
     }
 
-    if (skill.category === 'debuff') {
-      // Debuffs always land on the FOE (no dodge roll) and, like buffs, grant no charge.
-      events.push({ type: 'log', text: `${displayName(attacker)} used ${skill.name}!` });
+    if (skill.reflect) {
+      // Retaliate / Vengeance: return the LAST hit taken, multiplied. Nothing to
+      // return (the foe buffed, missed or has not attacked yet) -> the move fizzles.
+      const taken = this.cb(attacker).lastHit || 0;
       events.push({
-        type: 'cast', side: atkSide, kind: 'debuff', element: skill.element || null, name: skill.name,
-        skillId: skill.id, category: 'debuff', target: defSide,
+        type: 'cast', side: atkSide, kind: skill.damageType, element: skill.element, name: skill.name,
+        skillId: skill.id, category: skill.category, target: defSide,
       });
-      for (const eff of skill.effects) this._applyDebuff(defender, eff, events, defSide);
+      if (taken <= 0) {
+        events.push({ type: 'log', text: `${displayName(attacker)} used ${skill.name}! — but there was nothing to return.` });
+        return;
+      }
+      this._dealDamage(attacker, defender, skill, events, {
+        logPrefix: `${displayName(attacker)} used ${skill.name}!`,
+        fixedDamage: Math.max(1, Math.floor(taken * skill.reflect)),
+      });
       return;
     }
 
@@ -285,6 +309,14 @@ export class Battle {
     this._dealDamage(attacker, defender, skill, events, {
       logPrefix: `${displayName(attacker)} used ${skill.name}!`,
     });
+  }
+
+  /** Route each effect of a support skill / Ultimate to the side it targets. */
+  _applyEffects(skill, attacker, defender, events, atkSide, defSide) {
+    for (const eff of skill.effects || []) {
+      if (effectTarget(skill, eff) === 'foe') this._applyDebuff(defender, eff, events, defSide);
+      else this._applyBuff(attacker, eff, events, atkSide);
+    }
   }
 
   _applyBuff(target, eff, events, side) {
@@ -330,7 +362,7 @@ export class Battle {
    *  logPrefix: string — opening clause of the battle message, e.g. "Emberu used Bite!"
    *    The damage (or the dodge) is appended to it so the attack line reports the result.
    */
-  _dealDamage(attacker, defender, move, events, { isUltimate, logPrefix } = {}) {
+  _dealDamage(attacker, defender, move, events, { isUltimate, logPrefix, fixedDamage = null } = {}) {
     const atkSide = this.party.includes(attacker) ? 'player' : 'enemy';
     const defSide = atkSide === 'player' ? 'enemy' : 'player';
     const acb = this.cb(attacker);
@@ -345,6 +377,7 @@ export class Battle {
         text: `${prefix}${displayName(defender)} countered and dodged it! (${Math.round(dodge)}% Counter)`,
       });
       events.push({ type: 'miss', side: defSide, uid: defender.uid });
+      dcb.lastHit = 0;
       return; // no charge on a miss
     }
 
@@ -366,9 +399,12 @@ export class Battle {
 
     let dmg = Math.floor(((move.power * off) / Math.max(1, def)) * levelFactor * stageFactor * rand * mult);
     if (crit) dmg = Math.floor(dmg * (1 + critBonus / 100));
+    // Reflected damage ignores stats and elements: it is the foe's own hit, multiplied.
+    if (fixedDamage != null) dmg = crit ? Math.floor(fixedDamage * (1 + critBonus / 100)) : fixedDamage;
     dmg = Math.max(1, dmg);
 
     defender.currentHp = Math.max(0, defender.currentHp - dmg);
+    dcb.lastHit = dmg;
     events.push({
       type: 'log',
       text: `${prefix}${dmg} damage!${crit ? ` CRITICAL HIT! (x${(1 + critBonus / 100).toFixed(2)})` : ''}`,
@@ -382,7 +418,21 @@ export class Battle {
       element: atkElement, source: atkSide,
     });
     const eff = effectivenessLabel(mult);
-    if (eff) events.push({ type: 'log', text: eff });
+    if (eff && fixedDamage == null) events.push({ type: 'log', text: eff });
+
+    // Life steal / fixed heal riders: the attacker heals right after a landed hit.
+    if ((move.drain || move.healPct) && !isFainted(attacker)) {
+      const mx = maxHp(attacker);
+      let heal = 0;
+      if (move.drain) heal += Math.floor(dmg * move.drain);
+      if (move.healPct) heal += Math.floor(mx * move.healPct);
+      heal = Math.min(heal, mx - attacker.currentHp);
+      if (heal > 0) {
+        attacker.currentHp += heal;
+        events.push({ type: 'heal', side: atkSide, uid: attacker.uid, amount: heal, mythling: this.snapshot(attacker), source: move.id });
+        events.push({ type: 'log', text: `${displayName(attacker)} recovered ${heal} HP${move.drain ? (crit ? ' — the critical hit drained even more!' : ' by draining the foe!') : '!'}` });
+      }
+    }
 
     // Ultimate charge for successful damaging Normal/Special attacks only.
     if (!isUltimate && (move.category === 'normal' || move.category === 'special')) {
@@ -517,7 +567,7 @@ export class Battle {
 
 export function captureChance({ target, ballId, rngValue }) {
   const ball = getItem(ballId);
-  if (ball?.guaranteed) return 1;                 // King Ball: never fails
+  if (ball?.guaranteed) return 1;                 // God / Shiny / Dark Ball: never fails
   const sp = speciesOf(target);
   const rarity = getRarity(target.rarity);
   const levelFactor = clamp(1.25 - target.level * 0.02, 0.4, 1.25);

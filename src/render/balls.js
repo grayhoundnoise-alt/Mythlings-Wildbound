@@ -6,8 +6,9 @@
 //   normal_ball    Rune Shell  polished steel, riveted band, glowing rune window
 //   advanced_ball  Coast Prism faceted coast crystal around a bright core
 //   absolute_ball  Ember Forge dark forge-iron split by molten veins in a heat cage
-//   god_ball       Halo        pearl sphere circled by a tilted golden halo ring
-//   king_ball      Crown       royal velvet and gold, crowned and set with three gems
+//   god_ball       Halo        pearl sphere circled by a tilted golden halo ring (guaranteed catch)
+//   shiny_ball     Starlight   gold sphere holding a turning starfield (guaranteed catch, always Shiny)
+//   dark_ball      Eclipse     void sphere with a violet corona and a crescent of light (guaranteed, always Darkness)
 //
 // `drawBall(ctx, ballId, x, y, r, opts)` — opts.t drives pulses/sparkles,
 // opts.open (0..1) shows the binding seam split open, opts.rot spins the ball.
@@ -18,7 +19,8 @@ export const BALL_ART = {
   advanced_ball: { look: 'Coast Prism', base: '#5ad3c6', shade: '#166872', accent: '#eafffb', glow: '#a8fff2' },
   absolute_ball: { look: 'Ember Forge', base: '#524850', shade: '#1a1216', accent: '#ff8a3c', glow: '#ffb060' },
   god_ball:      { look: 'Halo',        base: '#fff8ea', shade: '#c5a058', accent: '#f2c761', glow: '#fff1b8' },
-  king_ball:     { look: 'Crown',       base: '#6d43b8', shade: '#2a1454', accent: '#ffd35a', glow: '#e6b8ff' },
+  shiny_ball:    { look: 'Starlight',   base: '#ffd766', shade: '#b8860b', accent: '#fff2a8', glow: '#fff6c8' },
+  dark_ball:     { look: 'Eclipse',     base: '#1b1230', shade: '#07040f', accent: '#b07cff', glow: '#7a4dff' },
 };
 
 function hexToRgb(hex) {
@@ -230,46 +232,72 @@ function drawHalo(ctx, r, art, t) {
   ctx.restore();
 }
 
-function drawCrown(ctx, r, art, t) {
+function drawStarlight(ctx, r, art, t) {
+  // Shiny Ball — a gold sphere holding a slowly turning starfield; sparkles orbit it.
+  ctx.save(); ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 2.2);
+  ctx.fillStyle = art.glow;
+  ctx.beginPath(); ctx.arc(0, 0, r * 1.32, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
   sphere(ctx, r, art.base, art.shade);
   ctx.save(); clipSphere(ctx, r);
-  // velvet meridians
-  ctx.strokeStyle = rgba('#b48cff', 0.35); ctx.lineWidth = r * 0.1;
-  for (const rx of [0.34, 0.7]) { ctx.beginPath(); ctx.ellipse(0, 0, r * rx, r * 0.99, 0, 0, Math.PI * 2); ctx.stroke(); }
-  ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(0, r); ctx.stroke();
-  // gold band with three gems
-  ctx.fillStyle = art.accent; ctx.fillRect(-r, -r * 0.11, r * 2, r * 0.22);
-  ctx.fillStyle = mix(art.accent, '#000000', 0.35); ctx.fillRect(-r, r * 0.07, r * 2, r * 0.04);
-  const gems = ['#ff5a6e', '#4ee27a', '#4aa8ff'];
-  [-0.46, 0, 0.46].forEach((x, i) => {
-    ctx.fillStyle = gems[i];
-    ctx.beginPath(); ctx.arc(x * r, 0, r * 0.1, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = mix(art.accent, '#000000', 0.4); ctx.lineWidth = r * 0.03; ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.arc(x * r - r * 0.03, -r * 0.035, r * 0.03, 0, Math.PI * 2); ctx.fill();
-  });
+  // inner starfield
+  for (let i = 0; i < 9; i++) {
+    const a = t * 0.35 + i * 0.7, rr = r * (0.2 + (i % 4) * 0.18);
+    ctx.fillStyle = i % 3 ? '#ffffff' : art.accent;
+    star(ctx, Math.cos(a) * rr, Math.sin(a) * rr * 0.7, r * 0.09, r * 0.035, 4, a);
+    ctx.fill();
+  }
+  // bright equator seam
+  ctx.fillStyle = rgba('#ffffff', 0.75); ctx.fillRect(-r, -r * 0.05, r * 2, r * 0.1);
+  ctx.restore();
+  // the big central star sigil
+  star(ctx, 0, 0, r * 0.42, r * 0.17, 5, -t * 0.5);
+  ctx.fillStyle = '#fffbe6'; ctx.fill();
+  ctx.strokeStyle = mix(art.accent, '#000000', 0.25); ctx.lineWidth = r * 0.045; ctx.lineJoin = 'round'; ctx.stroke();
+  outline(ctx, r, art.shade);
+  specular(ctx, r);
+  // orbiting sparkles
+  for (let i = 0; i < 3; i++) {
+    const a = t * 1.6 + (i * Math.PI * 2) / 3;
+    const k = (Math.sin(t * 4 + i * 2) + 1) / 2;
+    ctx.fillStyle = rgba('#ffffff', 0.6 + 0.4 * k);
+    star(ctx, Math.cos(a) * r * 1.22, Math.sin(a) * r * 0.9, r * (0.07 + 0.08 * k), r * 0.03, 4);
+    ctx.fill();
+  }
+}
+function drawEclipse(ctx, r, art, t) {
+  // Dark Ball — a void sphere ringed by a violet corona, with a crescent of light along the rim.
+  ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(t * 1.7);
+  const g = ctx.createRadialGradient(0, 0, r * 0.7, 0, 0, r * 1.5);
+  g.addColorStop(0, rgba(art.glow, 0.7)); g.addColorStop(1, rgba(art.glow, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  sphere(ctx, r, art.base, art.shade);
+  ctx.save(); clipSphere(ctx, r);
+  // swirling shadow bands
+  ctx.strokeStyle = rgba(art.accent, 0.35); ctx.lineWidth = r * 0.08;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath(); ctx.ellipse(0, r * (i - 1) * 0.35, r * 0.95, r * 0.22, Math.sin(t * 0.6 + i) * 0.25, 0, Math.PI * 2); ctx.stroke();
+  }
+  // the eclipse crescent
+  ctx.fillStyle = rgba('#ffffff', 0.85);
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.62, -Math.PI * 0.85, Math.PI * 0.15); ctx.arc(-r * 0.12, r * 0.1, r * 0.6, Math.PI * 0.15, -Math.PI * 0.85, true); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = art.base;
+  ctx.beginPath(); ctx.arc(-r * 0.1, r * 0.08, r * 0.56, 0, Math.PI * 2); ctx.fill();
+  // violet eye at the centre
+  ctx.fillStyle = art.accent; ctx.beginPath(); ctx.arc(0, 0, r * 0.13, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(-r * 0.04, -r * 0.04, r * 0.05, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
   outline(ctx, r, art.shade);
   specular(ctx, r);
-  // the crown itself, perched on top
-  const cy = -r * 0.98, w = r * 0.72, h = r * 0.36;
-  poly(ctx, [
-    [-w / 2, cy], [-w / 2, cy - h * 0.55], [-w * 0.25, cy - h * 0.15], [0, cy - h], [w * 0.25, cy - h * 0.15],
-    [w / 2, cy - h * 0.55], [w / 2, cy],
-  ]);
-  ctx.fillStyle = art.accent; ctx.fill();
-  ctx.strokeStyle = '#8a6410'; ctx.lineWidth = r * 0.05; ctx.lineJoin = 'round'; ctx.stroke();
-  for (const [x, y] of [[-w / 2, cy - h * 0.55], [0, cy - h], [w / 2, cy - h * 0.55]]) {
-    ctx.fillStyle = '#fff1b8';
-    ctx.beginPath(); ctx.arc(x, y, r * 0.055, 0, Math.PI * 2); ctx.fill();
+  // drifting shadow motes
+  ctx.save(); ctx.globalAlpha = 0.7;
+  for (let i = 0; i < 4; i++) {
+    const p = (t * 0.4 + i * 0.25) % 1;
+    ctx.fillStyle = art.accent;
+    ctx.beginPath(); ctx.arc(Math.cos(i * 1.6 + t) * r * 1.15, -r * 0.4 + (1 - p) * r * 1.2 - r * 0.6, r * 0.05 * (1 - p) + r * 0.02, 0, Math.PI * 2); ctx.fill();
   }
-  // sparkle
-  const sp = (Math.sin(t * 5) + 1) / 2;
-  if (sp > 0.6) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    star(ctx, r * 0.5, -r * 0.6, r * 0.14 * (sp - 0.6) / 0.4, r * 0.04, 4);
-    ctx.fill();
-  }
+  ctx.restore();
 }
 
 const DESIGNS = {
@@ -278,7 +306,8 @@ const DESIGNS = {
   advanced_ball: drawCoastPrism,
   absolute_ball: drawEmberForge,
   god_ball: drawHalo,
-  king_ball: drawCrown,
+  shiny_ball: drawStarlight,
+  dark_ball: drawEclipse,
 };
 
 /**

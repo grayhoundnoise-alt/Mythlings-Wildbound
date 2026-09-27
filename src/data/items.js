@@ -5,9 +5,11 @@ export const ITEMS = {
   normal_ball:   { id: 'normal_ball',   name: 'Normal Ball',   category: 'balls',   price: 260,  catchMult: 1.25, desc: 'A refined ball with a stronger binding field.' },
   advanced_ball: { id: 'advanced_ball', name: 'Advanced Ball', category: 'balls',   price: 550,  catchMult: 1.50, desc: 'Crafted with coast crystal. Notably more reliable.' },
   absolute_ball: { id: 'absolute_ball', name: 'Absolute Ball', category: 'balls',   price: 1100, catchMult: 1.80, desc: 'An ember-forged ball for stubborn Mythlings.' },
-  god_ball:      { id: 'god_ball',      name: 'God Ball',      category: 'balls',   price: 3000, catchMult: 2.50, desc: 'A legendary sphere. Almost never fails.' },
   // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
-  king_ball:     { id: 'king_ball',     name: 'King Ball',     category: 'balls',   price: 50000, catchMult: 99, guaranteed: true, desc: 'A crown-forged sphere that never fails. Guaranteed capture — for a royal price.' },
+  god_ball:      { id: 'god_ball',      name: 'God Ball',      category: 'balls',   price: 12000, catchMult: 99, guaranteed: true, desc: 'The supreme binding sphere. Never fails — a guaranteed capture.' },
+  // `forceMutation` turns the caught Mythling into that mutation, every time.
+  shiny_ball:    { id: 'shiny_ball',    name: 'Shiny Ball',    category: 'balls',   price: 60000, catchMult: 99, guaranteed: true, forceMutation: 'shiny',    desc: 'Forged from starlight. Guaranteed capture, and the Mythling always emerges SHINY.' },
+  dark_ball:     { id: 'dark_ball',     name: 'Dark Ball',     category: 'balls',   price: 90000, catchMult: 99, guaranteed: true, forceMutation: 'darkness', desc: 'Cut from an eclipse. Guaranteed capture, and the Mythling always emerges as a DARKNESS mutation.' },
 
   potion:         { id: 'potion',         name: 'Potion',         category: 'healing', price: 150,  heal: 60,   desc: 'Restores 60 HP to one Mythling.' },
   greater_potion: { id: 'greater_potion', name: 'Greater Potion', category: 'healing', price: 380,  heal: 160,  desc: 'Restores 160 HP to one Mythling.' },
@@ -18,6 +20,10 @@ export const ITEMS = {
   skill_tonic:    { id: 'skill_tonic',    name: 'Skill Tonic',    category: 'healing', price: 320,  restoreUses: 8, desc: 'Restores 8 uses to every limited skill.' },
   skill_elixir:   { id: 'skill_elixir',   name: 'Skill Elixir',   category: 'healing', price: 950,  restoreAllUses: true, desc: 'Resets every limited skill back to full uses.' },
   full_restore:   { id: 'full_restore',   name: 'Full Restore',   category: 'healing', price: 3200, healFull: true, restoreAllUses: true, desc: 'Fully restores HP AND every skill\'s uses. Cannot revive.' },
+
+  // ---- TONICS: re-roll a Mythling's personality traits (used from its profile) ----
+  mood_tonic:   { id: 'mood_tonic',   name: 'Mood Tonic',   category: 'tonics', price: 2500, rerollMood: true,     desc: 'Re-rolls a Mythling\'s Mood into a different one. Use it from the Mythling\'s profile.' },
+  temper_tonic: { id: 'temper_tonic', name: 'Temper Tonic', category: 'tonics', price: 2500, rerollRational: true, desc: 'Re-rolls a Mythling\'s Rational (+10 / -10 trait) into a different one. Use it from the Mythling\'s profile.' },
 
   // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
   sweet_berry:  { id: 'sweet_berry',  name: 'Sweet Berry',  category: 'food', price: 90,   exp: 40,   desc: 'A sugary forest berry. Feeding it grants 40 EXP.' },
@@ -41,12 +47,17 @@ export const ITEMS = {
 
   vale_charm:  { id: 'vale_charm',  name: 'Vale Charm',  category: 'key', desc: 'Proof that the Verdant Guardian was bested. Opens the Verdant Gate.' },
   coast_pass:  { id: 'coast_pass',  name: 'Coast Pass',  category: 'key', desc: 'Granted at Tidecrest Port. Opens the Emberwild Gate.' },
-  ember_sigil: { id: 'ember_sigil', name: 'Ember Sigil', category: 'key', desc: 'Awarded for completing the current Emberwild challenge.' },
+  ember_sigil: { id: 'ember_sigil', name: 'Ember Sigil', category: 'key', desc: 'Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags.' },
+  crag_seal:   { id: 'crag_seal',   name: 'Crag Seal',   category: 'key', desc: 'Proof that the Stone Warden of Stonehollow Crags was bested.' },
 };
+
+/** Item ids from earlier versions and what they became (applied when a save is loaded). */
+export const LEGACY_ITEMS = { king_ball: 'god_ball' };
 
 export const ITEM_CATEGORIES = [
   { id: 'balls',   name: 'Balls' },
   { id: 'healing', name: 'Healing' },
+  { id: 'tonics',  name: 'Tonics' },
   { id: 'food',    name: 'Food' },
   { id: 'key',     name: 'Key Items' },
 ];

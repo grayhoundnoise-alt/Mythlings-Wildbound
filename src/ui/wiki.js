@@ -8,18 +8,20 @@ import { el, Screens, closeButton, elementChip } from './ui.js';
 import { icon } from './icons.js';
 import { drawMythling } from '../render/creatures.js';
 import { SPECIES, SPECIES_IDS, STARTER_IDS } from '../data/species.js';
-import { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, buffSummary, skillStrength, isDamageSkill, SKILL_CATEGORY_LABEL } from '../data/skills.js';
+import { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, buffSummary, skillStrength, isDamageSkill, SKILL_CATEGORY_LABEL, riderSummary, isSupportUltimate } from '../data/skills.js';
 import { MAX_EQUIPPED_SKILLS } from '../core/mythling.js';
 import {
   MOODS, MOOD_IDS, STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO,
-  STAT_BAR_MAX, formatStat,
+  STAT_BAR_MAX, formatStat, RATIONALS, RATIONAL_IDS, RATIONAL_STATS,
 } from '../data/moods.js';
+import { RATIONAL_AMOUNT } from '../data/config.js';
+import { CollectionManager } from '../systems/GameState.js';
 import { RARITIES, RARITY_ORDER } from '../data/rarity.js';
 import { MUTATIONS, MUTATION_IDS } from '../data/mutations.js';
 import { ITEMS, ITEM_CATEGORIES, BALL_IDS } from '../data/items.js';
 import { ballCanvas, ballLook } from '../render/balls.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
-import { ELEMENTS, EFFECTIVENESS, elementMultiplier } from '../data/elements.js';
+import { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier } from '../data/elements.js';
 import {
   LEVEL_CAP, ABSOLUTE_MAX_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL,
   EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, expToNextLevel, DEFEAT_COIN_PENALTY,
@@ -148,8 +150,10 @@ function statsSection() {
       ['Dodge cap', `<b>${COUNTER_MAX_DODGE}%</b> — no Mythling can ever become untouchable.`],
       ['Stat cap', `Counter itself caps at <b>${COUNTER_MAX_PERCENT}</b>.`],
     ]),
-    note(`Counter was nerfed: it used to give a full 1% dodge per point (up to 35%). It is now
-      half that, capped at ${COUNTER_MAX_DODGE}%, so a missed attack is a surprise instead of a routine.`),
+    note(`Counter has been nerfed twice: it used to give a full 1% dodge per point (up to 35%), then half a percent
+      (up to 18%). It is now <b>${COUNTER_DODGE_SCALE}% per point, capped at ${COUNTER_MAX_DODGE}%</b>, so a missed attack is a rare surprise
+      instead of a routine. Crit Chance was nerfed alongside it: it grows far more slowly with level and caps at
+      <b>${CRIT_MAX_PERCENT}%</b>, so a critical hit stays special even at Lv.${LEVEL_CAP}.`),
     h3('Crit Chance & Crit Damage', 'crit critical chance multiplier damage'),
     table([
       ['CRIT — Crit Chance', `Percent chance that an attack lands critically. Caps at <b>${CRIT_MAX_PERCENT}%</b>.`],
@@ -165,35 +169,54 @@ function statsSection() {
 function moodsSection() {
   const rows = MOOD_IDS.map((id) => {
     const m = MOODS[id];
-    const up = m.up.map((k) => `<b class="good">+${STAT_SHORT[k]}</b>`).join(' ');
+    const up = m.up.map((k) => `<b class="good">+${STAT_LABELS[k]}</b>`).join(' ');
     return [
       `${m.name}${m.up.includes('crit') || m.up.includes('critMult') ? ' <span class="chip evolve">CRIT</span>' : ''}`,
-      `${up} &nbsp;&nbsp; <b class="bad">-${STAT_SHORT[m.down]}</b>`,
+      `${up}<br><span class="wiki-dim">${m.desc || ''}</span>`,
     ];
   });
+  // Rational table: one row per "up" stat, listing the five names that lower each other stat
+  const ratRows = RATIONAL_STATS.map((up) => [
+    `<b class="good">+${RATIONAL_AMOUNT} ${STAT_SHORT[up]}</b>`,
+    RATIONAL_STATS.filter((d) => d !== up).map((down) => {
+      const r = Object.values(RATIONALS).find((x) => x.up === up && x.down === down);
+      return `<b>${r.name}</b> <span class="wiki-dim">(−${RATIONAL_AMOUNT} ${STAT_SHORT[down]})</span>`;
+    }).join(' · '),
+  ]);
   return [
-    h3('What a Mood is', 'mood personality nature'),
-    para(`Every Mythling has a <b>Mood</b>: a fixed trait that raises <b>three</b> stats and lowers
-      <b>one</b>. Moods are rolled when a wild Mythling appears and are kept forever — through
-      capture, evolution and every level up. There are <b>${MOOD_IDS.length}</b> moods.`),
+    h3('What a Mood is', 'mood personality'),
+    para(`Every Mythling has a <b>Mood</b>: a fixed, purely <b>positive</b> trait that boosts exactly <b>one</b> stat.
+      There are <b>${MOOD_IDS.length}</b> Moods — one for every stat — so nothing is missing from the table below.
+      Moods are rolled when a wild Mythling appears and are kept through capture, evolution and every level up.
+      A <b>Mood Tonic</b> (sold from Azure Coast onward) re-rolls it into a different Mood.`),
     h3('Rarity amplifies the Mood', 'rarity magnitude scale'),
-    para(`Rarity does not change base stats by itself — it sets the <b>magnitude</b> of the Mood bonus.
-      Rarity <b>D</b> adds nothing at all; <b>SSS+</b> adds a huge swing. HP counts triple and Crit Damage counts double.`),
+    para(`Rarity does not change base stats by itself — it sets the <b>magnitude</b> of the Mood bonus:
+      <b>+2 × magnitude</b> to the Mood's stat (HP counts six times, Crit Damage four times). Rarity <b>D</b> adds
+      nothing at all; <b>SSS+</b> adds a huge boost.`),
     table(RARITY_ORDER.map((id) => [
       `<b style="color:${RARITIES[id].color}">Rarity ${id}</b>`,
-      `Mood magnitude <b>+${RARITIES[id].magnitude}</b>`,
+      `Mood magnitude <b>${RARITIES[id].magnitude}</b> → <b>+${RARITIES[id].magnitude * 2}</b> to the Mood's stat (HP <b>+${RARITIES[id].magnitude * 12}</b>, Crit Damage <b>+${RARITIES[id].magnitude * 8}%</b>)`,
     ])),
     h3('All moods', 'list table of moods'),
     table(rows),
-    note(`Example — a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+15 HP, +5 P.ATK, +5 CNT, −5 S.DEF</b>.
-      The same Mood at Rarity D (magnitude 0) changes nothing.`),
+    note(`Example — a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+10 Physical Attack</b>.
+      A <b>Sturdy</b> one at the same rarity: <b>+60 HP</b>. The same Mood at Rarity D changes nothing.`),
+    h3('Rational — the +10 / −10 trait', 'rational temper nature plus minus trade-off'),
+    para(`Where the Mood only ever helps, the <b>Rational</b> is a trade-off: a fixed <b>+${RATIONAL_AMOUNT}</b> to one of the six
+      main stats and a fixed <b>−${RATIONAL_AMOUNT}</b> to another. It is flat (not scaled by rarity or level) and it stacks with the
+      Mood, the Rarity magnitude and the mutation bonus. All <b>${RATIONAL_IDS.length}</b> possible pairs exist, so any stat can be
+      traded for any other. A <b>Temper Tonic</b> re-rolls it into a different Rational.`),
+    table(ratRows, 'rational names table'),
+    note(`Example — a <b>Hasty</b> Mythling: <b>+${RATIONAL_AMOUNT} Speed, −${RATIONAL_AMOUNT} HP</b>. A <b>Stoic</b> one: <b>+${RATIONAL_AMOUNT} HP, −${RATIONAL_AMOUNT} Speed</b>.
+      The profile marks the two stats with arrows and names the trait next to the Mood.`),
   ];
 }
 
 function raritySection() {
   const mut = MUTATION_IDS.filter((id) => id !== 'none').map((id) => [
     `<span style="color:${MUTATIONS[id].color}">${MUTATIONS[id].name}</span>`,
-    `${(MUTATIONS[id].chance * 100).toFixed(1)}% chance · cosmetic only (no stat change)`,
+    `${(MUTATIONS[id].chance * 100).toFixed(1)}% chance in the wild · <b>+${MUTATIONS[id].statBonus} to every stat</b> (after caps) · unique colours and aura`
+      + (id === 'shiny' ? ' · guaranteed by the <b>Shiny Ball</b>' : id === 'darkness' ? ' · guaranteed by the <b>Dark Ball</b>' : ''),
   ]);
   return [
     h3('Rarity', 'rarity tiers D C B A S SSS'),
@@ -219,7 +242,7 @@ function raritySection() {
       const it = ITEMS[id];
       const img = `<img class="ball-icon" width="28" height="28" src="${ballCanvas(id, 28).toDataURL()}" alt="">`;
       return [`<span class="wiki-ball">${img}<span>${it.name}<br><small>${ballLook(id)}</small></span></span>`,
-        `${it.guaranteed ? '<b>Guaranteed catch</b>' : `x${it.catchMult.toFixed(2)} catch`} · ${coins(it.price)} Wildcoins<br><small>${it.desc}</small>`];
+        `${it.guaranteed ? '<b>Guaranteed catch</b>' : `x${it.catchMult.toFixed(2)} catch`}${it.forceMutation ? ` · <b>always ${MUTATIONS[it.forceMutation].name}</b>` : ''} · ${coins(it.price)} Wildcoins<br><small>${it.desc}</small>`];
     }), 'balls'),
   ];
 }
@@ -238,10 +261,11 @@ function elementsSection() {
     }
   }
   return [
-    h3('The elemental triangle', 'element effectiveness chart nature water fire'),
+    h3('The element chart', 'element effectiveness chart nature water fire rock'),
     para(`Attacks use the <b>element of the skill</b>. Hitting a weakness multiplies damage by
       <b>x${EFFECTIVENESS.STRONG}</b>; hitting a resistance multiplies it by <b>x${EFFECTIVENESS.WEAK}</b>.
-      Same element vs same element is neutral.`),
+      Same element vs same element is neutral. <b>Rock</b> (Stonehollow Crags) smothers Fire but is weak to
+      both Water and Nature — bring the right team up the mountain.`),
     bullets(ids.map((id) => {
       const beats = ids.filter((d) => elementMultiplier(id, d) > 1).map((d) => ELEMENTS[d].name);
       return `<b style="color:${ELEMENTS[id].color}">${ELEMENTS[id].name}</b> is strong against ${beats.join(', ')}`;
@@ -307,9 +331,19 @@ function speciesSection() {
     para(`Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species
       default Mood and Rarity D. Open the <b>INDEX</b> tab in the menu to see every Mythling's four forms drawn side by side.`),
   ];
-  for (const id of SPECIES_IDS) {
+  const order = [...ELEMENT_ORDER, ...Object.keys(ELEMENTS).filter((e) => !ELEMENT_ORDER.includes(e))];
+  const grouped = order.flatMap((elId) => SPECIES_IDS.filter((id) => SPECIES[id].element === elId).map((id) => [elId, id]));
+  let lastEl = null;
+  for (const [elId, id] of grouped) {
+    if (elId !== lastEl) {
+      lastEl = elId;
+      out.push(h3(`${ELEMENTS[elId].name} type`, `${elId} type species list`));
+    }
     const sp = SPECIES[id];
-    const evoLine = sp.evolutions.map((ev) => `${ev.name} <span class="wiki-dim">(Lv.${ev.level})</span>`).join('  →  ');
+    // evolutions are revealed only once the player has owned that form
+    const evoLine = sp.evolutions.map((ev, st) => (st === 0 || CollectionManager.hasForm(id, st))
+      ? `${ev.name} <span class="wiki-dim">(Lv.${ev.level})</span>`
+      : `<span class="wiki-dim">??? (Lv.${ev.level}) 🔒</span>`.replace('🔒', '<span class="wiki-lock">locked</span>')).join('  →  ');
     const card = el('div', { class: 'wiki-card' }, [
       el('div', { class: 'wiki-card-head' }, [
         creature(id, 0, 96),
@@ -335,7 +369,7 @@ function speciesSection() {
           .join(' &nbsp;|&nbsp; ')],
       ]),
     ]);
-    card.dataset.wikitext = `${sp.displayName} ${sp.breed} ${sp.role} ${sp.element} ${sp.description} ${sp.evolutions.map((e) => e.name).join(' ')}`.toLowerCase();
+    card.dataset.wikitext = `${sp.displayName} ${sp.breed} ${sp.role} ${sp.element} ${sp.description} ${sp.evolutions.filter((e, st) => st === 0 || CollectionManager.hasForm(id, st)).map((e) => e.name).join(' ')}`.toLowerCase();
     out.push(card);
   }
   return out;
@@ -359,9 +393,10 @@ function skillsSection() {
   const byRank = (a, b) => firstLevel(a.id) - firstLevel(b.id) || skillStrength(a) - skillStrength(b) || a.name.localeCompare(b.name);
 
   const skillRow = (s) => {
+    const rider = riderSummary(s);
     const meta = isDamageSkill(s)
-      ? `Power <b>${s.power}</b> · ${s.damageType === 'physical' ? 'Physical (P.ATK)' : 'Special (S.ATK)'}${s.element ? ` · ${ELEMENTS[s.element].name}` : ''} · ${Number.isFinite(s.uses) ? `${s.uses} uses` : 'unlimited'}`
-      : `<b>${buffSummary(s, ' ')}</b> ${s.category === 'debuff' ? 'on the foe' : 'on self'} · ${s.uses} uses`;
+      ? `${s.reflect ? `<b>Returns the last hit x${s.reflect}</b>` : `Power <b>${s.power}</b>`} · ${s.damageType === 'physical' ? 'Physical (P.ATK)' : 'Special (S.ATK)'}${s.element ? ` · ${ELEMENTS[s.element].name}` : ''}${rider && !s.reflect ? ` · <b>${rider}</b>` : ''} · ${Number.isFinite(s.uses) ? `${s.uses} uses` : 'unlimited'}`
+      : `<b>${buffSummary(s, ' ')}</b>${(s.effects || []).some((e) => e.target) ? '' : (s.category === 'debuff' ? ' on the foe' : ' on self')}${(s.effects || []).length > 1 ? ' · <span class="chip evolve">ELITE</span>' : ''} · ${s.uses} uses`;
     const lv = firstLevel(s.id);
     return [
       `<span class="wiki-learn">Lv.${Number.isFinite(lv) ? lv : '—'}</span> <b>${s.name}</b>`
@@ -372,14 +407,13 @@ function skillsSection() {
     ];
   };
   const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat && s.id !== 'struggle').sort(byRank).map(skillRow);
-  const allByLevel = Object.values(SKILLS).filter((s) => s.id !== 'struggle' && learnLevels[s.id]).sort(byRank);
 
   // Ultimates: every tier, ordered by unlock level then power
   const ultRows = [];
   for (const u of Object.values(ULTIMATES)) {
     u.tiers.forEach((t, i) => ultRows.push({ u, t, i }));
   }
-  ultRows.sort((a, b) => a.t.unlockLevel - b.t.unlockLevel || a.t.power - b.t.power || a.u.baseName.localeCompare(b.u.baseName));
+  ultRows.sort((a, b) => a.t.unlockLevel - b.t.unlockLevel || (a.t.power || 0) - (b.t.power || 0) || a.u.baseName.localeCompare(b.u.baseName));
   const ultOwners = (uid) => Object.values(SPECIES).filter((sp) => sp.ultimate === uid).map((sp) => sp.displayName).join(', ') || '—';
 
   return [
@@ -395,11 +429,11 @@ function skillsSection() {
       '<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.',
       '<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe\'s stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.',
       'Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.',
+      '<b>ELITE</b> support skills (Lv.60 / Lv.80, only 4 uses) carry <b>two</b> effects — two buffs, two debuffs, or one of each. Effects on the foe are always debuffs; effects on yourself are always buffs.',
+      '<b>Life steal</b> skills attack and heal in the same move: <i>drain</i> skills heal a share of the damage they deal (a crit heals more), <i>mending</i> skills heal a fixed share of max HP after any hit.',
+      '<b>Retaliate</b> / <b>Vengeance</b> return the <b>last hit you took</b> at x2 / x3. You still take the hit first, and if the foe only buffed or debuffed there is nothing to return — the move fizzles.',
       'If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn.',
     ]),
-    h3('All skills by unlock level', 'all skills level order list'),
-    para('Every learnable skill, from the earliest to the latest unlock. Within a level, weaker skills come before stronger ones.'),
-    table(allByLevel.map(skillRow), 'skill level learned at rank'),
     h3('Normal skills', 'normal unlimited bite scratch peck'),
     table(catRows('normal'), 'normal skill level learned at'),
     h3('Special skills', 'special elemental power uses'),
@@ -412,12 +446,16 @@ function skillsSection() {
     table(ultRows.map(({ u, t, i }) => [
       `<span class="wiki-learn">Lv.${t.unlockLevel}</span> <b>${u.baseName}${t.suffix}</b>${t.future ? ' <span class="wiki-dim">(late game)</span>' : ''}`
         + `<br><span class="wiki-learn">${i === 0 ? 'Base tier' : `Tier${t.suffix}`} · evolution stage ${i + 1}</span>`,
-      `Power <b>${t.power}</b> · ${ELEMENTS[u.element].name} · ${u.damageType === 'physical' ? 'Physical' : 'Special'}`
+      (isSupportUltimate(u)
+        ? `<b>${u.kind === 'support' ? 'Support Ultimate' : ''}</b> · ${ELEMENTS[u.element].name} · <b>${(t.effects || []).map((e) => `${e.target === 'foe' ? 'foe ' : ''}${STAT_SHORT[e.stat]} ${e.target === 'foe' ? '-' : '+'}${e.amount}`).join(', ')}</b> · never misses, no damage`
+        : `Power <b>${t.power}</b> · ${ELEMENTS[u.element].name} · ${u.damageType === 'physical' ? 'Physical' : 'Special'}`)
         + `${t.selfBuff ? ` · also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(', ')} on self` : ''}`
         + `<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`,
     ]), 'ultimate tier power level'),
     note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge comes only from
-      successful Normal and Special attacks. The tier matches the evolution stage (Base → I → II → III).`),
+      successful Normal and Special attacks. The tier matches the evolution stage (Base → I → II → III).
+      <b>Support Ultimates</b> (Granite Bastion, Quake Curse, Crystal Resonance) deal no damage: they are Ultimate-grade
+      buffs / debuffs with two effects — buffs on yourself, debuffs on the foe, or one of each.`),
   ];
 }
 
@@ -430,8 +468,10 @@ function itemsSection() {
     if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
     if (i.healFull) effect += ' <span class="wiki-dim">(restores ALL HP)</span>';
     if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp.toLocaleString()} EXP)</span>`;
-    if (i.guaranteed) effect += ' <span class="wiki-dim">(<b>100%</b> catch — guaranteed)</span>';
+    if (i.guaranteed) effect += ` <span class="wiki-dim">(<b>100%</b> catch — guaranteed${i.forceMutation ? `, always <b>${MUTATIONS[i.forceMutation].name}</b>` : ''})</span>`;
     else if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
+    if (i.rerollMood) effect += ' <span class="wiki-dim">(re-rolls the Mood — use from the Mythling\'s profile)</span>';
+    if (i.rerollRational) effect += ' <span class="wiki-dim">(re-rolls the Rational — use from the Mythling\'s profile)</span>';
     return [
       `<b>${i.name}</b>${i.price ? '' : ' <span class="wiki-dim">(not sold)</span>'}`,
       `${effect}${i.price ? ` · <b>${i.price.toLocaleString()}</b> Wildcoins` : ''}`,
@@ -447,13 +487,19 @@ function itemsSection() {
     ], c.name)),
     note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP. You can feed a whole
       <b>stack at once</b> (−/+/MAX picker) and the game caps the amount at what it takes to reach Lv.${LEVEL_CAP},
-      so no food is ever wasted. The <b>King Ball</b> is the only ball with a guaranteed catch — and it is priced like it.`),
+      so no food is ever wasted. The <b>God Ball</b> is the supreme regular ball — a guaranteed catch — and the
+      <b>Shiny Ball</b> / <b>Dark Ball</b> go one step further: guaranteed catch <i>and</i> a guaranteed Shiny / Darkness
+      mutation. They are sold only at the Crags Outfitter in Stonehollow Crags, and they are priced like it.`),
   ];
 }
 
 function worldSection() {
   const out = [
     h3('Regions', 'region map area'),
+    para(`Wild levels are <b>fixed per region</b> — they never scale up to your party. Verdant Vale spawns
+      Lv.1–20, Azure Coast Lv.15–30, Emberwild Lv.30–45 and Stonehollow Crags Lv.45–60. When the wild Mythlings
+      of an area start to feel weak, that is the signal to beat its Guardian and move on to the next one.
+      Each region is the home of one element: Nature, Water, Fire and Rock.`),
   ];
   for (const id of MAP_ORDER) {
     const map = MAPS[id];

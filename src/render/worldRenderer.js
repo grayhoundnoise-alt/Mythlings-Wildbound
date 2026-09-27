@@ -15,7 +15,16 @@ const TERRAIN = {
   cinder:  { grass: '#59453f', grass2: '#4a3833', path: '#79615a', props: ['burnttree', 'ember', 'rock', 'deadtree'] },
   molten:  { grass: '#4a332f', grass2: '#3c2926', path: '#6d4b42', props: ['rock', 'ember', 'obsidian', 'crystal'] },
   volcanic_ruins: { grass: '#4f3a34', grass2: '#41302b', path: '#74564a', props: ['pillar', 'obsidian', 'ember', 'rock'] },
+  // ---- Stonehollow Crags (rock) ----
+  quarry:  { grass: '#9a8f78', grass2: '#877c67', path: '#c9bda0', props: ['rock', 'crate', 'barrel', 'deadtree'] },
+  crag:    { grass: '#7d7a72', grass2: '#6b685f', path: '#a39e90', props: ['rock', 'rock', 'stalag', 'crystal'] },
+  summit:  { grass: '#8f949c', grass2: '#7c8188', path: '#b8bcc2', props: ['pillar', 'rock', 'stalag', 'crystal'] },
 };
+
+/** Ground colour of a terrain id (used by the minimap so it matches the world). */
+export function terrainColor(terrainId) {
+  return (TERRAIN[terrainId] || TERRAIN.forest).grass;
+}
 
 const WATER_COLORS = {
   stream: ['#4fb0e8', '#2d84c4'],
@@ -409,6 +418,12 @@ export class WorldRenderer {
         ctx.globalAlpha = 0.45;
         ctx.fillStyle = '#e6faff';
         ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2); ctx.fill();
+      } else if (theme === 'rock') {
+        // drifting quarry dust + the odd falling pebble
+        ctx.globalAlpha = i % 4 === 0 ? 0.6 : 0.3;
+        ctx.fillStyle = i % 4 === 0 ? '#6e665c' : '#e8dcc4';
+        const py = i % 4 === 0 ? (y + time * 60) % (cam.h + 100) + cam.y - 50 : y;
+        ctx.beginPath(); ctx.arc(x, py, i % 4 === 0 ? 2.2 : 1.6, 0, Math.PI * 2); ctx.fill();
       } else {
         ctx.globalAlpha = 0.55;
         ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd07a';

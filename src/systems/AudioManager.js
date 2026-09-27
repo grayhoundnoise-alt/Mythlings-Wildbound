@@ -4,6 +4,7 @@ const THEMES = {
   vale:   { scale: [0, 2, 4, 7, 9, 12],   root: 329.63, tempo: 0.40, wave: 'triangle', pad: true,  bassEvery: 4, gain: 0.18 },
   coast:  { scale: [0, 2, 5, 7, 9, 12],   root: 261.63, tempo: 0.44, wave: 'sine',     pad: true,  bassEvery: 4, gain: 0.19 },
   ember:  { scale: [0, 3, 5, 7, 10, 12],  root: 220.00, tempo: 0.34, wave: 'sawtooth', pad: true,  bassEvery: 2, gain: 0.15 },
+  crags:  { scale: [0, 2, 3, 7, 8, 12],   root: 246.94, tempo: 0.50, wave: 'triangle', pad: true,  bassEvery: 2, gain: 0.17 },
   town:   { scale: [0, 2, 4, 5, 7, 9],    root: 349.23, tempo: 0.42, wave: 'triangle', pad: false, bassEvery: 4, gain: 0.17 },
   battle: { scale: [0, 2, 3, 5, 7, 10],   root: 196.00, tempo: 0.22, wave: 'square',   pad: false, bassEvery: 2, gain: 0.13 },
   boss:   { scale: [0, 1, 3, 5, 7, 8],    root: 174.61, tempo: 0.20, wave: 'sawtooth', pad: false, bassEvery: 2, gain: 0.13 },

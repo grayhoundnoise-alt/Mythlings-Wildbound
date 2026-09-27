@@ -336,9 +336,10 @@ class Game {
       if (SettingsManager.get('tutorialHints') && !GameState.world.flags[`intro_${toMap}`]) {
         WorldManager.setFlag(`intro_${toMap}`);
         const lines = {
-          azure_coast: ['Azure Coast — wild Mythlings here are Lv.10 to Lv.20.', 'Aquini and Rivruff live along these shores. Your Mythlings can evolve at Lv.20!'],
-          emberwild: ['Emberwild — the strongest region of this version. Wild Mythlings reach Lv.30.', 'Emberu rules the ash. Remember: anything you catch still starts again at Lv.1.'],
-          verdant_vale: ['Verdant Vale — home turf. Wild Mythlings Lv.1 to Lv.10.'],
+          azure_coast: ['Azure Coast — wild Mythlings here are Lv.15 to Lv.30.', 'Aquini and Rivruff live along these shores. Your Mythlings can evolve at Lv.20!'],
+          emberwild: ['Emberwild — wild Mythlings here are Lv.30 to Lv.45.', 'Emberu rules the ash. Remember: anything you catch still starts again at Lv.1.'],
+          stonehollow_crags: ['Stonehollow Crags — the strongest region of this version. Wild Mythlings are Lv.45 to Lv.60, and every one of them is Rock type.', 'Rock smothers Fire and crumbles under Water and Nature. The Stone Warden waits at the Titan Summit.'],
+          verdant_vale: ['Verdant Vale — home turf. Wild Mythlings Lv.1 to Lv.20.'],
         }[toMap];
         if (lines) await Dialogue.show(lines, 'GUIDE');
       }
@@ -625,6 +626,10 @@ class Game {
     }
     if (mapId === 'emberwild') {
       if (!WorldManager.isTrainerDefeated('flame_warden')) return goal('Challenge the Flame Warden in the Volcanic Ruins');
+      return goal('Travel east through the Emberwild Pass to Stonehollow Crags');
+    }
+    if (mapId === 'stonehollow_crags') {
+      if (!WorldManager.isTrainerDefeated('stone_warden')) return goal('Climb to the Titan Summit and defeat the Stone Warden');
     }
     return null;
   }
@@ -635,22 +640,64 @@ class Game {
     const d = this.overworld.minimapData();
     const sx = cv.width / d.w, sy = cv.height / d.h;
     ctx.clearRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = 'rgba(12,22,34,0.85)';
-    ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = 'rgba(80,180,110,0.25)';
+    // The static picture of the map (ground, water, bridges, buildings, gates)
+    // is drawn once per map and cached, so the minimap always matches the
+    // world instead of showing floating rectangles.
+    ctx.drawImage(this.minimapBase(d, cv.width, cv.height), 0, 0);
+    // encounter zones: a faint hatch so tall grass reads as "wild area"
+    ctx.fillStyle = 'rgba(60,220,110,0.16)';
     for (const z of d.zones) ctx.fillRect(z[0] * sx, z[1] * sy, z[2] * sx, z[3] * sy);
-    ctx.fillStyle = 'rgba(240,200,120,0.85)';
-    for (const b of d.buildings) ctx.fillRect(b[0] * sx, b[1] * sy, Math.max(3, b[2] * sx), Math.max(3, b[3] * sy));
-    ctx.fillStyle = 'rgba(160,220,255,0.9)';
-    for (const c of d.conns) ctx.fillRect(c[0] * sx, c[1] * sy, Math.max(3, c[2] * sx), Math.max(3, c[3] * sy));
+    // trainers (red) and NPCs (yellow)
+    for (const t of d.trainers) {
+      ctx.fillStyle = t[2] ? 'rgba(255,255,255,0.55)' : '#ff5a5a';
+      ctx.beginPath(); ctx.arc(t[0] * sx, t[1] * sy, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#ffd76a';
+    for (const n of d.npcs) { ctx.beginPath(); ctx.arc(n[0] * sx, n[1] * sy, 1.8, 0, Math.PI * 2); ctx.fill(); }
+    // roaming wild Mythlings in their element colour
     for (const w of d.wild) {
-      ctx.fillStyle = ELEMENTS[w[2]].color;
+      ctx.fillStyle = ELEMENTS[w[2]]?.color || '#fff';
       ctx.beginPath(); ctx.arc(w[0] * sx, w[1] * sy, 2.2, 0, Math.PI * 2); ctx.fill();
     }
+    // the player
     ctx.fillStyle = '#ffffff';
     ctx.beginPath(); ctx.arc(d.px * sx, d.py * sy, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.strokeRect(0.5, 0.5, cv.width - 1, cv.height - 1);
+  }
+
+  /** Cached base layer of the minimap for the current map (regions, water, bridges, buildings, gates). */
+  minimapBase(d, W, H) {
+    const key = `${d.mapId}:${W}x${H}`;
+    if (this._minimapBase?.key === key) return this._minimapBase.canvas;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const sx = W / d.w, sy = H / d.h;
+    g.fillStyle = 'rgba(12,22,34,0.9)';
+    g.fillRect(0, 0, W, H);
+    for (const r of d.regions) {
+      g.fillStyle = r[4];
+      g.fillRect(r[0] * sx, r[1] * sy, Math.ceil(r[2] * sx), Math.ceil(r[3] * sy));
+    }
+    // the central corridor the world renderer keeps walkable
+    g.fillStyle = 'rgba(255,255,255,0.08)';
+    g.fillRect(0, (d.h * 0.55 - 90) * sy, W, 180 * sy);
+    for (const w of d.water) {
+      g.fillStyle = w[4] === 'lava' ? '#ff7a2a' : '#3fa9f5';
+      g.fillRect(w[0] * sx, w[1] * sy, Math.max(2, w[2] * sx), Math.max(2, w[3] * sy));
+    }
+    g.fillStyle = '#c99a5a';
+    for (const b of d.bridges) g.fillRect(b[0] * sx, b[1] * sy, Math.max(2, b[2] * sx), Math.max(2, b[3] * sy));
+    for (const b of d.buildings) {
+      g.fillStyle = b[4] === 'center' ? '#ff8a8a' : b[4] === 'shop' ? '#7fc4ff' : 'rgba(240,200,120,0.95)';
+      g.fillRect(b[0] * sx, b[1] * sy, Math.max(3, b[2] * sx), Math.max(3, b[3] * sy));
+    }
+    g.fillStyle = 'rgba(160,220,255,0.95)';
+    for (const cn of d.conns) g.fillRect(cn[0] * sx, cn[1] * sy, Math.max(3, cn[2] * sx), Math.max(3, cn[3] * sy));
+    this._minimapBase = { key, canvas: c };
+    return c;
   }
 }
 

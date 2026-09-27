@@ -595,11 +595,11 @@ export function versionCompleteScreen(onDone) {
   const stage = el('div', { class: 'cinematic-stage' });
   layer.appendChild(stage);
   stage.append(
-    el('h2', { text: 'EMBERWILD COMPLETE' }),
+    el('h2', { text: 'STONEHOLLOW CRAGS COMPLETE' }),
     el('h2', { style: { fontSize: '1.4rem', color: '#eaf3ff' }, text: 'Current Version Complete' }),
-    el('p', { text: 'You have bested the Flame Warden and cleared every region of the current build of Wildbound.' }),
-    el('p', { text: 'The world stays open: keep exploring all three regions, hunt for Shiny and Darkness mutations, chase better Moods and Rarities, complete your collection, and raise your team to Lv.30.' }),
-    el('p', { class: 'sub', text: 'More regions, Mythlings and the Lv.60 / Lv.80 evolutions arrive in future updates.' }),
+    el('p', { text: 'You have bested the Stone Warden and cleared every region of the current build of Wildbound.' }),
+    el('p', { text: 'The world stays open: keep exploring all four regions, hunt for Shiny and Darkness mutations, chase better Moods, Rationals and Rarities, complete your collection, and raise your team to Lv.100.' }),
+    el('p', { class: 'sub', text: 'More regions and Mythlings arrive in future updates.' }),
     button('CONTINUE EXPLORING', { class: 'primary', onclick: () => { layer.remove(); onDone(); } }),
   );
   document.getElementById('app').appendChild(layer);
