@@ -38,6 +38,7 @@ const TABS = [
   ['bag', 'BAG', 'bag'],
   ['map', 'MAP', 'map'],
   ['collection', 'COLLECTION', 'book'],
+  ['index', 'INDEX', 'book'],
   ['stats', 'STATS', 'user'],
   ['save', 'SAVE', 'save'],
   ['settings', 'SETTINGS', 'settings'],
@@ -187,6 +188,7 @@ export class PlayerMenu {
       case 'bag': this.renderBag(b); break;
       case 'map': this.renderMap(b); break;
       case 'collection': this.renderCollection(b); break;
+      case 'index': this.renderIndex(b); break;
       case 'stats': this.renderStats(b); break;
       case 'save': this.renderSave(b); break;
       case 'settings': this.renderSettings(b); break;
@@ -581,6 +583,50 @@ export class PlayerMenu {
   }
 
   // ---------------------------------------------------- COLLECTION
+  // ---------------------------------------------------- INDEX
+  /**
+   * Mythling Index: every species with all four evolution stages drawn side by
+   * side, so you can see exactly what a Mythling grows into and at what level.
+   */
+  renderIndex(root) {
+    const seen = SPECIES_IDS.filter((id) => CollectionManager.entry(id)?.seen).length;
+    this.setTitle(`Mythling Index — ${seen}/${SPECIES_IDS.length} discovered`);
+    root.appendChild(el('p', {
+      class: 'sub',
+      text: 'Every Mythling and all four of its forms. Stages unlock at Lv.20, Lv.60 and Lv.80 — raise a Mythling to the level and it evolves on its own.',
+    }));
+
+    const list = el('div', { class: 'index-list' });
+    for (const id of SPECIES_IDS) {
+      const sp = SPECIES[id];
+      const entry = CollectionManager.entry(id);
+      const known = !!(entry && (entry.seen || entry.caught));
+      const card = el('div', { class: `index-card ${known ? '' : 'locked'}` }, [
+        el('div', { class: 'index-head' }, [
+          el('b', { text: known ? sp.displayName : '???' }),
+          elementChip(sp.element),
+          el('span', { class: 'role', text: sp.role }),
+          el('span', { class: 'role', text: `· ${sp.breed} · ${sp.spawnMaps?.[0]?.replace(/_/g, ' ') || ''}` }),
+        ]),
+        el('div', { class: 'index-stages' }, sp.evolutions.map((ev, stage) => {
+          const unlocked = known;
+          return el('div', { class: `index-stage ${unlocked ? '' : 'locked'}` }, [
+            unlocked
+              ? mythCanvas({ speciesId: id, stage, mutation: 'none' }, 96)
+              : el('div', { class: 'index-blank', text: '?' }),
+            el('div', { class: 'is-name', text: unlocked ? ev.name : '???' }),
+            el('div', { class: 'is-lv', text: stage === 0 ? 'Base form' : `Lv.${ev.level}` }),
+            ev.art?.horns || ev.art?.wings
+              ? el('div', { class: 'is-tag', text: [ev.art.horns ? 'Horns' : '', ev.art.wings ? 'Wings' : ''].filter(Boolean).join(' + ') })
+              : null,
+          ]);
+        })),
+      ]);
+      list.appendChild(card);
+    }
+    root.appendChild(list);
+  }
+
   renderCollection(root) {
     const s = CollectionManager.stats();
     this.setTitle(`Collection — ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen`);

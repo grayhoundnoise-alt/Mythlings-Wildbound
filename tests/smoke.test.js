@@ -918,5 +918,31 @@ test('the evolution canvas stays square at every size', () => {
   assert.match(cv[1], /height:\s*auto/);
 });
 
+// ------------------------------------------------------------------
+section('Wild encounters');
+const { EncounterManager } = await import('../src/systems/EncounterManager.js');
+
+test('every region spawns five species, all of the region element', () => {
+  const wanted = { verdant_vale: 'nature', azure_coast: 'water', emberwild: 'fire' };
+  for (const [mapId, element] of Object.entries(wanted)) {
+    const zones = EncounterManager.zonesForMap(mapId);
+    const seen = new Set();
+    for (const z of zones) for (let i = 0; i < 60; i++) seen.add(EncounterManager.spawnForZone(z, mapId).speciesId);
+    assert.equal(seen.size, 5, `${mapId} spawns ${seen.size} species`);
+    for (const id of seen) assert.equal(SPECIES[id].element, element, `${id} matches ${mapId}`);
+  }
+});
+
+test('spawns keep pace with a party that out-levels the story content', () => {
+  GameState.party = [createMythling({ speciesId: 'emberu', level: 70 })];
+  const zone = EncounterManager.zonesForMap('verdant_vale')[0];   // Lv.1-4
+  const levels = [];
+  for (let i = 0; i < 25; i++) {
+    levels.push(EncounterManager.spawnForZone(zone, 'verdant_vale', Math.random, { partyLevel: PartyManager.topLevel() }).level);
+  }
+  assert.ok(Math.max(...levels) >= 60, `scaled spawns reached only Lv.${Math.max(...levels)}`);
+  assert.ok(Math.min(...levels) <= LEVEL_CAP);
+});
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

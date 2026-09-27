@@ -323,7 +323,7 @@ select {
   background: rgba(10,18,30,0.75); border: 1.5px solid rgba(255,255,255,0.14);
   text-align: center; font-size: .72rem; backdrop-filter: blur(4px);
 }
-.party-chip canvas { width: 100%; height: 44px; display: block; }
+.party-chip canvas { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
 .party-chip .pc-name { font-weight: 800; font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .party-chip .pc-lv { color: var(--muted); font-size: .68rem; }
 .party-chip.fainted { filter: grayscale(1) brightness(.6); }
@@ -538,6 +538,33 @@ select {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 16px; padding: 28px 18px;
 }
+/* skill learn-level line in the wiki */
+.wiki-learn { color: var(--gold); font-size: .78rem; letter-spacing: .04em; }
+
+/* ---------- Mythling Index: every species with all four forms ---------- */
+.index-list { display: flex; flex-direction: column; gap: 14px; }
+.index-card {
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(255,255,255,.04); border: 1.5px solid rgba(255,255,255,.1);
+}
+.index-card.locked { opacity: .75; }
+.index-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.index-head .role { color: var(--muted); font-size: .8rem; }
+.index-stages { display: flex; gap: 10px; flex-wrap: wrap; }
+.index-stage {
+  width: 108px; padding: 6px; text-align: center; border-radius: 10px;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.08);
+}
+.index-stage canvas { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
+.index-stage .is-name { font-weight: 800; font-size: .78rem; margin-top: 4px; }
+.index-stage .is-lv { color: var(--muted); font-size: .7rem; }
+.index-stage .is-tag { color: var(--gold); font-size: .62rem; letter-spacing: .06em; margin-top: 2px; }
+.index-stage.locked { opacity: .5; }
+.index-blank {
+  width: 100%; aspect-ratio: 1 / 1; display: grid; place-items: center;
+  color: var(--muted); font-size: 2rem; background: rgba(255,255,255,.04); border-radius: 8px;
+}
+
 /* Square at every size: the canvas used to be stretched wide and short, which
    squashed the Mythling. JS backs it at device resolution for sharpness. */
 .cinematic canvas {
@@ -553,6 +580,9 @@ select {
 
 .levelup-list { display: flex; flex-direction: column; gap: 4px; font-size: .95rem; }
 .levelup-list .gain { color: var(--ok); }
+/* Skill Library: three slot buttons per skill (any skill, any slot) */
+.skill-slots { display: flex; gap: 4px; flex: none; }
+.skill-slots .btn { min-width: 30px; padding: 5px 8px; }
 
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -753,7 +783,12 @@ select {
 .levelup-body h3 { margin: 0 0 6px; font-size: 1rem; color: var(--gold); letter-spacing: .06em; }
 .levelup-body h3:not(:first-child) { margin-top: 14px; }
 .levelup-body p { margin: 6px 0 0; }
-.levelup-list { display: flex; flex-wrap: wrap; gap: 6px; }
+/* six across, then wrap onto a new row — a vertical column of nine stats was
+   far too tall for the evolution and level-up summaries */
+.levelup-list {
+  display: grid; grid-template-columns: repeat(6, auto);
+  justify-content: center; gap: 6px;
+}
 .levelup-list .gain {
   padding: 3px 9px; border-radius: 999px; font-size: .78rem; font-weight: 800; letter-spacing: .04em;
   background: rgba(110, 224, 140, .16); border: 1px solid rgba(134, 240, 160, .45); color: #d3ffdf;
@@ -894,13 +929,13 @@ input[type="text"].wiki-search {
   var GAME_VERSION = "0.3.0";
   var SAVE_PREFIX = "mythlings_wildbound";
   var SAVE_SLOT_COUNT = 3;
-  var LEVEL_CAP = 30;
-  var ABSOLUTE_MAX_LEVEL = 100;
+  var LEVEL_CAP = 100;
   var PARTY_MAX = 6;
   var STORAGE_MAX = 200;
   var ULTIMATE_UNLOCK_LEVEL = 10;
   var EVOLUTION_LEVELS = [1, 20, 60, 80];
-  var MAX_UNLOCKED_EVOLUTION_STAGE = 1;
+  var MAX_UNLOCKED_EVOLUTION_STAGE = 3;
+  var FUTURE_CONTENT_LIVE = true;
   var COUNTER_MAX_PERCENT = 35;
   var COUNTER_DODGE_SCALE = 0.5;
   var COUNTER_MAX_DODGE = 18;
@@ -923,9 +958,12 @@ input[type="text"].wiki-search {
     const v = (Number(counter) || 0) * COUNTER_DODGE_SCALE;
     return Math.max(0, Math.min(COUNTER_MAX_DODGE, v));
   }
+  var STORY_CAP = 30;
+  var STORY_ANCHOR = 24 + 9 * Math.pow(STORY_CAP, 1.85);
   function expToNextLevel(level) {
     if (level >= LEVEL_CAP) return Infinity;
-    return Math.floor(24 + 9 * Math.pow(level, 1.85));
+    if (level <= STORY_CAP) return Math.floor(24 + 9 * Math.pow(level, 1.85));
+    return Math.floor(STORY_ANCHOR * level / STORY_CAP);
   }
   function expReward({ enemyLevel, enemyYield, winnerLevel, isTrainer }) {
     const base = enemyYield * enemyLevel / 5.2;
@@ -1088,21 +1126,21 @@ input[type="text"].wiki-search {
           rect: [1040, 150, 820, 1e3],
           levelRange: [1, 4],
           density: 5,
-          species: [{ id: "spriggo", weight: 50 }, { id: "leaflet", weight: 50 }]
+          species: [{ id: "spriggo", weight: 30 }, { id: "leaflet", weight: 30 }, { id: "mosscoil", weight: 20 }, { id: "thornhound", weight: 10 }, { id: "petalwisp", weight: 10 }]
         },
         {
           id: "vz2",
           rect: [1920, 150, 840, 1200],
           levelRange: [4, 8],
           density: 6,
-          species: [{ id: "spriggo", weight: 45 }, { id: "leaflet", weight: 55 }]
+          species: [{ id: "spriggo", weight: 25 }, { id: "leaflet", weight: 30 }, { id: "mosscoil", weight: 20 }, { id: "thornhound", weight: 15 }, { id: "petalwisp", weight: 10 }]
         },
         {
           id: "vz3",
           rect: [2830, 200, 700, 1100],
           levelRange: [7, 10],
           density: 5,
-          species: [{ id: "spriggo", weight: 55 }, { id: "leaflet", weight: 45 }]
+          species: [{ id: "spriggo", weight: 30 }, { id: "leaflet", weight: 20 }, { id: "mosscoil", weight: 15 }, { id: "thornhound", weight: 20 }, { id: "petalwisp", weight: 15 }]
         }
       ],
       connections: [
@@ -1240,21 +1278,21 @@ input[type="text"].wiki-search {
           rect: [1140, 320, 820, 780],
           levelRange: [10, 13],
           density: 6,
-          species: [{ id: "aquini", weight: 50 }, { id: "rivruff", weight: 50 }]
+          species: [{ id: "aquini", weight: 30 }, { id: "rivruff", weight: 30 }, { id: "currentkit", weight: 20 }, { id: "shelldrake", weight: 10 }, { id: "tidewyrm", weight: 10 }]
         },
         {
           id: "az2",
           rect: [2380, 320, 480, 1050],
           levelRange: [13, 16],
           density: 5,
-          species: [{ id: "aquini", weight: 55 }, { id: "rivruff", weight: 45 }]
+          species: [{ id: "aquini", weight: 25 }, { id: "rivruff", weight: 25 }, { id: "currentkit", weight: 20 }, { id: "shelldrake", weight: 15 }, { id: "tidewyrm", weight: 15 }]
         },
         {
           id: "az3",
           rect: [2930, 320, 620, 520],
           levelRange: [16, 20],
           density: 5,
-          species: [{ id: "aquini", weight: 45 }, { id: "rivruff", weight: 55 }]
+          species: [{ id: "aquini", weight: 20 }, { id: "rivruff", weight: 25 }, { id: "currentkit", weight: 15 }, { id: "shelldrake", weight: 20 }, { id: "tidewyrm", weight: 20 }]
         }
       ],
       connections: [
@@ -1405,28 +1443,28 @@ input[type="text"].wiki-search {
           rect: [1040, 250, 820, 850],
           levelRange: [20, 23],
           density: 6,
-          species: [{ id: "emberu", weight: 80 }, { id: "spriggo", weight: 20 }]
+          species: [{ id: "emberu", weight: 45 }, { id: "emberlynx", weight: 20 }, { id: "cinderhawk", weight: 15 }, { id: "ashpup", weight: 15 }, { id: "magmataur", weight: 5 }]
         },
         {
           id: "ez2",
           rect: [1930, 300, 730, 1050],
           levelRange: [23, 26],
           density: 6,
-          species: [{ id: "emberu", weight: 75 }, { id: "leaflet", weight: 25 }]
+          species: [{ id: "emberu", weight: 40 }, { id: "emberlynx", weight: 20 }, { id: "cinderhawk", weight: 20 }, { id: "ashpup", weight: 15 }, { id: "magmataur", weight: 5 }]
         },
         {
           id: "ez3",
           rect: [2740, 500, 620, 520],
           levelRange: [25, 28],
           density: 5,
-          species: [{ id: "emberu", weight: 85 }, { id: "rivruff", weight: 15 }]
+          species: [{ id: "emberu", weight: 40 }, { id: "emberlynx", weight: 15 }, { id: "cinderhawk", weight: 15 }, { id: "ashpup", weight: 20 }, { id: "magmataur", weight: 10 }]
         },
         {
           id: "ez4",
           rect: [3440, 800, 700, 620],
           levelRange: [27, 30],
           density: 5,
-          species: [{ id: "emberu", weight: 100 }]
+          species: [{ id: "emberu", weight: 40 }, { id: "emberlynx", weight: 15 }, { id: "cinderhawk", weight: 10 }, { id: "ashpup", weight: 15 }, { id: "magmataur", weight: 20 }]
         }
       ],
       connections: [
@@ -1471,9 +1509,9 @@ input[type="text"].wiki-search {
       ],
       skillUnlocks: {
         1: ["bite", "vine_lash", "brave_guard"],
-        20: ["thorn_spear", "thorn_armor"],
-        60: ["nature_burst", "wild_instinct"],
-        80: ["ancient_bloom", "forest_blessing"]
+        20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        60: ["nature_burst", "wild_instinct", "briar_smash"],
+        80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
       },
       art: {
         body: "fox",
@@ -1508,9 +1546,9 @@ input[type="text"].wiki-search {
       ],
       skillUnlocks: {
         1: ["scratch", "water_shot", "flow_focus"],
-        20: ["aqua_spear", "tidal_focus"],
-        60: ["whirlpool", "deep_current"],
-        80: ["ocean_pressure", "ocean_mind"]
+        20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        60: ["whirlpool", "deep_current", "tide_smash"],
+        80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
       },
       art: {
         body: "feline",
@@ -1545,9 +1583,9 @@ input[type="text"].wiki-search {
       ],
       skillUnlocks: {
         1: ["bite", "flame_rawr", "dragon_fury"],
-        20: ["burning_fang", "burning_scales"],
-        60: ["inferno_roar", "dragon_heat"],
-        80: ["dragon_inferno", "ancient_flame"]
+        20: ["burning_fang", "burning_scales", "ember_jab"],
+        60: ["inferno_roar", "dragon_heat", "cinder_smash"],
+        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
       },
       art: {
         body: "dragon",
@@ -1582,9 +1620,9 @@ input[type="text"].wiki-search {
       ],
       skillUnlocks: {
         1: ["bite", "water_splash", "aqua_guard"],
-        20: ["heavy_wave", "thick_fur"],
-        60: ["crushing_current", "deep_guard"],
-        80: ["abyssal_wave", "fortress_hide"]
+        20: ["heavy_wave", "thick_fur", "stream_jab"],
+        60: ["crushing_current", "deep_guard", "tide_smash"],
+        80: ["abyssal_wave", "fortress_hide", "abyss_slam"]
       },
       art: {
         body: "wolf",
@@ -1619,9 +1657,9 @@ input[type="text"].wiki-search {
       ],
       skillUnlocks: {
         1: ["peck", "leaf_shot", "quick_breeze"],
-        20: ["razor_wing", "wind_step"],
-        60: ["sky_cutter", "feather_flow"],
-        80: ["sky_cyclone", "gale_mastery"]
+        20: ["razor_wing", "wind_step", "thorn_jab"],
+        60: ["sky_cutter", "feather_flow", "briar_smash"],
+        80: ["sky_cyclone", "gale_mastery", "worldroot_slam"]
       },
       art: {
         body: "avian",
@@ -1631,6 +1669,366 @@ input[type="text"].wiki-search {
         accent: "#d6f77a",
         eye: "#3a2a12",
         dark: "#3c6b27"
+      }
+    },
+    thornhound: {
+      id: "thornhound",
+      displayName: "Thornhound",
+      breed: "Hound",
+      element: "nature",
+      defaultRarity: "C",
+      defaultMood: "sturdy",
+      role: "Bulky Attacker",
+      catchRate: 0.5,
+      expYield: 66,
+      description: "A thick-coated pack hunter with briars for a ruff. It tanks a hit and answers with a shoulder charge.",
+      baseStats: { hp: 125, patk: 18, satk: 10, pdef: 16, sdef: 12, spd: 10, counter: 6, crit: 6, critMult: 38 },
+      ultimate: "verdant_crush",
+      spawnMaps: ["verdant_vale"],
+      evolutions: [
+        { stage: 0, name: "Thornpup", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Thornhound", level: 20, statMult: 1.36, art: { scale: 1.21 } },
+        { stage: 2, name: "Briarfang", level: 60, statMult: 1.8, art: { scale: 1.41, horns: true } },
+        { stage: 3, name: "Rootwarden", level: 80, statMult: 2.28, art: { scale: 1.63, horns: true } }
+      ],
+      skillUnlocks: {
+        1: ["bite", "vine_lash", "brave_guard"],
+        20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        60: ["nature_burst", "wild_instinct", "briar_smash"],
+        80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
+      },
+      art: {
+        body: "wolf",
+        primary: "#6b8f4e",
+        secondary: "#3f5c33",
+        belly: "#e6dfae",
+        accent: "#a7d86b",
+        eye: "#8dff7a",
+        dark: "#26381f"
+      }
+    },
+    mosscoil: {
+      id: "mosscoil",
+      displayName: "Mosscoil",
+      breed: "Fox",
+      element: "nature",
+      defaultRarity: "C",
+      defaultMood: "clever",
+      role: "Tricky Support",
+      catchRate: 0.52,
+      expYield: 62,
+      description: "Vines coil around its legs and never touch the ground. It fights by tripping foes and slipping away.",
+      baseStats: { hp: 105, patk: 12, satk: 15, pdef: 13, sdef: 14, spd: 15, counter: 14, crit: 7, critMult: 42 },
+      ultimate: "leafstorm",
+      spawnMaps: ["verdant_vale"],
+      evolutions: [
+        { stage: 0, name: "Mosskit", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Mosscoil", level: 20, statMult: 1.34, art: { scale: 1.22 } },
+        { stage: 2, name: "Vineshade", level: 60, statMult: 1.75, art: { scale: 1.42, horns: true } },
+        { stage: 3, name: "Worldcoil", level: 80, statMult: 2.2, art: { scale: 1.65, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["bite", "vine_lash", "brave_guard"],
+        20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        60: ["nature_burst", "wild_instinct", "briar_smash"],
+        80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
+      },
+      art: {
+        body: "fox",
+        primary: "#4f9e6a",
+        secondary: "#2f6b47",
+        belly: "#dff0c8",
+        accent: "#7ce0a0",
+        eye: "#b6ffd0",
+        dark: "#1d4432"
+      }
+    },
+    petalwisp: {
+      id: "petalwisp",
+      displayName: "Petalwisp",
+      breed: "Avian",
+      element: "nature",
+      defaultRarity: "C",
+      defaultMood: "calm",
+      role: "Speed Support",
+      catchRate: 0.58,
+      expYield: 58,
+      description: "A blossom-feathered flier that scatters pollen on the wind. It is gone before most Mythlings react.",
+      baseStats: { hp: 90, patk: 10, satk: 16, pdef: 9, sdef: 13, spd: 21, counter: 13, crit: 8, critMult: 44 },
+      ultimate: "leafstorm",
+      spawnMaps: ["verdant_vale"],
+      evolutions: [
+        { stage: 0, name: "Petalflit", level: 1, statMult: 1, art: { scale: 1, wings: true } },
+        { stage: 1, name: "Petalwisp", level: 20, statMult: 1.32, art: { scale: 1.19, wings: true } },
+        { stage: 2, name: "Bloomdancer", level: 60, statMult: 1.72, art: { scale: 1.39, wings: true } },
+        { stage: 3, name: "Skyblossom", level: 80, statMult: 2.15, art: { scale: 1.6, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["peck", "vine_lash", "brave_guard"],
+        20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        60: ["nature_burst", "wild_instinct", "briar_smash"],
+        80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
+      },
+      art: {
+        body: "avian",
+        primary: "#e58fb8",
+        secondary: "#a3557f",
+        belly: "#ffe9f2",
+        accent: "#ffc2dd",
+        eye: "#8dffb0",
+        dark: "#5c2a44"
+      }
+    },
+    tidewyrm: {
+      id: "tidewyrm",
+      displayName: "Tidewyrm",
+      breed: "Serpent",
+      element: "water",
+      defaultRarity: "C",
+      defaultMood: "focused",
+      role: "Special Wall",
+      catchRate: 0.46,
+      expYield: 70,
+      description: "A long river serpent that reads the current like a script. Waves break against its scales and go nowhere.",
+      baseStats: { hp: 115, patk: 10, satk: 17, pdef: 12, sdef: 20, spd: 11, counter: 8, crit: 6, critMult: 40 },
+      ultimate: "ocean_guard",
+      spawnMaps: ["azure_coast"],
+      evolutions: [
+        { stage: 0, name: "Tidelet", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Tidewyrm", level: 20, statMult: 1.38, art: { scale: 1.24 } },
+        { stage: 2, name: "Maelstrake", level: 60, statMult: 1.8, art: { scale: 1.46, horns: true } },
+        { stage: 3, name: "Abysscoil", level: 80, statMult: 2.28, art: { scale: 1.7, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["bite", "water_shot", "flow_focus"],
+        20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        60: ["whirlpool", "deep_current", "tide_smash"],
+        80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
+      },
+      art: {
+        body: "dragon",
+        primary: "#3f7fd0",
+        secondary: "#24508f",
+        belly: "#dff1ff",
+        accent: "#7fc0ff",
+        eye: "#9fe8ff",
+        dark: "#16305c"
+      }
+    },
+    shelldrake: {
+      id: "shelldrake",
+      displayName: "Shelldrake",
+      breed: "Hound",
+      element: "water",
+      defaultRarity: "C",
+      defaultMood: "sturdy",
+      role: "Tank",
+      catchRate: 0.48,
+      expYield: 68,
+      description: "A coast guardian grown into its own shell. It simply refuses to move, and the tide does the rest.",
+      baseStats: { hp: 135, patk: 15, satk: 10, pdef: 19, sdef: 15, spd: 8, counter: 5, crit: 5, critMult: 36 },
+      ultimate: "ocean_guard",
+      spawnMaps: ["azure_coast"],
+      evolutions: [
+        { stage: 0, name: "Shellpup", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Shelldrake", level: 20, statMult: 1.4, art: { scale: 1.21 } },
+        { stage: 2, name: "Tidebastion", level: 60, statMult: 1.84, art: { scale: 1.41, horns: true } },
+        { stage: 3, name: "Fortressshell", level: 80, statMult: 2.34, art: { scale: 1.63, horns: true } }
+      ],
+      skillUnlocks: {
+        1: ["bite", "water_shot", "flow_focus"],
+        20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        60: ["whirlpool", "deep_current", "tide_smash"],
+        80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
+      },
+      art: {
+        body: "wolf",
+        primary: "#3fa8a0",
+        secondary: "#206b6b",
+        belly: "#e2fbff",
+        accent: "#7fe6dd",
+        eye: "#b6fff5",
+        dark: "#124040"
+      }
+    },
+    currentkit: {
+      id: "currentkit",
+      displayName: "Currentkit",
+      breed: "Feline",
+      element: "water",
+      defaultRarity: "C",
+      defaultMood: "aggressive",
+      role: "Fast Physical",
+      catchRate: 0.5,
+      expYield: 66,
+      description: "A cat that runs on the surface of the water. It strikes first, often, and then is already somewhere else.",
+      baseStats: { hp: 98, patk: 18, satk: 12, pdef: 11, sdef: 12, spd: 20, counter: 12, crit: 10, critMult: 48 },
+      ultimate: "tidal_burst",
+      spawnMaps: ["azure_coast"],
+      evolutions: [
+        { stage: 0, name: "Ripplet", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Currentkit", level: 20, statMult: 1.32, art: { scale: 1.2 } },
+        { stage: 2, name: "Torrentlynx", level: 60, statMult: 1.72, art: { scale: 1.4 } },
+        { stage: 3, name: "Stormcurrent", level: 80, statMult: 2.15, art: { scale: 1.62, horns: true } }
+      ],
+      skillUnlocks: {
+        1: ["scratch", "water_shot", "flow_focus"],
+        20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        60: ["whirlpool", "deep_current", "tide_smash"],
+        80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
+      },
+      art: {
+        body: "feline",
+        primary: "#5cb8f0",
+        secondary: "#2b72b8",
+        belly: "#eaf9ff",
+        accent: "#a8e6ff",
+        eye: "#d8f6ff",
+        dark: "#164a78"
+      }
+    },
+    emberlynx: {
+      id: "emberlynx",
+      displayName: "Emberlynx",
+      breed: "Feline",
+      element: "fire",
+      defaultRarity: "C",
+      defaultMood: "aggressive",
+      role: "Physical Sweeper",
+      catchRate: 0.44,
+      expYield: 72,
+      description: "Its claws glow from the inside. It hunts in straight lines and expects the fight to end quickly.",
+      baseStats: { hp: 92, patk: 20, satk: 12, pdef: 10, sdef: 10, spd: 18, counter: 10, crit: 12, critMult: 52 },
+      ultimate: "fire_blast",
+      spawnMaps: ["emberwild"],
+      evolutions: [
+        { stage: 0, name: "Emberkit", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Emberlynx", level: 20, statMult: 1.32, art: { scale: 1.2 } },
+        { stage: 2, name: "Blazefang", level: 60, statMult: 1.72, art: { scale: 1.4, horns: true } },
+        { stage: 3, name: "Infernalynx", level: 80, statMult: 2.15, art: { scale: 1.62, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["scratch", "flame_rawr", "dragon_fury"],
+        20: ["burning_fang", "burning_scales", "ember_jab"],
+        60: ["inferno_roar", "dragon_heat", "cinder_smash"],
+        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+      },
+      art: {
+        body: "feline",
+        primary: "#f0803c",
+        secondary: "#b8451c",
+        belly: "#ffe6c8",
+        accent: "#ffb56b",
+        eye: "#ffd27a",
+        dark: "#5c1e08"
+      }
+    },
+    cinderhawk: {
+      id: "cinderhawk",
+      displayName: "Cinderhawk",
+      breed: "Avian",
+      element: "fire",
+      defaultRarity: "C",
+      defaultMood: "fierce",
+      role: "Glass Cannon",
+      catchRate: 0.42,
+      expYield: 74,
+      description: "A hunting bird that leaves a trail of embers. Enormous power, and almost nothing standing behind it.",
+      baseStats: { hp: 82, patk: 11, satk: 21, pdef: 8, sdef: 9, spd: 22, counter: 12, crit: 11, critMult: 50 },
+      ultimate: "fire_blast",
+      spawnMaps: ["emberwild"],
+      evolutions: [
+        { stage: 0, name: "Cinderchick", level: 1, statMult: 1, art: { scale: 1, wings: true } },
+        { stage: 1, name: "Cinderhawk", level: 20, statMult: 1.3, art: { scale: 1.19, wings: true } },
+        { stage: 2, name: "Embertalon", level: 60, statMult: 1.7, art: { scale: 1.39, wings: true } },
+        { stage: 3, name: "Solarhawk", level: 80, statMult: 2.12, art: { scale: 1.6, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["peck", "flame_rawr", "dragon_fury"],
+        20: ["burning_fang", "burning_scales", "ember_jab"],
+        60: ["inferno_roar", "dragon_heat", "cinder_smash"],
+        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+      },
+      art: {
+        body: "avian",
+        primary: "#ffb03c",
+        secondary: "#c96a12",
+        belly: "#fff0d0",
+        accent: "#ffd98a",
+        eye: "#fff3b0",
+        dark: "#6b3208"
+      }
+    },
+    magmataur: {
+      id: "magmataur",
+      displayName: "Magmataur",
+      breed: "Dragon",
+      element: "fire",
+      defaultRarity: "B",
+      defaultMood: "fierce",
+      role: "Heavy Hitter",
+      catchRate: 0.38,
+      expYield: 78,
+      description: "Slow, immense and patient as a volcano. Everything it lands is the last thing most Mythlings feel.",
+      baseStats: { hp: 120, patk: 22, satk: 14, pdef: 15, sdef: 12, spd: 7, counter: 4, crit: 7, critMult: 46 },
+      ultimate: "fire_blast",
+      spawnMaps: ["emberwild"],
+      evolutions: [
+        { stage: 0, name: "Ashwhelp", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Magmataur", level: 20, statMult: 1.36, art: { scale: 1.24, horns: true } },
+        { stage: 2, name: "Moltenhorne", level: 60, statMult: 1.8, art: { scale: 1.46, horns: true } },
+        { stage: 3, name: "Cataclysm", level: 80, statMult: 2.28, art: { scale: 1.7, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["bite", "flame_rawr", "dragon_fury"],
+        20: ["burning_fang", "burning_scales", "ember_jab"],
+        60: ["inferno_roar", "dragon_heat", "cinder_smash"],
+        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+      },
+      art: {
+        body: "dragon",
+        primary: "#c94a2a",
+        secondary: "#7d2412",
+        belly: "#ffd9a8",
+        accent: "#ff8340",
+        eye: "#ffb04a",
+        dark: "#4a1005"
+      }
+    },
+    ashpup: {
+      id: "ashpup",
+      displayName: "Ashpup",
+      breed: "Hound",
+      element: "fire",
+      defaultRarity: "C",
+      defaultMood: "sturdy",
+      role: "Balanced Bruiser",
+      catchRate: 0.52,
+      expYield: 64,
+      description: "An ash-coated pack runner from the foothills. It gives nothing away and takes whatever is offered.",
+      baseStats: { hp: 112, patk: 17, satk: 14, pdef: 14, sdef: 13, spd: 13, counter: 9, crit: 8, critMult: 42 },
+      ultimate: "fire_blast",
+      spawnMaps: ["emberwild"],
+      evolutions: [
+        { stage: 0, name: "Ashpup", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Cinderpelt", level: 20, statMult: 1.34, art: { scale: 1.21 } },
+        { stage: 2, name: "Emberhowl", level: 60, statMult: 1.75, art: { scale: 1.41, horns: true } },
+        { stage: 3, name: "Duskfang", level: 80, statMult: 2.2, art: { scale: 1.63, horns: true } }
+      ],
+      skillUnlocks: {
+        1: ["bite", "flame_rawr", "dragon_fury"],
+        20: ["burning_fang", "burning_scales", "ember_jab"],
+        60: ["inferno_roar", "dragon_heat", "cinder_smash"],
+        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+      },
+      art: {
+        body: "wolf",
+        primary: "#a45a4a",
+        secondary: "#6b332a",
+        belly: "#f0dcc8",
+        accent: "#d88a6a",
+        eye: "#ffb090",
+        dark: "#3a1a14"
       }
     }
   };
@@ -1695,6 +2093,7 @@ input[type="text"].wiki-search {
     greater_potion: { id: "greater_potion", name: "Greater Potion", category: "healing", price: 380, heal: 160, desc: "Restores 160 HP to one Mythling." },
     revive_herb: { id: "revive_herb", name: "Revive Herb", category: "healing", price: 600, revive: 0.5, desc: "Revives a fainted Mythling with half HP." },
     skill_tonic: { id: "skill_tonic", name: "Skill Tonic", category: "healing", price: 320, restoreUses: 8, desc: "Restores 8 uses to every limited skill." },
+    skill_elixir: { id: "skill_elixir", name: "Skill Elixir", category: "healing", price: 950, restoreAllUses: true, desc: "Resets every limited skill back to full uses." },
     // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
     sweet_berry: { id: "sweet_berry", name: "Sweet Berry", category: "food", price: 90, exp: 40, desc: "A sugary forest berry. Feeding it grants 40 EXP." },
     honey_nut: { id: "honey_nut", name: "Honey Nut", category: "food", price: 240, exp: 130, desc: "A sticky, energy-packed nut. Grants 130 EXP." },
@@ -1730,6 +2129,21 @@ input[type="text"].wiki-search {
     bite: { id: "bite", name: "Bite", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A quick bite. Unlimited uses." },
     scratch: { id: "scratch", name: "Scratch", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A swift claw swipe. Unlimited uses." },
     peck: { id: "peck", name: "Peck", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A sharp beak jab. Unlimited uses." },
+    // ---------- Evolved normal skills ----------
+    // Evolutions used to grant only Specials and Buffs, so a Mythling's unlimited
+    // attack stayed at the Lv.1 power forever. Every stage now also teaches a
+    // stronger unlimited Normal move (weaker than the stage's Special, because it
+    // never runs out).
+    thorn_jab: { id: "thorn_jab", name: "Thorn Jab", category: "normal", damageType: "physical", element: "nature", power: 17, uses: Infinity, desc: "A jab of hardened thorns. Unlimited uses." },
+    briar_smash: { id: "briar_smash", name: "Briar Smash", category: "normal", damageType: "physical", element: "nature", power: 29, uses: Infinity, desc: "A crushing blow wrapped in briars. Unlimited uses." },
+    worldroot_slam: { id: "worldroot_slam", name: "Worldroot Slam", category: "normal", damageType: "physical", element: "nature", power: 40, uses: Infinity, desc: "Roots older than the forest come down. Unlimited uses." },
+    stream_jab: { id: "stream_jab", name: "Stream Jab", category: "normal", damageType: "physical", element: "water", power: 17, uses: Infinity, desc: "A lance of running water. Unlimited uses." },
+    tide_smash: { id: "tide_smash", name: "Tide Smash", category: "normal", damageType: "physical", element: "water", power: 30, uses: Infinity, desc: "The weight of the turning tide. Unlimited uses." },
+    abyss_slam: { id: "abyss_slam", name: "Abyss Slam", category: "normal", damageType: "physical", element: "water", power: 41, uses: Infinity, desc: "Pressure from the lightless deep. Unlimited uses." },
+    ember_jab: { id: "ember_jab", name: "Ember Jab", category: "normal", damageType: "physical", element: "fire", power: 18, uses: Infinity, desc: "A searing strike. Unlimited uses." },
+    cinder_smash: { id: "cinder_smash", name: "Cinder Smash", category: "normal", damageType: "physical", element: "fire", power: 31, uses: Infinity, desc: "A heavy blow wreathed in cinders. Unlimited uses." },
+    magma_slam: { id: "magma_slam", name: "Magma Slam", category: "normal", damageType: "physical", element: "fire", power: 42, uses: Infinity, desc: "A fist of cooled magma. Unlimited uses." },
+    struggle: { id: "struggle", name: "Struggle", category: "normal", damageType: "physical", element: null, power: 8, uses: Infinity, desc: "A desperate shove when nothing else is left. Unlimited uses." },
     // ---------- SPRIGGO line ----------
     vine_lash: { id: "vine_lash", name: "Vine Lash", category: "special", damageType: "special", element: "nature", power: 16, uses: 20, desc: "Whips the foe with a living vine." },
     brave_guard: { id: "brave_guard", name: "Brave Guard", category: "buff", effects: [{ stat: "patk", amount: 4 }], uses: 10, desc: "Raises Physical Attack." },
@@ -2025,6 +2439,7 @@ input[type="text"].wiki-search {
       icon: "shiny",
       color: "#ffe680",
       chance: 0.035,
+      statBonus: 1,
       palette: { hueShift: 40, saturate: 1.25, lighten: 1.12 },
       aura: { color: "rgba(255,240,150,0.85)", particles: "sparkle" }
     },
@@ -2034,6 +2449,7 @@ input[type="text"].wiki-search {
       icon: "darkness",
       color: "#b07cff",
       chance: 0.02,
+      statBonus: 2,
       palette: { hueShift: -25, saturate: 0.55, lighten: 0.48 },
       aura: { color: "rgba(150,90,255,0.8)", particles: "shadow" }
     }
@@ -2084,6 +2500,10 @@ input[type="text"].wiki-search {
   function uid(prefix = "m") {
     uidCounter += 1;
     return `${prefix}_${Date.now().toString(36)}_${uidCounter.toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
+  }
+  function coins(n) {
+    const v = Math.floor(Number(n) || 0);
+    return v.toLocaleString("en-US");
   }
   function formatTime(ms) {
     const total = Math.floor(ms / 1e3);
@@ -2201,7 +2621,7 @@ input[type="text"].wiki-search {
     if (!sp) return 0;
     let stage = 0;
     sp.evolutions.forEach((ev, i) => {
-      if (i <= MAX_UNLOCKED_EVOLUTION_STAGE && !ev.future && level >= ev.level) stage = i;
+      if (i <= MAX_UNLOCKED_EVOLUTION_STAGE && (FUTURE_CONTENT_LIVE || !ev.future) && level >= ev.level) stage = i;
     });
     return stage;
   }
@@ -2252,7 +2672,7 @@ input[type="text"].wiki-search {
     }
     for (const id of learned) {
       const sk = getSkill(id);
-      if (!sk || sk.future) continue;
+      if (!sk || !FUTURE_CONTENT_LIVE && sk.future) continue;
       if (!m.library.includes(id)) {
         m.library.push(id);
         if (m.uses[id] == null && Number.isFinite(sk.uses)) m.uses[id] = sk.uses;
@@ -2287,6 +2707,7 @@ input[type="text"].wiki-search {
     const mag = rarityMagnitude(m.rarity);
     const mods = moodModifiers(m.mood, mag);
     const out = {};
+    const mutBonus = getMutation(m.mutation).statBonus || 0;
     for (const k of STAT_KEYS) {
       const base = sp.baseStats[k];
       const grown = base * (1 + STAT_GROWTH[k] * (m.level - 1));
@@ -2294,6 +2715,7 @@ input[type="text"].wiki-search {
       if (k === "counter") v = clamp(v, 0, COUNTER_MAX_PERCENT);
       if (k === "crit") v = clamp(v, 0, CRIT_MAX_PERCENT);
       if (k === "critMult") v = clamp(v, 0, CRIT_MAX_MULT);
+      v += mutBonus;
       out[k] = Math.max(k === "hp" ? 10 : 1, v);
     }
     return out;
@@ -2396,7 +2818,7 @@ input[type="text"].wiki-search {
     const next = nextEvolution(m);
     if (!next) return false;
     if (m.stage + 1 > MAX_UNLOCKED_EVOLUTION_STAGE) return false;
-    if (next.future) return false;
+    if (!FUTURE_CONTENT_LIVE && next.future) return false;
     return m.level >= next.level;
   }
   function futureEvolutionInfo(m) {
@@ -2404,7 +2826,7 @@ input[type="text"].wiki-search {
     const list = [];
     for (let i = m.stage + 1; i < sp.evolutions.length; i++) {
       const ev = sp.evolutions[i];
-      const locked = i > MAX_UNLOCKED_EVOLUTION_STAGE || !!ev.future;
+      const locked = i > MAX_UNLOCKED_EVOLUTION_STAGE || !FUTURE_CONTENT_LIVE && !!ev.future;
       list.push({ name: ev.name, level: ev.level, locked, future: !!ev.future });
     }
     return list;
@@ -2423,7 +2845,7 @@ input[type="text"].wiki-search {
     const sp = speciesOf(m);
     const newSkills = (sp.skillUnlocks[stageData(m).level] || []).filter((id) => {
       const s = getSkill(id);
-      return s && !s.future;
+      return s && (FUTURE_CONTENT_LIVE || !s.future);
     });
     return {
       from,
@@ -2455,11 +2877,27 @@ input[type="text"].wiki-search {
     }
   }
   function equipSkill(m, slot, skillId) {
-    const sk = getSkill(skillId);
-    if (!sk || sk.category !== slot) return false;
-    if (!m.library.includes(skillId)) return false;
+    if (!["normal", "special", "buff"].includes(slot)) return false;
+    if (skillId != null && !getSkill(skillId)) return false;
+    if (skillId != null && !m.library.includes(skillId)) return false;
     m.skills[slot] = skillId;
     return true;
+  }
+  function unequipSkill(m, slot) {
+    if (!["normal", "special", "buff"].includes(slot)) return false;
+    m.skills[slot] = null;
+    return true;
+  }
+  function basicAttack(m) {
+    const known = (m.library || []).map(getSkill).filter(Boolean);
+    const infinite = known.filter((sk) => sk.category === "normal" && !Number.isFinite(sk.uses)).sort((a, b) => (b.power || 0) - (a.power || 0))[0];
+    if (infinite) return infinite;
+    const usable = known.find((sk) => {
+      var _a;
+      return Number.isFinite(sk.uses) && (((_a = m.uses) == null ? void 0 : _a[sk.id]) ?? 0) > 0;
+    });
+    if (usable) return usable;
+    return getSkill("struggle");
   }
   function librarySkills(m, category = null) {
     return m.library.map(getSkill).filter((s) => s && (!category || s.category === category));
@@ -2543,7 +2981,7 @@ input[type="text"].wiki-search {
       return GameState.meta.playTime + (Date.now() - GameState._sessionStart);
     }
   };
-  var PartyManager = {
+  var PartyManager2 = {
     list() {
       return GameState.party;
     },
@@ -2561,6 +2999,10 @@ input[type="text"].wiki-search {
     },
     allFainted() {
       return GameState.party.length > 0 && GameState.party.every((m) => m.currentHp <= 0);
+    },
+    /** Highest level in the party — wild spawns and trainer teams keep pace with it. */
+    topLevel() {
+      return GameState.party.reduce((top, m) => Math.max(top, m.level || 1), 1);
     },
     add(m) {
       if (this.isFull()) return false;
@@ -2607,15 +3049,15 @@ input[type="text"].wiki-search {
       return m;
     },
     toParty(uid2) {
-      if (PartyManager.isFull()) return false;
+      if (PartyManager2.isFull()) return false;
       const m = this.remove(uid2);
       if (!m) return false;
-      PartyManager.add(m);
+      PartyManager2.add(m);
       return true;
     },
     fromParty(uid2) {
       if (GameState.party.length <= 1) return false;
-      const m = PartyManager.remove(uid2);
+      const m = PartyManager2.remove(uid2);
       if (!m) return false;
       this.add(m);
       return true;
@@ -2759,12 +3201,12 @@ input[type="text"].wiki-search {
     GameState._sessionStart = Date.now();
     if (settings) GameState.settings = settings;
     const starter = createMythling({ speciesId: starterId, level: 1, isStarter: true, originMap: "verdant_vale" });
-    PartyManager.add(starter);
+    PartyManager2.add(starter);
     CollectionManager.markCaught(starterId, starter.mutation);
     return starter;
   }
   function serialize() {
-    const lead = PartyManager.lead();
+    const lead = PartyManager2.lead();
     const map = getMap(GameState.player.map);
     return {
       gameVersion: GAME_VERSION,
@@ -2810,7 +3252,7 @@ input[type="text"].wiki-search {
     const maxStage = stageForLevel(m.speciesId, m.level);
     if (m.stage > maxStage) m.stage = maxStage;
     refreshLibrary(m);
-    autoEquip(m);
+    if (!raw.skills) autoEquip(m);
     const mx = maxHp(m);
     if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
     if (m.currentHp < 0) m.currentHp = 0;
@@ -3337,7 +3779,7 @@ input[type="text"].wiki-search {
     nextStageInfo(m) {
       const next = nextEvolution(m);
       if (!next) return null;
-      const locked = m.stage + 1 > MAX_UNLOCKED_EVOLUTION_STAGE || !!next.future;
+      const locked = m.stage + 1 > MAX_UNLOCKED_EVOLUTION_STAGE || !FUTURE_CONTENT_LIVE && !!next.future;
       return { name: next.name, level: next.level, locked, reached: m.level >= next.level };
     }
   };
@@ -3561,7 +4003,7 @@ input[type="text"].wiki-search {
       const defSide = atkSide === "player" ? "enemy" : "player";
       if (action.type === "ultimate") {
         const ult = ultimateMove(attacker);
-        if (!ultimateReady(attacker) || !ult || ult.future) {
+        if (!ultimateReady(attacker) || !ult || !FUTURE_CONTENT_LIVE && ult.future) {
           events.push({ type: "log", text: `${displayName(attacker)}'s Ultimate is not ready!` });
           return;
         }
@@ -3583,15 +4025,14 @@ input[type="text"].wiki-search {
         }
         return;
       }
-      const skillId = action.skillId || attacker.skills[action.slot];
-      const skill = getSkill(skillId);
-      if (!skill) {
-        events.push({ type: "log", text: `${displayName(attacker)} hesitates...` });
-        return;
-      }
-      if (Number.isFinite(skill.uses) && usesLeft(attacker, skillId) <= 0) {
-        events.push({ type: "log", text: `${skill.name} has no uses left!` });
-        return;
+      let skillId = action.skillId || attacker.skills[action.slot];
+      let skill = getSkill(skillId);
+      if (!skill || Number.isFinite(skill.uses) && usesLeft(attacker, skillId) <= 0) {
+        const fallback = basicAttack(attacker);
+        if (skill) events.push({ type: "log", text: `${skill.name} has no uses left!` });
+        events.push({ type: "log", text: `${displayName(attacker)} falls back on ${fallback.name}!` });
+        skill = fallback;
+        skillId = fallback.id;
       }
       if (Number.isFinite(skill.uses)) consumeUse(attacker, skillId);
       if (skill.category === "buff") {
@@ -3774,9 +4215,9 @@ input[type="text"].wiki-search {
       var _a, _b;
       const yieldV = speciesOf(defeated).expYield;
       if (this.type === BattleType.WILD) {
-        const coins = coinReward({ enemyLevel: defeated.level, enemyYield: yieldV, winnerLevel: (_a = this.player) == null ? void 0 : _a.level });
-        this.rewards.coins += coins;
-        events.push({ type: "coins", amount: coins });
+        const coins2 = coinReward({ enemyLevel: defeated.level, enemyYield: yieldV, winnerLevel: (_a = this.player) == null ? void 0 : _a.level });
+        this.rewards.coins += coins2;
+        events.push({ type: "coins", amount: coins2 });
       }
       for (const m of this.party) {
         if (isFainted(m)) continue;
@@ -5087,11 +5528,18 @@ input[type="text"].wiki-search {
     rivruff: RIVRUFF,
     leaflet: LEAFLET
   };
+  var BODY_PLANS = {
+    fox: SPRIGGO,
+    feline: AQUINI,
+    dragon: EMBERU,
+    wolf: RIVRUFF,
+    avian: LEAFLET
+  };
   function artFor(speciesId) {
-    var _a;
+    var _a, _b;
     if (SPECIES_ART[speciesId]) return SPECIES_ART[speciesId];
     const sp = getSpecies(speciesId);
-    return SPECIES_ART[(_a = sp == null ? void 0 : sp.art) == null ? void 0 : _a.body] || null;
+    return BODY_PLANS[(_a = sp == null ? void 0 : sp.art) == null ? void 0 : _a.body] || SPECIES_ART[(_b = sp == null ? void 0 : sp.art) == null ? void 0 : _b.body] || null;
   }
   function artContext(speciesId, stage, expression, pose = {}) {
     var _a, _b;
@@ -6834,11 +7282,21 @@ input[type="text"].wiki-search {
 
   // src/systems/EncounterManager.js
   var EncounterManager = {
-    /** Roll a wild Mythling for a given zone. Never exceeds the zone/level cap. */
+    /**
+     * Roll a wild Mythling for a given zone.
+     *
+     * `modifiers.partyLevel` lets the world keep pace with the party: once you
+     * out-level a zone's range the whole range shifts up by the difference, so
+     * grinding past the story content to the Lv.100 cap stays possible instead
+     * of paying nothing.
+     */
     spawnForZone(zone, mapId, rng = Math.random, modifiers = {}) {
       const pick = weightedChoice(rng, zone.species);
       const [lo, hi] = zone.levelRange;
-      const level = clamp(randInt(rng, lo, hi), 1, LEVEL_CAP);
+      let level = randInt(rng, lo, hi);
+      const top = Number(modifiers.partyLevel) || 0;
+      if (top > hi) level += top - hi;
+      level = clamp(level, 1, LEVEL_CAP);
       return createMythling({
         speciesId: pick.id,
         level,
@@ -7586,7 +8044,7 @@ input[type="text"].wiki-search {
         const x = zx + Math.random() * zw;
         const y = zy + Math.random() * zh;
         if (!initial && dist(x, y, this.player.x, this.player.y) < 420) continue;
-        const m = EncounterManager.spawnForZone(zone, map.id);
+        const m = EncounterManager.spawnForZone(zone, map.id, Math.random, { partyLevel: PartyManager.topLevel() });
         this.wild.push({
           m,
           x,
@@ -8072,8 +8530,8 @@ input[type="text"].wiki-search {
     },
     /** Place a freshly-caught Mythling. Returns 'party' | 'storage'. */
     place(mythling, preferParty = true) {
-      if (preferParty && !PartyManager.isFull()) {
-        PartyManager.add(mythling);
+      if (preferParty && !PartyManager2.isFull()) {
+        PartyManager2.add(mythling);
         return "party";
       }
       StorageManager.add(mythling);
@@ -10661,7 +11119,25 @@ input[type="text"].wiki-search {
         btn.title = sk.desc;
         return btn;
       };
-      this.actions.append(mk("normal"), mk("special"), mk("buff"));
+      const slotsUsable = ["normal", "special", "buff"].some((slot) => {
+        const sk = equippedSkill(p2, slot);
+        if (!sk) return false;
+        const left = usesLeft(p2, sk.id);
+        return !Number.isFinite(left) || left > 0;
+      });
+      if (slotsUsable) {
+        this.actions.append(mk("normal"), mk("special"), mk("buff"));
+      } else {
+        const basic = basicAttack(p2);
+        const btn = button("", {
+          class: "action-btn basic",
+          onclick: () => this.doAction({ type: "skill", skillId: basic.id })
+        });
+        btn.innerHTML = `<div class="ab-name">${iconSvg(basic.element || "strike", basic.element || "")}<span>${basic.name}</span></div><small>Out of uses \xB7 PWR ${basic.power} \xB7 ${iconSvg("infinity", "tiny")} unlimited</small>`;
+        btn.title = basic.desc;
+        btn.style.gridColumn = "1/-1";
+        this.actions.appendChild(btn);
+      }
       const ult = ultimateMove(p2);
       const unlocked = ultimateUnlocked(p2);
       const ready = unlocked && p2.ultCharge >= ULTIMATE_MAX_CHARGE;
@@ -10756,7 +11232,7 @@ input[type="text"].wiki-search {
       const caught = res.mythling;
       this.pushLog(`Gotcha! ${displayName(caught)} was caught!`, true);
       let destination = "party";
-      if (PartyManager.isFull()) {
+      if (PartyManager2.isFull()) {
         const send = await confirmDialog(
           "PARTY FULL",
           `Your party is full (6/6). Send <b>${displayName(caught)}</b> to storage?`,
@@ -10833,7 +11309,7 @@ input[type="text"].wiki-search {
           document.getElementById("modal").innerHTML = "";
           resolve(v);
         };
-        PartyManager.list().forEach((m) => {
+        PartyManager2.list().forEach((m) => {
           const ok = filterFn(m);
           const card = el("div", { class: `myth-card ${isFainted(m) ? "fainted" : ""}`, style: ok ? {} : { opacity: 0.45, pointerEvents: "none" } }, [
             this.miniCanvas(m),
@@ -11007,7 +11483,7 @@ input[type="text"].wiki-search {
         case "coins":
           if (ev.amount > 0) {
             AudioManager.sfx("coin");
-            this.pushLog(`The defeated Mythling dropped ${ev.amount} Wildcoins!`);
+            this.pushLog(`The defeated Mythling dropped ${coins(ev.amount)} Wildcoins!`);
             this.floatNumber(ev.side === "enemy" ? "enemy" : "player", `+${ev.amount}`, "#ffe08a");
             await wait(320);
           }
@@ -11651,8 +12127,10 @@ input[type="text"].wiki-search {
           `Mood magnitude <b>+${r.magnitude}</b> \xB7 catch modifier <b>x${r.catchMod.toFixed(2)}</b> \xB7 roll weight <b>${r.weight}</b>`
         ];
       })),
-      h3("Mutations", "shiny darkness mutation cosmetic"),
-      para("Mutations are rare cosmetic variants recorded in your Collection. They do not change stats in this version."),
+      h3("Mutations", "shiny darkness mutation cosmetic stat bonus"),
+      para(`Mutations are rare variants recorded in your Collection. Besides looking different, they carry a
+      flat bonus to <b>every</b> stat: <b>Shiny +1</b> and <b>Darkness +2</b>, applied after the stat caps so the
+      bonus always lands.`),
       table(mut),
       h3("Catch chance", "catch capture ball formula"),
       para(`<code>chance = catchRate \xD7 ballMultiplier \xD7 rarityModifier \xD7 levelFactor \xD7 hpFactor</code><br>
@@ -11660,7 +12138,7 @@ input[type="text"].wiki-search {
       You must <b>defeat</b> a wild Mythling before any ball will work.`),
       table(BALL_IDS.map((id) => {
         const it = ITEMS[id];
-        return [`${it.name}`, `x${it.catchMult.toFixed(2)} catch \xB7 ${it.price} Wildcoins`];
+        return [`${it.name}`, `x${it.catchMult.toFixed(2)} catch \xB7 ${coins(it.price)} Wildcoins`];
       }), "balls")
     ];
   }
@@ -11741,14 +12219,12 @@ input[type="text"].wiki-search {
   function speciesSection() {
     const out = [
       h3(`The ${SPECIES_IDS.length} species of this version`, "species mythling dex list"),
-      para("Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species default Mood and Rarity D.")
+      para(`Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species
+      default Mood and Rarity D. Open the <b>INDEX</b> tab in the menu to see every Mythling's four forms drawn side by side.`)
     ];
     for (const id of SPECIES_IDS) {
       const sp = SPECIES[id];
-      const evoLine = sp.evolutions.map((ev) => {
-        const locked = ev.future || ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE;
-        return `${ev.name} <span class="wiki-dim">(Lv.${ev.level}${locked ? " \u2014 future update" : ""})</span>`;
-      }).join("  \u2192  ");
+      const evoLine = sp.evolutions.map((ev) => `${ev.name} <span class="wiki-dim">(Lv.${ev.level})</span>`).join("  \u2192  ");
       const card = el("div", { class: "wiki-card" }, [
         el("div", { class: "wiki-card-head" }, [
           creature(id, 0, 96),
@@ -11789,29 +12265,41 @@ input[type="text"].wiki-search {
         }
       }
     }
+    const learnLevels = (sid) => {
+      const levels = /* @__PURE__ */ new Set();
+      for (const sp of Object.values(SPECIES)) {
+        for (const lv of Object.keys(sp.skillUnlocks)) {
+          if (sp.skillUnlocks[lv].includes(sid)) levels.add(Number(lv));
+        }
+      }
+      return [...levels].sort((a, b) => a - b);
+    };
     const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat).map((s) => {
       const meta = s.category === "buff" ? `${buffSummary(s, " ")} \xB7 ${s.uses} uses` : `Power <b>${s.power}</b> \xB7 ${s.damageType === "physical" ? "Physical (P.ATK)" : "Special (S.ATK)"}${s.element ? ` \xB7 ${ELEMENTS[s.element].name}` : ""} \xB7 ${Number.isFinite(s.uses) ? `${s.uses} uses` : "unlimited"}`;
+      const levels = learnLevels(s.id).map((lv) => `Lv.${lv}`).join(" \xB7 ") || "\u2014";
       return [
-        `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ""}`,
+        `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ""}<br><span class="wiki-learn">Learned at ${levels}</span>`,
         `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` \xB7 ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT2[s.debuff.stat]} by ${s.debuff.amount}` : ""}</span><br><span class="wiki-dim">Learned by: ${(owners[s.id] || ["\u2014"]).join(", ")}</span>`
       ];
     });
     return [
       h3("Skill slots", "normal special buff equip slots"),
-      para(`Every Mythling equips <b>1 Normal</b>, <b>1 Special</b> and <b>1 Buff</b> skill. Everything it ever
-      learns stays in its <b>Skill Library</b> forever \u2014 you can re-equip any learned skill from the
-      SKILLS tab at any time. The Ultimate is fixed to the species.`),
+      para(`Every Mythling has <b>three slots</b> and <b>any skill it has learned can go into any of them</b> \u2014
+      two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on.
+      Everything a Mythling ever learns stays in its <b>Skill Library</b> forever, and leaving a slot empty is
+      allowed (nothing refills it, and the choice is saved). The Ultimate is fixed to the species.`),
       bullets([
-        "<b>Normal</b> skills have unlimited uses but low power.",
+        "<b>Normal</b> skills have unlimited uses but low power \u2014 every evolution teaches a stronger one.",
         "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.",
-        "<b>Buff</b> skills raise one stat and never grant Ultimate Charge."
+        "<b>Buff</b> skills raise one stat and never grant Ultimate Charge.",
+        "If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn."
       ]),
       h3("Normal skills", "normal unlimited bite scratch peck"),
-      table(catRows("normal")),
+      table(catRows("normal"), "normal skill level learned at"),
       h3("Special skills", "special elemental power uses"),
-      table(catRows("special")),
+      table(catRows("special"), "special skill level learned at"),
       h3("Buff skills", "buff raise stat stacks"),
-      table(catRows("buff")),
+      table(catRows("buff"), "buff skill level learned at"),
       h3("Ultimates", "ultimate charge tier"),
       table(Object.values(ULTIMATES).map((u) => [
         `<b>${u.baseName}</b>`,
@@ -11828,6 +12316,7 @@ input[type="text"].wiki-search {
       if (i.heal) effect += ` <span class="wiki-dim">(restores ${i.heal} HP)</span>`;
       if (i.revive) effect += ` <span class="wiki-dim">(revives with ${Math.round(i.revive * 100)}% HP)</span>`;
       if (i.restoreUses) effect += ` <span class="wiki-dim">(+${i.restoreUses} uses to every limited skill)</span>`;
+      if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
       if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp} EXP)</span>`;
       if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
       return [
@@ -11895,24 +12384,31 @@ input[type="text"].wiki-search {
     ]);
     return [
       h3("EXP & levelling", "exp experience level up curve"),
-      para(`Defeating Mythlings and trainers, and feeding food, all grant EXP. The requirement grows with
-      level: <code>24 + 9 \xD7 level^1.85</code>.`),
+      para(`Defeating Mythlings and trainers, and feeding food, all grant EXP. Up to <b>Lv.30</b> the
+      requirement is <code>24 + 9 \xD7 level^1.85</code>. Past the story cap it continues as a straight line
+      through that same Lv.30 cost, so a level always costs roughly what a level-appropriate battle
+      pays out \u2014 reaching Lv.100 is a long post-game grind instead of an impossible one.`),
       table(curve),
       bullets([
-        `The current level cap is <b>Lv.${LEVEL_CAP}</b> (the data is built for ${ABSOLUTE_MAX_LEVEL}). At the cap no more EXP is stored.`,
+        `Every Mythling can reach <b>Lv.${LEVEL_CAP}</b>. At the cap no more EXP is stored.`,
+        "Wild Mythlings and trainer teams keep pace with your party: once you out-level a zone or a trainer, their levels rise with you, so late grinding still pays.",
         "Levelling up raises every stat and tops up HP by the amount max HP grew.",
         "Levels are also where new skills are learned \u2014 they are added to the library automatically."
       ]),
       h3("Evolution", "evolve evolution stage level 20"),
       table([
-        ["Lv.20", "First evolution \u2014 live in this version (stat multiplier 1.34)."],
-        ["Lv.60 / Lv.80", `Locked until a future update (the build allows stages 0\u2013${MAX_UNLOCKED_EVOLUTION_STAGE}).`]
+        ["Stage 0", "The base form you catch or start with."],
+        ["Lv.20", "First evolution (stat multiplier ~1.34) and Ultimate tier \u201C I \u201D."],
+        ["Lv.60", "Second evolution (~1.75) and Ultimate tier \u201C II \u201D."],
+        ["Lv.80", "Final evolution (~2.20) and Ultimate tier \u201C III \u201D."]
       ]),
-      para("Evolution is offered automatically after a battle or feed. It raises stats, upgrades the Ultimate and unlocks that stage\u2019s skills."),
+      para(`All four stages are live. Evolution is offered automatically after a battle or feed: it raises
+      stats, upgrades the Ultimate, and unlocks that stage\u2019s skills \u2014 a new <b>Special</b>, a new
+      <b>Buff</b> and a stronger <b>unlimited Normal</b> move. The INDEX tab shows what every form looks like.`),
       h3("Capture resets level", "catch capture reset level one"),
       note("A captured Mythling is <b>always</b> reset to Lv.1 with its library rebuilt for Lv.1. Its species, Mood, Rarity and mutation are preserved, and the level you caught it at is recorded on its info panel."),
       h3("Collection", "collection dex seen caught"),
-      para("Every species and mutation you see or catch is recorded in the COLLECTION tab.")
+      para("Every species and mutation you see or catch is recorded in the COLLECTION tab, and the INDEX tab shows all four forms of each species once you have seen it.")
     ];
   }
   function controlsSection() {
@@ -12092,15 +12588,39 @@ input[type="text"].wiki-search {
     ["bag", "BAG", "bag"],
     ["map", "MAP", "map"],
     ["collection", "COLLECTION", "book"],
+    ["index", "INDEX", "book"],
     ["stats", "STATS", "user"],
     ["save", "SAVE", "save"],
     ["settings", "SETTINGS", "settings"]
   ];
+  var SLOT_LABEL = { normal: "N", special: "S", buff: "B" };
   function mythCanvas(m, size = 66, animated = false) {
+    const dpr = () => Math.min(2, typeof window !== "undefined" && window.devicePixelRatio || 1);
     const cv = el("canvas", { width: size, height: size });
     const ctx = cv.getContext("2d");
+    let bw = 0, bh = 0;
+    let clock = 0;
+    const fit = () => {
+      const d = dpr();
+      const w = Math.max(1, Math.round((cv.clientWidth || size) * d));
+      const h = Math.max(1, Math.round((cv.clientHeight || size) * d));
+      if (w === bw && h === bh) return false;
+      bw = w;
+      bh = h;
+      cv.width = w;
+      cv.height = h;
+      return true;
+    };
     const draw = (t = 0) => {
-      ctx.clearRect(0, 0, size, size);
+      clock = t;
+      fit();
+      const d = dpr();
+      const w = bw / d, h = bh / d;
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const s = Math.min(w, h) / size;
+      ctx.translate((w - size * s) / 2, (h - size * s) / 2);
+      ctx.scale(s, s);
       ctx.save();
       ctx.translate(size / 2, size * 0.88);
       drawMythling(ctx, {
@@ -12117,6 +12637,16 @@ input[type="text"].wiki-search {
       ctx.restore();
     };
     draw(0);
+    const repaint = () => {
+      if (fit()) draw(clock);
+    };
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(repaint);
+      ro.observe(cv);
+      cv._ro = ro;
+    } else if (typeof requestAnimationFrame !== "undefined") {
+      requestAnimationFrame(repaint);
+    }
     if (animated) {
       let raf, t0 = performance.now();
       const loop = (now) => {
@@ -12124,8 +12654,14 @@ input[type="text"].wiki-search {
         raf = requestAnimationFrame(loop);
       };
       raf = requestAnimationFrame(loop);
-      cv._stop = () => cancelAnimationFrame(raf);
+      const prevStop = cv._stop;
+      cv._stop = () => {
+        cancelAnimationFrame(raf);
+        cv._ro && cv._ro.disconnect();
+        prevStop && prevStop();
+      };
     }
+    cv.redraw = repaint;
     return cv;
   }
   function labeledBar(kind, label, value, pct, extraClass = "", title = "") {
@@ -12211,6 +12747,9 @@ input[type="text"].wiki-search {
         case "collection":
           this.renderCollection(b);
           break;
+        case "index":
+          this.renderIndex(b);
+          break;
         case "stats":
           this.renderStats(b);
           break;
@@ -12226,23 +12765,23 @@ input[type="text"].wiki-search {
     }
     // ---------------------------------------------------- PARTY
     renderParty(root) {
-      this.setTitle(`Party  (${PartyManager.count()}/${PARTY_MAX})`);
+      this.setTitle(`Party  (${PartyManager2.count()}/${PARTY_MAX})`);
       root.appendChild(el("p", { class: "sub", text: "Click a Mythling for full details. Use the arrows to reorder \u2014 the first Mythling leads every battle." }));
       const grid = el("div", { class: "grid-cards" });
-      PartyManager.list().forEach((m, i) => {
+      PartyManager2.list().forEach((m, i) => {
         grid.appendChild(this.mythCard(m, {
           extra: el("div", { class: "row", style: { gap: "4px", marginTop: "4px" } }, [
             iconBtn("up", "Move up", { class: "small ghost", disabled: i === 0, onclick: (e) => {
               e.stopPropagation();
-              PartyManager.swap(i, i - 1);
+              PartyManager2.swap(i, i - 1);
               this.renderTab();
             } }),
-            iconBtn("down", "Move down", { class: "small ghost", disabled: i === PartyManager.count() - 1, onclick: (e) => {
+            iconBtn("down", "Move down", { class: "small ghost", disabled: i === PartyManager2.count() - 1, onclick: (e) => {
               e.stopPropagation();
-              PartyManager.swap(i, i + 1);
+              PartyManager2.swap(i, i + 1);
               this.renderTab();
             } }),
-            iconTextBtn("box", "Storage", { class: "small ghost", disabled: PartyManager.count() <= 1, onclick: (e) => {
+            iconTextBtn("box", "Storage", { class: "small ghost", disabled: PartyManager2.count() <= 1, onclick: (e) => {
               e.stopPropagation();
               if (StorageManager.fromParty(m.uid)) {
                 toast(`${displayName(m)} sent to storage`);
@@ -12432,25 +12971,34 @@ input[type="text"].wiki-search {
       }
       for (const m of list) {
         this.storageList.appendChild(this.mythCard(m, {
-          extra: iconTextBtn("dna", "Party", {
-            class: "small primary",
-            disabled: PartyManager.isFull(),
-            onclick: (e) => {
-              e.stopPropagation();
-              if (StorageManager.toParty(m.uid)) {
-                toast(`${displayName(m)} joined your party`);
-                this.renderStorageList();
-              } else toast("Party is full!", "bad");
-            }
-          })
+          extra: el("div", { class: "row", style: { gap: "6px" } }, [
+            iconTextBtn("dna", "Party", {
+              class: "small primary",
+              disabled: PartyManager2.isFull(),
+              onclick: (e) => {
+                e.stopPropagation();
+                if (StorageManager.toParty(m.uid)) {
+                  toast(`${displayName(m)} joined your party`);
+                  this.renderStorageList();
+                } else toast("Party is full!", "bad");
+              }
+            }),
+            button("RELEASE", {
+              class: "small ghost",
+              onclick: (e) => {
+                e.stopPropagation();
+                this.releaseFromStorage(m);
+              }
+            })
+          ])
         }));
       }
     }
     // ---------------------------------------------------- SKILLS
     renderSkills(root) {
       this.setTitle("Skill Library");
-      root.appendChild(el("p", { class: "sub", text: "Each Mythling equips 1 Normal, 1 Special and 1 Buff skill. Everything it has learned stays in its library \u2014 nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced." }));
-      const party = PartyManager.list();
+      root.appendChild(el("p", { class: "sub", text: "Every Mythling has three slots and any skill it has learned can go into any of them \u2014 two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on. Leaving a slot empty is allowed and is saved as-is. Everything learned stays in the library \u2014 nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced." }));
+      const party = PartyManager2.list();
       const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
       const picker = el("div", { class: "row", style: { marginBottom: "14px" } }, party.map((m) => button(`${displayName(m)} Lv.${m.level}`, {
         class: `small ${sel.uid === m.uid ? "primary" : "ghost"}`,
@@ -12476,20 +13024,55 @@ input[type="text"].wiki-search {
           continue;
         }
         for (const sk of skills) {
-          const equipped = sel.skills[cat] === sk.id;
-          root.appendChild(el("div", { class: `skill-row ${equipped ? "equipped" : ""}` }, [
+          const slots = ["normal", "special", "buff"];
+          const inSlot = slots.filter((s) => sel.skills[s] === sk.id);
+          root.appendChild(el("div", { class: `skill-row ${inSlot.length ? "equipped" : ""}` }, [
             el("div", { style: { flex: "1" } }, [
               el("div", { class: "sk-name", html: `${iconSvg(sk.element || "strike", sk.element || "")} ${sk.name}` }),
               el("div", { class: "sk-meta", text: `${sk.category === "buff" ? buffSummary(sk, " ") : `Power ${sk.power} \xB7 ${sk.damageType === "physical" ? "Physical" : "Special"}`} \xB7 ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : "Unlimited uses"} \u2014 ${sk.desc}` })
             ]),
-            equipped ? el("span", { class: "chip", text: "EQUIPPED" }) : button("EQUIP", { class: "small primary", onclick: () => {
-              equipSkill(sel, cat, sk.id);
-              AudioManager.sfx("confirm");
-              this.renderTab();
-            } })
+            el("div", { class: "skill-slots" }, [
+              ...slots.map((s) => button(SLOT_LABEL[s], {
+                class: `small ${sel.skills[s] === sk.id ? "primary" : "ghost"}`,
+                title: `Put ${sk.name} in the ${s} slot`,
+                onclick: () => {
+                  equipSkill(sel, s, sk.id);
+                  AudioManager.sfx("confirm");
+                  this.renderTab();
+                }
+              })),
+              inSlot.length ? button("\u2715", {
+                class: "small ghost",
+                title: "Unequip",
+                onclick: () => {
+                  for (const s of inSlot) unequipSkill(sel, s);
+                  AudioManager.sfx("cancel");
+                  this.renderTab();
+                }
+              }) : null
+            ])
           ]));
         }
       }
+    }
+    /** Let a Mythling go. Storage only — the party always keeps at least one. */
+    async releaseFromStorage(m) {
+      const ok = await confirmDialog(
+        "RELEASE MYTHLING",
+        `Release <b>${displayName(m)}</b> (Lv.${m.level}) for good?<br><br>It leaves your storage and cannot be recovered.`,
+        "RELEASE",
+        "KEEP"
+      );
+      if (!ok) return;
+      if (!StorageManager.remove(m.uid)) {
+        toast("That Mythling is no longer in storage.", "bad");
+        return;
+      }
+      CollectionManager.markSeen(m.speciesId, m.mutation);
+      AudioManager.sfx("cancel");
+      toast(`${displayName(m)} was released into the wild`, "ok");
+      this.renderStorageList();
+      if (this.game && this.game.autosave) this.game.autosave();
     }
     // ---------------------------------------------------- BAG
     renderBag(root) {
@@ -12497,7 +13080,7 @@ input[type="text"].wiki-search {
       root.appendChild(el(
         "div",
         { class: "coin-pill", style: { display: "inline-flex", marginBottom: "12px" } },
-        [icon("coin", "gold"), el("span", { text: `${GameState.player.wildcoins} Wildcoins` })]
+        [icon("coin", "gold"), el("span", { text: `${coins(GameState.player.wildcoins)} Wildcoins` })]
       ));
       for (const cat of ITEM_CATEGORIES) {
         const entries = InventoryManager.byCategory(cat.id);
@@ -12563,7 +13146,7 @@ input[type="text"].wiki-search {
           layer.innerHTML = "";
           resolve(v);
         };
-        PartyManager.list().forEach((m) => {
+        PartyManager2.list().forEach((m) => {
           const card = this.mythCard(m, {
             onClick: () => finish(m),
             extra: note2 ? el("div", { class: "mc-sub feed-note", text: note2(m) }) : null
@@ -12598,6 +13181,20 @@ input[type="text"].wiki-search {
         InventoryManager.remove(itemId, 1);
         pick.currentHp = Math.floor(maxHp(pick) * item.revive);
         toast(`${displayName(pick)} was revived!`, "ok");
+      } else if (item.restoreAllUses) {
+        const before = JSON.stringify(pick.uses);
+        pick.uses = {};
+        for (const id of pick.library) {
+          const sk = getSkill(id);
+          if (sk && Number.isFinite(sk.uses)) pick.uses[id] = sk.uses;
+        }
+        if (JSON.stringify(pick.uses) === before) {
+          toast("Every skill is already at full uses!", "bad");
+          return;
+        }
+        InventoryManager.remove(itemId, 1);
+        AudioManager.sfx("heal");
+        toast(`${displayName(pick)}'s skills are fully restored`, "ok");
       } else if (item.restoreUses) {
         InventoryManager.remove(itemId, 1);
         restoreUses(pick, item.restoreUses);
@@ -12626,6 +13223,49 @@ input[type="text"].wiki-search {
       root.appendChild(el("p", { class: "sub", style: { marginTop: "14px" }, text: "Travel between regions by walking through the gates at the edge of each map. More regions will open in future updates." }));
     }
     // ---------------------------------------------------- COLLECTION
+    // ---------------------------------------------------- INDEX
+    /**
+     * Mythling Index: every species with all four evolution stages drawn side by
+     * side, so you can see exactly what a Mythling grows into and at what level.
+     */
+    renderIndex(root) {
+      var _a, _b;
+      const seen = SPECIES_IDS.filter((id) => {
+        var _a2;
+        return (_a2 = CollectionManager.entry(id)) == null ? void 0 : _a2.seen;
+      }).length;
+      this.setTitle(`Mythling Index \u2014 ${seen}/${SPECIES_IDS.length} discovered`);
+      root.appendChild(el("p", {
+        class: "sub",
+        text: "Every Mythling and all four of its forms. Stages unlock at Lv.20, Lv.60 and Lv.80 \u2014 raise a Mythling to the level and it evolves on its own."
+      }));
+      const list = el("div", { class: "index-list" });
+      for (const id of SPECIES_IDS) {
+        const sp = SPECIES[id];
+        const entry = CollectionManager.entry(id);
+        const known = !!(entry && (entry.seen || entry.caught));
+        const card = el("div", { class: `index-card ${known ? "" : "locked"}` }, [
+          el("div", { class: "index-head" }, [
+            el("b", { text: known ? sp.displayName : "???" }),
+            elementChip(sp.element),
+            el("span", { class: "role", text: sp.role }),
+            el("span", { class: "role", text: `\xB7 ${sp.breed} \xB7 ${((_b = (_a = sp.spawnMaps) == null ? void 0 : _a[0]) == null ? void 0 : _b.replace(/_/g, " ")) || ""}` })
+          ]),
+          el("div", { class: "index-stages" }, sp.evolutions.map((ev, stage) => {
+            var _a2, _b2;
+            const unlocked = known;
+            return el("div", { class: `index-stage ${unlocked ? "" : "locked"}` }, [
+              unlocked ? mythCanvas({ speciesId: id, stage, mutation: "none" }, 96) : el("div", { class: "index-blank", text: "?" }),
+              el("div", { class: "is-name", text: unlocked ? ev.name : "???" }),
+              el("div", { class: "is-lv", text: stage === 0 ? "Base form" : `Lv.${ev.level}` }),
+              ((_a2 = ev.art) == null ? void 0 : _a2.horns) || ((_b2 = ev.art) == null ? void 0 : _b2.wings) ? el("div", { class: "is-tag", text: [ev.art.horns ? "Horns" : "", ev.art.wings ? "Wings" : ""].filter(Boolean).join(" + ") }) : null
+            ]);
+          }))
+        ]);
+        list.appendChild(card);
+      }
+      root.appendChild(list);
+    }
     renderCollection(root) {
       const s = CollectionManager.stats();
       this.setTitle(`Collection \u2014 ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen`);
@@ -12676,11 +13316,11 @@ input[type="text"].wiki-search {
       this.setTitle("Trainer Record");
       const rows = [
         ["Trainer", GameState.player.name],
-        ["Wildcoins", String(GameState.player.wildcoins)],
+        ["Wildcoins", coins(GameState.player.wildcoins)],
         ["Play time", formatTime(PlayerManager.playTime())],
         ["Current region", MAPS[GameState.player.map].displayName],
         ["Starter", GameState.player.starter ? SPECIES[GameState.player.starter].displayName : "\u2014"],
-        ["Party", `${PartyManager.count()} / ${PARTY_MAX}`],
+        ["Party", `${PartyManager2.count()} / ${PARTY_MAX}`],
         ["Storage", `${StorageManager.list().length} Mythlings`],
         ["Collection", `${s.caught}/${s.total} caught`],
         ["Trainers defeated", String(Object.keys(GameState.world.defeatedTrainers).length)],
@@ -13220,12 +13860,12 @@ input[type="text"].wiki-search {
       for (const id of building.stock) {
         const item = getItem(id);
         let qty = 1;
-        const totalLabel = el("div", { class: "ir-qty price" }, [icon("coin", "gold"), el("span", { text: String(item.price) })]);
+        const totalLabel = el("div", { class: "ir-qty price" }, [icon("coin", "gold"), el("span", { text: coins(item.price) })]);
         const qtyLabel = el("b", { text: "1" });
         const setQty = (n) => {
           qty = Math.max(1, Math.min(99, n));
           qtyLabel.textContent = String(qty);
-          totalLabel.lastChild.textContent = String(item.price * qty);
+          totalLabel.lastChild.textContent = coins(item.price * qty);
         };
         rows.appendChild(el("div", { class: "item-row" }, [
           icon(item.category === "balls" ? "orb" : item.category === "food" ? "food" : item.category === "key" ? "key" : "heal", "item-ico"),
@@ -13249,7 +13889,7 @@ input[type="text"].wiki-search {
                 AudioManager.sfx("cancel");
                 return;
               }
-              const ok = await confirmDialog("CONFIRM PURCHASE", `Buy <b>${qty}\xD7 ${item.name}</b> for <b>${total} Wildcoins</b>?`, "BUY", "CANCEL");
+              const ok = await confirmDialog("CONFIRM PURCHASE", `Buy <b>${qty}\xD7 ${item.name}</b> for <b>${coins(total)} Wildcoins</b>?`, "BUY", "CANCEL");
               if (!ok) return;
               if (!PlayerManager.spendCoins(total)) {
                 toast("Not enough Wildcoins!", "bad");
@@ -13273,7 +13913,7 @@ input[type="text"].wiki-search {
         el("p", { class: "sub coin-line" }, [
           el("span", { text: "Wildcoins:" }),
           icon("coin", "gold"),
-          el("b", { style: { color: "#ffe08a" }, text: String(GameState.player.wildcoins) })
+          el("b", { style: { color: "#ffe08a" }, text: coins(GameState.player.wildcoins) })
         ]),
         render(),
         el("div", { class: "row end", style: { marginTop: "16px" } }, [button("LEAVE SHOP", { class: "primary", onclick: onClose, sfx: "cancel" })])
@@ -13284,7 +13924,7 @@ input[type="text"].wiki-search {
   }
   function centerScreen({ onHeal, onParty, onStorage, onSave, onClose }) {
     const party = el("div", { class: "grid-cards" });
-    for (const m of PartyManager.list()) {
+    for (const m of PartyManager2.list()) {
       const pct = hpPercent(m);
       party.appendChild(el("div", { class: "myth-card" }, [
         mythCanvas(m, 60),
@@ -13669,7 +14309,7 @@ input[type="text"].wiki-search {
             onChoose: async (starterId) => {
               Screens.clear();
               createNewGameState({ slot, playerName: name, starterId, settings: SettingsManager.settings });
-              const starter = PartyManager.lead();
+              const starter = PartyManager2.lead();
               await modal({
                 title: "A NEW PARTNER",
                 body: el("div", { style: { textAlign: "center" } }, [
@@ -13859,7 +14499,7 @@ input[type="text"].wiki-search {
       Screens.clear();
       centerScreen({
         onHeal: async () => {
-          PartyManager.healAll();
+          PartyManager2.healAll();
           AudioManager.sfx("heal");
           toast("Your Mythlings are fully healed!", "ok");
           GameState.player.lastHealMap = this.overworld.mapId;
@@ -13886,7 +14526,7 @@ input[type="text"].wiki-search {
     }
     // ------------------------------------------------------------ battles
     startWildBattle(wildMythling) {
-      const lead = PartyManager.firstHealthy();
+      const lead = PartyManager2.firstHealthy();
       if (!lead) {
         toast("All your Mythlings have fainted!", "bad");
         this.handleWhiteout();
@@ -13894,29 +14534,31 @@ input[type="text"].wiki-search {
       }
       const battle = new Battle({
         type: BattleType.WILD,
-        party: PartyManager.list(),
+        party: PartyManager2.list(),
         enemies: [wildMythling],
         mapId: this.overworld.mapId
       });
       this.beginBattle(battle);
     }
     startTrainerBattle(trainer) {
-      const lead = PartyManager.firstHealthy();
+      const lead = PartyManager2.firstHealthy();
       if (!lead) {
         toast("All your Mythlings have fainted!", "bad");
         this.handleWhiteout();
         return;
       }
+      const teamTop = Math.max(...trainer.team.map((s) => s.level || 1));
+      const bump = Math.max(0, PartyManager2.topLevel() - teamTop);
       const enemies = trainer.team.map((spec) => createMythling({
         speciesId: spec.species,
-        level: spec.level,
+        level: Math.min(LEVEL_CAP, (spec.level || 1) + bump),
         rarity: spec.rarity || SPECIES[spec.species].defaultRarity,
         mood: spec.mood || SPECIES[spec.species].defaultMood,
         mutation: "none"
       }));
       const battle = new Battle({
         type: BattleType.TRAINER,
-        party: PartyManager.list(),
+        party: PartyManager2.list(),
         enemies,
         trainer,
         mapId: this.overworld.mapId
@@ -13953,7 +14595,7 @@ input[type="text"].wiki-search {
       }
       if (battle.rewards.coins > 0) {
         PlayerManager.addCoins(battle.rewards.coins);
-        toast(`+${battle.rewards.coins} Wildcoins`, "ok");
+        toast(`+${coins(battle.rewards.coins)} Wildcoins`, "ok");
         this.updateHud();
       }
       if (levelEntries.length) {
@@ -13967,7 +14609,7 @@ input[type="text"].wiki-search {
           if (rw.coins) PlayerManager.addCoins(rw.coins);
           for (const [id, qty] of Object.entries(rw.items || {})) InventoryManager.add(id, qty);
           AudioManager.sfx("coin");
-          await Dialogue.show([t.defeat, `You received ${rw.coins || 0} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}\xD7 ${i.replace(/_/g, " ")}`).join(", ")}` : ""}!`], t.name);
+          await Dialogue.show([t.defeat, `You received ${coins(rw.coins || 0)} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}\xD7 ${i.replace(/_/g, " ")}`).join(", ")}` : ""}!`], t.name);
           if (t.guardian) toast(`${t.name} defeated \u2014 a new path has opened!`, "ok");
           await this.autosave();
           if (t.finalBoss) {
@@ -13982,7 +14624,7 @@ input[type="text"].wiki-search {
       this.updateHud();
     }
     async checkEvolutions() {
-      const ready = EvolutionManager.pending(PartyManager.list());
+      const ready = EvolutionManager.pending(PartyManager2.list());
       for (const m of ready) {
         await new Promise((resolve) => this.runEvolution(m, resolve));
       }
@@ -14006,10 +14648,10 @@ input[type="text"].wiki-search {
       PlayerManager.addCoins(-penalty);
       await modal({
         title: "YOU WERE DEFEATED",
-        body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${penalty} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
+        body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${coins(penalty)} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
         buttons: [{ label: "CONTINUE", value: true, primary: true }]
       });
-      PartyManager.healAll();
+      PartyManager2.healAll();
       const here = this.overworld.mapId;
       const hasCentre = (_a = getMap(here)) == null ? void 0 : _a.buildings.some((b) => b.type === "center");
       const healMap = hasCentre ? here : GameState.player.lastHealMap || "verdant_vale";
@@ -14093,7 +14735,7 @@ input[type="text"].wiki-search {
       if (this.mode !== "overworld") return;
       const strip2 = document.getElementById("hud-party");
       strip2.innerHTML = "";
-      for (const m of PartyManager.list()) {
+      for (const m of PartyManager2.list()) {
         const pct = hpPercent(m);
         const chip = el("div", { class: `party-chip ${isFainted(m) ? "fainted" : ""}` }, [
           mythCanvas(m, 76),
@@ -14113,7 +14755,7 @@ input[type="text"].wiki-search {
         chip.addEventListener("click", () => this.openMenu("party"));
         strip2.appendChild(chip);
       }
-      document.getElementById("hud-coins").textContent = String(GameState.player.wildcoins);
+      document.getElementById("hud-coins").textContent = coins(GameState.player.wildcoins);
       document.getElementById("hud-location").textContent = this.overworld.currentRegionName();
       const obj = document.getElementById("objective");
       const objective = this.currentObjective();

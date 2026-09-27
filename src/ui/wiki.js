@@ -203,8 +203,10 @@ function raritySection() {
         `Mood magnitude <b>+${r.magnitude}</b> · catch modifier <b>x${r.catchMod.toFixed(2)}</b> · roll weight <b>${r.weight}</b>`,
       ];
     })),
-    h3('Mutations', 'shiny darkness mutation cosmetic'),
-    para('Mutations are rare cosmetic variants recorded in your Collection. They do not change stats in this version.'),
+    h3('Mutations', 'shiny darkness mutation cosmetic stat bonus'),
+    para(`Mutations are rare variants recorded in your Collection. Besides looking different, they carry a
+      flat bonus to <b>every</b> stat: <b>Shiny +1</b> and <b>Darkness +2</b>, applied after the stat caps so the
+      bonus always lands.`),
     table(mut),
     h3('Catch chance', 'catch capture ball formula'),
     para(`<code>chance = catchRate × ballMultiplier × rarityModifier × levelFactor × hpFactor</code><br>
@@ -296,14 +298,12 @@ function battleSection() {
 function speciesSection() {
   const out = [
     h3(`The ${SPECIES_IDS.length} species of this version`, 'species mythling dex list'),
-    para('Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species default Mood and Rarity D.'),
+    para(`Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species
+      default Mood and Rarity D. Open the <b>INDEX</b> tab in the menu to see every Mythling's four forms drawn side by side.`),
   ];
   for (const id of SPECIES_IDS) {
     const sp = SPECIES[id];
-    const evoLine = sp.evolutions.map((ev) => {
-      const locked = ev.future || ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE;
-      return `${ev.name} <span class="wiki-dim">(Lv.${ev.level}${locked ? ' — future update' : ''})</span>`;
-    }).join('  →  ');
+    const evoLine = sp.evolutions.map((ev) => `${ev.name} <span class="wiki-dim">(Lv.${ev.level})</span>`).join('  →  ');
     const card = el('div', { class: 'wiki-card' }, [
       el('div', { class: 'wiki-card-head' }, [
         creature(id, 0, 96),
@@ -345,31 +345,45 @@ function skillsSection() {
       }
     }
   }
+  // level each skill is learned at, lowest first (Lv.1 / 20 / 60 / 80)
+  const learnLevels = (sid) => {
+    const levels = new Set();
+    for (const sp of Object.values(SPECIES)) {
+      for (const lv of Object.keys(sp.skillUnlocks)) {
+        if (sp.skillUnlocks[lv].includes(sid)) levels.add(Number(lv));
+      }
+    }
+    return [...levels].sort((a, b) => a - b);
+  };
   const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat).map((s) => {
     const meta = s.category === 'buff'
       ? `${buffSummary(s, ' ')} · ${s.uses} uses`
       : `Power <b>${s.power}</b> · ${s.damageType === 'physical' ? 'Physical (P.ATK)' : 'Special (S.ATK)'}${s.element ? ` · ${ELEMENTS[s.element].name}` : ''} · ${Number.isFinite(s.uses) ? `${s.uses} uses` : 'unlimited'}`;
+    const levels = learnLevels(s.id).map((lv) => `Lv.${lv}`).join(' · ') || '—';
     return [
-      `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ''}`,
+      `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ''}`
+        + `<br><span class="wiki-learn">Learned at ${levels}</span>`,
       `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` · ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT[s.debuff.stat]} by ${s.debuff.amount}` : ''}</span><br><span class="wiki-dim">Learned by: ${(owners[s.id] || ['—']).join(', ')}</span>`,
     ];
   });
   return [
     h3('Skill slots', 'normal special buff equip slots'),
-    para(`Every Mythling equips <b>1 Normal</b>, <b>1 Special</b> and <b>1 Buff</b> skill. Everything it ever
-      learns stays in its <b>Skill Library</b> forever — you can re-equip any learned skill from the
-      SKILLS tab at any time. The Ultimate is fixed to the species.`),
+    para(`Every Mythling has <b>three slots</b> and <b>any skill it has learned can go into any of them</b> —
+      two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on.
+      Everything a Mythling ever learns stays in its <b>Skill Library</b> forever, and leaving a slot empty is
+      allowed (nothing refills it, and the choice is saved). The Ultimate is fixed to the species.`),
     bullets([
-      '<b>Normal</b> skills have unlimited uses but low power.',
+      '<b>Normal</b> skills have unlimited uses but low power — every evolution teaches a stronger one.',
       '<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.',
       '<b>Buff</b> skills raise one stat and never grant Ultimate Charge.',
+      'If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn.',
     ]),
     h3('Normal skills', 'normal unlimited bite scratch peck'),
-    table(catRows('normal')),
+    table(catRows('normal'), 'normal skill level learned at'),
     h3('Special skills', 'special elemental power uses'),
-    table(catRows('special')),
+    table(catRows('special'), 'special skill level learned at'),
     h3('Buff skills', 'buff raise stat stacks'),
-    table(catRows('buff')),
+    table(catRows('buff'), 'buff skill level learned at'),
     h3('Ultimates', 'ultimate charge tier'),
     table(Object.values(ULTIMATES).map((u) => [
       `<b>${u.baseName}</b>`,
@@ -389,6 +403,7 @@ function itemsSection() {
     if (i.heal) effect += ` <span class="wiki-dim">(restores ${i.heal} HP)</span>`;
     if (i.revive) effect += ` <span class="wiki-dim">(revives with ${Math.round(i.revive * 100)}% HP)</span>`;
     if (i.restoreUses) effect += ` <span class="wiki-dim">(+${i.restoreUses} uses to every limited skill)</span>`;
+    if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
     if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp} EXP)</span>`;
     if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
     return [
@@ -450,24 +465,31 @@ function progressSection() {
   ]);
   return [
     h3('EXP & levelling', 'exp experience level up curve'),
-    para(`Defeating Mythlings and trainers, and feeding food, all grant EXP. The requirement grows with
-      level: <code>24 + 9 × level^1.85</code>.`),
+    para(`Defeating Mythlings and trainers, and feeding food, all grant EXP. Up to <b>Lv.30</b> the
+      requirement is <code>24 + 9 × level^1.85</code>. Past the story cap it continues as a straight line
+      through that same Lv.30 cost, so a level always costs roughly what a level-appropriate battle
+      pays out — reaching Lv.100 is a long post-game grind instead of an impossible one.`),
     table(curve),
     bullets([
-      `The current level cap is <b>Lv.${LEVEL_CAP}</b> (the data is built for ${ABSOLUTE_MAX_LEVEL}). At the cap no more EXP is stored.`,
+      `Every Mythling can reach <b>Lv.${LEVEL_CAP}</b>. At the cap no more EXP is stored.`,
+      'Wild Mythlings and trainer teams keep pace with your party: once you out-level a zone or a trainer, their levels rise with you, so late grinding still pays.',
       'Levelling up raises every stat and tops up HP by the amount max HP grew.',
       'Levels are also where new skills are learned — they are added to the library automatically.',
     ]),
     h3('Evolution', 'evolve evolution stage level 20'),
     table([
-      ['Lv.20', 'First evolution — live in this version (stat multiplier 1.34).'],
-      ['Lv.60 / Lv.80', `Locked until a future update (the build allows stages 0–${MAX_UNLOCKED_EVOLUTION_STAGE}).`],
+      ['Stage 0', 'The base form you catch or start with.'],
+      ['Lv.20', 'First evolution (stat multiplier ~1.34) and Ultimate tier “ I ”.'],
+      ['Lv.60', 'Second evolution (~1.75) and Ultimate tier “ II ”.'],
+      ['Lv.80', 'Final evolution (~2.20) and Ultimate tier “ III ”.'],
     ]),
-    para('Evolution is offered automatically after a battle or feed. It raises stats, upgrades the Ultimate and unlocks that stage’s skills.'),
+    para(`All four stages are live. Evolution is offered automatically after a battle or feed: it raises
+      stats, upgrades the Ultimate, and unlocks that stage’s skills — a new <b>Special</b>, a new
+      <b>Buff</b> and a stronger <b>unlimited Normal</b> move. The INDEX tab shows what every form looks like.`),
     h3('Capture resets level', 'catch capture reset level one'),
     note('A captured Mythling is <b>always</b> reset to Lv.1 with its library rebuilt for Lv.1. Its species, Mood, Rarity and mutation are preserved, and the level you caught it at is recorded on its info panel.'),
     h3('Collection', 'collection dex seen caught'),
-    para('Every species and mutation you see or catch is recorded in the COLLECTION tab.'),
+    para('Every species and mutation you see or catch is recorded in the COLLECTION tab, and the INDEX tab shows all four forms of each species once you have seen it.'),
   ];
 }
 

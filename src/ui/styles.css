@@ -530,6 +530,33 @@ select {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 16px; padding: 28px 18px;
 }
+/* skill learn-level line in the wiki */
+.wiki-learn { color: var(--gold); font-size: .78rem; letter-spacing: .04em; }
+
+/* ---------- Mythling Index: every species with all four forms ---------- */
+.index-list { display: flex; flex-direction: column; gap: 14px; }
+.index-card {
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(255,255,255,.04); border: 1.5px solid rgba(255,255,255,.1);
+}
+.index-card.locked { opacity: .75; }
+.index-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.index-head .role { color: var(--muted); font-size: .8rem; }
+.index-stages { display: flex; gap: 10px; flex-wrap: wrap; }
+.index-stage {
+  width: 108px; padding: 6px; text-align: center; border-radius: 10px;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.08);
+}
+.index-stage canvas { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
+.index-stage .is-name { font-weight: 800; font-size: .78rem; margin-top: 4px; }
+.index-stage .is-lv { color: var(--muted); font-size: .7rem; }
+.index-stage .is-tag { color: var(--gold); font-size: .62rem; letter-spacing: .06em; margin-top: 2px; }
+.index-stage.locked { opacity: .5; }
+.index-blank {
+  width: 100%; aspect-ratio: 1 / 1; display: grid; place-items: center;
+  color: var(--muted); font-size: 2rem; background: rgba(255,255,255,.04); border-radius: 8px;
+}
+
 /* Square at every size: the canvas used to be stretched wide and short, which
    squashed the Mythling. JS backs it at device resolution for sharpness. */
 .cinematic canvas {
