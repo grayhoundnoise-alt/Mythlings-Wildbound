@@ -379,8 +379,12 @@ class Game {
   startTrainerBattle(trainer) {
     const lead = PartyManager.firstHealthy();
     if (!lead) { toast('All your Mythlings have fainted!', 'bad'); this.handleWhiteout(); return; }
+    // Post-game: a trainer's team keeps pace with the party so rematches and
+    // late grinding stay worth doing on the way to Lv.100.
+    const teamTop = Math.max(...trainer.team.map((s) => s.level || 1));
+    const bump = Math.max(0, PartyManager.topLevel() - teamTop);
     const enemies = trainer.team.map((spec) => createMythling({
-      speciesId: spec.species, level: spec.level,
+      speciesId: spec.species, level: Math.min(LEVEL_CAP, (spec.level || 1) + bump),
       rarity: spec.rarity || SPECIES[spec.species].defaultRarity,
       mood: spec.mood || SPECIES[spec.species].defaultMood,
       mutation: 'none',

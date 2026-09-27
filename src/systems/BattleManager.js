@@ -11,7 +11,7 @@ import { getItem } from '../data/items.js';
 import { getRarity } from '../data/rarity.js';
 import {
   DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, COUNTER_MAX_PERCENT, expReward, LEVEL_CAP,
-  counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT, coinReward,
+  counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT, coinReward, FUTURE_CONTENT_LIVE,
 } from '../data/config.js';
 import { clamp, randInt } from '../core/utils.js';
 
@@ -239,7 +239,7 @@ export class Battle {
 
     if (action.type === 'ultimate') {
       const ult = ultimateMove(attacker);
-      if (!ultimateReady(attacker) || !ult || ult.future) {
+      if (!ultimateReady(attacker) || !ult || (!FUTURE_CONTENT_LIVE && ult.future)) {
         events.push({ type: 'log', text: `${displayName(attacker)}'s Ultimate is not ready!` });
         return;
       }

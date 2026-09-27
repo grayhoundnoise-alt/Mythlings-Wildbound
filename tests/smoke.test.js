@@ -471,15 +471,28 @@ test('old saves missing new fields get safe defaults', () => {
   assert.equal(InventoryManager.count('potion'), 2);
 });
 
-test('a save claiming Lv.99 is clamped to the level cap', () => {
+test('a save claiming an impossible level is clamped to the level cap', () => {
   const cheat = {
     slot: 1, player: { name: 'CHEAT', map: 'verdant_vale', starter: 'emberu' },
-    party: [{ speciesId: 'emberu', level: 99, stage: 3 }], inventory: {}, collection: {}, world: {}, meta: {},
+    party: [{ speciesId: 'emberu', level: 9999, stage: 3 }], inventory: {}, collection: {}, world: {}, meta: {},
   };
   deserialize(cheat);
   const m = PartyManager.lead();
   assert.equal(m.level, LEVEL_CAP);
-  assert.ok(m.stage <= 1, 'future evolution stage rejected');
+  assert.equal(LEVEL_CAP, 100, 'every Mythling can reach Lv.100');
+  assert.equal(m.stage, 3, 'all four evolution stages are live at this cap');
+});
+
+test('Lv.100 is reachable and the exp curve stays sane past the story cap', () => {
+  // the story tops out at Lv.30; the curve past it must not ask for thousands
+  // of battles per level, so cost per level stays proportional to payout
+  const at30 = expToNextLevel(30);
+  const at99 = expToNextLevel(99);
+  assert.ok(at99 / at30 < 5, `Lv.99 costs ${(at99 / at30).toFixed(1)}x Lv.30, expected under 5x`);
+  assert.equal(expToNextLevel(100), Infinity, 'Lv.100 is the ceiling');
+  let total = 0;
+  for (let l = 1; l < 100; l++) total += expToNextLevel(l);
+  assert.ok(total < 1_500_000, `total exp to Lv.100 is ${total}`);
 });
 
 // ------------------------------------------------------------------

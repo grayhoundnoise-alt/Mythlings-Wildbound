@@ -9,11 +9,21 @@ import { weightedChoice, randInt, choice, clamp } from '../core/utils.js';
 import { LEVEL_CAP } from '../data/config.js';
 
 export const EncounterManager = {
-  /** Roll a wild Mythling for a given zone. Never exceeds the zone/level cap. */
+  /**
+   * Roll a wild Mythling for a given zone.
+   *
+   * `modifiers.partyLevel` lets the world keep pace with the party: once you
+   * out-level a zone's range the whole range shifts up by the difference, so
+   * grinding past the story content to the Lv.100 cap stays possible instead
+   * of paying nothing.
+   */
   spawnForZone(zone, mapId, rng = Math.random, modifiers = {}) {
     const pick = weightedChoice(rng, zone.species);
     const [lo, hi] = zone.levelRange;
-    const level = clamp(randInt(rng, lo, hi), 1, LEVEL_CAP);
+    let level = randInt(rng, lo, hi);
+    const top = Number(modifiers.partyLevel) || 0;
+    if (top > hi) level += top - hi;
+    level = clamp(level, 1, LEVEL_CAP);
     return createMythling({
       speciesId: pick.id,
       level,

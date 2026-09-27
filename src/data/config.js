@@ -3,7 +3,7 @@ export const GAME_VERSION = '0.3.0';
 export const SAVE_PREFIX = 'mythlings_wildbound';
 export const SAVE_SLOT_COUNT = 3;
 
-export const LEVEL_CAP = 30;          // current live cap. Architecture supports raising this.
+export const LEVEL_CAP = 100;         // live cap: every Mythling can reach Lv.100
 export const ABSOLUTE_MAX_LEVEL = 100; // ceiling the data structures are built for
 
 export const PARTY_MAX = 6;
@@ -12,7 +12,13 @@ export const STORAGE_MAX = 200;
 export const ULTIMATE_UNLOCK_LEVEL = 10;
 export const EVOLUTION_LEVELS = [1, 20, 60, 80];
 /** Evolution stages the CURRENT build allows. Index into species.evolutions. */
-export const MAX_UNLOCKED_EVOLUTION_STAGE = 1;
+export const MAX_UNLOCKED_EVOLUTION_STAGE = 3;
+/**
+ * The Lv.60 / Lv.80 evolutions, their skills and Ultimate tiers II / III are
+ * flagged `future` in the data. With the cap at Lv.100 they are all reachable,
+ * so they are live; flip this off to lock them again without editing data.
+ */
+export const FUTURE_CONTENT_LIVE = true;
 
 export const COUNTER_MAX_PERCENT = 35; // Counter can never make something untouchable
 /**
@@ -42,9 +48,17 @@ export function counterDodgePercent(counter) {
 }
 
 /** EXP needed to go from `level` to `level+1`. */
+const STORY_CAP = 30;                                  // story content tops out here
+const STORY_ANCHOR = 24 + 9 * Math.pow(STORY_CAP, 1.85);  // cost of Lv.30 -> 31
+
 export function expToNextLevel(level) {
   if (level >= LEVEL_CAP) return Infinity;
-  return Math.floor(24 + 9 * Math.pow(level, 1.85));
+  if (level <= STORY_CAP) return Math.floor(24 + 9 * Math.pow(level, 1.85));
+  // Past the story cap the curve flattens to a straight line through the
+  // Lv.30 anchor, so a level always costs roughly what a level-appropriate
+  // battle pays out. Keeping the L^1.85 curve would ask for ~2,000 extra
+  // battles to reach Lv.100; this asks for a long post-game grind instead.
+  return Math.floor((STORY_ANCHOR * level) / STORY_CAP);
 }
 
 export function totalExpForLevel(level) {

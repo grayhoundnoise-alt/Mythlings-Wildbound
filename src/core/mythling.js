@@ -5,7 +5,7 @@ import { moodModifiers, STAT_KEYS, MOOD_IDS } from '../data/moods.js';
 import { rarityMagnitude, rollRarity } from '../data/rarity.js';
 import { rollMutation } from '../data/mutations.js';
 import {
-  LEVEL_CAP, MAX_UNLOCKED_EVOLUTION_STAGE, STAT_GROWTH,
+  LEVEL_CAP, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, STAT_GROWTH,
   expToNextLevel, ULTIMATE_UNLOCK_LEVEL, COUNTER_MAX_PERCENT,
   CRIT_MAX_PERCENT, CRIT_MAX_MULT,
 } from '../data/config.js';
@@ -17,7 +17,7 @@ export function stageForLevel(speciesId, level) {
   if (!sp) return 0;
   let stage = 0;
   sp.evolutions.forEach((ev, i) => {
-    if (i <= MAX_UNLOCKED_EVOLUTION_STAGE && !ev.future && level >= ev.level) stage = i;
+    if (i <= MAX_UNLOCKED_EVOLUTION_STAGE && (FUTURE_CONTENT_LIVE || !ev.future) && level >= ev.level) stage = i;
   });
   return stage;
 }
@@ -77,7 +77,7 @@ export function refreshLibrary(m) {
   }
   for (const id of learned) {
     const sk = getSkill(id);
-    if (!sk || sk.future) continue; // future-stage skills stay locked in this build
+    if (!sk || (!FUTURE_CONTENT_LIVE && sk.future)) continue; // future-stage skills stay locked unless the cap allows them
     if (!m.library.includes(id)) {
       m.library.push(id);
       if (m.uses[id] == null && Number.isFinite(sk.uses)) m.uses[id] = sk.uses;
@@ -220,7 +220,7 @@ export function canEvolve(m) {
   const next = nextEvolution(m);
   if (!next) return false;
   if (m.stage + 1 > MAX_UNLOCKED_EVOLUTION_STAGE) return false;
-  if (next.future) return false;
+  if (!FUTURE_CONTENT_LIVE && next.future) return false;
   return m.level >= next.level;
 }
 
@@ -230,7 +230,7 @@ export function futureEvolutionInfo(m) {
   const list = [];
   for (let i = m.stage + 1; i < sp.evolutions.length; i++) {
     const ev = sp.evolutions[i];
-    const locked = i > MAX_UNLOCKED_EVOLUTION_STAGE || !!ev.future;
+    const locked = i > MAX_UNLOCKED_EVOLUTION_STAGE || (!FUTURE_CONTENT_LIVE && !!ev.future);
     list.push({ name: ev.name, level: ev.level, locked, future: !!ev.future });
   }
   return list;
@@ -249,7 +249,7 @@ export function evolve(m) {
   m.currentHp = Math.min(afterStats.hp, m.currentHp + Math.max(0, gains.hp));
   const sp = speciesOf(m);
   const newSkills = (sp.skillUnlocks[stageData(m).level] || []).filter((id) => {
-    const s = getSkill(id); return s && !s.future;
+    const s = getSkill(id); return s && (FUTURE_CONTENT_LIVE || !s.future);
   });
   return {
     from,

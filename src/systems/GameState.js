@@ -85,6 +85,10 @@ export const PartyManager = {
   lead() { return GameState.party[0] || null; },
   firstHealthy() { return GameState.party.find((m) => m.currentHp > 0) || null; },
   allFainted() { return GameState.party.length > 0 && GameState.party.every((m) => m.currentHp <= 0); },
+  /** Highest level in the party — wild spawns and trainer teams keep pace with it. */
+  topLevel() {
+    return GameState.party.reduce((top, m) => Math.max(top, m.level || 1), 1);
+  },
   add(m) {
     if (this.isFull()) return false;
     GameState.party.push(m);

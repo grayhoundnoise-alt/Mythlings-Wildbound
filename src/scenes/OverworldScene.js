@@ -60,7 +60,7 @@ export class OverworldScene {
       const x = zx + Math.random() * zw;
       const y = zy + Math.random() * zh;
       if (!initial && dist(x, y, this.player.x, this.player.y) < 420) continue;
-      const m = EncounterManager.spawnForZone(zone, map.id);
+      const m = EncounterManager.spawnForZone(zone, map.id, Math.random, { partyLevel: PartyManager.topLevel() });
       this.wild.push({
         m, x, y, zone,
         hx: x, hy: y,
