@@ -228,12 +228,45 @@ test('normal skill has infinite uses, special/buff limited', () => {
   assert.equal(usesLeft(m, 'vine_lash'), 19);
 });
 
-test('skill swapping only accepts matching category from the library', () => {
+test('any learned skill can go into any slot', () => {
   const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
   assert.equal(equipSkill(m, 'special', 'thorn_spear'), true);
   assert.equal(m.skills.special, 'thorn_spear');
-  assert.equal(equipSkill(m, 'special', 'brave_guard'), false);
-  assert.equal(equipSkill(m, 'normal', 'nature_burst'), false);
+  // slots are just slots: two specials, or a buff in the normal slot, are fine
+  assert.equal(equipSkill(m, 'normal', 'thorn_armor'), true, 'a buff in the normal slot');
+  assert.equal(equipSkill(m, 'buff', 'thorn_armor'), true, 'the same skill in two slots');
+  assert.equal(m.skills.normal, 'thorn_armor');
+  // ...but only skills the Mythling has actually learned
+  assert.equal(equipSkill(m, 'special', 'ocean_pressure'), false, 'not in the library');
+  assert.equal(equipSkill(m, 'special', 'not_a_skill'), false, 'unknown skill');
+});
+
+test('a slot can be left empty', () => {
+  const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  equipSkill(m, 'normal', null);
+  equipSkill(m, 'special', null);
+  equipSkill(m, 'buff', null);
+  assert.deepEqual(m.skills, { normal: null, special: null, buff: null });
+  // a reload must not quietly refill slots the player chose to leave empty
+  GameState.party = [m];
+  GameState.storage = [];
+  const round = deserialize(serialize());
+  assert.equal(round, true);
+  const reloaded = PartyManager.lead();
+  assert.deepEqual(reloaded.skills, { normal: null, special: null, buff: null },
+    'empty slots survive a save/load');
+});
+
+const { getSkill: getSkillById } = await import('../src/data/skills.js');
+const { basicAttack } = await import('../src/core/mythling.js');
+
+test('an exhausted move falls back to the unlimited attack instead of wasting the turn', () => {
+  const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  for (const id of m.library) { const sk = getSkillById(id); if (sk && Number.isFinite(sk.uses)) m.uses[id] = 0; }
+  const basic = basicAttack(m);
+  assert.equal(Number.isFinite(basic.uses), false, `${basic.name} has unlimited uses`);
+  assert.equal(basic.category, 'normal');
+  assert.equal(basic.id, 'thorn_jab', 'the evolved unlimited move beats Lv.1 Bite');
 });
 
 // ------------------------------------------------------------------

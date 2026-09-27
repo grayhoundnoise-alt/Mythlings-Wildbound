@@ -6,7 +6,7 @@ import {
 } from '../systems/GameState.js';
 import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, stageData,
-  librarySkills, equipSkill, ultimateMove, ultimateUnlocked, expNeeded, restoreUses,
+  librarySkills, equipSkill, unequipSkill, ultimateMove, ultimateUnlocked, expNeeded, restoreUses,
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
@@ -25,7 +25,7 @@ import {
   Screens, panelHeader, closeButton,
 } from './ui.js';
 import { icon, iconSvg, iconLabel } from './icons.js';
-import { buffSummary } from '../data/skills.js';
+import { buffSummary, getSkill } from '../data/skills.js';
 import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { AudioManager } from '../systems/AudioManager.js';
@@ -52,6 +52,9 @@ const TABS = [
  * squashed, and the backing store follows the real CSS box at device
  * resolution so it stays crisp.
  */
+/** Short labels for the three battle slots in the Skill Library. */
+export const SLOT_LABEL = { normal: 'N', special: 'S', buff: 'B' };
+
 export function mythCanvas(m, size = 66, animated = false) {
   const dpr = () => Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
   const cv = el('canvas', { width: size, height: size });
@@ -363,10 +366,16 @@ export class PlayerMenu {
     }
     for (const m of list) {
       this.storageList.appendChild(this.mythCard(m, {
-        extra: iconTextBtn('dna', 'Party', {
-          class: 'small primary', disabled: PartyManager.isFull(),
-          onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
-        }),
+        extra: el('div', { class: 'row', style: { gap: '6px' } }, [
+          iconTextBtn('dna', 'Party', {
+            class: 'small primary', disabled: PartyManager.isFull(),
+            onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
+          }),
+          button('RELEASE', {
+            class: 'small ghost',
+            onclick: (e) => { e.stopPropagation(); this.releaseFromStorage(m); },
+          }),
+        ]),
       }));
     }
   }
@@ -374,7 +383,7 @@ export class PlayerMenu {
   // ---------------------------------------------------- SKILLS
   renderSkills(root) {
     this.setTitle('Skill Library');
-    root.appendChild(el('p', { class: 'sub', text: 'Each Mythling equips 1 Normal, 1 Special and 1 Buff skill. Everything it has learned stays in its library — nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.' }));
+    root.appendChild(el('p', { class: 'sub', text: 'Every Mythling has three slots and any skill it has learned can go into any of them — two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on. Leaving a slot empty is allowed and is saved as-is. Everything learned stays in the library — nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.' }));
     const party = PartyManager.list();
     const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
     const picker = el('div', { class: 'row', style: { marginBottom: '14px' } }, party.map((m) =>
@@ -398,17 +407,47 @@ export class PlayerMenu {
       const skills = librarySkills(sel, cat);
       if (!skills.length) { root.appendChild(el('p', { class: 'sub', text: 'None learned yet.' })); continue; }
       for (const sk of skills) {
-        const equipped = sel.skills[cat] === sk.id;
-        root.appendChild(el('div', { class: `skill-row ${equipped ? 'equipped' : ''}` }, [
+        const slots = ['normal', 'special', 'buff'];
+        const inSlot = slots.filter((s) => sel.skills[s] === sk.id);
+        root.appendChild(el('div', { class: `skill-row ${inSlot.length ? 'equipped' : ''}` }, [
           el('div', { style: { flex: '1' } }, [
             el('div', { class: 'sk-name', html: `${iconSvg(sk.element || 'strike', sk.element || '')} ${sk.name}` }),
             el('div', { class: 'sk-meta', text: `${sk.category === 'buff' ? buffSummary(sk, ' ') : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`} · ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : 'Unlimited uses'} — ${sk.desc}` }),
           ]),
-          equipped ? el('span', { class: 'chip', text: 'EQUIPPED' })
-            : button('EQUIP', { class: 'small primary', onclick: () => { equipSkill(sel, cat, sk.id); AudioManager.sfx('confirm'); this.renderTab(); } }),
+          el('div', { class: 'skill-slots' }, [
+            ...slots.map((s) => button(SLOT_LABEL[s], {
+              class: `small ${sel.skills[s] === sk.id ? 'primary' : 'ghost'}`,
+              title: `Put ${sk.name} in the ${s} slot`,
+              onclick: () => {
+                equipSkill(sel, s, sk.id);
+                AudioManager.sfx('confirm');
+                this.renderTab();
+              },
+            })),
+            inSlot.length ? button('✕', {
+              class: 'small ghost', title: 'Unequip',
+              onclick: () => { for (const s of inSlot) unequipSkill(sel, s); AudioManager.sfx('cancel'); this.renderTab(); },
+            }) : null,
+          ]),
         ]));
       }
     }
+  }
+
+  /** Let a Mythling go. Storage only — the party always keeps at least one. */
+  async releaseFromStorage(m) {
+    const ok = await confirmDialog(
+      'RELEASE MYTHLING',
+      `Release <b>${displayName(m)}</b> (Lv.${m.level}) for good?<br><br>It leaves your storage and cannot be recovered.`,
+      'RELEASE', 'KEEP',
+    );
+    if (!ok) return;
+    if (!StorageManager.remove(m.uid)) { toast('That Mythling is no longer in storage.', 'bad'); return; }
+    CollectionManager.markSeen(m.speciesId, m.mutation);   // it still counts as discovered
+    AudioManager.sfx('cancel');
+    toast(`${displayName(m)} was released into the wild`, 'ok');
+    this.renderStorageList();
+    if (this.game && this.game.autosave) this.game.autosave();
   }
 
   // ---------------------------------------------------- BAG
@@ -505,6 +544,14 @@ export class PlayerMenu {
       InventoryManager.remove(itemId, 1);
       pick.currentHp = Math.floor(maxHp(pick) * item.revive);
       toast(`${displayName(pick)} was revived!`, 'ok');
+    } else if (item.restoreAllUses) {
+      const before = JSON.stringify(pick.uses);
+      pick.uses = {};
+      for (const id of pick.library) { const sk = getSkill(id); if (sk && Number.isFinite(sk.uses)) pick.uses[id] = sk.uses; }
+      if (JSON.stringify(pick.uses) === before) { toast('Every skill is already at full uses!', 'bad'); return; }
+      InventoryManager.remove(itemId, 1);
+      AudioManager.sfx('heal');
+      toast(`${displayName(pick)}'s skills are fully restored`, 'ok');
     } else if (item.restoreUses) {
       InventoryManager.remove(itemId, 1);
       restoreUses(pick, item.restoreUses);

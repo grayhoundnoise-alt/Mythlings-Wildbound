@@ -314,7 +314,9 @@ function migrateMythling(raw) {
   const maxStage = stageForLevel(m.speciesId, m.level);
   if (m.stage > maxStage) m.stage = maxStage;
   refreshLibrary(m);  // adds any skills introduced by a newer game version
-  autoEquip(m);
+  // only fill empty slots for saves that predate free slot assignment: if the
+  // player chose to leave a slot empty, that choice has to survive a reload
+  if (!raw.skills) autoEquip(m);
   const mx = maxHp(m);
   if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
   if (m.currentHp < 0) m.currentHp = 0;

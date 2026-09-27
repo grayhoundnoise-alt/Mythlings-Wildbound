@@ -3,7 +3,7 @@ import { getSpecies, getEvolutionStage, skillsUnlockedAt } from '../data/species
 import { getSkill, resolveUltimate, ULTIMATE_MAX_CHARGE } from '../data/skills.js';
 import { moodModifiers, STAT_KEYS, MOOD_IDS } from '../data/moods.js';
 import { rarityMagnitude, rollRarity } from '../data/rarity.js';
-import { rollMutation } from '../data/mutations.js';
+import { rollMutation, getMutation } from '../data/mutations.js';
 import {
   LEVEL_CAP, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, STAT_GROWTH,
   expToNextLevel, ULTIMATE_UNLOCK_LEVEL, COUNTER_MAX_PERCENT,
@@ -117,6 +117,9 @@ export function computeStats(m) {
   const mag = rarityMagnitude(m.rarity);
   const mods = moodModifiers(m.mood, mag);
   const out = {};
+  // Shiny +1 and Darkness +2 to every stat, added AFTER the caps so the bonus
+  // is never swallowed by them.
+  const mutBonus = getMutation(m.mutation).statBonus || 0;
   for (const k of STAT_KEYS) {
     const base = sp.baseStats[k];
     const grown = base * (1 + STAT_GROWTH[k] * (m.level - 1));
@@ -124,6 +127,7 @@ export function computeStats(m) {
     if (k === 'counter') v = clamp(v, 0, COUNTER_MAX_PERCENT);
     if (k === 'crit') v = clamp(v, 0, CRIT_MAX_PERCENT);
     if (k === 'critMult') v = clamp(v, 0, CRIT_MAX_MULT);
+    v += mutBonus;
     out[k] = Math.max(k === 'hp' ? 10 : 1, v);
   }
   return out;
@@ -287,12 +291,43 @@ export function restoreUses(m, amount) {
   }
 }
 
+/**
+ * Equip a skill into one of the three slots.
+ *
+ * Slots are just slots: any learned skill can go into any of them, so you can
+ * run two Specials, three Buffs, or whatever combination you like. The slot
+ * only decides which battle button the skill sits on.
+ */
 export function equipSkill(m, slot, skillId) {
-  const sk = getSkill(skillId);
-  if (!sk || sk.category !== slot) return false;
-  if (!m.library.includes(skillId)) return false;
+  if (!['normal', 'special', 'buff'].includes(slot)) return false;
+  if (skillId != null && !getSkill(skillId)) return false;
+  if (skillId != null && !m.library.includes(skillId)) return false;
   m.skills[slot] = skillId;
   return true;
+}
+
+/** Unequip a slot (leaving it empty is allowed — nothing refills it for you). */
+export function unequipSkill(m, slot) {
+  if (!['normal', 'special', 'buff'].includes(slot)) return false;
+  m.skills[slot] = null;
+  return true;
+}
+
+/**
+ * The attack a Mythling falls back on when every equipped skill is out of
+ * uses: its own unlimited Normal move if it knows one, otherwise any skill
+ * with uses left, otherwise a universal Struggle. A turn is never wasted.
+ */
+export function basicAttack(m) {
+  const known = (m.library || []).map(getSkill).filter(Boolean);
+  // strongest unlimited Normal move it has learned (evolutions teach better ones)
+  const infinite = known
+    .filter((sk) => sk.category === 'normal' && !Number.isFinite(sk.uses))
+    .sort((a, b) => (b.power || 0) - (a.power || 0))[0];
+  if (infinite) return infinite;
+  const usable = known.find((sk) => Number.isFinite(sk.uses) && (m.uses?.[sk.id] ?? 0) > 0);
+  if (usable) return usable;
+  return getSkill('struggle');
 }
 
 export function librarySkills(m, category = null) {

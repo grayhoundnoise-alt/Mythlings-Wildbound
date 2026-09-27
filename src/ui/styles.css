@@ -545,6 +545,9 @@ select {
 
 .levelup-list { display: flex; flex-direction: column; gap: 4px; font-size: .95rem; }
 .levelup-list .gain { color: var(--ok); }
+/* Skill Library: three slot buttons per skill (any skill, any slot) */
+.skill-slots { display: flex; gap: 4px; flex: none; }
+.skill-slots .btn { min-width: 30px; padding: 5px 8px; }
 
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

@@ -2,7 +2,7 @@
 // that the battle UI animates. No DOM access in here.
 import {
   computeStats, maxHp, displayName, stageData, speciesOf, isFainted,
-  equippedSkill, usesLeft, consumeUse, ultimateMove, ultimateReady, ultimateUnlocked,
+  equippedSkill, usesLeft, consumeUse, ultimateMove, ultimateReady, ultimateUnlocked, basicAttack,
   addUltimateCharge, gainExp, hpPercent,
 } from '../core/mythling.js';
 import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE } from '../data/skills.js';
@@ -257,15 +257,16 @@ export class Battle {
       return;
     }
 
-    const skillId = action.skillId || attacker.skills[action.slot];
-    const skill = getSkill(skillId);
-    if (!skill) {
-      events.push({ type: 'log', text: `${displayName(attacker)} hesitates...` });
-      return;
-    }
-    if (Number.isFinite(skill.uses) && usesLeft(attacker, skillId) <= 0) {
-      events.push({ type: 'log', text: `${skill.name} has no uses left!` });
-      return;
+    let skillId = action.skillId || attacker.skills[action.slot];
+    let skill = getSkill(skillId);
+    // Out of uses (or nothing equipped at all)? Fall back to the Mythling's
+    // unlimited attack instead of losing the turn.
+    if (!skill || (Number.isFinite(skill.uses) && usesLeft(attacker, skillId) <= 0)) {
+      const fallback = basicAttack(attacker);
+      if (skill) events.push({ type: 'log', text: `${skill.name} has no uses left!` });
+      events.push({ type: 'log', text: `${displayName(attacker)} falls back on ${fallback.name}!` });
+      skill = fallback;
+      skillId = fallback.id;
     }
     if (Number.isFinite(skill.uses)) consumeUse(attacker, skillId);
 

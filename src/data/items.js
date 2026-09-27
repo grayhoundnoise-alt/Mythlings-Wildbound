@@ -11,6 +11,7 @@ export const ITEMS = {
   greater_potion: { id: 'greater_potion', name: 'Greater Potion', category: 'healing', price: 380,  heal: 160,  desc: 'Restores 160 HP to one Mythling.' },
   revive_herb:    { id: 'revive_herb',    name: 'Revive Herb',    category: 'healing', price: 600,  revive: 0.5, desc: 'Revives a fainted Mythling with half HP.' },
   skill_tonic:    { id: 'skill_tonic',    name: 'Skill Tonic',    category: 'healing', price: 320,  restoreUses: 8, desc: 'Restores 8 uses to every limited skill.' },
+  skill_elixir:   { id: 'skill_elixir',   name: 'Skill Elixir',   category: 'healing', price: 950,  restoreAllUses: true, desc: 'Resets every limited skill back to full uses.' },
 
   // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
   sweet_berry:  { id: 'sweet_berry',  name: 'Sweet Berry',  category: 'food', price: 90,   exp: 40,   desc: 'A sugary forest berry. Feeding it grants 40 EXP.' },

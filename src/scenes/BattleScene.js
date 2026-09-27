@@ -5,7 +5,7 @@ import { CaptureManager } from '../systems/CaptureManager.js';
 import { InventoryManager, PartyManager, GameState, CollectionManager, bus } from '../systems/GameState.js';
 import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, ultimateMove,
-  ultimateUnlocked, equippedSkill, usesLeft, librarySkills,
+  ultimateUnlocked, equippedSkill, usesLeft, librarySkills, basicAttack,
 } from '../core/mythling.js';
 import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
 import { STAT_SHORT } from '../data/moods.js';
@@ -307,7 +307,29 @@ export class BattleScene {
       btn.title = sk.desc;
       return btn;
     };
-    this.actions.append(mk('normal'), mk('special'), mk('buff'));
+    // If every equipped skill is empty (or nothing is equipped at all) there is
+    // nothing to press, so offer the guaranteed unlimited attack instead of
+    // leaving the player stuck with a dead turn.
+    const slotsUsable = ['normal', 'special', 'buff'].some((slot) => {
+      const sk = equippedSkill(p, slot);
+      if (!sk) return false;
+      const left = usesLeft(p, sk.id);
+      return !Number.isFinite(left) || left > 0;
+    });
+    if (slotsUsable) {
+      this.actions.append(mk('normal'), mk('special'), mk('buff'));
+    } else {
+      const basic = basicAttack(p);
+      const btn = button('', {
+        class: 'action-btn basic',
+        onclick: () => this.doAction({ type: 'skill', skillId: basic.id }),
+      });
+      btn.innerHTML = `<div class="ab-name">${iconSvg(basic.element || 'strike', basic.element || '')}<span>${basic.name}</span></div>`
+        + `<small>Out of uses · PWR ${basic.power} · ${iconSvg('infinity', 'tiny')} unlimited</small>`;
+      btn.title = basic.desc;
+      btn.style.gridColumn = '1/-1';
+      this.actions.appendChild(btn);
+    }
 
     // Ultimate
     const ult = ultimateMove(p);

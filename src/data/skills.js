@@ -13,6 +13,22 @@ export const SKILLS = {
   scratch: { id: 'scratch', name: 'Scratch', category: 'normal', damageType: 'physical', element: null, power: 10, uses: Infinity, desc: 'A swift claw swipe. Unlimited uses.' },
   peck:    { id: 'peck',    name: 'Peck',    category: 'normal', damageType: 'physical', element: null, power: 10, uses: Infinity, desc: 'A sharp beak jab. Unlimited uses.' },
 
+  // ---------- Evolved normal skills ----------
+  // Evolutions used to grant only Specials and Buffs, so a Mythling's unlimited
+  // attack stayed at the Lv.1 power forever. Every stage now also teaches a
+  // stronger unlimited Normal move (weaker than the stage's Special, because it
+  // never runs out).
+  thorn_jab:      { id: 'thorn_jab',      name: 'Thorn Jab',      category: 'normal', damageType: 'physical', element: 'nature', power: 17, uses: Infinity, desc: 'A jab of hardened thorns. Unlimited uses.' },
+  briar_smash:    { id: 'briar_smash',    name: 'Briar Smash',    category: 'normal', damageType: 'physical', element: 'nature', power: 29, uses: Infinity, desc: 'A crushing blow wrapped in briars. Unlimited uses.' },
+  worldroot_slam: { id: 'worldroot_slam', name: 'Worldroot Slam', category: 'normal', damageType: 'physical', element: 'nature', power: 40, uses: Infinity, desc: 'Roots older than the forest come down. Unlimited uses.' },
+  stream_jab:     { id: 'stream_jab',     name: 'Stream Jab',     category: 'normal', damageType: 'physical', element: 'water',  power: 17, uses: Infinity, desc: 'A lance of running water. Unlimited uses.' },
+  tide_smash:     { id: 'tide_smash',     name: 'Tide Smash',     category: 'normal', damageType: 'physical', element: 'water',  power: 30, uses: Infinity, desc: 'The weight of the turning tide. Unlimited uses.' },
+  abyss_slam:     { id: 'abyss_slam',     name: 'Abyss Slam',     category: 'normal', damageType: 'physical', element: 'water',  power: 41, uses: Infinity, desc: 'Pressure from the lightless deep. Unlimited uses.' },
+  ember_jab:      { id: 'ember_jab',      name: 'Ember Jab',      category: 'normal', damageType: 'physical', element: 'fire',   power: 18, uses: Infinity, desc: 'A searing strike. Unlimited uses.' },
+  cinder_smash:   { id: 'cinder_smash',   name: 'Cinder Smash',   category: 'normal', damageType: 'physical', element: 'fire',   power: 31, uses: Infinity, desc: 'A heavy blow wreathed in cinders. Unlimited uses.' },
+  magma_slam:     { id: 'magma_slam',     name: 'Magma Slam',     category: 'normal', damageType: 'physical', element: 'fire',   power: 42, uses: Infinity, desc: 'A fist of cooled magma. Unlimited uses.' },
+  struggle:       { id: 'struggle',       name: 'Struggle',       category: 'normal', damageType: 'physical', element: null,     power: 8,  uses: Infinity, desc: 'A desperate shove when nothing else is left. Unlimited uses.' },
+
   // ---------- SPRIGGO line ----------
   vine_lash:      { id: 'vine_lash',      name: 'Vine Lash',      category: 'special', damageType: 'special',  element: 'nature', power: 16, uses: 20, desc: 'Whips the foe with a living vine.' },
   brave_guard:    { id: 'brave_guard',    name: 'Brave Guard',    category: 'buff', effects: [{ stat: 'patk', amount: 4 }], uses: 10, desc: 'Raises Physical Attack.' },

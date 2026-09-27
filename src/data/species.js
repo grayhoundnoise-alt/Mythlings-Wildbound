@@ -31,9 +31,9 @@ export const SPECIES = {
     ],
     skillUnlocks: {
       1:  ['bite', 'vine_lash', 'brave_guard'],
-      20: ['thorn_spear', 'thorn_armor'],
-      60: ['nature_burst', 'wild_instinct'],
-      80: ['ancient_bloom', 'forest_blessing'],
+      20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
+      60: ['nature_burst', 'wild_instinct', 'briar_smash'],
+      80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
     },
     art: {
       body: 'fox',
@@ -65,9 +65,9 @@ export const SPECIES = {
     ],
     skillUnlocks: {
       1:  ['scratch', 'water_shot', 'flow_focus'],
-      20: ['aqua_spear', 'tidal_focus'],
-      60: ['whirlpool', 'deep_current'],
-      80: ['ocean_pressure', 'ocean_mind'],
+      20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
+      60: ['whirlpool', 'deep_current', 'tide_smash'],
+      80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
     },
     art: {
       body: 'feline',
@@ -99,9 +99,9 @@ export const SPECIES = {
     ],
     skillUnlocks: {
       1:  ['bite', 'flame_rawr', 'dragon_fury'],
-      20: ['burning_fang', 'burning_scales'],
-      60: ['inferno_roar', 'dragon_heat'],
-      80: ['dragon_inferno', 'ancient_flame'],
+      20: ['burning_fang', 'burning_scales', 'ember_jab'],
+      60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
+      80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
     },
     art: {
       body: 'dragon',
@@ -133,9 +133,9 @@ export const SPECIES = {
     ],
     skillUnlocks: {
       1:  ['bite', 'water_splash', 'aqua_guard'],
-      20: ['heavy_wave', 'thick_fur'],
-      60: ['crushing_current', 'deep_guard'],
-      80: ['abyssal_wave', 'fortress_hide'],
+      20: ['heavy_wave', 'thick_fur', 'stream_jab'],
+      60: ['crushing_current', 'deep_guard', 'tide_smash'],
+      80: ['abyssal_wave', 'fortress_hide', 'abyss_slam'],
     },
     art: {
       body: 'wolf',
@@ -167,9 +167,9 @@ export const SPECIES = {
     ],
     skillUnlocks: {
       1:  ['peck', 'leaf_shot', 'quick_breeze'],
-      20: ['razor_wing', 'wind_step'],
-      60: ['sky_cutter', 'feather_flow'],
-      80: ['sky_cyclone', 'gale_mastery'],
+      20: ['razor_wing', 'wind_step', 'thorn_jab'],
+      60: ['sky_cutter', 'feather_flow', 'briar_smash'],
+      80: ['sky_cyclone', 'gale_mastery', 'worldroot_slam'],
     },
     art: {
       body: 'avian',
