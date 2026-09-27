@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Mythlings: Wildbound</title>
+<link rel="stylesheet" href="./src/ui/styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <!-- ===================== HUD (exploration) ===================== -->
+    <div id="hud" class="hud hidden">
+      <div class="hud-topleft">
+        <div id="hud-party" class="party-strip"></div>
+      </div>
+      <div class="hud-topright">
+        <div class="coin-pill"><span class="coin-icon">🪙</span><span id="hud-coins">0</span></div>
+        <div id="hud-location" class="location-pill">Verdant Vale</div>
+        <canvas id="minimap" width="190" height="110" class="minimap"></canvas>
+      </div>
+      <div class="hud-bottomleft">
+        <div class="hint-pill"><b>WASD</b> move · <b>E</b> interact · <b>ESC</b> menu</div>
+        <div id="objective" class="objective-pill"></div>
+      </div>
+      <div class="hud-bottomright">
+        <button class="round-btn" id="btn-menu" title="Menu (ESC)">☰</button>
+        <button class="round-btn" id="btn-interact" title="Interact (E)">E</button>
+      </div>
+      <div id="touch-joystick" class="joystick hidden"><div class="joystick-knob"></div></div>
+    </div>
+
+    <!-- ===================== Screen stack ===================== -->
+    <div id="screens"></div>
+
+    <!-- ===================== Dialogue ===================== -->
+    <div id="dialogue" class="dialogue hidden">
+      <div class="dialogue-box panel">
+        <div class="dialogue-name" id="dialogue-name"></div>
+        <div class="dialogue-text" id="dialogue-text"></div>
+        <div class="dialogue-next">▼ [Space]</div>
+      </div>
+    </div>
+
+    <!-- ===================== Toast / autosave ===================== -->
+    <div id="toast-layer" class="toast-layer"></div>
+
+    <!-- ===================== Modal ===================== -->
+    <div id="modal" class="modal-layer hidden"></div>
+
+    <div id="fade" class="fade"></div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
