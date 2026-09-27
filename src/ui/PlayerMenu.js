@@ -10,8 +10,8 @@ import {
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
-import { MOODS, STAT_LABELS, STAT_KEYS, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat } from '../data/moods.js';
-import { counterDodgePercent } from '../data/config.js';
+import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat } from '../data/moods.js';
+import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE } from '../data/config.js';
 import { openWiki } from './wiki.js';
 import { RARITY_ORDER, getRarity } from '../data/rarity.js';
 import { MUTATIONS } from '../data/mutations.js';
@@ -665,7 +665,7 @@ export class PlayerMenu {
         ]),
       ]),
       el('h3', { text: 'Evolution line' }),
-      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev) => el('div', { class: 'chip', style: ev.future ? { opacity: .55 } : {} }, [
+      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev) => el('div', { class: 'chip', style: ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE ? { opacity: .55 } : {} }, [
         el('span', { text: `${ev.name} (Lv.${ev.level})` }), ev.future ? icon('lock', 'tiny') : null,
       ]))),
     ]);

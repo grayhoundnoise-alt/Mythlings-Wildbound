@@ -2303,7 +2303,7 @@ input[type="text"].wiki-search {
     crit: "Crit Chance",
     critMult: "Crit Damage"
   };
-  var STAT_SHORT2 = {
+  var STAT_SHORT = {
     hp: "HP",
     patk: "P.ATK",
     satk: "S.ATK",
@@ -2377,8 +2377,8 @@ input[type="text"].wiki-search {
   function moodSummary(moodId) {
     const m = getMood(moodId);
     return {
-      up: m.up.map((k) => STAT_SHORT2[k]),
-      down: STAT_SHORT2[m.down]
+      up: m.up.map((k) => STAT_SHORT[k]),
+      down: STAT_SHORT[m.down]
     };
   }
   function formatStat(key, value) {
@@ -2981,7 +2981,7 @@ input[type="text"].wiki-search {
       return GameState.meta.playTime + (Date.now() - GameState._sessionStart);
     }
   };
-  var PartyManager2 = {
+  var PartyManager = {
     list() {
       return GameState.party;
     },
@@ -3049,15 +3049,15 @@ input[type="text"].wiki-search {
       return m;
     },
     toParty(uid2) {
-      if (PartyManager2.isFull()) return false;
+      if (PartyManager.isFull()) return false;
       const m = this.remove(uid2);
       if (!m) return false;
-      PartyManager2.add(m);
+      PartyManager.add(m);
       return true;
     },
     fromParty(uid2) {
       if (GameState.party.length <= 1) return false;
-      const m = PartyManager2.remove(uid2);
+      const m = PartyManager.remove(uid2);
       if (!m) return false;
       this.add(m);
       return true;
@@ -3201,12 +3201,12 @@ input[type="text"].wiki-search {
     GameState._sessionStart = Date.now();
     if (settings) GameState.settings = settings;
     const starter = createMythling({ speciesId: starterId, level: 1, isStarter: true, originMap: "verdant_vale" });
-    PartyManager2.add(starter);
+    PartyManager.add(starter);
     CollectionManager.markCaught(starterId, starter.mutation);
     return starter;
   }
   function serialize() {
-    const lead = PartyManager2.lead();
+    const lead = PartyManager.lead();
     const map = getMap(GameState.player.map);
     return {
       gameVersion: GAME_VERSION,
@@ -8530,8 +8530,8 @@ input[type="text"].wiki-search {
     },
     /** Place a freshly-caught Mythling. Returns 'party' | 'storage'. */
     place(mythling, preferParty = true) {
-      if (preferParty && !PartyManager2.isFull()) {
-        PartyManager2.add(mythling);
+      if (preferParty && !PartyManager.isFull()) {
+        PartyManager.add(mythling);
         return "party";
       }
       StorageManager.add(mythling);
@@ -11072,8 +11072,8 @@ input[type="text"].wiki-search {
       entries.sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total));
       for (const [stat, b] of entries) {
         const up = b.total >= 0;
-        const chip = el("span", { class: `buff-chip ${up ? "up" : "down"}`, title: `${STAT_SHORT2[stat] || stat.toUpperCase()} ${up ? "buffed" : "lowered"} by ${Math.abs(b.total)} over ${Math.abs(b.stacks)} stack(s) \u2014 clears when the battle ends` });
-        chip.innerHTML = `<span class="bc-arrow">${up ? "\u25B2" : "\u25BC"}</span><span class="bc-stat">${STAT_SHORT2[stat] || stat.toUpperCase()}</span><span class="bc-val">${up ? "+" : ""}${b.total}</span><span class="bc-stacks">x${Math.abs(b.stacks)}</span>`;
+        const chip = el("span", { class: `buff-chip ${up ? "up" : "down"}`, title: `${STAT_SHORT[stat] || stat.toUpperCase()} ${up ? "buffed" : "lowered"} by ${Math.abs(b.total)} over ${Math.abs(b.stacks)} stack(s) \u2014 clears when the battle ends` });
+        chip.innerHTML = `<span class="bc-arrow">${up ? "\u25B2" : "\u25BC"}</span><span class="bc-stat">${STAT_SHORT[stat] || stat.toUpperCase()}</span><span class="bc-val">${up ? "+" : ""}${b.total}</span><span class="bc-stacks">x${Math.abs(b.stacks)}</span>`;
         row.appendChild(chip);
       }
       return row;
@@ -11232,7 +11232,7 @@ input[type="text"].wiki-search {
       const caught = res.mythling;
       this.pushLog(`Gotcha! ${displayName(caught)} was caught!`, true);
       let destination = "party";
-      if (PartyManager2.isFull()) {
+      if (PartyManager.isFull()) {
         const send = await confirmDialog(
           "PARTY FULL",
           `Your party is full (6/6). Send <b>${displayName(caught)}</b> to storage?`,
@@ -11309,7 +11309,7 @@ input[type="text"].wiki-search {
           document.getElementById("modal").innerHTML = "";
           resolve(v);
         };
-        PartyManager2.list().forEach((m) => {
+        PartyManager.list().forEach((m) => {
           const ok = filterFn(m);
           const card = el("div", { class: `myth-card ${isFainted(m) ? "fainted" : ""}`, style: ok ? {} : { opacity: 0.45, pointerEvents: "none" } }, [
             this.miniCanvas(m),
@@ -11499,7 +11499,7 @@ input[type="text"].wiki-search {
               total: ev.total !== void 0 ? ev.total : cur.total + (ev.type === "buff" ? ev.amount : -ev.amount)
             };
           }
-          const lbl = STAT_SHORT2[ev.stat] || ev.stat.toUpperCase();
+          const lbl = STAT_SHORT[ev.stat] || ev.stat.toUpperCase();
           const sign = ev.type === "buff" ? "+" : "-";
           this.floatNumber(
             ev.side,
@@ -12062,7 +12062,7 @@ input[type="text"].wiki-search {
       h3("The nine stats", "stat list hp attack defense speed counter crit"),
       para("Species base stats grow with level, get multiplied by the evolution stage, and are then modified by Mood (scaled by Rarity). Buffs from skills stack on top during a battle only."),
       table(STAT_KEYS.map((k) => [
-        `${STAT_SHORT2[k]} \u2014 ${STAT_LABELS[k]}`,
+        `${STAT_SHORT[k]} \u2014 ${STAT_LABELS[k]}`,
         `${STAT_INFO[k]} <span class="wiki-dim">(bar scale: 0\u2013${STAT_BAR_MAX[k]})</span>`
       ])),
       h3("Counter \u2014 the evasion stat", "counter dodge evasion miss nerf"),
@@ -12088,10 +12088,10 @@ input[type="text"].wiki-search {
   function moodsSection() {
     const rows = MOOD_IDS.map((id) => {
       const m = MOODS[id];
-      const up = m.up.map((k) => `<b class="good">+${STAT_SHORT2[k]}</b>`).join(" ");
+      const up = m.up.map((k) => `<b class="good">+${STAT_SHORT[k]}</b>`).join(" ");
       return [
         `${m.name}${m.up.includes("crit") || m.up.includes("critMult") ? ' <span class="chip evolve">CRIT</span>' : ""}`,
-        `${up} &nbsp;&nbsp; <b class="bad">-${STAT_SHORT2[m.down]}</b>`
+        `${up} &nbsp;&nbsp; <b class="bad">-${STAT_SHORT[m.down]}</b>`
       ];
     });
     return [
@@ -12241,7 +12241,7 @@ input[type="text"].wiki-search {
           ])
         ]),
         table([
-          ["Base stats", STAT_KEYS.map((k) => `${STAT_SHORT2[k]} ${formatStat(k, sp.baseStats[k])}`).join(" \xB7 ")],
+          ["Base stats", STAT_KEYS.map((k) => `${STAT_SHORT[k]} ${formatStat(k, sp.baseStats[k])}`).join(" \xB7 ")],
           ["Evolution line", evoLine],
           ["Found in", sp.spawnMaps.map((m) => MAPS[m].displayName).join(", ")],
           ["Default mood / rarity", `${MOODS[sp.defaultMood].name} / ${sp.defaultRarity}`],
@@ -12279,7 +12279,7 @@ input[type="text"].wiki-search {
       const levels = learnLevels(s.id).map((lv) => `Lv.${lv}`).join(" \xB7 ") || "\u2014";
       return [
         `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ""}<br><span class="wiki-learn">Learned at ${levels}</span>`,
-        `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` \xB7 ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT2[s.debuff.stat]} by ${s.debuff.amount}` : ""}</span><br><span class="wiki-dim">Learned by: ${(owners[s.id] || ["\u2014"]).join(", ")}</span>`
+        `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` \xB7 ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT[s.debuff.stat]} by ${s.debuff.amount}` : ""}</span><br><span class="wiki-dim">Learned by: ${(owners[s.id] || ["\u2014"]).join(", ")}</span>`
       ];
     });
     return [
@@ -12765,23 +12765,23 @@ input[type="text"].wiki-search {
     }
     // ---------------------------------------------------- PARTY
     renderParty(root) {
-      this.setTitle(`Party  (${PartyManager2.count()}/${PARTY_MAX})`);
+      this.setTitle(`Party  (${PartyManager.count()}/${PARTY_MAX})`);
       root.appendChild(el("p", { class: "sub", text: "Click a Mythling for full details. Use the arrows to reorder \u2014 the first Mythling leads every battle." }));
       const grid = el("div", { class: "grid-cards" });
-      PartyManager2.list().forEach((m, i) => {
+      PartyManager.list().forEach((m, i) => {
         grid.appendChild(this.mythCard(m, {
           extra: el("div", { class: "row", style: { gap: "4px", marginTop: "4px" } }, [
             iconBtn("up", "Move up", { class: "small ghost", disabled: i === 0, onclick: (e) => {
               e.stopPropagation();
-              PartyManager2.swap(i, i - 1);
+              PartyManager.swap(i, i - 1);
               this.renderTab();
             } }),
-            iconBtn("down", "Move down", { class: "small ghost", disabled: i === PartyManager2.count() - 1, onclick: (e) => {
+            iconBtn("down", "Move down", { class: "small ghost", disabled: i === PartyManager.count() - 1, onclick: (e) => {
               e.stopPropagation();
-              PartyManager2.swap(i, i + 1);
+              PartyManager.swap(i, i + 1);
               this.renderTab();
             } }),
-            iconTextBtn("box", "Storage", { class: "small ghost", disabled: PartyManager2.count() <= 1, onclick: (e) => {
+            iconTextBtn("box", "Storage", { class: "small ghost", disabled: PartyManager.count() <= 1, onclick: (e) => {
               e.stopPropagation();
               if (StorageManager.fromParty(m.uid)) {
                 toast(`${displayName(m)} sent to storage`);
@@ -12974,7 +12974,7 @@ input[type="text"].wiki-search {
           extra: el("div", { class: "row", style: { gap: "6px" } }, [
             iconTextBtn("dna", "Party", {
               class: "small primary",
-              disabled: PartyManager2.isFull(),
+              disabled: PartyManager.isFull(),
               onclick: (e) => {
                 e.stopPropagation();
                 if (StorageManager.toParty(m.uid)) {
@@ -12998,7 +12998,7 @@ input[type="text"].wiki-search {
     renderSkills(root) {
       this.setTitle("Skill Library");
       root.appendChild(el("p", { class: "sub", text: "Every Mythling has three slots and any skill it has learned can go into any of them \u2014 two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on. Leaving a slot empty is allowed and is saved as-is. Everything learned stays in the library \u2014 nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced." }));
-      const party = PartyManager2.list();
+      const party = PartyManager.list();
       const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
       const picker = el("div", { class: "row", style: { marginBottom: "14px" } }, party.map((m) => button(`${displayName(m)} Lv.${m.level}`, {
         class: `small ${sel.uid === m.uid ? "primary" : "ghost"}`,
@@ -13146,7 +13146,7 @@ input[type="text"].wiki-search {
           layer.innerHTML = "";
           resolve(v);
         };
-        PartyManager2.list().forEach((m) => {
+        PartyManager.list().forEach((m) => {
           const card = this.mythCard(m, {
             onClick: () => finish(m),
             extra: note2 ? el("div", { class: "mc-sub feed-note", text: note2(m) }) : null
@@ -13303,7 +13303,7 @@ input[type="text"].wiki-search {
           ])
         ]),
         el("h3", { text: "Evolution line" }),
-        el("div", { class: "row", style: { gap: "8px" } }, sp.evolutions.map((ev) => el("div", { class: "chip", style: ev.future ? { opacity: 0.55 } : {} }, [
+        el("div", { class: "row", style: { gap: "8px" } }, sp.evolutions.map((ev) => el("div", { class: "chip", style: ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE ? { opacity: 0.55 } : {} }, [
           el("span", { text: `${ev.name} (Lv.${ev.level})` }),
           ev.future ? icon("lock", "tiny") : null
         ])))
@@ -13320,7 +13320,7 @@ input[type="text"].wiki-search {
         ["Play time", formatTime(PlayerManager.playTime())],
         ["Current region", MAPS[GameState.player.map].displayName],
         ["Starter", GameState.player.starter ? SPECIES[GameState.player.starter].displayName : "\u2014"],
-        ["Party", `${PartyManager2.count()} / ${PARTY_MAX}`],
+        ["Party", `${PartyManager.count()} / ${PARTY_MAX}`],
         ["Storage", `${StorageManager.list().length} Mythlings`],
         ["Collection", `${s.caught}/${s.total} caught`],
         ["Trainers defeated", String(Object.keys(GameState.world.defeatedTrainers).length)],
@@ -13795,7 +13795,7 @@ input[type="text"].wiki-search {
           rarityChip(sp.defaultRarity),
           el("span", { class: "chip", text: MOODS[sp.defaultMood].name })
         ]),
-        el("div", { class: "stat-mini" }, Object.keys(stats).map((k) => el("div", {}, [el("span", { text: STAT_SHORT2[k] }), el("b", { text: String(stats[k]) })]))),
+        el("div", { class: "stat-mini" }, Object.keys(stats).map((k) => el("div", {}, [el("span", { text: STAT_SHORT[k] }), el("b", { text: String(stats[k]) })]))),
         el("p", { class: "sub", style: { fontSize: ".78rem", marginTop: "8px" }, text: sp.description }),
         el("div", { class: "sub", style: { fontSize: ".75rem" }, text: `Evolves into ${sp.evolutions[1].name} at Lv.20 \xB7 Ultimate: ${ultimateName(sp)}` })
       ]);
@@ -13924,7 +13924,7 @@ input[type="text"].wiki-search {
   }
   function centerScreen({ onHeal, onParty, onStorage, onSave, onClose }) {
     const party = el("div", { class: "grid-cards" });
-    for (const m of PartyManager2.list()) {
+    for (const m of PartyManager.list()) {
       const pct = hpPercent(m);
       party.appendChild(el("div", { class: "myth-card" }, [
         mythCanvas(m, 60),
@@ -14066,7 +14066,7 @@ input[type="text"].wiki-search {
       layer.classList.add("done");
       title.textContent = "Congratulations!";
       sub.innerHTML = `<b>${result.from}</b> evolved into <b style="color:#ffd76a">${result.to}</b>!`;
-      const gains = el("div", { class: "levelup-list" }, Object.entries(result.gains).filter(([, v]) => v !== 0).map(([k, v]) => el("div", { class: "gain", text: `${STAT_SHORT2[k]} ${v > 0 ? "+" : ""}${v}` })));
+      const gains = el("div", { class: "levelup-list" }, Object.entries(result.gains).filter(([, v]) => v !== 0).map(([k, v]) => el("div", { class: "gain", text: `${STAT_SHORT[k]} ${v > 0 ? "+" : ""}${v}` })));
       const skills = result.newSkills.length ? el("p", { html: `New skills added to the Skill Library: <b>${result.newSkills.map((s) => s.replace(/_/g, " ")).join(", ")}</b>` }) : null;
       const ult = el("p", { html: `Ultimate upgraded to <b style="color:#ffd76a">${result.ultimate.name}</b>!` });
       const btn = button("CONTINUE", {
@@ -14113,7 +14113,7 @@ input[type="text"].wiki-search {
       const gains = Object.entries(g.gains).filter(([, v]) => v !== 0);
       body.appendChild(el("div", { class: "levelup-list" }, gains.length ? gains.map(([k, v]) => el("div", {
         class: `gain ${v > 0 ? "up" : "down"}`,
-        text: `${STAT_SHORT2[k]} ${v > 0 ? "+" : ""}${v}`
+        text: `${STAT_SHORT[k]} ${v > 0 ? "+" : ""}${v}`
       })) : [el("div", { class: "gain", text: "no stat change" })]));
       for (const ms of g.milestones) {
         if (ms === "ultimate") body.appendChild(el("p", { html: `${iconSvg("ultimate", "gold")} <b style="color:#ffd76a">ULTIMATE UNLOCKED!</b> Charge it by attacking \u2014 8 charges to unleash it.` }));
@@ -14309,7 +14309,7 @@ input[type="text"].wiki-search {
             onChoose: async (starterId) => {
               Screens.clear();
               createNewGameState({ slot, playerName: name, starterId, settings: SettingsManager.settings });
-              const starter = PartyManager2.lead();
+              const starter = PartyManager.lead();
               await modal({
                 title: "A NEW PARTNER",
                 body: el("div", { style: { textAlign: "center" } }, [
@@ -14499,7 +14499,7 @@ input[type="text"].wiki-search {
       Screens.clear();
       centerScreen({
         onHeal: async () => {
-          PartyManager2.healAll();
+          PartyManager.healAll();
           AudioManager.sfx("heal");
           toast("Your Mythlings are fully healed!", "ok");
           GameState.player.lastHealMap = this.overworld.mapId;
@@ -14526,7 +14526,7 @@ input[type="text"].wiki-search {
     }
     // ------------------------------------------------------------ battles
     startWildBattle(wildMythling) {
-      const lead = PartyManager2.firstHealthy();
+      const lead = PartyManager.firstHealthy();
       if (!lead) {
         toast("All your Mythlings have fainted!", "bad");
         this.handleWhiteout();
@@ -14534,21 +14534,21 @@ input[type="text"].wiki-search {
       }
       const battle = new Battle({
         type: BattleType.WILD,
-        party: PartyManager2.list(),
+        party: PartyManager.list(),
         enemies: [wildMythling],
         mapId: this.overworld.mapId
       });
       this.beginBattle(battle);
     }
     startTrainerBattle(trainer) {
-      const lead = PartyManager2.firstHealthy();
+      const lead = PartyManager.firstHealthy();
       if (!lead) {
         toast("All your Mythlings have fainted!", "bad");
         this.handleWhiteout();
         return;
       }
       const teamTop = Math.max(...trainer.team.map((s) => s.level || 1));
-      const bump = Math.max(0, PartyManager2.topLevel() - teamTop);
+      const bump = Math.max(0, PartyManager.topLevel() - teamTop);
       const enemies = trainer.team.map((spec) => createMythling({
         speciesId: spec.species,
         level: Math.min(LEVEL_CAP, (spec.level || 1) + bump),
@@ -14558,7 +14558,7 @@ input[type="text"].wiki-search {
       }));
       const battle = new Battle({
         type: BattleType.TRAINER,
-        party: PartyManager2.list(),
+        party: PartyManager.list(),
         enemies,
         trainer,
         mapId: this.overworld.mapId
@@ -14624,7 +14624,7 @@ input[type="text"].wiki-search {
       this.updateHud();
     }
     async checkEvolutions() {
-      const ready = EvolutionManager.pending(PartyManager2.list());
+      const ready = EvolutionManager.pending(PartyManager.list());
       for (const m of ready) {
         await new Promise((resolve) => this.runEvolution(m, resolve));
       }
@@ -14651,7 +14651,7 @@ input[type="text"].wiki-search {
         body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${coins(penalty)} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
         buttons: [{ label: "CONTINUE", value: true, primary: true }]
       });
-      PartyManager2.healAll();
+      PartyManager.healAll();
       const here = this.overworld.mapId;
       const hasCentre = (_a = getMap(here)) == null ? void 0 : _a.buildings.some((b) => b.type === "center");
       const healMap = hasCentre ? here : GameState.player.lastHealMap || "verdant_vale";
@@ -14735,7 +14735,7 @@ input[type="text"].wiki-search {
       if (this.mode !== "overworld") return;
       const strip2 = document.getElementById("hud-party");
       strip2.innerHTML = "";
-      for (const m of PartyManager2.list()) {
+      for (const m of PartyManager.list()) {
         const pct = hpPercent(m);
         const chip = el("div", { class: `party-chip ${isFainted(m) ? "fainted" : ""}` }, [
           mythCanvas(m, 76),

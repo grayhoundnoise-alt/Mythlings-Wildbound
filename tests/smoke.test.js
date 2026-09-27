@@ -16,19 +16,44 @@ const noopCtx = () => {
     createLinearGradient: () => grad, createRadialGradient: () => grad, createPattern: () => null,
     setTransform() {}, save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
     beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {}, bezierCurveTo() {},
-    arc() {}, ellipse() {}, rect() {}, fill() {}, stroke() {}, clip() {},
+    arc() {}, arcTo() {}, ellipse() {}, rect() {}, fill() {}, stroke() {}, clip() {},
     fillRect() {}, strokeRect() {}, clearRect() {}, drawImage() {}, fillText() {}, strokeText() {},
+    transform() {}, roundRect() {}, createImageData: () => ({ data: [] }),
+    getImageData: () => ({ data: new Uint8ClampedArray(4) }), putImageData() {},
     measureText: () => ({ width: 10 }), setLineDash() {},
   };
   return new Proxy(base, { get: (o, k) => (k in o ? o[k] : undefined), set: (o, k, v) => { o[k] = v; return true; } });
 };
+const mkEl = (tag) => {
+  const e = {
+    tagName: String(tag).toUpperCase(), style: {}, dataset: {}, children: [],
+    textContent: '', innerHTML: '', width: 300, height: 300,
+    classList: { _s: new Set(), add(...c) { c.forEach((x) => this._s.add(x)); }, remove(...c) { c.forEach((x) => this._s.delete(x)); }, toggle() {}, contains(c) { return this._s.has(c); } },
+    appendChild(c) { this.children.push(c); return c; },
+    append(...c) { c.forEach((x) => this.children.push(x)); },
+    removeChild(c) { this.children = this.children.filter((x) => x !== c); },
+    remove() {}, insertBefore(c) { this.children.push(c); return c; }, replaceWith() {},
+    addEventListener() {}, removeEventListener() {}, setAttribute() {}, getAttribute: () => null,
+    querySelector: () => mkEl('div'), querySelectorAll: () => [],
+    getBoundingClientRect: () => ({ x: 0, y: 0, width: 100, height: 100, top: 0, left: 0, right: 100, bottom: 100 }),
+    focus() {}, blur() {}, scrollTo() {},
+    getContext: () => noopCtx(),
+  };
+  return e;
+};
 globalThis.document = {
   documentElement: { dataset: {} },
-  createElement: (tag) => {
-    if (tag === 'canvas') return { tagName: 'CANVAS', width: 300, height: 300, style: {}, getContext: () => noopCtx() };
-    return { tagName: String(tag).toUpperCase(), style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, appendChild(c) { return c; }, children: [] };
-  },
+  body: mkEl('body'),
+  createElement: (tag) => mkEl(tag),
+  createElementNS: (ns, tag) => mkEl(tag),
+  createTextNode: (t) => ({ nodeValue: t }),
+  getElementById: () => mkEl('div'),
+  querySelector: () => mkEl('div'), querySelectorAll: () => [],
+  addEventListener() {}, removeEventListener() {}, activeElement: null,
 };
+globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+globalThis.requestAnimationFrame = (f) => setTimeout(() => f(Date.now()), 0);
+globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 globalThis.window.devicePixelRatio = 2;
 globalThis.localStorage = {
   _d: new Map(),
@@ -49,7 +74,7 @@ const { elementMultiplier } = await import('../src/data/elements.js');
 const { moodModifiers, MOODS, STAT_KEYS } = await import('../src/data/moods.js');
 const { counterDodgePercent, COUNTER_MAX_DODGE } = await import('../src/data/config.js');
 const { MAPS } = await import('../src/data/maps.js');
-const { SPECIES } = await import('../src/data/species.js');
+const { SPECIES, SPECIES_IDS } = await import('../src/data/species.js');
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -942,6 +967,42 @@ test('spawns keep pace with a party that out-levels the story content', () => {
   }
   assert.ok(Math.max(...levels) >= 60, `scaled spawns reached only Lv.${Math.max(...levels)}`);
   assert.ok(Math.min(...levels) <= LEVEL_CAP);
+});
+
+// ------------------------------------------------------------------
+// Anything that throws below is a black screen or a dead menu in the browser,
+// so these deliberately run the real scene and menu code, not its data.
+section('Screens actually run');
+const { OverworldScene } = await import('../src/scenes/OverworldScene.js');
+const { PlayerMenu } = await import('../src/ui/PlayerMenu.js');
+const { Screens: ScreenStack } = await import('../src/ui/ui.js');
+const { MAPS: MAPS2, MAP_ORDER } = await import('../src/data/maps.js');
+
+test('the overworld spawns and runs in every region', () => {
+  const ow = new OverworldScene(document.createElement('canvas'));
+  for (const mapId of MAP_ORDER) {
+    ow.enter(mapId, MAPS2[mapId].spawn.x, MAPS2[mapId].spawn.y);
+    ow.populate(true);
+    for (let i = 0; i < 5; i++) { ow.update(1 / 60); ow.render(); }
+  }
+  assert.ok(ow.wild.length > 0, 'wild Mythlings spawned');
+});
+
+test('every menu tab renders, including the Index', () => {
+  const menu = new PlayerMenu({ autosave: () => {} });
+  menu.node = document.createElement('div');
+  menu.body = document.createElement('div');
+  menu.head = document.createElement('div');
+  for (const tab of ['party', 'mythlings', 'skills', 'bag', 'map', 'collection', 'index', 'stats', 'save', 'settings']) {
+    menu.tab = tab;
+    menu.renderTab();
+    assert.ok(menu.body.children.length > 0, `${tab} tab drew something`);
+  }
+});
+
+test('the species info popup renders for every species', () => {
+  const menu = new PlayerMenu({ autosave: () => {} });
+  for (const id of SPECIES_IDS) menu.showSpeciesInfo(id);
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

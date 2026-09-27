@@ -1,7 +1,7 @@
 // Exploration scene: movement, camera, roaming wild Mythlings, NPCs, trainers,
 // interaction prompts and map transitions.
 import { getMap, regionAt } from '../data/maps.js';
-import { GameState, PlayerManager, WorldManager, InventoryManager, CollectionManager, bus } from '../systems/GameState.js';
+import { GameState, PartyManager, PlayerManager, WorldManager, InventoryManager, CollectionManager, bus } from '../systems/GameState.js';
 import { EncounterManager } from '../systems/EncounterManager.js';
 import { WorldRenderer, drawTrainerAvatar, roundRect } from '../render/worldRenderer.js';
 import { drawMythling } from '../render/creatures.js';
