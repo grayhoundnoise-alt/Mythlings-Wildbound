@@ -11,6 +11,7 @@ import { getItem } from '../data/items.js';
 import { getRarity } from '../data/rarity.js';
 import {
   DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, COUNTER_MAX_PERCENT, expReward, LEVEL_CAP,
+  counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT,
 } from '../data/config.js';
 import { clamp, randInt } from '../core/utils.js';
 
@@ -37,6 +38,8 @@ class Combatant {
     const buff = this.buffs[key]?.total || 0;
     let v = b + buff;
     if (key === 'counter') v = clamp(v, 0, COUNTER_MAX_PERCENT);
+    if (key === 'crit') v = clamp(v, 0, CRIT_MAX_PERCENT);
+    if (key === 'critMult') v = clamp(v, 0, CRIT_MAX_MULT);
     return Math.max(1, Math.floor(v));
   }
   applyBuff(stat, amount) {
@@ -89,6 +92,11 @@ export class Battle {
   // ---------------- accessors ----------------
   get player() { return this.party[this.playerIndex]; }
   get enemy() { return this.enemies[this.enemyIndex]; }
+
+  /** Trainer party bookkeeping: how big the enemy team is and how much of it is left. */
+  enemyTeamTotal() { return this.enemies.length; }
+  enemyTeamLeft() { return this.enemies.filter((m) => !isFainted(m)).length; }
+  enemyTeamSummary() { return { left: this.enemyTeamLeft(), total: this.enemyTeamTotal() }; }
 
   cb(m) {
     if (!this.combatants.has(m.uid)) {
@@ -238,7 +246,7 @@ export class Battle {
       events.push({ type: 'charge', side: atkSide, value: 0 });
       events.push({ type: 'log', text: `${displayName(attacker)} unleashes ${ult.name}!`, emphasis: true });
       events.push({ type: 'ultimate-cast', side: atkSide, element: ult.element, name: ult.name });
-      this._dealDamage(attacker, defender, ult, events, { isUltimate: true });
+      this._dealDamage(attacker, defender, ult, events, { isUltimate: true, logPrefix: `${ult.name} strikes` });
       if (ult.selfBuff) {
         for (const eff of ult.selfBuff) this._applyBuff(attacker, eff, events, atkSide);
       }
@@ -265,9 +273,12 @@ export class Battle {
       return;
     }
 
-    events.push({ type: 'log', text: `${displayName(attacker)} used ${skill.name}!` });
     events.push({ type: 'cast', side: atkSide, kind: skill.damageType, element: skill.element, name: skill.name });
-    this._dealDamage(attacker, defender, skill, events, {});
+    // The "used <skill>" line is written by _dealDamage so the damage (or the dodge)
+    // can be reported in the very same sentence.
+    this._dealDamage(attacker, defender, skill, events, {
+      logPrefix: `${displayName(attacker)} used ${skill.name}!`,
+    });
   }
 
   _applyBuff(target, eff, events, side) {
@@ -281,18 +292,27 @@ export class Battle {
     events.push({ type: 'log', text: `${displayName(target)}'s ${eff.stat.toUpperCase()} rose! (+${res.total}, ${res.stacks}/${MAX_BUFF_STACKS} stacks)` });
   }
 
-  _dealDamage(attacker, defender, move, events, { isUltimate }) {
+  /**
+   * @param {object} opts
+   *  isUltimate: bool,
+   *  logPrefix: string — opening clause of the battle message, e.g. "Emberu used Bite!"
+   *    The damage (or the dodge) is appended to it so the attack line reports the result.
+   */
+  _dealDamage(attacker, defender, move, events, { isUltimate, logPrefix } = {}) {
     const atkSide = this.party.includes(attacker) ? 'player' : 'enemy';
     const defSide = atkSide === 'player' ? 'enemy' : 'player';
     const acb = this.cb(attacker);
     const dcb = this.cb(defender);
+    const prefix = logPrefix ? `${logPrefix} — ` : '';
 
-    // Counter = evasion chance
-    const counter = dcb.stat('counter');
-    const missChance = clamp(counter, 0, COUNTER_MAX_PERCENT) / 100;
-    if (this.rng() < missChance) {
+    // Counter = evasion chance (nerfed: half a percent per point, capped at 18%).
+    const dodge = counterDodgePercent(dcb.stat('counter'));
+    if (this.rng() * 100 < dodge) {
+      events.push({
+        type: 'log',
+        text: `${prefix}${displayName(defender)} countered and dodged it! (${Math.round(dodge)}% Counter)`,
+      });
       events.push({ type: 'miss', side: defSide, uid: defender.uid });
-      events.push({ type: 'log', text: `${displayName(defender)} countered and dodged the attack!` });
       return; // no charge on a miss
     }
 
@@ -301,6 +321,11 @@ export class Battle {
     const off = acb.stat(offKey);
     const def = dcb.stat(defKey);
 
+    // Crit Chance / Crit Damage
+    const critChance = clamp(acb.stat('crit'), 0, CRIT_MAX_PERCENT);
+    const critBonus = clamp(acb.stat('critMult'), 0, CRIT_MAX_MULT);
+    const crit = this.rng() * 100 < critChance;
+
     const atkElement = move.element || speciesOf(attacker).element;
     const mult = elementMultiplier(atkElement, speciesOf(defender).element);
     const rand = DAMAGE_RANDOM_MIN + this.rng() * (DAMAGE_RANDOM_MAX - DAMAGE_RANDOM_MIN);
@@ -308,12 +333,18 @@ export class Battle {
     const stageFactor = stageData(attacker).statMult;
 
     let dmg = Math.floor(((move.power * off) / Math.max(1, def)) * levelFactor * stageFactor * rand * mult);
+    if (crit) dmg = Math.floor(dmg * (1 + critBonus / 100));
     dmg = Math.max(1, dmg);
 
     defender.currentHp = Math.max(0, defender.currentHp - dmg);
     events.push({
+      type: 'log',
+      text: `${prefix}${dmg} damage!${crit ? ` CRITICAL HIT! (x${(1 + critBonus / 100).toFixed(2)})` : ''}`,
+      emphasis: crit,
+    });
+    events.push({
       type: 'damage', side: defSide, uid: defender.uid, amount: dmg, effectiveness: mult,
-      isUltimate: !!isUltimate, mythling: this.snapshot(defender),
+      isUltimate: !!isUltimate, crit, critBonus, mythling: this.snapshot(defender),
     });
     const eff = effectivenessLabel(mult);
     if (eff) events.push({ type: 'log', text: eff });
@@ -375,8 +406,10 @@ export class Battle {
       if (this.type === BattleType.TRAINER && nextEnemy >= 0) {
         this._awardExp(this.enemy, events);
         this.enemyIndex = nextEnemy;
-        events.push({ type: 'log', text: `${this.trainer.name} sends out ${displayName(this.enemy)}!` });
-        events.push({ type: 'switch', side: 'enemy', mythling: this.snapshot(this.enemy) });
+        const { left, total } = this.enemyTeamSummary();
+        const last = left === 1 ? ' — their last Mythling!' : ` (${left} of ${total} left)`;
+        events.push({ type: 'log', text: `${this.trainer.name} sends out ${displayName(this.enemy)}!${last}`, emphasis: true });
+        events.push({ type: 'switch', side: 'enemy', mythling: this.snapshot(this.enemy), teamLeft: left, teamTotal: total });
         return;
       }
       this._awardExp(this.enemy, events);
@@ -385,7 +418,8 @@ export class Battle {
         events.push({ type: 'wild-defeated', mythling: this.snapshot(this.enemy) });
       } else {
         this.phase = BattlePhase.WON;
-        events.push({ type: 'win' });
+        events.push({ type: 'log', text: `${this.trainer.name} has no Mythlings left!`, emphasis: true });
+        events.push({ type: 'win', teamLeft: 0, teamTotal: this.enemyTeamTotal() });
       }
       return;
     }

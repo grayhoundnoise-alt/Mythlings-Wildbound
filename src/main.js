@@ -405,7 +405,7 @@ class Game {
     // level-up + evolution follow-ups
     const levelEntries = [];
     for (const r of battle.rewards.exp) {
-      for (const lv of r.result.levels) levelEntries.push({ name: r.name, ...lv });
+      for (const lv of r.result.levels) levelEntries.push({ uid: r.uid, name: r.name, ...lv });
     }
 
     await fade(true);
@@ -532,8 +532,14 @@ class Game {
         mythCanvas(m, 76),
         el('div', { class: 'pc-name', text: displayName(m) }),
         el('div', { class: 'pc-lv', text: `Lv.${m.level}${m.level >= LEVEL_CAP ? ' MAX' : ''}` }),
-        bar('hp', pct, hpClass(pct)),
-        bar('ult', m.ultCharge / 8),
+        // Labelled bars: green is HP, orange is Ultimate Charge. Neither is EXP —
+        // EXP is only shown (and only ever grows) on the party cards in the menu.
+        el('div', { class: 'pc-bar', title: `HP ${m.currentHp}/${maxHp(m)}` }, [
+          el('span', { class: 'pc-tag', text: 'HP' }), bar('hp', pct, hpClass(pct)),
+        ]),
+        el('div', { class: 'pc-bar', title: `Ultimate Charge ${m.ultCharge}/8 — reset to 0 by a Center heal, never affects EXP` }, [
+          el('span', { class: 'pc-tag', text: 'ULT' }), bar('ult', m.ultCharge / 8),
+        ]),
       ]);
       chip.addEventListener('click', () => this.openMenu('party'));
       strip.appendChild(chip);

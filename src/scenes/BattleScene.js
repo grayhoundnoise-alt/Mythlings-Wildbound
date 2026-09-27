@@ -82,7 +82,7 @@ export class BattleScene {
     const enemy = battle.enemy;
     CollectionManager.markSeen(enemy.speciesId, enemy.mutation);
     const intro = battle.type === BattleType.TRAINER
-      ? `${battle.trainer.name} wants to battle!`
+      ? `${battle.trainer.name} wants to battle! (${battle.enemies.length} Mythlings)`
       : `A wild ${displayName(enemy)} Lv.${enemy.level} appeared!`;
     this.pushLog(intro, true);
     if (battle.type === BattleType.TRAINER) this.pushLog(`${battle.trainer.name}: ${battle.trainer.intro}`);
@@ -132,6 +132,10 @@ export class BattleScene {
         mutationChip(m.mutation),
         el('span', { class: 'cc-lv', text: `Lv.${m.level}` }),
       ]),
+    ];
+    // Trainer battles: how big is their team and how much of it is left?
+    if (side === 'enemy' && this.battle.type === BattleType.TRAINER) rows.push(this.teamRow());
+    rows.push(
       el('div', { class: 'row', style: { gap: '6px', margin: '4px 0' } }, [
         elementChip(sp.element),
         rarityChip(m.rarity),
@@ -140,7 +144,7 @@ export class BattleScene {
       bar('hp', pct, hpClass(pct)),
       el('div', { class: 'cc-hp-text', text: `${hp} / ${v.maxHp} HP` }),
       this.buffRow(v),
-    ];
+    );
     if (side === 'player') {
       const pips = el('div', { class: 'ult-track' });
       for (let i = 0; i < ULTIMATE_MAX_CHARGE; i++) {
@@ -156,6 +160,34 @@ export class BattleScene {
       }));
     }
     return rows;
+  }
+
+  /**
+   * Trainer party readout: one pip per team member, filled while it can still
+   * fight. Lets the player see immediately whether the enemy is down to its
+   * last Mythling.
+   */
+  teamRow() {
+    const b = this.battle;
+    const total = b.enemies.length;
+    const left = b.enemies.filter((m) => !isFainted(m)).length;
+    const name = b.trainer?.name || 'Trainer';
+    const row = el('div', { class: `team-row ${left === 1 ? 'last' : ''}` });
+    row.dataset.sig = `${left}/${total}`;
+    const pips = el('div', { class: 'team-pips' });
+    for (let i = 0; i < total; i++) {
+      pips.appendChild(el('div', { class: `team-pip ${i < left ? 'alive' : 'down'}` }));
+    }
+    row.append(
+      el('div', { class: 'team-name', text: name }),
+      pips,
+      el('div', {
+        class: 'team-count',
+        text: left === 1 ? `1/${total} LEFT — LAST MYTHLING!` : `${left}/${total} LEFT`,
+      }),
+    );
+    row.title = `${name} has ${left} of ${total} Mythlings still able to battle.`;
+    return row;
   }
 
   /**
@@ -488,12 +520,19 @@ export class BattleScene {
         const target = ev.side;
         this.applyViewHp(ev);
         this.anim[target].tilt = target === 'player' ? -0.14 : 0.14;
-        AudioManager.sfx(ev.isUltimate || ev.effectiveness > 1 ? 'hit-strong' : 'hit');
-        if (SettingsManager.get('screenShake')) this.shake = Math.max(this.shake, ev.isUltimate ? 14 : 7);
+        AudioManager.sfx(ev.crit ? 'crit' : (ev.isUltimate || ev.effectiveness > 1) ? 'hit-strong' : 'hit');
+        if (SettingsManager.get('screenShake')) this.shake = Math.max(this.shake, ev.isUltimate || ev.crit ? 14 : 7);
         this.spawnHit(target, ev.effectiveness);
-        if (SettingsManager.get('damageNumbers')) this.floatNumber(target, `-${ev.amount}`, ev.effectiveness > 1 ? '#ffd76a' : ev.effectiveness < 1 ? '#9fb3c9' : '#ff8a8a');
+        if (ev.crit) {
+          this.flash = Math.max(this.flash, 0.75);
+          this.spawnHit(target, 1.5);
+        }
+        if (SettingsManager.get('damageNumbers')) {
+          this.floatNumber(target, ev.crit ? `-${ev.amount} CRIT!` : `-${ev.amount}`,
+            ev.crit || ev.effectiveness > 1 ? '#ffd76a' : ev.effectiveness < 1 ? '#9fb3c9' : '#ff8a8a', ev.crit);
+        }
         this.refreshCards();
-        await wait(400);
+        await wait(ev.crit ? 520 : 400);
         this.anim[target].tilt = 0;
         break;
       }
@@ -609,6 +648,13 @@ export class BattleScene {
     const txt = card.querySelector('.cc-hp-text');
     if (txt) txt.textContent = `${hp} / ${v.maxHp} HP`;
 
+    // trainer team: rebuild only when the count actually changed
+    const oldTeam = card.querySelector('.team-row');
+    if (oldTeam && this.battle.type === BattleType.TRAINER) {
+      const sig = `${this.battle.enemies.filter((m) => !isFainted(m)).length}/${this.battle.enemies.length}`;
+      if (oldTeam.dataset.sig !== sig) oldTeam.replaceWith(this.teamRow());
+    }
+
     // buff chips: only touch the DOM when the readout actually changed
     const oldRow = card.querySelector('.buff-row');
     const sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
@@ -658,9 +704,13 @@ export class BattleScene {
     return { x: p.x * W, y: p.y * H };
   }
 
-  floatNumber(side, text, color) {
+  floatNumber(side, text, color, crit = false) {
     const { x, y } = this.screenPos(side);
-    const n = el('div', { class: 'dmg-float', text, style: { left: `${x - 24}px`, top: `${y - 110}px`, color } });
+    const n = el('div', {
+      class: `dmg-float ${crit ? 'crit' : ''}`,
+      text,
+      style: { left: `${x - (crit ? 60 : 24)}px`, top: `${y - 110}px`, color },
+    });
     document.getElementById('app').appendChild(n);
     setTimeout(() => n.remove(), 1100);
   }

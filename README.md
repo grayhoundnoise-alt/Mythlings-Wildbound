@@ -31,7 +31,7 @@ npm run build:offline   # regenerates MythlingsWildbound-Offline.html
 ```
 
 ```bash
-npm test             # 31 headless rule tests (levels, capture, evolution, save/load, maps…)
+npm test             # 39 headless rule tests (levels, crits, capture, evolution, save/load, maps…)
 ```
 
 ## Controls
@@ -58,7 +58,31 @@ npm test             # 31 headless rule tests (levels, capture, evolution, save/
 | **Evolution** | Lv.20 first evolution only. Lv.60 / Lv.80 stages exist in data but are **locked** |
 | **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades to tier " I" on evolution |
 | **Mutations** | Shiny ✧ and Darkness ☾ — cosmetic only, never a power boost |
-| **Systems** | Rarity, Mood, Skill Library, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Collection index, Save/Load/Autosave, Settings |
+| **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion), **CRIT** (crit chance %), **C.DMG** (crit damage %) |
+| **Moods** | 21 — each raises 3 stats and lowers 1. Feral / Savage / Precise / Brutal / Keen push crits |
+| **Systems** | Rarity, Mood, Skill Library, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Collection index, Save/Load/Autosave, Settings, **Game Wiki** |
+
+### Combat numbers
+
+* **Counter (evasion)** — every point of Counter is **0.5 % dodge**, capped at **18 %** (Counter itself
+  caps at 35). It used to be a full 1 % per point, which made attacks miss far too often.
+* **Crits** — Crit Chance is the % chance an attack lands critically (caps at 60 %); Crit Damage is the
+  bonus damage on a crit (`+50 %` = a 1.5× hit, caps at `+200 %`). Five moods feed them.
+* **Battle log** — every attack line now reports the exact damage:
+  `Emberu used Burning Fang! — 163 damage! CRITICAL HIT! (x2.15)`.
+* **Trainer teams** — the enemy card shows a pip strip and a `2/3 LEFT` counter, and shouts
+  `LAST MYTHLING!` when you are down to the trainer's final Mythling.
+* **Level ups** — a whole party levelling at once collapses into one entry per Mythling
+  (`Lv.12 → Lv.15`) in a scrollable summary.
+
+### Game Wiki
+
+`SETTINGS → OPEN WIKI` (also on the title screen's Settings) opens a searchable reference built
+straight from `src/data/*`: getting started, all nine stats, every mood and rarity, mutations, the
+element chart, the full battle rules and damage formula, all five species with base stats and
+evolution lines, every skill and Ultimate, all items, the three regions with their trainers, the EXP
+curve, controls and the roadmap. It is generated from the same data files the game runs on, so it
+can never drift out of date.
 
 ### The rule that never bends
 
@@ -96,6 +120,7 @@ src/
     species.js             the 5 Mythlings + full 4-stage evolution lines (Lv.60/80 marked future)
     skills.js              skills, buffs, debuff riders, Ultimates (base → I → II → III)
     moods.js  rarity.js  mutations.js  elements.js  items.js
+    config.js also owns the Counter->dodge curve and the crit caps
     maps.js                3 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
   core/
     mythling.js            the Mythling model: stats, EXP/levels, evolution, skills, resetToLevelOne()
@@ -116,6 +141,7 @@ src/
     MenuScene.js  OverworldScene.js  BattleScene.js
   ui/
     ui.js  styles.css  screens.js  PlayerMenu.js
+    wiki.js                 searchable in-game reference generated from src/data/*
     logo.js                SVG wordmark + element crest for the title screen
     icons.js               hand-built SVG icon set — the game ships zero emoji
 tests/smoke.test.js        headless rule tests

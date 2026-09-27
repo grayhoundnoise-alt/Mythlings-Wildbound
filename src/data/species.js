@@ -20,7 +20,7 @@ export const SPECIES = {
     catchRate: 0.55,
     expYield: 62,
     description: 'A curious forest fox whose leaf-tail rustles when it senses adventure. Vines coil around its forelegs like living bracers.',
-    baseStats: { hp: 110, patk: 14, satk: 16, pdef: 13, sdef: 15, spd: 14, counter: 8 },
+    baseStats: { hp: 110, patk: 14, satk: 16, pdef: 13, sdef: 15, spd: 14, counter: 8, crit: 6, critMult: 40 },
     ultimate: 'verdant_crush',
     spawnMaps: ['verdant_vale'],
     evolutions: [
@@ -54,7 +54,7 @@ export const SPECIES = {
     catchRate: 0.52,
     expYield: 64,
     description: 'A sleek river cat with ear-fins that catch the current. It leaves rings of droplets wherever it steps.',
-    baseStats: { hp: 95, patk: 11, satk: 19, pdef: 10, sdef: 16, spd: 19, counter: 11 },
+    baseStats: { hp: 95, patk: 11, satk: 19, pdef: 10, sdef: 16, spd: 19, counter: 11, crit: 8, critMult: 44 },
     ultimate: 'tidal_burst',
     spawnMaps: ['azure_coast'],
     evolutions: [
@@ -88,7 +88,7 @@ export const SPECIES = {
     catchRate: 0.45,
     expYield: 70,
     description: 'A stocky young dragon with an ember glowing on its brow. Small puffs of smoke escape its nose when it is excited.',
-    baseStats: { hp: 105, patk: 18, satk: 18, pdef: 12, sdef: 11, spd: 13, counter: 7 },
+    baseStats: { hp: 105, patk: 18, satk: 18, pdef: 12, sdef: 11, spd: 13, counter: 7, crit: 7, critMult: 48 },
     ultimate: 'fire_blast',
     spawnMaps: ['emberwild'],
     evolutions: [
@@ -122,7 +122,7 @@ export const SPECIES = {
     catchRate: 0.5,
     expYield: 66,
     description: 'A broad-pawed river wolf. A slow ribbon of water always circles its mane, even far from the shore.',
-    baseStats: { hp: 120, patk: 13, satk: 12, pdef: 17, sdef: 15, spd: 9, counter: 5 },
+    baseStats: { hp: 120, patk: 13, satk: 12, pdef: 17, sdef: 15, spd: 9, counter: 5, crit: 4, critMult: 32 },
     ultimate: 'ocean_guard',
     spawnMaps: ['azure_coast'],
     evolutions: [
@@ -156,7 +156,7 @@ export const SPECIES = {
     catchRate: 0.62,
     expYield: 52,
     description: 'A palm-sized forest bird whose feathers grew into leaves. It never stops hopping, even while asleep.',
-    baseStats: { hp: 80, patk: 11, satk: 14, pdef: 8, sdef: 12, spd: 21, counter: 18 },
+    baseStats: { hp: 80, patk: 11, satk: 14, pdef: 8, sdef: 12, spd: 21, counter: 18, crit: 10, critMult: 52 },
     ultimate: 'leafstorm',
     spawnMaps: ['verdant_vale'],
     evolutions: [

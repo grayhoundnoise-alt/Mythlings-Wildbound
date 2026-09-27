@@ -21,7 +21,8 @@ const { GameState, PartyManager, StorageManager, InventoryManager, CollectionMan
   PlayerManager, createNewGameState, serialize, deserialize } = await import('../src/systems/GameState.js');
 const { CaptureManager } = await import('../src/systems/CaptureManager.js');
 const { elementMultiplier } = await import('../src/data/elements.js');
-const { moodModifiers } = await import('../src/data/moods.js');
+const { moodModifiers, MOODS, STAT_KEYS } = await import('../src/data/moods.js');
+const { counterDodgePercent, COUNTER_MAX_DODGE } = await import('../src/data/config.js');
 const { MAPS } = await import('../src/data/maps.js');
 const { SPECIES } = await import('../src/data/species.js');
 
@@ -56,6 +57,44 @@ test('counter is capped so nothing becomes untouchable', () => {
   assert.ok(computeStats(m).counter <= 35);
 });
 
+test('crit chance and crit damage exist and are capped', () => {
+  const m = createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'feral' });
+  const s = computeStats(m);
+  assert.ok(s.crit <= 60, `crit chance capped, got ${s.crit}`);
+  assert.ok(s.critMult <= 200, `crit damage capped, got ${s.critMult}`);
+  // a crit-focused mood beats the same Mythling with a non-crit mood
+  const plain = computeStats(createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'brave' }));
+  assert.ok(s.crit > plain.crit, 'feral raises crit chance');
+  assert.ok(s.critMult > plain.critMult, 'feral raises crit damage');
+});
+
+test('every mood touches three up stats and one down stat', () => {
+  for (const [id, mood] of Object.entries(MOODS)) {
+    assert.equal(mood.up.length, 3, `${id} ups`);
+    assert.ok(STAT_KEYS.includes(mood.down), `${id} down stat is known`);
+    for (const k of mood.up) assert.ok(STAT_KEYS.includes(k), `${id} up stat ${k} is known`);
+    assert.ok(!mood.up.includes(mood.down), `${id} does not boost and lower the same stat`);
+  }
+});
+
+test('the crit moods are wired to the crit stats', () => {
+  for (const id of ['feral', 'savage', 'precise', 'brutal', 'keen']) {
+    const mood = MOODS[id];
+    assert.ok(mood.up.includes('crit') || mood.up.includes('critMult'), `${id} boosts a crit stat`);
+  }
+});
+
+test('counter is nerfed: half a percent per point, capped at 18%', () => {
+  assert.equal(counterDodgePercent(20), 10);
+  assert.equal(counterDodgePercent(0), 0);
+  assert.equal(counterDodgePercent(35), 17.5);
+  assert.equal(counterDodgePercent(999), COUNTER_MAX_DODGE);
+  // and the underlying stat still caps at 35 so nothing is untouchable
+  const m = createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'swift' });
+  assert.ok(computeStats(m).counter <= 35);
+  assert.ok(counterDodgePercent(computeStats(m).counter) <= 18);
+});
+
 test('element triangle', () => {
   assert.equal(elementMultiplier('nature', 'water'), 1.5);
   assert.equal(elementMultiplier('water', 'fire'), 1.5);
@@ -83,6 +122,23 @@ test('never exceeds Lv.30 and EXP stops accumulating', () => {
   assert.equal(m.exp, 0);
   assert.ok(res.capped);
   assert.ok(isMaxLevel(m));
+});
+
+test('a multi-level-up is collapsed to one entry per Mythling', async () => {
+  const { groupLevelUps } = await import('../src/ui/screens.js');
+  const groups = groupLevelUps([
+    { uid: 'a', name: 'Spriggo', level: 12, gains: { hp: 5, crit: 1 }, milestones: [] },
+    { uid: 'a', name: 'Spriggo', level: 13, gains: { hp: 5, crit: 1 }, milestones: ['ultimate'] },
+    { uid: 'b', name: 'Aquini', level: 20, gains: { hp: 9 }, milestones: [] },
+  ]);
+  assert.equal(groups.length, 2, 'one entry per Mythling');
+  const a = groups[0];
+  assert.equal(a.from, 11);
+  assert.equal(a.to, 13);
+  assert.deepEqual(a.gains, { hp: 10, crit: 2 }, 'gains are summed across levels');
+  assert.deepEqual(a.milestones, ['ultimate'], 'milestones are merged');
+  assert.equal(groups[1].name, 'Aquini');
+  assert.equal(groupLevelUps([]).length, 0);
 });
 
 test('Ultimate unlocks at Lv.10 only', () => {
@@ -166,6 +222,72 @@ test('a full wild battle can be fought and won', () => {
   assert.equal(b.phase, BattlePhase.DEFEATED_WILD);
   assert.equal(wild.currentHp, 0);
   assert.ok(b.rewards.exp.length > 0, 'EXP awarded');
+});
+
+test('the attack message reports the damage dealt', () => {
+  const p = createMythling({ speciesId: 'emberu', level: 30 });
+  const e = createMythling({ speciesId: 'rivruff', level: 30 });
+  // rng() order per turn: enemy AI pick, then per attack (dodge roll, crit roll, damage random)
+  const seq = [0.5, 0.99, 0.99, 0.5, 0.99];
+  let i = 0;
+  const b = new Battle({
+    type: BattleType.WILD, party: [p], enemies: [e], mapId: 'emberwild',
+    rng: () => seq[i++] ?? 0.99,
+  });
+  const r = b.act({ type: 'skill', slot: 'special' });
+  const dmg = r.events.find((ev) => ev.type === 'damage' && ev.side === 'enemy');
+  assert.ok(dmg, 'the attack connected');
+  const log = r.events.find((ev) => ev.type === 'log' && ev.text.includes('used'));
+  assert.ok(log, 'there is an attack message');
+  assert.ok(log.text.includes(`${dmg.amount} damage`), `message reports damage: ${log.text}`);
+  assert.equal(log.text.includes('CRITICAL'), false, 'no crit on this roll');
+});
+
+test('a crit multiplies the damage and says so', () => {
+  const p = createMythling({ speciesId: 'leaflet', level: 30, mood: 'feral', rarity: 'SSS+' });
+  const e = createMythling({ speciesId: 'rivruff', level: 30 });
+  const hit = (seq) => {
+    let i = 0;
+    const b = new Battle({
+      type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale',
+      rng: () => seq[i++] ?? 0.99,
+    });
+    restoreAll(p);
+    restoreAll(e);
+    const r = b.act({ type: 'skill', slot: 'special' });
+    return r.events.find((ev) => ev.type === 'damage' && ev.side === 'enemy');
+  };
+  const noCrit = hit([0.5, 0.99, 0.99, 0.5]);   // AI, dodge no, crit no
+  const crit = hit([0.5, 0.99, 0.001, 0.5]);    // AI, dodge no, crit yes
+  assert.ok(crit && noCrit, 'both attacks landed');
+  assert.equal(noCrit.crit, false);
+  assert.equal(crit.crit, true);
+  assert.ok(crit.amount > noCrit.amount, `crit (${crit.amount}) beats normal (${noCrit.amount})`);
+  const critLog = hit([0.5, 0.99, 0.001, 0.5]);
+  assert.ok(critLog, 'crit still lands');
+});
+
+test('trainer battles report how many Mythlings the trainer has left', () => {
+  const p = createMythling({ speciesId: 'emberu', level: 30 });
+  const trainer = { name: 'Tester', intro: 'hi', defeat: 'bye', flag: 't1', reward: {}, team: [] };
+  const enemies = [
+    createMythling({ speciesId: 'leaflet', level: 2 }),
+    createMythling({ speciesId: 'leaflet', level: 2 }),
+    createMythling({ speciesId: 'leaflet', level: 2 }),
+  ];
+  const b = new Battle({ type: BattleType.TRAINER, party: [p], enemies, trainer, mapId: 'verdant_vale' });
+  assert.equal(b.enemyTeamTotal(), 3);
+  assert.equal(b.enemyTeamLeft(), 3);
+  const events = [];
+  let guard = 0;
+  while (b.phase === BattlePhase.ACTIVE && guard++ < 60) events.push(...b.act({ type: 'skill', slot: 'normal' }).events);
+  const switches = events.filter((ev) => ev.type === 'switch' && ev.side === 'enemy');
+  assert.equal(switches.length, 2, 'trainer sent out two replacements');
+  assert.equal(switches[0].teamLeft, 2);
+  assert.equal(switches[0].teamTotal, 3);
+  assert.equal(switches[1].teamLeft, 1, 'the last Mythling is flagged as 1 left');
+  assert.equal(b.enemyTeamLeft(), 0);
+  assert.ok(events.some((ev) => ev.type === 'log' && /last Mythling/i.test(ev.text)), 'announces the final Mythling');
 });
 
 test('buff stacking is capped at 30 stacks', () => {

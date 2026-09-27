@@ -97,7 +97,14 @@ export function dismissModal() {
   return true;
 }
 
-export function modal({ title, body, buttons, dismissible = true, cancelValue }) {
+/**
+ * @param {object} opts
+ *  wide:   roomier box (used by the Mythling detail panel so it does not turn
+ *          into one very tall column of text)
+ *  scroll: cap the body height and let long content scroll instead of running
+ *          off the bottom of the screen
+ */
+export function modal({ title, body, buttons, dismissible = true, cancelValue, wide = false, scroll = true }) {
   return new Promise((resolve) => {
     const layer = document.getElementById('modal');
     layer.innerHTML = '';
@@ -115,13 +122,14 @@ export function modal({ title, body, buttons, dismissible = true, cancelValue })
       : (btns.find((b) => !b.primary) || {}).value ?? false;
     const dismiss = () => close(fallback);
     if (dismissible) activeModalClose = dismiss;
-    const box = el('div', { class: 'modal panel' }, [
+    const box = el('div', { class: `modal panel ${wide ? 'wide' : ''}` }, [
       el('div', { class: 'panel-head' }, [
         el('div', { class: 'panel-head-text' }, [el('h3', { text: title || '' })]),
         dismissible ? closeButton(dismiss) : null,
       ]),
-      typeof body === 'string' ? el('p', { html: body }) : body,
-      el('div', { class: 'row end' }, btns.map((b) =>
+      el('div', { class: `modal-body ${scroll ? 'scroll-y' : ''}` },
+        [typeof body === 'string' ? el('p', { html: body }) : body]),
+      el('div', { class: 'row end', style: { marginTop: '12px' } }, btns.map((b) =>
         button(b.label, { class: b.primary ? 'primary' : b.danger ? 'danger' : 'ghost', onclick: () => close(b.value) }))),
     ]);
     layer.appendChild(box);

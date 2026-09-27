@@ -10,7 +10,9 @@ import {
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
-import { MOODS, STAT_LABELS, STAT_KEYS, moodSummary } from '../data/moods.js';
+import { MOODS, STAT_LABELS, STAT_KEYS, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat } from '../data/moods.js';
+import { counterDodgePercent } from '../data/config.js';
+import { openWiki } from './wiki.js';
 import { RARITY_ORDER, getRarity } from '../data/rarity.js';
 import { MUTATIONS } from '../data/mutations.js';
 import { ITEM_CATEGORIES, getItem } from '../data/items.js';
@@ -61,6 +63,19 @@ export function mythCanvas(m, size = 66, animated = false) {
     cv._stop = () => cancelAnimationFrame(raf);
   }
   return cv;
+}
+
+/** A bar with a small legend above it, so HP and EXP can never be confused. */
+export function labeledBar(kind, label, value, pct, extraClass = '', title = '') {
+  const wrap = el('div', { class: 'bar-wrap' }, [
+    el('div', { class: 'bar-label' }, [
+      el('span', { text: label }),
+      el('span', { class: 'bar-value', text: value }),
+    ]),
+    bar(kind, pct, extraClass),
+  ]);
+  if (title) wrap.title = title;
+  return wrap;
 }
 
 export class PlayerMenu {
@@ -163,9 +178,11 @@ export class PlayerMenu {
           mutationChip(m.mutation),
         ]),
         el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${MOODS[m.mood].name} · ${getRarity(m.rarity).name}` }),
-        bar('hp', pct, hpClass(pct)),
-        el('div', { class: 'mc-sub', text: `${m.currentHp}/${maxHp(m)} HP` }),
-        bar('exp', m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m)),
+        labeledBar('hp', 'HP', `${m.currentHp}/${maxHp(m)}`, pct, hpClass(pct)),
+        labeledBar('exp', 'EXP',
+          m.level >= LEVEL_CAP ? 'MAX LEVEL' : `${m.exp} / ${expNeeded(m)}`,
+          m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m),
+          '', 'EXP is kept forever — healing only restores HP, skill uses and Ultimate Charge.'),
         extra || null,
       ]),
     ]);
@@ -185,11 +202,11 @@ export class PlayerMenu {
     const statRows = STAT_KEYS.map((k) => {
       const isUp = MOODS[m.mood].up.includes(k);
       const isDown = MOODS[m.mood].down === k;
-      const maxRef = k === 'hp' ? 600 : k === 'counter' ? 35 : 90;
-      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}` }, [
+      const maxRef = STAT_BAR_MAX[k] || 90;
+      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}`, title: STAT_INFO[k] }, [
         el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), isUp ? icon('up', 'tiny') : isDown ? icon('down', 'tiny') : null]),
         el('div', { class: 'sbar' }, [el('i', { style: { width: `${Math.min(100, (stats[k] / maxRef) * 100)}%` } })]),
-        el('b', { text: String(stats[k]) }),
+        el('b', { text: formatStat(k, stats[k]) }),
       ]);
     });
 
@@ -215,11 +232,16 @@ export class PlayerMenu {
         el('h3', { text: `${displayName(m)}  ·  Lv.${m.level}${m.level >= LEVEL_CAP ? '  (MAX LEVEL)' : ''}` }),
         el('div', { class: 'mc-sub', text: `Species: ${sp.displayName} · Breed: ${sp.breed} · Role: ${sp.role} · Form: ${stageData(m).name} (stage ${m.stage + 1})` }),
         el('div', { style: { margin: '8px 0' } }, [
-          el('div', { class: 'mc-sub', text: m.level >= LEVEL_CAP ? 'EXP: MAX LEVEL REACHED' : `EXP: ${m.exp} / ${expNeeded(m)}` }),
-          bar('exp', m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m)),
+          labeledBar('exp', 'EXP',
+            m.level >= LEVEL_CAP ? 'MAX LEVEL' : `${m.exp} / ${expNeeded(m)}`,
+            m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m),
+            '', 'EXP is never lost when healing — only HP, skill uses and Ultimate Charge are restored.'),
         ]),
         el('h3', { text: 'Stats' }),
         el('div', { class: 'stat-rows' }, statRows),
+        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html:
+          `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) · `
+          + `<b>${stats.crit}%</b> crit chance · crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
         el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} &nbsp; ${iconSvg('down', 'tiny')} ${mood.down} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
 
         el('h3', { text: 'Equipped Skills' }),
@@ -257,7 +279,8 @@ export class PlayerMenu {
       ]),
     ]);
 
-    modal({ title: displayName(m).toUpperCase(), body, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
+    // Wide + scrollable: this panel used to run far past the bottom of the screen.
+    modal({ title: displayName(m).toUpperCase(), body, wide: true, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
   }
 
   // ---------------------------------------------------- STORAGE
@@ -390,7 +413,7 @@ export class PlayerMenu {
     toast(`${displayName(pick)} ate the ${item.name} — +${res.exp} EXP`, 'ok');
     this.renderTab();
     if (res.result.levels.length) {
-      const entries = res.result.levels.map((lv) => ({ name: displayName(pick), ...lv }));
+      const entries = res.result.levels.map((lv) => ({ uid: pick.uid, name: displayName(pick), ...lv }));
       await new Promise((done) => levelUpSummaryRef(entries, done));
       this.renderTab();
     }
@@ -500,7 +523,7 @@ export class PlayerMenu {
         el('div', {}, [
           el('div', { class: 'row', style: { gap: '6px' } }, [elementChip(sp.element), el('span', { class: 'chip', text: sp.breed }), el('span', { class: 'chip', text: sp.role })]),
           el('p', { class: 'sub', text: sp.description }),
-          el('div', { class: 'mc-sub', text: `Base stats — HP ${sp.baseStats.hp}, P.ATK ${sp.baseStats.patk}, S.ATK ${sp.baseStats.satk}, P.DEF ${sp.baseStats.pdef}, S.DEF ${sp.baseStats.sdef}, SPD ${sp.baseStats.spd}, CNT ${sp.baseStats.counter}` }),
+          el('div', { class: 'mc-sub', text: `Base stats — ${STAT_KEYS.map((k) => `${STAT_SHORT[k]} ${formatStat(k, sp.baseStats[k])}`).join(', ')}` }),
           el('div', { class: 'mc-sub', text: `Found in: ${sp.spawnMaps.map((mp) => MAPS[mp].displayName).join(', ')}` }),
         ]),
       ]),
@@ -509,7 +532,7 @@ export class PlayerMenu {
         el('span', { text: `${ev.name} (Lv.${ev.level})` }), ev.future ? icon('lock', 'tiny') : null,
       ]))),
     ]);
-    modal({ title: sp.displayName.toUpperCase(), body, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
+    modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
   }
 
   // ---------------------------------------------------- STATS
@@ -619,7 +642,16 @@ export function settingsPanel() {
     return el('div', { class: 'item-row' }, [el('div', { class: 'ir-main' }, [el('div', { class: 'ir-name', text: label })]), b]);
   };
 
+  // Wiki: every rule, Mythling, mood, stat, skill and item in the game.
+  const wikiBtn = iconTextBtn('book', 'OPEN WIKI', { class: 'primary small', sfx: 'confirm', onclick: () => openWiki() });
   wrap.append(
+    el('div', { class: 'item-row', style: { borderColor: 'rgba(242,199,97,.5)', background: 'rgba(242,199,97,.08)' } }, [
+      el('div', { class: 'ir-main' }, [
+        el('div', { class: 'ir-name', text: 'Game Wiki' }),
+        el('div', { class: 'ir-desc', text: 'Stats, moods, rarities, elements, species, skills, items, battle rules and the world — all in one place.' }),
+      ]),
+      wikiBtn,
+    ]),
     slider('Master Volume', 'masterVolume', 0, 1, 0.05),
     slider('Music Volume', 'musicVolume', 0, 1, 0.05),
     slider('SFX Volume', 'sfxVolume', 0, 1, 0.05),

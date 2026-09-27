@@ -15,12 +15,31 @@ export const EVOLUTION_LEVELS = [1, 20, 60, 80];
 export const MAX_UNLOCKED_EVOLUTION_STAGE = 1;
 
 export const COUNTER_MAX_PERCENT = 35; // Counter can never make something untouchable
+/**
+ * Counter is the EVASION stat: every point of Counter used to be a full 1% dodge,
+ * which made attacks miss far too often. Each point is now worth half a percent and
+ * the dodge chance is hard-capped, so a maxed Counter dodges 18% of hits, not 35%.
+ */
+export const COUNTER_DODGE_SCALE = 0.5;
+export const COUNTER_MAX_DODGE = 18;
+
+/** Crit Chance is a percentage (0-60). Crit Damage is a BONUS percentage (0-200 => up to x3). */
+export const CRIT_MAX_PERCENT = 60;
+export const CRIT_MAX_MULT = 200;
+
 export const DAMAGE_RANDOM_MIN = 0.85;
 export const DAMAGE_RANDOM_MAX = 1.0;
 
 export const STAT_GROWTH = {
   hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
+  crit: 0.030, critMult: 0.008,
 };
+
+/** Counter (evasion stat) -> actual dodge chance in percent. Single source of truth. */
+export function counterDodgePercent(counter) {
+  const v = (Number(counter) || 0) * COUNTER_DODGE_SCALE;
+  return Math.max(0, Math.min(COUNTER_MAX_DODGE, v));
+}
 
 /** EXP needed to go from `level` to `level+1`. */
 export function expToNextLevel(level) {

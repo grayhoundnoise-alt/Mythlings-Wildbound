@@ -454,21 +454,52 @@ export function evolutionCinematic(mythling, result, onDone) {
 }
 
 // ------------------------------------------------------------------ LEVEL UP SUMMARY
+/**
+ * Collapses a (possibly long) list of level events into ONE entry per Mythling
+ * ("Lv.12 → Lv.15" with the combined stat gains) and puts the whole thing in a
+ * scrollable box, so a whole party levelling up at once stays readable.
+ */
+export function groupLevelUps(entries) {
+  const groups = [];
+  const byKey = new Map();
+  for (const e of entries) {
+    const key = e.uid || e.name;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { uid: e.uid || null, name: e.name, from: e.level - 1, to: e.level, gains: {}, milestones: [] };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+    g.from = Math.min(g.from, e.level - 1);
+    g.to = Math.max(g.to, e.level);
+    for (const [k, v] of Object.entries(e.gains || {})) g.gains[k] = (g.gains[k] || 0) + v;
+    for (const ms of e.milestones || []) if (!g.milestones.includes(ms)) g.milestones.push(ms);
+  }
+  return groups;
+}
+
 export function levelUpSummary(entries, onDone) {
   if (!entries.length) { onDone(); return; }
-  const body = el('div', {});
-  for (const e of entries) {
-    body.appendChild(el('h3', { text: `${e.name} → Lv.${e.level}` }));
-    body.appendChild(el('div', { class: 'levelup-list' }, Object.entries(e.gains)
-      .filter(([, v]) => v !== 0)
-      .map(([k, v]) => el('div', { class: 'gain', text: `${STAT_SHORT[k]} ${v > 0 ? '+' : ''}${v}` }))));
-    for (const ms of e.milestones) {
+  const groups = groupLevelUps(entries);
+  const body = el('div', { class: 'levelup-body' });
+  for (const g of groups) {
+    body.appendChild(el('h3', { text: `${g.name}  ·  Lv.${g.from} → Lv.${g.to}` }));
+    const gains = Object.entries(g.gains).filter(([, v]) => v !== 0);
+    body.appendChild(el('div', { class: 'levelup-list' }, gains.length
+      ? gains.map(([k, v]) => el('div', {
+        class: `gain ${v > 0 ? 'up' : 'down'}`,
+        text: `${STAT_SHORT[k]} ${v > 0 ? '+' : ''}${v}`,
+      }))
+      : [el('div', { class: 'gain', text: 'no stat change' })]));
+    for (const ms of g.milestones) {
       if (ms === 'ultimate') body.appendChild(el('p', { html: `${iconSvg('ultimate', 'gold')} <b style="color:#ffd76a">ULTIMATE UNLOCKED!</b> Charge it by attacking — 8 charges to unleash it.` }));
       if (ms === 'evolution') body.appendChild(el('p', { html: `${iconSvg('levelup', 'good')} <b style="color:#6de89a">EVOLUTION AVAILABLE!</b>` }));
       if (ms === 'maxlevel') body.appendChild(el('p', { html: `<b style="color:#ffd76a">MAX LEVEL Lv.${LEVEL_CAP} REACHED!</b> Further levels arrive in a future update.` }));
     }
   }
-  modal({ title: 'LEVEL UP!', body, buttons: [{ label: 'NICE!', value: true, primary: true }] }).then(onDone);
+  const title = groups.length > 1 ? `LEVEL UP! (${groups.length} Mythlings)` : 'LEVEL UP!';
+  // .levelup-body scrolls itself, so the modal wrapper must not add a second scrollbar.
+  modal({ title, body, scroll: false, buttons: [{ label: 'NICE!', value: true, primary: true }] }).then(onDone);
 }
 
 // ------------------------------------------------------------------ VERSION COMPLETE

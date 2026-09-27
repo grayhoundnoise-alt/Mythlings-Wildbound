@@ -7,6 +7,7 @@ import { rollMutation } from '../data/mutations.js';
 import {
   LEVEL_CAP, MAX_UNLOCKED_EVOLUTION_STAGE, STAT_GROWTH,
   expToNextLevel, ULTIMATE_UNLOCK_LEVEL, COUNTER_MAX_PERCENT,
+  CRIT_MAX_PERCENT, CRIT_MAX_MULT,
 } from '../data/config.js';
 import { clamp, uid, choice } from './utils.js';
 
@@ -121,6 +122,8 @@ export function computeStats(m) {
     const grown = base * (1 + STAT_GROWTH[k] * (m.level - 1));
     let v = Math.floor(grown * st.statMult) + (mods[k] || 0);
     if (k === 'counter') v = clamp(v, 0, COUNTER_MAX_PERCENT);
+    if (k === 'crit') v = clamp(v, 0, CRIT_MAX_PERCENT);
+    if (k === 'critMult') v = clamp(v, 0, CRIT_MAX_MULT);
     out[k] = Math.max(k === 'hp' ? 10 : 1, v);
   }
   return out;

@@ -672,6 +672,152 @@ select {
 /* HP drains smoothly so the drop lands with the hit rather than snapping */
 .combatant-card .bar > i { transition: width .34s cubic-bezier(.3,.8,.4,1); }
 
+/* =====================================================================
+   Modals: never taller than the screen, and the body scrolls.
+   ===================================================================== */
+.modal-layer { overflow: auto; align-items: flex-start; }
+.modal {
+  width: min(560px, 94vw); padding: 24px 26px;
+  max-height: 94vh; margin: auto;
+  display: flex; flex-direction: column;
+}
+.modal.wide { width: min(980px, 96vw); }
+.modal > .panel-head, .modal > .row.end { flex: none; }
+.modal-body { min-height: 0; }
+.modal-body.scroll-y { overflow: auto; max-height: min(62vh, 620px); padding-right: 6px; }
+
+/* ---------- Labelled bars (HP / EXP / ULT) ---------- */
+.bar-wrap { margin: 4px 0 2px; }
+.bar-label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.bar-value { color: #cfe0f2; letter-spacing: .04em; font-weight: 700; }
+.party-chip .pc-bar { display: flex; align-items: center; gap: 4px; }
+.party-chip .pc-tag {
+  font-size: .56rem; letter-spacing: .08em; font-weight: 800; color: var(--muted); flex: none;
+}
+.party-chip .pc-bar .bar { flex: 1; margin-top: 2px; }
+
+/* ---------- Battle: trainer team readout ---------- */
+.team-row {
+  display: flex; align-items: center; gap: 6px; margin: 4px 0 2px;
+  padding: 3px 6px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.team-row.last { border-color: #ffd76a; background: rgba(242, 199, 97, 0.16); }
+.team-name {
+  font-size: .62rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: #cfe0f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+}
+.team-pips { display: flex; gap: 3px; flex: 1; }
+.team-pip { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); }
+.team-pip.alive { background: linear-gradient(90deg, #ffd76a, #ff8a3d); box-shadow: 0 0 6px rgba(255, 170, 60, .6); }
+.team-pip.down { background: rgba(255, 255, 255, 0.1); }
+.team-count {
+  font-size: .6rem; font-weight: 800; letter-spacing: .08em; color: #ffe6a8; white-space: nowrap;
+}
+.team-row.last .team-count { color: #ffd76a; animation: blink 1s infinite; }
+
+/* ---------- Battle: critical hits ---------- */
+.dmg-float.crit {
+  font-size: 2.1rem; color: #ffd76a !important;
+  text-shadow: 0 0 14px rgba(255, 200, 90, .9), 0 2px 0 rgba(0, 0, 0, .6);
+}
+
+/* ---------- Level-up summary (can be long: it scrolls) ---------- */
+.levelup-body { max-height: min(52vh, 460px); overflow: auto; padding-right: 6px; }
+.levelup-body h3 { margin: 0 0 6px; font-size: 1rem; color: var(--gold); letter-spacing: .06em; }
+.levelup-body h3:not(:first-child) { margin-top: 14px; }
+.levelup-body p { margin: 6px 0 0; }
+.levelup-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.levelup-list .gain {
+  padding: 3px 9px; border-radius: 999px; font-size: .78rem; font-weight: 800; letter-spacing: .04em;
+  background: rgba(110, 224, 140, .16); border: 1px solid rgba(134, 240, 160, .45); color: #d3ffdf;
+}
+.levelup-list .gain.down {
+  background: rgba(255, 140, 150, .16); border-color: rgba(255, 160, 168, .45); color: #ffdfe2;
+}
+
+/* =====================================================================
+   GAME WIKI
+   ===================================================================== */
+.wiki-screen {
+  width: min(1180px, 96vw); height: min(860px, 94vh);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.wiki-screen .panel-head.sticky { gap: 14px; }
+.wiki-main { flex: 1; display: flex; min-height: 0; }
+.wiki-nav {
+  width: 224px; flex: none; padding: 14px 12px; display: flex; flex-direction: column; gap: 5px;
+  background: rgba(6, 12, 22, 0.55); border-right: 2px solid rgba(242, 199, 97, 0.25); overflow: auto;
+}
+.wiki-tab {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 12px; border-radius: 10px; border: none; text-align: left; cursor: pointer;
+  background: transparent; color: #bfd3e8; font-weight: 700; font-size: .88rem; font-family: inherit;
+}
+.wiki-tab .ico { width: 16px; height: 16px; opacity: .85; }
+.wiki-tab:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.wiki-tab.active {
+  background: linear-gradient(90deg, rgba(242, 199, 97, .28), transparent);
+  color: var(--gold); box-shadow: inset 3px 0 0 var(--gold);
+}
+.wiki-nav-foot { margin-top: auto; padding-top: 10px; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.wiki-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.wiki-status { padding: 10px 24px 0; font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.wiki-body { flex: 1; overflow: auto; padding: 4px 24px 26px; }
+.wiki-h3 { margin: 20px 0 8px; font-size: 1.02rem; color: var(--gold); letter-spacing: .08em; text-transform: uppercase; }
+.wiki-h3:first-child { margin-top: 4px; }
+.wiki-p { margin: 0 0 10px; line-height: 1.6; color: #dce9f7; font-size: .92rem; }
+.wiki-table { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 14px; }
+.wiki-tr {
+  display: grid; grid-template-columns: 240px 1fr; gap: 12px;
+  padding: 8px 11px; border-radius: 9px; background: rgba(255, 255, 255, 0.05);
+  font-size: .87rem; line-height: 1.45;
+}
+.wiki-tr .wiki-td.k { color: var(--gold); font-weight: 800; }
+.wiki-tr .wiki-td.v { color: #dce9f7; }
+.wiki-ul { margin: 0 0 14px; padding-left: 20px; line-height: 1.6; font-size: .9rem; color: #dce9f7; }
+.wiki-ul li { margin-bottom: 5px; }
+.wiki-note {
+  margin: 10px 0 14px; padding: 10px 14px; border-left: 3px solid var(--gold);
+  background: rgba(242, 199, 97, 0.1); border-radius: 0 10px 10px 0;
+  font-size: .88rem; line-height: 1.55; color: #f2e7cd;
+}
+.wiki-dim { color: var(--muted); font-size: .82rem; }
+.wiki-hidden { display: none !important; }
+.wiki-card { border: 1.5px solid rgba(255, 255, 255, 0.12); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; background: rgba(255, 255, 255, 0.04); }
+.wiki-card-head { display: flex; gap: 14px; align-items: flex-start; }
+.wiki-portrait { width: 96px; height: 96px; flex: none; }
+.wiki-card-title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-weight: 800; font-size: 1.05rem; margin-bottom: 5px; }
+.wiki-elgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; margin: 8px 0 14px; }
+.wiki-el { padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); font-size: .82rem; }
+.wiki-el.strong { background: rgba(110, 224, 140, 0.16); color: #c9ffd8; }
+.wiki-el.weak { background: rgba(255, 140, 150, 0.14); color: #ffd8dc; }
+.wiki-body code {
+  background: rgba(0, 0, 0, 0.4); padding: 2px 7px; border-radius: 6px;
+  font-size: .84em; color: #ffe9b8; word-break: break-word;
+}
+.wiki-body .good { color: var(--ok); }
+.wiki-body .bad { color: var(--danger); }
+input[type="text"].wiki-search {
+  width: 240px; padding: 9px 13px; font-size: .88rem; letter-spacing: normal; text-transform: none;
+  background: rgba(8, 16, 26, 0.9); border: 1.5px solid rgba(242, 199, 97, 0.4); border-radius: 10px;
+}
+
+@media (max-width: 900px) {
+  .wiki-nav { width: 58px; align-items: center; }
+  .wiki-tab span { display: none; }
+  .wiki-tab { justify-content: center; }
+  .wiki-nav-foot { display: none; }
+  .wiki-tr { grid-template-columns: 1fr; gap: 2px; }
+  .wiki-body, .wiki-status { padding-left: 14px; padding-right: 14px; }
+  input[type="text"].wiki-search { width: 150px; }
+  .wiki-card-head { flex-direction: column; }
+  .wiki-portrait { width: 78px; height: 78px; }
+}
+
 </style>
 </head>
 <body>
@@ -726,10 +872,17 @@ select {
   var SAVE_PREFIX = "mythlings_wildbound";
   var SAVE_SLOT_COUNT = 3;
   var LEVEL_CAP = 30;
+  var ABSOLUTE_MAX_LEVEL = 100;
   var PARTY_MAX = 6;
+  var STORAGE_MAX = 200;
   var ULTIMATE_UNLOCK_LEVEL = 10;
+  var EVOLUTION_LEVELS = [1, 20, 60, 80];
   var MAX_UNLOCKED_EVOLUTION_STAGE = 1;
   var COUNTER_MAX_PERCENT = 35;
+  var COUNTER_DODGE_SCALE = 0.5;
+  var COUNTER_MAX_DODGE = 18;
+  var CRIT_MAX_PERCENT = 60;
+  var CRIT_MAX_MULT = 200;
   var DAMAGE_RANDOM_MIN = 0.85;
   var DAMAGE_RANDOM_MAX = 1;
   var STAT_GROWTH = {
@@ -739,8 +892,14 @@ select {
     pdef: 0.07,
     sdef: 0.07,
     spd: 0.06,
-    counter: 0.035
+    counter: 0.035,
+    crit: 0.03,
+    critMult: 8e-3
   };
+  function counterDodgePercent(counter) {
+    const v = (Number(counter) || 0) * COUNTER_DODGE_SCALE;
+    return Math.max(0, Math.min(COUNTER_MAX_DODGE, v));
+  }
   function expToNextLevel(level) {
     if (level >= LEVEL_CAP) return Infinity;
     return Math.floor(24 + 9 * Math.pow(level, 1.85));
@@ -1272,7 +1431,7 @@ select {
       catchRate: 0.55,
       expYield: 62,
       description: "A curious forest fox whose leaf-tail rustles when it senses adventure. Vines coil around its forelegs like living bracers.",
-      baseStats: { hp: 110, patk: 14, satk: 16, pdef: 13, sdef: 15, spd: 14, counter: 8 },
+      baseStats: { hp: 110, patk: 14, satk: 16, pdef: 13, sdef: 15, spd: 14, counter: 8, crit: 6, critMult: 40 },
       ultimate: "verdant_crush",
       spawnMaps: ["verdant_vale"],
       evolutions: [
@@ -1309,7 +1468,7 @@ select {
       catchRate: 0.52,
       expYield: 64,
       description: "A sleek river cat with ear-fins that catch the current. It leaves rings of droplets wherever it steps.",
-      baseStats: { hp: 95, patk: 11, satk: 19, pdef: 10, sdef: 16, spd: 19, counter: 11 },
+      baseStats: { hp: 95, patk: 11, satk: 19, pdef: 10, sdef: 16, spd: 19, counter: 11, crit: 8, critMult: 44 },
       ultimate: "tidal_burst",
       spawnMaps: ["azure_coast"],
       evolutions: [
@@ -1346,7 +1505,7 @@ select {
       catchRate: 0.45,
       expYield: 70,
       description: "A stocky young dragon with an ember glowing on its brow. Small puffs of smoke escape its nose when it is excited.",
-      baseStats: { hp: 105, patk: 18, satk: 18, pdef: 12, sdef: 11, spd: 13, counter: 7 },
+      baseStats: { hp: 105, patk: 18, satk: 18, pdef: 12, sdef: 11, spd: 13, counter: 7, crit: 7, critMult: 48 },
       ultimate: "fire_blast",
       spawnMaps: ["emberwild"],
       evolutions: [
@@ -1383,7 +1542,7 @@ select {
       catchRate: 0.5,
       expYield: 66,
       description: "A broad-pawed river wolf. A slow ribbon of water always circles its mane, even far from the shore.",
-      baseStats: { hp: 120, patk: 13, satk: 12, pdef: 17, sdef: 15, spd: 9, counter: 5 },
+      baseStats: { hp: 120, patk: 13, satk: 12, pdef: 17, sdef: 15, spd: 9, counter: 5, crit: 4, critMult: 32 },
       ultimate: "ocean_guard",
       spawnMaps: ["azure_coast"],
       evolutions: [
@@ -1420,7 +1579,7 @@ select {
       catchRate: 0.62,
       expYield: 52,
       description: "A palm-sized forest bird whose feathers grew into leaves. It never stops hopping, even while asleep.",
-      baseStats: { hp: 80, patk: 11, satk: 14, pdef: 8, sdef: 12, spd: 21, counter: 18 },
+      baseStats: { hp: 80, patk: 11, satk: 14, pdef: 8, sdef: 12, spd: 21, counter: 18, crit: 10, critMult: 52 },
       ultimate: "leafstorm",
       spawnMaps: ["verdant_vale"],
       evolutions: [
@@ -1689,7 +1848,7 @@ select {
   }
 
   // src/data/moods.js
-  var STAT_KEYS = ["hp", "patk", "satk", "pdef", "sdef", "spd", "counter"];
+  var STAT_KEYS = ["hp", "patk", "satk", "pdef", "sdef", "spd", "counter", "crit", "critMult"];
   var STAT_LABELS = {
     hp: "HP",
     patk: "Physical Attack",
@@ -1697,16 +1856,42 @@ select {
     pdef: "Physical Defense",
     sdef: "Special Defense",
     spd: "Speed",
-    counter: "Counter"
+    counter: "Counter",
+    crit: "Crit Chance",
+    critMult: "Crit Damage"
   };
-  var STAT_SHORT = {
+  var STAT_SHORT2 = {
     hp: "HP",
     patk: "P.ATK",
     satk: "S.ATK",
     pdef: "P.DEF",
     sdef: "S.DEF",
     spd: "SPD",
-    counter: "CNT"
+    counter: "CNT",
+    crit: "CRIT",
+    critMult: "C.DMG"
+  };
+  var STAT_INFO = {
+    hp: "Hit Points. Reach 0 and the Mythling faints.",
+    patk: "Drives the damage of Physical skills (and how hard Physical hits land).",
+    satk: "Drives the damage of Special skills and every Ultimate.",
+    pdef: "Reduces incoming Physical damage.",
+    sdef: "Reduces incoming Special damage.",
+    spd: "Higher Speed acts first each turn \u2014 and helps you flee.",
+    counter: "Evasion. Each point is 0.5% dodge, capped at 18% (Counter caps at 35).",
+    crit: "Chance to land a critical hit, in percent (caps at 60%).",
+    critMult: "Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +200%)."
+  };
+  var STAT_BAR_MAX = {
+    hp: 600,
+    patk: 90,
+    satk: 90,
+    pdef: 90,
+    sdef: 90,
+    spd: 90,
+    counter: 35,
+    crit: 60,
+    critMult: 200
   };
   var MOODS = {
     lazy: { id: "lazy", name: "Lazy", up: ["hp", "pdef", "sdef"], down: "spd" },
@@ -1724,26 +1909,41 @@ select {
     stubborn: { id: "stubborn", name: "Stubborn", up: ["hp", "patk", "pdef"], down: "spd" },
     ambitious: { id: "ambitious", name: "Ambitious", up: ["patk", "satk", "counter"], down: "hp" },
     cautious: { id: "cautious", name: "Cautious", up: ["pdef", "sdef", "counter"], down: "patk" },
-    fierce: { id: "fierce", name: "Fierce", up: ["hp", "patk", "spd"], down: "counter" }
+    fierce: { id: "fierce", name: "Fierce", up: ["hp", "patk", "spd"], down: "counter" },
+    // ---- Crit moods (Crit Chance / Crit Damage) ----
+    feral: { id: "feral", name: "Feral", up: ["crit", "critMult", "patk"], down: "sdef" },
+    savage: { id: "savage", name: "Savage", up: ["crit", "patk", "spd"], down: "pdef" },
+    precise: { id: "precise", name: "Precise", up: ["crit", "critMult", "satk"], down: "hp" },
+    brutal: { id: "brutal", name: "Brutal", up: ["critMult", "patk", "satk"], down: "sdef" },
+    keen: { id: "keen", name: "Keen", up: ["crit", "spd", "counter"], down: "pdef" }
   };
   var MOOD_IDS = Object.keys(MOODS);
+  var CRIT_MOOD_IDS = MOOD_IDS.filter((id) => MOODS[id].up.includes("crit") || MOODS[id].up.includes("critMult"));
   function getMood(id) {
     return MOODS[id] || MOODS.brave;
   }
+  var MOOD_SCALE = { hp: 3, critMult: 2 };
   function moodModifiers(moodId, magnitude) {
     const mood = getMood(moodId);
     const out = {};
     for (const k of STAT_KEYS) out[k] = 0;
-    for (const k of mood.up) out[k] += k === "hp" ? magnitude * 3 : magnitude;
-    out[mood.down] -= mood.down === "hp" ? magnitude * 3 : magnitude;
+    for (const k of mood.up) out[k] += magnitude * (MOOD_SCALE[k] || 1);
+    out[mood.down] -= magnitude * (MOOD_SCALE[mood.down] || 1);
     return out;
   }
   function moodSummary(moodId) {
     const m = getMood(moodId);
     return {
-      up: m.up.map((k) => STAT_SHORT[k]),
-      down: STAT_SHORT[m.down]
+      up: m.up.map((k) => STAT_SHORT2[k]),
+      down: STAT_SHORT2[m.down]
     };
+  }
+  function formatStat(key, value) {
+    if (value == null || !Number.isFinite(value)) return "\u2014";
+    if (key === "crit") return `${value}%`;
+    if (key === "critMult") return `+${value}%`;
+    if (key === "counter") return String(value);
+    return String(value);
   }
 
   // src/data/rarity.js
@@ -2063,6 +2263,8 @@ select {
       const grown = base * (1 + STAT_GROWTH[k] * (m.level - 1));
       let v = Math.floor(grown * st.statMult) + (mods[k] || 0);
       if (k === "counter") v = clamp(v, 0, COUNTER_MAX_PERCENT);
+      if (k === "crit") v = clamp(v, 0, CRIT_MAX_PERCENT);
+      if (k === "critMult") v = clamp(v, 0, CRIT_MAX_MULT);
       out[k] = Math.max(k === "hp" ? 10 : 1, v);
     }
     return out;
@@ -3032,6 +3234,12 @@ select {
         case "step":
           this._noise(0.05, 0.05, 500);
           break;
+        case "crit":
+          this._noise(0.26, 0.36, 2200);
+          this._sweep(1200, 240, 0.3, "square", 0.22);
+          this._note(1568, t + 0.04, 0.16, "triangle", 0.16);
+          this._note(2093, t + 0.1, 0.14, "triangle", 0.12);
+          break;
         default:
           break;
       }
@@ -3131,6 +3339,8 @@ select {
       const buff = ((_a = this.buffs[key]) == null ? void 0 : _a.total) || 0;
       let v = b + buff;
       if (key === "counter") v = clamp(v, 0, COUNTER_MAX_PERCENT);
+      if (key === "crit") v = clamp(v, 0, CRIT_MAX_PERCENT);
+      if (key === "critMult") v = clamp(v, 0, CRIT_MAX_MULT);
       return Math.max(1, Math.floor(v));
     }
     applyBuff(stat, amount) {
@@ -3182,6 +3392,16 @@ select {
     }
     get enemy() {
       return this.enemies[this.enemyIndex];
+    }
+    /** Trainer party bookkeeping: how big the enemy team is and how much of it is left. */
+    enemyTeamTotal() {
+      return this.enemies.length;
+    }
+    enemyTeamLeft() {
+      return this.enemies.filter((m) => !isFainted(m)).length;
+    }
+    enemyTeamSummary() {
+      return { left: this.enemyTeamLeft(), total: this.enemyTeamTotal() };
     }
     cb(m) {
       if (!this.combatants.has(m.uid)) {
@@ -3319,7 +3539,7 @@ select {
         events.push({ type: "charge", side: atkSide, value: 0 });
         events.push({ type: "log", text: `${displayName(attacker)} unleashes ${ult.name}!`, emphasis: true });
         events.push({ type: "ultimate-cast", side: atkSide, element: ult.element, name: ult.name });
-        this._dealDamage(attacker, defender, ult, events, { isUltimate: true });
+        this._dealDamage(attacker, defender, ult, events, { isUltimate: true, logPrefix: `${ult.name} strikes` });
         if (ult.selfBuff) {
           for (const eff of ult.selfBuff) this._applyBuff(attacker, eff, events, atkSide);
         }
@@ -3342,9 +3562,10 @@ select {
         for (const eff of skill.effects) this._applyBuff(attacker, eff, events, atkSide);
         return;
       }
-      events.push({ type: "log", text: `${displayName(attacker)} used ${skill.name}!` });
       events.push({ type: "cast", side: atkSide, kind: skill.damageType, element: skill.element, name: skill.name });
-      this._dealDamage(attacker, defender, skill, events, {});
+      this._dealDamage(attacker, defender, skill, events, {
+        logPrefix: `${displayName(attacker)} used ${skill.name}!`
+      });
     }
     _applyBuff(target, eff, events, side) {
       const cb = this.cb(target);
@@ -3356,30 +3577,48 @@ select {
       events.push({ type: "buff", side, stat: eff.stat, amount: eff.amount, stacks: res.stacks, total: res.total, uid: target.uid });
       events.push({ type: "log", text: `${displayName(target)}'s ${eff.stat.toUpperCase()} rose! (+${res.total}, ${res.stacks}/${MAX_BUFF_STACKS} stacks)` });
     }
-    _dealDamage(attacker, defender, move, events, { isUltimate }) {
+    /**
+     * @param {object} opts
+     *  isUltimate: bool,
+     *  logPrefix: string — opening clause of the battle message, e.g. "Emberu used Bite!"
+     *    The damage (or the dodge) is appended to it so the attack line reports the result.
+     */
+    _dealDamage(attacker, defender, move, events, { isUltimate, logPrefix } = {}) {
       const atkSide = this.party.includes(attacker) ? "player" : "enemy";
       const defSide = atkSide === "player" ? "enemy" : "player";
       const acb = this.cb(attacker);
       const dcb = this.cb(defender);
-      const counter = dcb.stat("counter");
-      const missChance = clamp(counter, 0, COUNTER_MAX_PERCENT) / 100;
-      if (this.rng() < missChance) {
+      const prefix = logPrefix ? `${logPrefix} \u2014 ` : "";
+      const dodge = counterDodgePercent(dcb.stat("counter"));
+      if (this.rng() * 100 < dodge) {
+        events.push({
+          type: "log",
+          text: `${prefix}${displayName(defender)} countered and dodged it! (${Math.round(dodge)}% Counter)`
+        });
         events.push({ type: "miss", side: defSide, uid: defender.uid });
-        events.push({ type: "log", text: `${displayName(defender)} countered and dodged the attack!` });
         return;
       }
       const offKey = move.damageType === "physical" ? "patk" : "satk";
       const defKey = move.damageType === "physical" ? "pdef" : "sdef";
       const off = acb.stat(offKey);
       const def = dcb.stat(defKey);
+      const critChance = clamp(acb.stat("crit"), 0, CRIT_MAX_PERCENT);
+      const critBonus = clamp(acb.stat("critMult"), 0, CRIT_MAX_MULT);
+      const crit = this.rng() * 100 < critChance;
       const atkElement = move.element || speciesOf(attacker).element;
       const mult = elementMultiplier(atkElement, speciesOf(defender).element);
       const rand = DAMAGE_RANDOM_MIN + this.rng() * (DAMAGE_RANDOM_MAX - DAMAGE_RANDOM_MIN);
       const levelFactor = 1 + 0.085 * (attacker.level - 1);
       const stageFactor = stageData(attacker).statMult;
       let dmg = Math.floor(move.power * off / Math.max(1, def) * levelFactor * stageFactor * rand * mult);
+      if (crit) dmg = Math.floor(dmg * (1 + critBonus / 100));
       dmg = Math.max(1, dmg);
       defender.currentHp = Math.max(0, defender.currentHp - dmg);
+      events.push({
+        type: "log",
+        text: `${prefix}${dmg} damage!${crit ? ` CRITICAL HIT! (x${(1 + critBonus / 100).toFixed(2)})` : ""}`,
+        emphasis: crit
+      });
       events.push({
         type: "damage",
         side: defSide,
@@ -3387,6 +3626,8 @@ select {
         amount: dmg,
         effectiveness: mult,
         isUltimate: !!isUltimate,
+        crit,
+        critBonus,
         mythling: this.snapshot(defender)
       });
       const eff = effectivenessLabel(mult);
@@ -3437,8 +3678,10 @@ select {
         if (this.type === BattleType.TRAINER && nextEnemy >= 0) {
           this._awardExp(this.enemy, events);
           this.enemyIndex = nextEnemy;
-          events.push({ type: "log", text: `${this.trainer.name} sends out ${displayName(this.enemy)}!` });
-          events.push({ type: "switch", side: "enemy", mythling: this.snapshot(this.enemy) });
+          const { left, total } = this.enemyTeamSummary();
+          const last = left === 1 ? " \u2014 their last Mythling!" : ` (${left} of ${total} left)`;
+          events.push({ type: "log", text: `${this.trainer.name} sends out ${displayName(this.enemy)}!${last}`, emphasis: true });
+          events.push({ type: "switch", side: "enemy", mythling: this.snapshot(this.enemy), teamLeft: left, teamTotal: total });
           return;
         }
         this._awardExp(this.enemy, events);
@@ -3447,7 +3690,8 @@ select {
           events.push({ type: "wild-defeated", mythling: this.snapshot(this.enemy) });
         } else {
           this.phase = BattlePhase.WON;
-          events.push({ type: "win" });
+          events.push({ type: "log", text: `${this.trainer.name} has no Mythlings left!`, emphasis: true });
+          events.push({ type: "win", teamLeft: 0, teamTotal: this.enemyTeamTotal() });
         }
         return;
       }
@@ -6954,7 +7198,7 @@ select {
     activeModalClose();
     return true;
   }
-  function modal({ title, body, buttons, dismissible = true, cancelValue }) {
+  function modal({ title, body, buttons, dismissible = true, cancelValue, wide = false, scroll = true }) {
     return new Promise((resolve) => {
       const layer = document.getElementById("modal");
       layer.innerHTML = "";
@@ -6969,13 +7213,17 @@ select {
       const fallback = cancelValue !== void 0 ? cancelValue : (btns.find((b) => !b.primary) || {}).value ?? false;
       const dismiss = () => close(fallback);
       if (dismissible) activeModalClose = dismiss;
-      const box = el("div", { class: "modal panel" }, [
+      const box = el("div", { class: `modal panel ${wide ? "wide" : ""}` }, [
         el("div", { class: "panel-head" }, [
           el("div", { class: "panel-head-text" }, [el("h3", { text: title || "" })]),
           dismissible ? closeButton(dismiss) : null
         ]),
-        typeof body === "string" ? el("p", { html: body }) : body,
-        el("div", { class: "row end" }, btns.map((b) => button(b.label, { class: b.primary ? "primary" : b.danger ? "danger" : "ghost", onclick: () => close(b.value) })))
+        el(
+          "div",
+          { class: `modal-body ${scroll ? "scroll-y" : ""}` },
+          [typeof body === "string" ? el("p", { html: body }) : body]
+        ),
+        el("div", { class: "row end", style: { marginTop: "12px" } }, btns.map((b) => button(b.label, { class: b.primary ? "primary" : b.danger ? "danger" : "ghost", onclick: () => close(b.value) })))
       ]);
       layer.appendChild(box);
     });
@@ -7143,7 +7391,7 @@ select {
       this.buildUI();
       const enemy = battle.enemy;
       CollectionManager.markSeen(enemy.speciesId, enemy.mutation);
-      const intro = battle.type === BattleType.TRAINER ? `${battle.trainer.name} wants to battle!` : `A wild ${displayName(enemy)} Lv.${enemy.level} appeared!`;
+      const intro = battle.type === BattleType.TRAINER ? `${battle.trainer.name} wants to battle! (${battle.enemies.length} Mythlings)` : `A wild ${displayName(enemy)} Lv.${enemy.level} appeared!`;
       this.pushLog(intro, true);
       if (battle.type === BattleType.TRAINER) this.pushLog(`${battle.trainer.name}: ${battle.trainer.intro}`);
       AudioManager.playTheme(((_a = battle.trainer) == null ? void 0 : _a.finalBoss) ? "boss" : "battle");
@@ -7185,7 +7433,10 @@ select {
           el("span", { class: "cc-name", text: displayName(m) }),
           mutationChip(m.mutation),
           el("span", { class: "cc-lv", text: `Lv.${m.level}` })
-        ]),
+        ])
+      ];
+      if (side === "enemy" && this.battle.type === BattleType.TRAINER) rows.push(this.teamRow());
+      rows.push(
         el("div", { class: "row", style: { gap: "6px", margin: "4px 0" } }, [
           elementChip(sp.element),
           rarityChip(m.rarity),
@@ -7194,7 +7445,7 @@ select {
         bar("hp", pct, hpClass(pct)),
         el("div", { class: "cc-hp-text", text: `${hp} / ${v.maxHp} HP` }),
         this.buffRow(v)
-      ];
+      );
       if (side === "player") {
         const pips = el("div", { class: "ult-track" });
         for (let i = 0; i < ULTIMATE_MAX_CHARGE; i++) {
@@ -7208,6 +7459,34 @@ select {
         }));
       }
       return rows;
+    }
+    /**
+     * Trainer party readout: one pip per team member, filled while it can still
+     * fight. Lets the player see immediately whether the enemy is down to its
+     * last Mythling.
+     */
+    teamRow() {
+      var _a;
+      const b = this.battle;
+      const total = b.enemies.length;
+      const left = b.enemies.filter((m) => !isFainted(m)).length;
+      const name = ((_a = b.trainer) == null ? void 0 : _a.name) || "Trainer";
+      const row = el("div", { class: `team-row ${left === 1 ? "last" : ""}` });
+      row.dataset.sig = `${left}/${total}`;
+      const pips = el("div", { class: "team-pips" });
+      for (let i = 0; i < total; i++) {
+        pips.appendChild(el("div", { class: `team-pip ${i < left ? "alive" : "down"}` }));
+      }
+      row.append(
+        el("div", { class: "team-name", text: name }),
+        pips,
+        el("div", {
+          class: "team-count",
+          text: left === 1 ? `1/${total} LEFT \u2014 LAST MYTHLING!` : `${left}/${total} LEFT`
+        })
+      );
+      row.title = `${name} has ${left} of ${total} Mythlings still able to battle.`;
+      return row;
     }
     /**
      * Active buff / debuff chips: which stat, the total modifier and how many
@@ -7224,8 +7503,8 @@ select {
       entries.sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total));
       for (const [stat, b] of entries) {
         const up = b.total >= 0;
-        const chip = el("span", { class: `buff-chip ${up ? "up" : "down"}`, title: `${STAT_SHORT[stat] || stat.toUpperCase()} ${up ? "buffed" : "lowered"} by ${Math.abs(b.total)} over ${Math.abs(b.stacks)} stack(s) \u2014 clears when the battle ends` });
-        chip.innerHTML = `<span class="bc-arrow">${up ? "\u25B2" : "\u25BC"}</span><span class="bc-stat">${STAT_SHORT[stat] || stat.toUpperCase()}</span><span class="bc-val">${up ? "+" : ""}${b.total}</span><span class="bc-stacks">x${Math.abs(b.stacks)}</span>`;
+        const chip = el("span", { class: `buff-chip ${up ? "up" : "down"}`, title: `${STAT_SHORT2[stat] || stat.toUpperCase()} ${up ? "buffed" : "lowered"} by ${Math.abs(b.total)} over ${Math.abs(b.stacks)} stack(s) \u2014 clears when the battle ends` });
+        chip.innerHTML = `<span class="bc-arrow">${up ? "\u25B2" : "\u25BC"}</span><span class="bc-stat">${STAT_SHORT2[stat] || stat.toUpperCase()}</span><span class="bc-val">${up ? "+" : ""}${b.total}</span><span class="bc-stacks">x${Math.abs(b.stacks)}</span>`;
         row.appendChild(chip);
       }
       return row;
@@ -7524,12 +7803,23 @@ select {
           const target = ev.side;
           this.applyViewHp(ev);
           this.anim[target].tilt = target === "player" ? -0.14 : 0.14;
-          AudioManager.sfx(ev.isUltimate || ev.effectiveness > 1 ? "hit-strong" : "hit");
-          if (SettingsManager.get("screenShake")) this.shake = Math.max(this.shake, ev.isUltimate ? 14 : 7);
+          AudioManager.sfx(ev.crit ? "crit" : ev.isUltimate || ev.effectiveness > 1 ? "hit-strong" : "hit");
+          if (SettingsManager.get("screenShake")) this.shake = Math.max(this.shake, ev.isUltimate || ev.crit ? 14 : 7);
           this.spawnHit(target, ev.effectiveness);
-          if (SettingsManager.get("damageNumbers")) this.floatNumber(target, `-${ev.amount}`, ev.effectiveness > 1 ? "#ffd76a" : ev.effectiveness < 1 ? "#9fb3c9" : "#ff8a8a");
+          if (ev.crit) {
+            this.flash = Math.max(this.flash, 0.75);
+            this.spawnHit(target, 1.5);
+          }
+          if (SettingsManager.get("damageNumbers")) {
+            this.floatNumber(
+              target,
+              ev.crit ? `-${ev.amount} CRIT!` : `-${ev.amount}`,
+              ev.crit || ev.effectiveness > 1 ? "#ffd76a" : ev.effectiveness < 1 ? "#9fb3c9" : "#ff8a8a",
+              ev.crit
+            );
+          }
           this.refreshCards();
-          await wait(400);
+          await wait(ev.crit ? 520 : 400);
           this.anim[target].tilt = 0;
           break;
         }
@@ -7556,7 +7846,7 @@ select {
               total: ev.total !== void 0 ? ev.total : cur.total + (ev.type === "buff" ? ev.amount : -ev.amount)
             };
           }
-          const lbl = STAT_SHORT[ev.stat] || ev.stat.toUpperCase();
+          const lbl = STAT_SHORT2[ev.stat] || ev.stat.toUpperCase();
           const sign = ev.type === "buff" ? "+" : "-";
           this.floatNumber(
             ev.side,
@@ -7649,6 +7939,11 @@ select {
       }
       const txt = card.querySelector(".cc-hp-text");
       if (txt) txt.textContent = `${hp} / ${v.maxHp} HP`;
+      const oldTeam = card.querySelector(".team-row");
+      if (oldTeam && this.battle.type === BattleType.TRAINER) {
+        const sig2 = `${this.battle.enemies.filter((m2) => !isFainted(m2)).length}/${this.battle.enemies.length}`;
+        if (oldTeam.dataset.sig !== sig2) oldTeam.replaceWith(this.teamRow());
+      }
       const oldRow = card.querySelector(".buff-row");
       const sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
       if (oldRow && oldRow.dataset.sig !== sig) {
@@ -7702,9 +7997,13 @@ select {
       const p = SLOT_POS[side];
       return { x: p.x * W, y: p.y * H };
     }
-    floatNumber(side, text, color) {
+    floatNumber(side, text, color, crit = false) {
       const { x, y } = this.screenPos(side);
-      const n = el("div", { class: "dmg-float", text, style: { left: `${x - 24}px`, top: `${y - 110}px`, color } });
+      const n = el("div", {
+        class: `dmg-float ${crit ? "crit" : ""}`,
+        text,
+        style: { left: `${x - (crit ? 60 : 24)}px`, top: `${y - 110}px`, color }
+      });
       document.getElementById("app").appendChild(n);
       setTimeout(() => n.remove(), 1100);
     }
@@ -8016,6 +8315,569 @@ select {
     }
   };
 
+  // src/ui/wiki.js
+  function h3(text, search = "") {
+    const n = el("h3", { class: "wiki-h3", text });
+    n.dataset.wikitext = `${text} ${search}`.toLowerCase();
+    return n;
+  }
+  function para(html, search = "") {
+    const n = el("p", { class: "wiki-p", html });
+    n.dataset.wikitext = search ? search.toLowerCase() : strip(html).toLowerCase();
+    return n;
+  }
+  function strip(html) {
+    return String(html).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+  }
+  function table(rows, search = "") {
+    const body = rows.filter(Boolean).map(([k, v]) => el("div", { class: "wiki-tr" }, [
+      el("div", { class: "wiki-td k", html: k }),
+      // keys may carry chips / colour
+      el("div", { class: "wiki-td v", html: v })
+    ]));
+    const n = el("div", { class: "wiki-table" }, body);
+    n.dataset.wikitext = `${rows.map((r) => `${(r == null ? void 0 : r[0]) || ""} ${strip((r == null ? void 0 : r[1]) || "")}`).join(" ")} ${search}`.toLowerCase();
+    return n;
+  }
+  function bullets(items, search = "") {
+    const n = el("ul", { class: "wiki-ul" }, items.filter(Boolean).map((t) => el("li", { html: t })));
+    n.dataset.wikitext = `${items.join(" ")} ${search}`.toLowerCase();
+    return n;
+  }
+  function note(html, search = "") {
+    const n = el("div", { class: "wiki-note", html });
+    n.dataset.wikitext = `${strip(html)} ${search}`.toLowerCase();
+    return n;
+  }
+  function block(children, search = "") {
+    const n = el("div", { class: "wiki-block" }, children);
+    if (search) n.dataset.wikitext = search.toLowerCase();
+    return n;
+  }
+  function creature(speciesId, stage = 0, size = 92) {
+    const cv = el("canvas", { class: "wiki-portrait", width: size, height: size });
+    const ctx = cv.getContext("2d");
+    ctx.save();
+    ctx.translate(size / 2, size * 0.9);
+    drawMythling(ctx, {
+      speciesId,
+      stage,
+      mutation: "none",
+      x: -size * 0.05,
+      y: 0,
+      size: size * 0.8,
+      t: 0,
+      facing: 1,
+      shadow: false
+    });
+    ctx.restore();
+    return cv;
+  }
+  var SECTIONS = [
+    ["basics", "Getting Started", "play", basics],
+    ["stats", "Stats", "dna", statsSection],
+    ["moods", "Moods", "user", moodsSection],
+    ["rarity", "Rarity & Mutations", "diamond", raritySection],
+    ["elements", "Elements", "spark", elementsSection],
+    ["battle", "Battle Rules", "strike", battleSection],
+    ["mythlings", "Mythlings", "box", speciesSection],
+    ["skills", "Skills & Ultimates", "ultimate", skillsSection],
+    ["items", "Items & Balls", "bag", itemsSection],
+    ["world", "World & Trainers", "map", worldSection],
+    ["progress", "Levelling & Evolution", "levelup", progressSection],
+    ["controls", "Controls & Menus", "settings", controlsSection],
+    ["version", "Version & Roadmap", "flag", versionSection]
+  ];
+  function basics() {
+    return [
+      h3("The journey", "story objective goal"),
+      para(
+        `Mythlings: Wildbound is a creature-collecting RPG. Explore three regions, battle wild
+      Mythlings and NPC trainers, and grow a team of up to ${PARTY_MAX} Mythlings.`,
+        "explore regions journey overview"
+      ),
+      bullets([
+        "<b>Walk the routes</b> \u2014 wild Mythlings appear while you move through tall grass and wild zones.",
+        "<b>Defeat a wild Mythling first</b> \u2014 a living one will never hold still, so you must knock it out before you can catch it.",
+        "<b>Catch it</b> \u2014 choose a ball on the victory screen. Every caught Mythling restarts at <b>Lv.1</b> and keeps its species, Mood, Rarity and mutation.",
+        "<b>Raise it</b> \u2014 battle, or feed it food from your bag to convert items straight into EXP.",
+        "<b>Evolve at Lv.20</b> \u2014 the first evolution is live in this version.",
+        "<b>Beat each region Guardian</b> to unlock the gate to the next region."
+      ], "rules core loop catch defeat evolve guardian gate"),
+      note(`<b>The golden rule:</b> a Mythling you catch is always reset to <b>Lv.1</b>. Its level in the
+      wild only decides how hard the fight and the catch are \u2014 never how strong it becomes for you.`),
+      h3("Where to go", "route order"),
+      table(MAP_ORDER.map((id, i) => [
+        `${i + 1}. ${MAPS[id].displayName}`,
+        `Wild Mythlings <b>Lv.${MAPS[id].levelRange[0]}\u2013${MAPS[id].levelRange[1]}</b>`
+      ])),
+      h3("Saving", "save autosave slot"),
+      bullets([
+        "The game autosaves after important moments (battles, catches, evolutions, purchases).",
+        "Open the menu with <b>ESC</b> and use the <b>SAVE</b> tab to save manually to any of 3 slots."
+      ])
+    ];
+  }
+  function statsSection() {
+    return [
+      h3("The nine stats", "stat list hp attack defense speed counter crit"),
+      para("Species base stats grow with level, get multiplied by the evolution stage, and are then modified by Mood (scaled by Rarity). Buffs from skills stack on top during a battle only."),
+      table(STAT_KEYS.map((k) => [
+        `${STAT_SHORT2[k]} \u2014 ${STAT_LABELS[k]}`,
+        `${STAT_INFO[k]} <span class="wiki-dim">(bar scale: 0\u2013${STAT_BAR_MAX[k]})</span>`
+      ])),
+      h3("Counter \u2014 the evasion stat", "counter dodge evasion miss nerf"),
+      table([
+        ["What it does", "Gives the defender a chance to dodge an incoming attack entirely."],
+        ["Conversion", `Each point of Counter = <b>${COUNTER_DODGE_SCALE * 100}%</b> dodge chance.`],
+        ["Dodge cap", `<b>${COUNTER_MAX_DODGE}%</b> \u2014 no Mythling can ever become untouchable.`],
+        ["Stat cap", `Counter itself caps at <b>${COUNTER_MAX_PERCENT}</b>.`]
+      ]),
+      note(`Counter was nerfed: it used to give a full 1% dodge per point (up to 35%). It is now
+      half that, capped at ${COUNTER_MAX_DODGE}%, so a missed attack is a surprise instead of a routine.`),
+      h3("Crit Chance & Crit Damage", "crit critical chance multiplier damage"),
+      table([
+        ["CRIT \u2014 Crit Chance", `Percent chance that an attack lands critically. Caps at <b>${CRIT_MAX_PERCENT}%</b>.`],
+        ["C.DMG \u2014 Crit Damage", `Bonus damage on a critical hit. +50% means a crit deals <b>1.5x</b>. Caps at <b>+${CRIT_MAX_MULT}%</b> (x3).`],
+        ["Base values", "Every species starts around 4\u201310% crit chance and +40% to +65% crit damage."],
+        ["Growth", "Crit Chance grows with level; Crit Damage grows with level and jumps with evolution."],
+        ["Moods", "Feral, Savage, Precise, Brutal and Keen moods push crit chance and/or crit damage."]
+      ]),
+      para("A critical hit multiplies the whole damage roll (after element effectiveness), shows a golden damage number and a <b>CRITICAL HIT!</b> line in the battle log.")
+    ];
+  }
+  function moodsSection() {
+    const rows = MOOD_IDS.map((id) => {
+      const m = MOODS[id];
+      const up = m.up.map((k) => `<b class="good">+${STAT_SHORT2[k]}</b>`).join(" ");
+      return [
+        `${m.name}${m.up.includes("crit") || m.up.includes("critMult") ? ' <span class="chip evolve">CRIT</span>' : ""}`,
+        `${up} &nbsp;&nbsp; <b class="bad">-${STAT_SHORT2[m.down]}</b>`
+      ];
+    });
+    return [
+      h3("What a Mood is", "mood personality nature"),
+      para(`Every Mythling has a <b>Mood</b>: a fixed trait that raises <b>three</b> stats and lowers
+      <b>one</b>. Moods are rolled when a wild Mythling appears and are kept forever \u2014 through
+      capture, evolution and every level up. There are <b>${MOOD_IDS.length}</b> moods.`),
+      h3("Rarity amplifies the Mood", "rarity magnitude scale"),
+      para(`Rarity does not change base stats by itself \u2014 it sets the <b>magnitude</b> of the Mood bonus.
+      Rarity <b>D</b> adds nothing at all; <b>SSS+</b> adds a huge swing. HP counts triple and Crit Damage counts double.`),
+      table(RARITY_ORDER.map((id) => [
+        `<b style="color:${RARITIES[id].color}">Rarity ${id}</b>`,
+        `Mood magnitude <b>+${RARITIES[id].magnitude}</b>`
+      ])),
+      h3("All moods", "list table of moods"),
+      table(rows),
+      note(`Example \u2014 a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+15 HP, +5 P.ATK, +5 CNT, \u22125 S.DEF</b>.
+      The same Mood at Rarity D (magnitude 0) changes nothing.`)
+    ];
+  }
+  function raritySection() {
+    const mut = MUTATION_IDS.filter((id) => id !== "none").map((id) => [
+      `<span style="color:${MUTATIONS[id].color}">${MUTATIONS[id].name}</span>`,
+      `${(MUTATIONS[id].chance * 100).toFixed(1)}% chance \xB7 cosmetic only (no stat change)`
+    ]);
+    return [
+      h3("Rarity", "rarity tiers D C B A S SSS"),
+      para("Rarity is rolled independently from the species. It sets how strongly the Mood applies and slightly changes how easy the Mythling is to catch."),
+      table(RARITY_ORDER.map((id) => {
+        const r = RARITIES[id];
+        return [
+          `<b style="color:${r.color}">${r.name}</b>`,
+          `Mood magnitude <b>+${r.magnitude}</b> \xB7 catch modifier <b>x${r.catchMod.toFixed(2)}</b> \xB7 roll weight <b>${r.weight}</b>`
+        ];
+      })),
+      h3("Mutations", "shiny darkness mutation cosmetic"),
+      para("Mutations are rare cosmetic variants recorded in your Collection. They do not change stats in this version."),
+      table(mut),
+      h3("Catch chance", "catch capture ball formula"),
+      para(`<code>chance = catchRate \xD7 ballMultiplier \xD7 rarityModifier \xD7 levelFactor \xD7 hpFactor</code><br>
+      A fainted wild Mythling is much easier to catch (x1.35) than a weakened one; the lower its HP, the better.
+      You must <b>defeat</b> a wild Mythling before any ball will work.`),
+      table(BALL_IDS.map((id) => {
+        const it = ITEMS[id];
+        return [`${it.name}`, `x${it.catchMult.toFixed(2)} catch \xB7 ${it.price} Wildcoins`];
+      }), "balls")
+    ];
+  }
+  function elementsSection() {
+    const ids = Object.keys(ELEMENTS);
+    const grid = el("div", { class: "wiki-elgrid" });
+    for (const a of ids) {
+      for (const d of ids) {
+        const m = elementMultiplier(a, d);
+        const cell = el("div", {
+          class: `wiki-el ${m > 1 ? "strong" : m < 1 ? "weak" : ""}`,
+          text: `${ELEMENTS[a].name} \u2192 ${ELEMENTS[d].name}: x${m}`
+        });
+        grid.appendChild(cell);
+      }
+    }
+    return [
+      h3("The elemental triangle", "element effectiveness chart nature water fire"),
+      para(`Attacks use the <b>element of the skill</b>. Hitting a weakness multiplies damage by
+      <b>x${EFFECTIVENESS.STRONG}</b>; hitting a resistance multiplies it by <b>x${EFFECTIVENESS.WEAK}</b>.
+      Same element vs same element is neutral.`),
+      bullets(ids.map((id) => {
+        const beats = ids.filter((d) => elementMultiplier(id, d) > 1).map((d) => ELEMENTS[d].name);
+        return `<b style="color:${ELEMENTS[id].color}">${ELEMENTS[id].name}</b> is strong against ${beats.join(", ")}`;
+      })),
+      block([grid], "element chart table")
+    ];
+  }
+  function battleSection() {
+    return [
+      h3("Turn order", "speed first turn order"),
+      para('The Mythling with the higher <b>Speed</b> acts first each turn (a coin flip on a tie). Using an item or switching always resolves before anything else \u2014 they are "fast" actions.'),
+      h3("Damage", "damage formula calculation attack defense"),
+      para(`<code>damage = floor( (Power \xD7 OFF / DEF) \xD7 levelFactor \xD7 stageFactor \xD7 random(0.85\u20131.0) \xD7 elementMultiplier )</code>`),
+      bullets([
+        "<b>OFF</b> is P.ATK and <b>DEF</b> is P.DEF for Physical skills; S.ATK / S.DEF for Special skills and Ultimates.",
+        "<b>levelFactor</b> grows 8.5% per level above Lv.1.",
+        "<b>stageFactor</b> is the evolution stat multiplier (1.00 base, 1.34 evolved).",
+        "Every hit deals at least <b>1</b> damage.",
+        "The battle log now reports the exact damage of every attack."
+      ], "power off def level factor random"),
+      h3("Dodging (Counter)", "dodge miss counter evasion"),
+      para(`Before damage is rolled, the defender gets a <b>${COUNTER_DODGE_SCALE * 100}% per point of Counter</b>
+      chance to dodge, capped at <b>${COUNTER_MAX_DODGE}%</b>. A dodge grants the attacker no Ultimate Charge.`),
+      h3("Critical hits", "crit critical hit chance damage multiplier"),
+      para(`After a successful hit, the attacker rolls its <b>Crit Chance</b>. On a crit the damage is
+      multiplied by <code>1 + CritDamage/100</code>, the number floats in gold and the log shouts
+      <b>CRITICAL HIT!</b>.`),
+      h3("Buffs & debuffs", "buff debuff stacks"),
+      bullets([
+        `Buff skills raise one stat at a time and stack up to <b>${MAX_BUFF_STACKS}</b> stacks per stat.`,
+        "Buffs are shown as chips on both combatant cards (\u25B2 up / \u25BC down, total and stacks).",
+        "Some Special skills carry a rider that debuffs the target (for example Speed).",
+        "All buffs and debuffs clear when the battle ends."
+      ]),
+      h3("The Ultimate", "ultimate charge unleash"),
+      bullets([
+        `Unlocks at <b>Lv.${ULTIMATE_UNLOCK_LEVEL}</b>.`,
+        `Every successful Normal or Special attack adds <b>1</b> charge; <b>${ULTIMATE_MAX_CHARGE}</b> charges unleashes it. Buffs, misses and being hit grant no charge.`,
+        "The Ultimate is fixed to the species and upgrades with evolution (base \u2192 I).",
+        "Using it spends all charge."
+      ]),
+      h3("Fainting, items & fleeing", "faint item switch run flee escape"),
+      bullets([
+        "When your Mythling faints, the next healthy one is sent out automatically \u2014 or you can switch yourself.",
+        `Items and switching happen first in the turn, but the enemy still gets to act.`,
+        "You can only flee from <b>wild</b> battles; trainer battles have no escape.",
+        `Losing all your Mythlings sends you back to the nearest Mythling Center and costs <b>${Math.round(DEFEAT_COIN_PENALTY * 100)}%</b> of your Wildcoins. Nothing else is lost.`
+      ]),
+      h3("Trainer battles", "trainer team party count"),
+      para(`Trainers field a fixed team. The enemy card shows a <b>team pip strip</b> and a
+      <b>"X/Y LEFT"</b> counter, and it says <b>LAST MYTHLING!</b> when you are down to their final one \u2014
+      so you always know how much fight is left.`),
+      h3("EXP from battle", "exp experience reward"),
+      para("Every Mythling that took part earns full EXP; bench members earn 40%. Trainer battles pay a x1.6 bonus. Over-levelled opponents pay far less.")
+    ];
+  }
+  function speciesSection() {
+    const out = [
+      h3(`The ${SPECIES_IDS.length} species of this version`, "species mythling dex list"),
+      para("Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species default Mood and Rarity D.")
+    ];
+    for (const id of SPECIES_IDS) {
+      const sp = SPECIES[id];
+      const evoLine = sp.evolutions.map((ev) => {
+        const locked = ev.future || ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE;
+        return `${ev.name} <span class="wiki-dim">(Lv.${ev.level}${locked ? " \u2014 future update" : ""})</span>`;
+      }).join("  \u2192  ");
+      const card = el("div", { class: "wiki-card" }, [
+        el("div", { class: "wiki-card-head" }, [
+          creature(id, 0, 96),
+          el("div", {}, [
+            el("div", { class: "wiki-card-title" }, [
+              el("span", { text: sp.displayName }),
+              elementChip(sp.element),
+              el("span", { class: "chip", text: sp.breed }),
+              el("span", { class: "chip", text: sp.role }),
+              sp.starter ? el("span", { class: "chip max", text: "STARTER" }) : null
+            ]),
+            el("div", { class: "wiki-p", html: sp.description }),
+            el("div", { class: "wiki-dim", text: `Ultimate: ${ULTIMATES[sp.ultimate].baseName} \xB7 catch rate ${(sp.catchRate * 100).toFixed(0)}% \xB7 EXP yield ${sp.expYield}` })
+          ])
+        ]),
+        table([
+          ["Base stats", STAT_KEYS.map((k) => `${STAT_SHORT2[k]} ${formatStat(k, sp.baseStats[k])}`).join(" \xB7 ")],
+          ["Evolution line", evoLine],
+          ["Found in", sp.spawnMaps.map((m) => MAPS[m].displayName).join(", ")],
+          ["Default mood / rarity", `${MOODS[sp.defaultMood].name} / ${sp.defaultRarity}`],
+          ["Skills", Object.keys(sp.skillUnlocks).sort((a, b) => a - b).map((lv) => `Lv.${lv}: ${sp.skillUnlocks[lv].map((s) => {
+            var _a;
+            return ((_a = SKILLS[s]) == null ? void 0 : _a.name) || s;
+          }).join(", ")}`).join(" &nbsp;|&nbsp; ")]
+        ])
+      ]);
+      card.dataset.wikitext = `${sp.displayName} ${sp.breed} ${sp.role} ${sp.element} ${sp.description} ${sp.evolutions.map((e) => e.name).join(" ")}`.toLowerCase();
+      out.push(card);
+    }
+    return out;
+  }
+  function skillsSection() {
+    const owners = {};
+    for (const sp of Object.values(SPECIES)) {
+      for (const lv of Object.keys(sp.skillUnlocks)) {
+        for (const sid of sp.skillUnlocks[lv]) {
+          (owners[sid] = owners[sid] || []).push(`${sp.displayName} (Lv.${lv})`);
+        }
+      }
+    }
+    const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat).map((s) => {
+      const meta = s.category === "buff" ? `${buffSummary(s, " ")} \xB7 ${s.uses} uses` : `Power <b>${s.power}</b> \xB7 ${s.damageType === "physical" ? "Physical (P.ATK)" : "Special (S.ATK)"}${s.element ? ` \xB7 ${ELEMENTS[s.element].name}` : ""} \xB7 ${Number.isFinite(s.uses) ? `${s.uses} uses` : "unlimited"}`;
+      return [
+        `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ""}`,
+        `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` \xB7 ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT2[s.debuff.stat]} by ${s.debuff.amount}` : ""}</span><br><span class="wiki-dim">Learned by: ${(owners[s.id] || ["\u2014"]).join(", ")}</span>`
+      ];
+    });
+    return [
+      h3("Skill slots", "normal special buff equip slots"),
+      para(`Every Mythling equips <b>1 Normal</b>, <b>1 Special</b> and <b>1 Buff</b> skill. Everything it ever
+      learns stays in its <b>Skill Library</b> forever \u2014 you can re-equip any learned skill from the
+      SKILLS tab at any time. The Ultimate is fixed to the species.`),
+      bullets([
+        "<b>Normal</b> skills have unlimited uses but low power.",
+        "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.",
+        "<b>Buff</b> skills raise one stat and never grant Ultimate Charge."
+      ]),
+      h3("Normal skills", "normal unlimited bite scratch peck"),
+      table(catRows("normal")),
+      h3("Special skills", "special elemental power uses"),
+      table(catRows("special")),
+      h3("Buff skills", "buff raise stat stacks"),
+      table(catRows("buff")),
+      h3("Ultimates", "ultimate charge tier"),
+      table(Object.values(ULTIMATES).map((u) => [
+        `<b>${u.baseName}</b>`,
+        `${ELEMENTS[u.element].name} \xB7 ${u.damageType === "physical" ? "Physical" : "Special"} \xB7 ` + u.tiers.map((t) => `${t.suffix ? `Tier${t.suffix}` : "Base"} PWR ${t.power} (Lv.${t.unlockLevel}${t.future ? ", future" : ""})`).join(" \xB7 ") + `<br><span class="wiki-dim">${u.desc}</span>`
+      ])),
+      note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge only from
+      successful Normal and Special attacks. Only the Base and \u201C I \u201D tiers are reachable in this version
+      (the tier matches the evolution stage).`)
+    ];
+  }
+  function itemsSection() {
+    const rowsFor = (catId) => Object.values(ITEMS).filter((i) => i.category === catId).map((i) => {
+      let effect = i.desc;
+      if (i.heal) effect += ` <span class="wiki-dim">(restores ${i.heal} HP)</span>`;
+      if (i.revive) effect += ` <span class="wiki-dim">(revives with ${Math.round(i.revive * 100)}% HP)</span>`;
+      if (i.restoreUses) effect += ` <span class="wiki-dim">(+${i.restoreUses} uses to every limited skill)</span>`;
+      if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp} EXP)</span>`;
+      if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
+      return [
+        `<b>${i.name}</b>${i.price ? "" : ' <span class="wiki-dim">(not sold)</span>'}`,
+        `${effect}${i.price ? ` \xB7 <b>${i.price}</b> Wildcoins` : ""}`
+      ];
+    });
+    return [
+      h3("Bags & money", "bag inventory wildcoins shop"),
+      para(`Wildcoins are earned from trainer battles and are spent in the shops of each region.
+      Your bag has no size limit in this version.`),
+      ...ITEM_CATEGORIES.map((c) => block([
+        h3(c.name, c.id),
+        table(rowsFor(c.id))
+      ], c.name)),
+      note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP, and it can never
+      push a Mythling past the level cap.`)
+    ];
+  }
+  function worldSection() {
+    const out = [
+      h3("Regions", "region map area")
+    ];
+    for (const id of MAP_ORDER) {
+      const map = MAPS[id];
+      const gates = (map.connections || []).map((c) => {
+        var _a;
+        return `\u2192 ${MAPS[c.toMap].displayName}${c.requiresItem ? ` (needs ${((_a = ITEMS[c.requiresItem]) == null ? void 0 : _a.name) || c.requiresItem})` : ""}`;
+      }).join(", ");
+      out.push(block([
+        table([
+          [`<b>${map.displayName}</b>`, `Wild Mythlings <b>Lv.${map.levelRange[0]}\u2013${map.levelRange[1]}</b> \xB7 routes: ${map.regions.map((r) => r.name).join(" \u2192 ")}`],
+          ["Gates", gates || "\u2014"]
+        ])
+      ], map.displayName));
+    }
+    out.push(h3("Trainers", "trainer npc boss guardian"));
+    for (const id of MAP_ORDER) {
+      const map = MAPS[id];
+      const trainers = (map.trainers || []).map((t) => {
+        var _a, _b;
+        return [
+          `<b>${t.name}</b>${t.guardian ? ' <span class="chip evolve">GUARDIAN</span>' : ""}${t.finalBoss ? ' <span class="chip max">FINAL</span>' : ""}`,
+          `${t.team.map((m) => `${SPECIES[m.species].displayName} Lv.${m.level}${m.rarity && m.rarity !== "D" ? ` (${m.rarity})` : ""}`).join(", ")} \xB7 reward ${((_a = t.reward) == null ? void 0 : _a.coins) || 0} Wildcoins${Object.keys(((_b = t.reward) == null ? void 0 : _b.items) || {}).length ? ` + ${Object.entries(t.reward.items).map(([i, q]) => {
+            var _a2;
+            return `${q}x ${((_a2 = ITEMS[i]) == null ? void 0 : _a2.name) || i}`;
+          }).join(", ")}` : ""}`
+        ];
+      });
+      out.push(block([table(trainers)], map.displayName));
+    }
+    out.push(h3("Buildings", "center shop heal healpoint"));
+    out.push(bullets([
+      "<b>Mythling Center</b> \u2014 free, instant healing: HP, skill uses and status restored. Your last used Center is where you wake up after a wipe.",
+      "<b>Shops</b> \u2014 buy balls, healing items and food with Wildcoins.",
+      "<b>Gates</b> \u2014 sealed until you defeat that region\u2019s Guardian and earn its key item."
+    ]));
+    out.push(note("Healing at a Center restores HP and skill uses and resets Ultimate Charge to 0 \u2014 it never touches your EXP."));
+    return out;
+  }
+  function progressSection() {
+    const curve = [1, 5, 10, 15, 20, 25, 29].map((lv) => [
+      `Lv.${lv} \u2192 Lv.${lv + 1}`,
+      `${expToNextLevel(lv)} EXP`
+    ]);
+    return [
+      h3("EXP & levelling", "exp experience level up curve"),
+      para(`Defeating Mythlings and trainers, and feeding food, all grant EXP. The requirement grows with
+      level: <code>24 + 9 \xD7 level^1.85</code>.`),
+      table(curve),
+      bullets([
+        `The current level cap is <b>Lv.${LEVEL_CAP}</b> (the data is built for ${ABSOLUTE_MAX_LEVEL}). At the cap no more EXP is stored.`,
+        "Levelling up raises every stat and tops up HP by the amount max HP grew.",
+        "Levels are also where new skills are learned \u2014 they are added to the library automatically."
+      ]),
+      h3("Evolution", "evolve evolution stage level 20"),
+      table([
+        ["Lv.20", "First evolution \u2014 live in this version (stat multiplier 1.34)."],
+        ["Lv.60 / Lv.80", `Locked until a future update (the build allows stages 0\u2013${MAX_UNLOCKED_EVOLUTION_STAGE}).`]
+      ]),
+      para("Evolution is offered automatically after a battle or feed. It raises stats, upgrades the Ultimate and unlocks that stage\u2019s skills."),
+      h3("Capture resets level", "catch capture reset level one"),
+      note("A captured Mythling is <b>always</b> reset to Lv.1 with its library rebuilt for Lv.1. Its species, Mood, Rarity and mutation are preserved, and the level you caught it at is recorded on its info panel."),
+      h3("Collection", "collection dex seen caught"),
+      para("Every species and mutation you see or catch is recorded in the COLLECTION tab.")
+    ];
+  }
+  function controlsSection() {
+    return [
+      h3("World", "controls keys movement"),
+      table([
+        ["W A S D / arrows", "Move"],
+        ["E / Enter", "Interact with people, buildings and signs"],
+        ["ESC", "Open the menu \u2014 or close whatever panel is on top"],
+        ["Touch devices", "An on-screen stick appears on first touch"]
+      ]),
+      h3("Battle", "battle keys shortcuts"),
+      table([
+        ["1", "Normal skill"],
+        ["2", "Special skill"],
+        ["3", "Buff skill"],
+        ["4 / R", "Ultimate (when fully charged)"],
+        ["Mouse / tap", "Every action is clickable: ITEM, PARTY, CATCH, RUN"]
+      ]),
+      h3("Menu tabs", "menu tabs party bag"),
+      table([
+        ["PARTY", "Your team: reorder, inspect, evolve. Click a Mythling for full details."],
+        ["MYTHLINGS", "Storage with filters and sorting."],
+        ["SKILLS", "Skill Library \u2014 equip Normal / Special / Buff skills."],
+        ["BAG", "Balls, healing, food and key items; feed food for EXP."],
+        ["MAP", "Regions you have unlocked."],
+        ["COLLECTION", "Species and mutations discovered."],
+        ["STATS", "Trainer record: play time, coins, progress."],
+        ["SAVE", "Manual save, slot switching, quit to menu."],
+        ["SETTINGS", "Audio, text speed, display, and the Game Wiki."]
+      ]),
+      h3("Bars you will see", "bar hp exp ult charge label"),
+      table([
+        ["HP bar (green/yellow/red)", "Current health. Healing fills it back to full."],
+        ["EXP bar (blue)", `Progress to the next level \u2014 <b>never</b> lost when healing. At Lv.${LEVEL_CAP} it shows MAX.`],
+        ["ULT bar (orange)", "Ultimate Charge, 0\u20138. A Center heal resets it to 0."]
+      ])
+    ];
+  }
+  function versionSection() {
+    return [
+      h3(`Version ${GAME_VERSION}`, "version number build"),
+      table([
+        ["Level cap", `Lv.${LEVEL_CAP}`],
+        ["Species", `${SPECIES_IDS.length} (3 starters)`],
+        ["Regions", `${MAP_ORDER.length}`],
+        ["Moods", `${MOOD_IDS.length}`],
+        ["Party / Storage", `${PARTY_MAX} / ${STORAGE_MAX}`],
+        ["Evolution stages live", `Lv.1 and Lv.20 (${EVOLUTION_LEVELS.slice(0, 2).join(", ")})`]
+      ]),
+      h3("Coming in future updates", "roadmap future locked"),
+      bullets([
+        "Lv.60 and Lv.80 evolutions (already described in the data).",
+        "Higher level caps and more regions.",
+        "More species, skills and moods."
+      ]),
+      note("Everything in this Wiki is generated from the same data files the game runs on, so it always matches the build you are playing.")
+    ];
+  }
+  function openWiki(sectionId = "basics") {
+    var _a;
+    if (((_a = Screens.top()) == null ? void 0 : _a.dataset.id) === "wiki") return;
+    let current = sectionId;
+    const nav = el("div", { class: "wiki-nav" });
+    const bodyWrap = el("div", { class: "wiki-body" });
+    const status = el("div", { class: "wiki-status", text: "" });
+    const searchInput = el("input", {
+      type: "text",
+      class: "wiki-search",
+      placeholder: "Search this page\u2026",
+      oninput: () => applySearch(),
+      onkeydown: (e) => e.stopPropagation()
+    });
+    const node = el("div", { class: "wiki-screen panel screen-inner" }, [
+      el("div", { class: "panel-head sticky" }, [
+        el("div", { class: "panel-head-text" }, [
+          el("h2", { class: "panel-title", text: "Game Wiki" }),
+          el("p", { class: "sub", text: "Every rule, stat, Mythling, skill and item \u2014 generated live from the game data." })
+        ]),
+        el("div", { class: "row", style: { gap: "8px" } }, [
+          searchInput,
+          closeButton(() => Screens.pop(), "Close wiki (ESC)")
+        ])
+      ]),
+      el("div", { class: "wiki-main" }, [nav, el("div", { class: "wiki-col" }, [status, bodyWrap])])
+    ]);
+    const renderNav = () => {
+      nav.innerHTML = "";
+      for (const [id, label, ico] of SECTIONS) {
+        const b = el("button", { class: `wiki-tab ${current === id ? "active" : ""}`, title: label }, [icon(ico), el("span", { text: label })]);
+        b.addEventListener("click", () => {
+          AudioManager.sfx("click");
+          current = id;
+          searchInput.value = "";
+          renderNav();
+          renderBody();
+        });
+        nav.appendChild(b);
+      }
+      nav.appendChild(el("div", { class: "wiki-nav-foot", text: `Mythlings: Wildbound v${GAME_VERSION}` }));
+    };
+    const renderBody = () => {
+      const sec = SECTIONS.find((s) => s[0] === current) || SECTIONS[0];
+      bodyWrap.innerHTML = "";
+      bodyWrap.scrollTop = 0;
+      bodyWrap.appendChild(el("div", { class: "wiki-section" }, sec[3]()));
+      status.textContent = sec[1];
+      applySearch();
+    };
+    function applySearch() {
+      const q = searchInput.value.trim().toLowerCase();
+      const blocks = bodyWrap.querySelectorAll("[data-wikitext]");
+      let shown = 0;
+      for (const b of blocks) {
+        const hit = !q || (b.dataset.wikitext || "").includes(q);
+        b.classList.toggle("wiki-hidden", !hit);
+        if (hit) shown += 1;
+      }
+      if (q) status.textContent = `${shown} result${shown === 1 ? "" : "s"} for \u201C${searchInput.value.trim()}\u201D`;
+      else status.textContent = (SECTIONS.find((s) => s[0] === current) || SECTIONS[0])[1];
+    }
+    renderNav();
+    renderBody();
+    Screens.push(node, "wiki", () => Screens.pop());
+    setTimeout(() => searchInput.blur(), 30);
+    return node;
+  }
+
   // src/systems/FeedManager.js
   var FeedManager = {
     isFood(itemId) {
@@ -8095,6 +8957,17 @@ select {
       cv._stop = () => cancelAnimationFrame(raf);
     }
     return cv;
+  }
+  function labeledBar(kind, label, value, pct, extraClass = "", title = "") {
+    const wrap = el("div", { class: "bar-wrap" }, [
+      el("div", { class: "bar-label" }, [
+        el("span", { text: label }),
+        el("span", { class: "bar-value", text: value })
+      ]),
+      bar(kind, pct, extraClass)
+    ]);
+    if (title) wrap.title = title;
+    return wrap;
   }
   var PlayerMenu = class {
     constructor(game) {
@@ -8225,9 +9098,15 @@ select {
             mutationChip(m.mutation)
           ]),
           el("div", { class: "mc-sub", text: `Lv.${m.level} \xB7 ${sp.displayName} \xB7 ${MOODS[m.mood].name} \xB7 ${getRarity(m.rarity).name}` }),
-          bar("hp", pct, hpClass(pct)),
-          el("div", { class: "mc-sub", text: `${m.currentHp}/${maxHp(m)} HP` }),
-          bar("exp", m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m)),
+          labeledBar("hp", "HP", `${m.currentHp}/${maxHp(m)}`, pct, hpClass(pct)),
+          labeledBar(
+            "exp",
+            "EXP",
+            m.level >= LEVEL_CAP ? "MAX LEVEL" : `${m.exp} / ${expNeeded(m)}`,
+            m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m),
+            "",
+            "EXP is kept forever \u2014 healing only restores HP, skill uses and Ultimate Charge."
+          ),
           extra || null
         ])
       ]);
@@ -8246,11 +9125,11 @@ select {
       const statRows = STAT_KEYS.map((k) => {
         const isUp = MOODS[m.mood].up.includes(k);
         const isDown = MOODS[m.mood].down === k;
-        const maxRef = k === "hp" ? 600 : k === "counter" ? 35 : 90;
-        return el("div", { class: `stat-row ${isUp ? "up" : ""} ${isDown ? "down" : ""}` }, [
+        const maxRef = STAT_BAR_MAX[k] || 90;
+        return el("div", { class: `stat-row ${isUp ? "up" : ""} ${isDown ? "down" : ""}`, title: STAT_INFO[k] }, [
           el("span", { class: "stat-name" }, [el("span", { text: STAT_LABELS[k] }), isUp ? icon("up", "tiny") : isDown ? icon("down", "tiny") : null]),
           el("div", { class: "sbar" }, [el("i", { style: { width: `${Math.min(100, stats[k] / maxRef * 100)}%` } })]),
-          el("b", { text: String(stats[k]) })
+          el("b", { text: formatStat(k, stats[k]) })
         ]);
       });
       const body = el("div", { class: "detail-wrap" }, [
@@ -8283,11 +9162,18 @@ select {
           el("h3", { text: `${displayName(m)}  \xB7  Lv.${m.level}${m.level >= LEVEL_CAP ? "  (MAX LEVEL)" : ""}` }),
           el("div", { class: "mc-sub", text: `Species: ${sp.displayName} \xB7 Breed: ${sp.breed} \xB7 Role: ${sp.role} \xB7 Form: ${stageData(m).name} (stage ${m.stage + 1})` }),
           el("div", { style: { margin: "8px 0" } }, [
-            el("div", { class: "mc-sub", text: m.level >= LEVEL_CAP ? "EXP: MAX LEVEL REACHED" : `EXP: ${m.exp} / ${expNeeded(m)}` }),
-            bar("exp", m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m))
+            labeledBar(
+              "exp",
+              "EXP",
+              m.level >= LEVEL_CAP ? "MAX LEVEL" : `${m.exp} / ${expNeeded(m)}`,
+              m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m),
+              "",
+              "EXP is never lost when healing \u2014 only HP, skill uses and Ultimate Charge are restored."
+            )
           ]),
           el("h3", { text: "Stats" }),
           el("div", { class: "stat-rows" }, statRows),
+          el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) \xB7 <b>${stats.crit}%</b> crit chance \xB7 crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
           el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg("up", "tiny")} ${mood.up.join(", ")} &nbsp; ${iconSvg("down", "tiny")} ${mood.down} \u2014 magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
           el("h3", { text: "Equipped Skills" }),
           ...["normal", "special", "buff"].map((slot) => {
@@ -8318,7 +9204,7 @@ select {
           el("div", { class: "mc-sub", text: ((_a = m.meta) == null ? void 0 : _a.isStarter) ? "Your starter partner \u2014 chosen at the beginning of your journey." : ((_b = m.meta) == null ? void 0 : _b.caughtLevel) ? `Caught at Lv.${m.meta.caughtLevel} with a ${((_c = getItem(m.meta.caughtWith)) == null ? void 0 : _c.name) || "ball"} in ${((_d = MAPS[m.meta.originMap]) == null ? void 0 : _d.displayName) || "the wild"} \u2014 restarted at Lv.1.` : "Origin unknown." })
         ])
       ]);
-      modal({ title: displayName(m).toUpperCase(), body, buttons: [{ label: "CLOSE", value: true, primary: true }] });
+      modal({ title: displayName(m).toUpperCase(), body, wide: true, buttons: [{ label: "CLOSE", value: true, primary: true }] });
     }
     // ---------------------------------------------------- STORAGE
     renderStorage(root) {
@@ -8486,7 +9372,7 @@ select {
       toast(`${displayName(pick)} ate the ${item.name} \u2014 +${res.exp} EXP`, "ok");
       this.renderTab();
       if (res.result.levels.length) {
-        const entries = res.result.levels.map((lv) => ({ name: displayName(pick), ...lv }));
+        const entries = res.result.levels.map((lv) => ({ uid: pick.uid, name: displayName(pick), ...lv }));
         await new Promise((done) => levelUpSummaryRef(entries, done));
         this.renderTab();
       }
@@ -8495,7 +9381,7 @@ select {
       await this.game.autosave();
     }
     /** Shared party picker used by items and food. `note` adds a per-Mythling line. */
-    pickPartyTarget(title, note = null) {
+    pickPartyTarget(title, note2 = null) {
       const list = el("div", { class: "grid-cards" });
       return new Promise((resolve) => {
         let done = false;
@@ -8510,7 +9396,7 @@ select {
         PartyManager.list().forEach((m) => {
           const card = this.mythCard(m, {
             onClick: () => finish(m),
-            extra: note ? el("div", { class: "mc-sub feed-note", text: note(m) }) : null
+            extra: note2 ? el("div", { class: "mc-sub feed-note", text: note2(m) }) : null
           });
           list.appendChild(card);
         });
@@ -8602,7 +9488,7 @@ select {
           el("div", {}, [
             el("div", { class: "row", style: { gap: "6px" } }, [elementChip(sp.element), el("span", { class: "chip", text: sp.breed }), el("span", { class: "chip", text: sp.role })]),
             el("p", { class: "sub", text: sp.description }),
-            el("div", { class: "mc-sub", text: `Base stats \u2014 HP ${sp.baseStats.hp}, P.ATK ${sp.baseStats.patk}, S.ATK ${sp.baseStats.satk}, P.DEF ${sp.baseStats.pdef}, S.DEF ${sp.baseStats.sdef}, SPD ${sp.baseStats.spd}, CNT ${sp.baseStats.counter}` }),
+            el("div", { class: "mc-sub", text: `Base stats \u2014 ${STAT_KEYS.map((k) => `${STAT_SHORT[k]} ${formatStat(k, sp.baseStats[k])}`).join(", ")}` }),
             el("div", { class: "mc-sub", text: `Found in: ${sp.spawnMaps.map((mp) => MAPS[mp].displayName).join(", ")}` })
           ])
         ]),
@@ -8612,7 +9498,7 @@ select {
           ev.future ? icon("lock", "tiny") : null
         ])))
       ]);
-      modal({ title: sp.displayName.toUpperCase(), body, buttons: [{ label: "CLOSE", value: true, primary: true }] });
+      modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: "CLOSE", value: true, primary: true }] });
     }
     // ---------------------------------------------------- STATS
     renderStats(root) {
@@ -8727,7 +9613,15 @@ select {
       });
       return el("div", { class: "item-row" }, [el("div", { class: "ir-main" }, [el("div", { class: "ir-name", text: label })]), b]);
     };
+    const wikiBtn = iconTextBtn("book", "OPEN WIKI", { class: "primary small", sfx: "confirm", onclick: () => openWiki() });
     wrap.append(
+      el("div", { class: "item-row", style: { borderColor: "rgba(242,199,97,.5)", background: "rgba(242,199,97,.08)" } }, [
+        el("div", { class: "ir-main" }, [
+          el("div", { class: "ir-name", text: "Game Wiki" }),
+          el("div", { class: "ir-desc", text: "Stats, moods, rarities, elements, species, skills, items, battle rules and the world \u2014 all in one place." })
+        ]),
+        wikiBtn
+      ]),
       slider("Master Volume", "masterVolume", 0, 1, 0.05),
       slider("Music Volume", "musicVolume", 0, 1, 0.05),
       slider("SFX Volume", "sfxVolume", 0, 1, 0.05),
@@ -9091,7 +9985,7 @@ select {
           rarityChip(sp.defaultRarity),
           el("span", { class: "chip", text: MOODS[sp.defaultMood].name })
         ]),
-        el("div", { class: "stat-mini" }, Object.keys(stats).map((k) => el("div", {}, [el("span", { text: STAT_SHORT[k] }), el("b", { text: String(stats[k]) })]))),
+        el("div", { class: "stat-mini" }, Object.keys(stats).map((k) => el("div", {}, [el("span", { text: STAT_SHORT2[k] }), el("b", { text: String(stats[k]) })]))),
         el("p", { class: "sub", style: { fontSize: ".78rem", marginTop: "8px" }, text: sp.description }),
         el("div", { class: "sub", style: { fontSize: ".75rem" }, text: `Evolves into ${sp.evolutions[1].name} at Lv.20 \xB7 Ultimate: ${ultimateName(sp)}` })
       ]);
@@ -9312,7 +10206,7 @@ select {
       AudioManager.sfx("levelup");
       title.textContent = "Congratulations!";
       sub.innerHTML = `<b>${result.from}</b> evolved into <b style="color:#ffd76a">${result.to}</b>!`;
-      const gains = el("div", { class: "levelup-list" }, Object.entries(result.gains).filter(([, v]) => v !== 0).map(([k, v]) => el("div", { class: "gain", text: `${STAT_SHORT[k]} ${v > 0 ? "+" : ""}${v}` })));
+      const gains = el("div", { class: "levelup-list" }, Object.entries(result.gains).filter(([, v]) => v !== 0).map(([k, v]) => el("div", { class: "gain", text: `${STAT_SHORT2[k]} ${v > 0 ? "+" : ""}${v}` })));
       const skills = result.newSkills.length ? el("p", { html: `New skills added to the Skill Library: <b>${result.newSkills.map((s) => s.replace(/_/g, " ")).join(", ")}</b>` }) : null;
       const ult = el("p", { html: `Ultimate upgraded to <b style="color:#ffd76a">${result.ultimate.name}</b>!` });
       const btn = button("CONTINUE", { class: "primary", onclick: () => {
@@ -9322,22 +10216,46 @@ select {
       layer.append(gains, skills || el("span"), ult, btn);
     };
   }
+  function groupLevelUps(entries) {
+    const groups = [];
+    const byKey = /* @__PURE__ */ new Map();
+    for (const e of entries) {
+      const key = e.uid || e.name;
+      let g = byKey.get(key);
+      if (!g) {
+        g = { uid: e.uid || null, name: e.name, from: e.level - 1, to: e.level, gains: {}, milestones: [] };
+        byKey.set(key, g);
+        groups.push(g);
+      }
+      g.from = Math.min(g.from, e.level - 1);
+      g.to = Math.max(g.to, e.level);
+      for (const [k, v] of Object.entries(e.gains || {})) g.gains[k] = (g.gains[k] || 0) + v;
+      for (const ms of e.milestones || []) if (!g.milestones.includes(ms)) g.milestones.push(ms);
+    }
+    return groups;
+  }
   function levelUpSummary(entries, onDone) {
     if (!entries.length) {
       onDone();
       return;
     }
-    const body = el("div", {});
-    for (const e of entries) {
-      body.appendChild(el("h3", { text: `${e.name} \u2192 Lv.${e.level}` }));
-      body.appendChild(el("div", { class: "levelup-list" }, Object.entries(e.gains).filter(([, v]) => v !== 0).map(([k, v]) => el("div", { class: "gain", text: `${STAT_SHORT[k]} ${v > 0 ? "+" : ""}${v}` }))));
-      for (const ms of e.milestones) {
+    const groups = groupLevelUps(entries);
+    const body = el("div", { class: "levelup-body" });
+    for (const g of groups) {
+      body.appendChild(el("h3", { text: `${g.name}  \xB7  Lv.${g.from} \u2192 Lv.${g.to}` }));
+      const gains = Object.entries(g.gains).filter(([, v]) => v !== 0);
+      body.appendChild(el("div", { class: "levelup-list" }, gains.length ? gains.map(([k, v]) => el("div", {
+        class: `gain ${v > 0 ? "up" : "down"}`,
+        text: `${STAT_SHORT2[k]} ${v > 0 ? "+" : ""}${v}`
+      })) : [el("div", { class: "gain", text: "no stat change" })]));
+      for (const ms of g.milestones) {
         if (ms === "ultimate") body.appendChild(el("p", { html: `${iconSvg("ultimate", "gold")} <b style="color:#ffd76a">ULTIMATE UNLOCKED!</b> Charge it by attacking \u2014 8 charges to unleash it.` }));
         if (ms === "evolution") body.appendChild(el("p", { html: `${iconSvg("levelup", "good")} <b style="color:#6de89a">EVOLUTION AVAILABLE!</b>` }));
         if (ms === "maxlevel") body.appendChild(el("p", { html: `<b style="color:#ffd76a">MAX LEVEL Lv.${LEVEL_CAP} REACHED!</b> Further levels arrive in a future update.` }));
       }
     }
-    modal({ title: "LEVEL UP!", body, buttons: [{ label: "NICE!", value: true, primary: true }] }).then(onDone);
+    const title = groups.length > 1 ? `LEVEL UP! (${groups.length} Mythlings)` : "LEVEL UP!";
+    modal({ title, body, scroll: false, buttons: [{ label: "NICE!", value: true, primary: true }] }).then(onDone);
   }
   function versionCompleteScreen(onDone) {
     const layer = el("div", { class: "cinematic" });
@@ -9785,7 +10703,7 @@ select {
     async endBattle(outcome, battle) {
       const levelEntries = [];
       for (const r of battle.rewards.exp) {
-        for (const lv of r.result.levels) levelEntries.push({ name: r.name, ...lv });
+        for (const lv of r.result.levels) levelEntries.push({ uid: r.uid, name: r.name, ...lv });
       }
       await fade(true);
       this.mode = "overworld";
@@ -9898,19 +10816,27 @@ select {
     // ------------------------------------------------------------ HUD
     updateHud() {
       if (this.mode !== "overworld") return;
-      const strip = document.getElementById("hud-party");
-      strip.innerHTML = "";
+      const strip2 = document.getElementById("hud-party");
+      strip2.innerHTML = "";
       for (const m of PartyManager.list()) {
         const pct = hpPercent(m);
         const chip = el("div", { class: `party-chip ${isFainted(m) ? "fainted" : ""}` }, [
           mythCanvas(m, 76),
           el("div", { class: "pc-name", text: displayName(m) }),
           el("div", { class: "pc-lv", text: `Lv.${m.level}${m.level >= LEVEL_CAP ? " MAX" : ""}` }),
-          bar("hp", pct, hpClass(pct)),
-          bar("ult", m.ultCharge / 8)
+          // Labelled bars: green is HP, orange is Ultimate Charge. Neither is EXP —
+          // EXP is only shown (and only ever grows) on the party cards in the menu.
+          el("div", { class: "pc-bar", title: `HP ${m.currentHp}/${maxHp(m)}` }, [
+            el("span", { class: "pc-tag", text: "HP" }),
+            bar("hp", pct, hpClass(pct))
+          ]),
+          el("div", { class: "pc-bar", title: `Ultimate Charge ${m.ultCharge}/8 \u2014 reset to 0 by a Center heal, never affects EXP` }, [
+            el("span", { class: "pc-tag", text: "ULT" }),
+            bar("ult", m.ultCharge / 8)
+          ])
         ]);
         chip.addEventListener("click", () => this.openMenu("party"));
-        strip.appendChild(chip);
+        strip2.appendChild(chip);
       }
       document.getElementById("hud-coins").textContent = String(GameState.player.wildcoins);
       document.getElementById("hud-location").textContent = this.overworld.currentRegionName();
