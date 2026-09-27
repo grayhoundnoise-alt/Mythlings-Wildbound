@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MYTHLING EDIT — Mythlings: Wildbound Creature, Map & Animation Editor</title>
+<meta name="description" content="Standalone offline editor for Mythlings: Wildbound — creatures, rigs, anchors, animations, VFX, maps, collision, spawns, warps and NPCs. Exports JSON / JavaScript / Arena AI packages.">
+<style>
+/* INLINE:styles.css */
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="menubar">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 5 5 1-4 4 1 6-5-3-5 3 1-6-4-4 5-1z"/></svg>
+      MYTHLING <b>EDIT</b>
+    </div>
+    <div class="menu-root" id="menu-root"></div>
+    <div class="menu-right">
+      <span class="pill" id="mr-project">—</span>
+      <span id="mr-version">v1.0.0</span>
+    </div>
+  </div>
+
+  <div id="toolbar"></div>
+
+  <div id="left-panel" class="panel">
+    <div class="tabs" id="left-tabs"></div>
+    <div class="panel-body" id="left-body"></div>
+  </div>
+  <div id="lsplit" class="splitter"></div>
+
+  <div id="center">
+    <div id="center-head">
+      <span class="mode-badge"><span class="dot"></span><span id="mode-label">MAP EDITOR</span></span>
+      <span class="crumb" id="crumb"></span>
+      <div class="view-tools">
+        <span class="coord" id="coord">X: 0  Y: 0</span>
+        <button class="btn small ghost" id="zoom-out" title="Zoom out (−)">−</button>
+        <button class="btn small ghost" id="zoom-label" title="Reset zoom">100%</button>
+        <button class="btn small ghost" id="zoom-in" title="Zoom in (+)">+</button>
+        <button class="btn small ghost" id="zoom-fit" title="Fit to screen (F)">FIT</button>
+      </div>
+    </div>
+    <div id="canvas-wrap">
+      <canvas id="scene" tabindex="0"></canvas>
+      <div class="float-tools" id="float-tools"></div>
+      <div class="sub-toolbar" id="sub-toolbar"></div>
+      <div class="anim-strip hidden" id="anim-strip"></div>
+      <div class="mini-legend hidden" id="mini-legend"></div>
+      <div id="screen-layer"></div>
+      <div id="playtest-hud" class="hidden"></div>
+      <div id="playtest-msg" class="hidden"></div>
+      <div class="collapsed-strip" id="left-collapsed"><button title="Show left panel">Hierarchy</button></div>
+      <div class="collapsed-strip" id="right-collapsed"><button title="Show right panel">Inspector</button></div>
+      <div id="bottom-collapsed"><button title="Show bottom panel">▲ Timeline / Console</button></div>
+    </div>
+  </div>
+
+  <div id="rsplit" class="splitter"></div>
+  <div id="right-panel" class="panel">
+    <div class="tabs" id="right-tabs"></div>
+    <div class="panel-body" id="right-body"></div>
+  </div>
+
+  <div id="bottom-panel" class="panel">
+    <div id="bsplit" class="splitter"></div>
+    <div class="tabs" id="bottom-tabs"></div>
+    <div id="bottom-body"></div>
+  </div>
+
+  <div id="statusbar">
+    <span class="s-tool" id="s-tool">SELECT</span>
+    <span id="s-mode" class="dim"></span>
+    <span class="s-center" id="s-cursor">X: 0  Y: 0</span>
+    <span id="s-zoom">Zoom: 100%</span>
+    <span id="s-objects">Objects: 0</span>
+    <span id="s-selected">Selected: 0</span>
+    <span class="s-save saved" id="s-save">SAVED</span>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<div id="start" class="hidden"></div>
+<input type="file" id="file-input" class="hidden">
+
+<script>
+/* INLINE:js */
+</script>
+</body>
+</html>

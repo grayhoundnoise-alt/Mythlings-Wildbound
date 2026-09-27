@@ -34,6 +34,20 @@ npm run build:offline   # regenerates MythlingsWildbound-Offline.html
 npm test             # 87 headless rule tests (levels, crits, capture, evolution, save/load, maps, rig, VFX…)
 ```
 
+### MYTHLING EDIT — the standalone content editor (not part of the game)
+
+**`MythlingEdit.html`** is a separate, single-file, fully offline editor for creatures, parts, anchors,
+rigs, animations, skill VFX, props, NPCs, maps, collision, encounter zones and warps. Double-click it —
+no server, no build step, no external dependencies. It never touches the game: it reads and writes its
+own project JSON (`{ project, maps, mythlings, objects, animations, vfx, … }`, kept in IndexedDB with
+autosave and snapshots) and exports JSON / JavaScript (`registerMythling`, `registerMap`,
+`registerAnimation`, `registerVFX`, `registerObject`), PNG previews and a **COPY FOR ARENA AI**
+implementation package that you can paste into a chat to have the content wired into the game.
+
+```bash
+node tools/build-editor.mjs   # regenerates MythlingEdit.html from tools/mythling-edit/ (sources)
+```
+
 ## Controls
 
 | Input | Action |

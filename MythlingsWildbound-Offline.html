@@ -485,7 +485,7 @@ select {
 .myth-card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,199,97,.3); }
 .myth-card canvas { width: 66px; height: 66px; flex: none; }
 .myth-card .mc-main { flex: 1; min-width: 0; }
-.myth-card .mc-name { font-weight: 800; font-size: .98rem; display: flex; gap: 6px; align-items: center; }
+.myth-card .mc-name { font-weight: 800; font-size: .98rem; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
 .myth-card .mc-sub { color: var(--muted); font-size: .78rem; margin: 2px 0 4px; }
 .myth-card.fainted { filter: grayscale(.85) brightness(.75); }
 
@@ -662,6 +662,20 @@ select {
 .stat-row.down .ico { color: var(--danger); }
 .chip .ico { width: .9em; height: .9em; margin-right: 4px; }
 .chip.evolve { border-color: #ffd76a; color: #ffd76a; }
+/* icon-only EVOLVE badge: never pushes the name row out of the card */
+.chip.evolve.icon-only { padding: 3px 6px; background: rgba(255,215,106,.16); animation: evo-pulse 1.4s ease-in-out infinite; cursor: help; }
+.chip.evolve.icon-only svg { width: 14px; height: 14px; }
+@keyframes evo-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,106,.45); } 50% { box-shadow: 0 0 0 5px rgba(255,215,106,0); } }
+
+/* ---------- ball art ---------- */
+.ball-icon { flex: none; display: inline-block; vertical-align: middle; }
+.item-ico.ball-icon { width: 30px; height: 30px; }
+.action-btn.ball-btn .ab-name { align-items: center; }
+.caught-ball-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.06); }
+.caught-ball-name { font-weight: 800; }
+.caught-line { display: flex; align-items: center; gap: 8px; }
+.wiki-ball { display: inline-flex; align-items: center; gap: 8px; }
+.wiki-ball small { color: var(--muted); font-weight: 600; }
 .coin-line { display: flex; align-items: center; gap: 6px; }
 .ir-qty.price { display: inline-flex; align-items: center; gap: 5px; }
 .locked-row { display: flex; align-items: center; gap: 6px; }
@@ -10848,6 +10862,415 @@ input[type="text"].wiki-search {
   };
   var SkillVFX = new SkillVFXManager();
 
+  // src/render/balls.js
+  var BALL_ART = {
+    basic_ball: { look: "Cordbound", base: "#d2ad74", shade: "#7a5630", accent: "#4a3320", glow: "#ffdca0" },
+    normal_ball: { look: "Rune Shell", base: "#93adc9", shade: "#39516f", accent: "#e4f7ff", glow: "#8fe3ff" },
+    advanced_ball: { look: "Coast Prism", base: "#5ad3c6", shade: "#166872", accent: "#eafffb", glow: "#a8fff2" },
+    absolute_ball: { look: "Ember Forge", base: "#524850", shade: "#1a1216", accent: "#ff8a3c", glow: "#ffb060" },
+    god_ball: { look: "Halo", base: "#fff8ea", shade: "#c5a058", accent: "#f2c761", glow: "#fff1b8" },
+    king_ball: { look: "Crown", base: "#6d43b8", shade: "#2a1454", accent: "#ffd35a", glow: "#e6b8ff" }
+  };
+  function hexToRgb2(hex) {
+    const h = hex.replace("#", "");
+    const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+    return [n >> 16 & 255, n >> 8 & 255, n & 255];
+  }
+  function mix(a, b, k) {
+    const A = hexToRgb2(a), B = hexToRgb2(b);
+    const c = A.map((v, i) => Math.round(v + (B[i] - v) * k));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  }
+  function rgba(hex, a) {
+    const [r, g, b] = hexToRgb2(hex);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  function sphere(ctx, r, base, shade, alpha = 1) {
+    const g = ctx.createRadialGradient(-r * 0.36, -r * 0.4, r * 0.08, 0, 0, r * 1.05);
+    g.addColorStop(0, mix(base, "#ffffff", 0.4));
+    g.addColorStop(0.45, base);
+    g.addColorStop(1, shade);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  function outline(ctx, r, shade) {
+    ctx.lineWidth = Math.max(1, r * 0.08);
+    ctx.strokeStyle = shade;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  function specular(ctx, r) {
+    ctx.save();
+    ctx.translate(-r * 0.34, -r * 0.42);
+    ctx.rotate(-0.6);
+    ctx.fillStyle = "rgba(255,255,255,0.42)";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.3, r * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  function clipSphere(ctx, r) {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.clip();
+  }
+  function poly2(ctx, pts) {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath();
+  }
+  function drawCordbound(ctx, r, art) {
+    sphere(ctx, r, art.base, art.shade);
+    ctx.save();
+    clipSphere(ctx, r);
+    ctx.lineCap = "round";
+    for (const ang of [0.72, -0.72]) {
+      ctx.save();
+      ctx.rotate(ang);
+      ctx.strokeStyle = art.accent;
+      ctx.lineWidth = r * 0.24;
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.2, 0);
+      ctx.lineTo(r * 1.2, 0);
+      ctx.stroke();
+      ctx.strokeStyle = mix(art.accent, "#ffffff", 0.35);
+      ctx.lineWidth = r * 0.06;
+      ctx.setLineDash([r * 0.16, r * 0.12]);
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.2, -r * 0.04);
+      ctx.lineTo(r * 1.2, -r * 0.04);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.fillStyle = art.accent;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#c98a45";
+    ctx.lineWidth = r * 0.07;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.17, 0, Math.PI * 2);
+    ctx.stroke();
+    outline(ctx, r, art.shade);
+    specular(ctx, r);
+  }
+  function drawRuneShell(ctx, r, art, t) {
+    sphere(ctx, r, art.base, art.shade);
+    ctx.save();
+    clipSphere(ctx, r);
+    ctx.fillStyle = art.shade;
+    ctx.fillRect(-r, -r * 0.13, r * 2, r * 0.26);
+    ctx.fillStyle = mix(art.shade, "#ffffff", 0.18);
+    ctx.fillRect(-r, -r * 0.13, r * 2, r * 0.05);
+    for (const x of [-0.52, 0, 0.52]) {
+      ctx.fillStyle = art.accent;
+      ctx.beginPath();
+      ctx.arc(x * r, 0, r * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    const pulse = 0.65 + 0.35 * Math.sin(t * 3.2);
+    const cy = -r * 0.5, s = r * 0.42;
+    const tri = [[0, cy - s * 0.6], [s * 0.55, cy + s * 0.35], [-s * 0.55, cy + s * 0.35]];
+    poly2(ctx, tri);
+    const g = ctx.createRadialGradient(0, cy, 0, 0, cy, s * 0.7);
+    g.addColorStop(0, "#ffffff");
+    g.addColorStop(0.5, art.glow);
+    g.addColorStop(1, rgba(art.glow, 0.15));
+    ctx.fillStyle = g;
+    ctx.globalAlpha = pulse;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = art.shade;
+    ctx.lineWidth = r * 0.06;
+    ctx.stroke();
+    outline(ctx, r, art.shade);
+    specular(ctx, r);
+  }
+  function drawCoastPrism(ctx, r, art, t) {
+    sphere(ctx, r, art.base, art.shade, 0.96);
+    ctx.save();
+    clipSphere(ctx, r);
+    ctx.strokeStyle = rgba(art.accent, 0.42);
+    ctx.lineWidth = Math.max(0.8, r * 0.045);
+    const step = r * 0.5, h = step * 0.866;
+    for (let row = -3; row <= 3; row++) {
+      for (let col = -3; col <= 3; col++) {
+        const cx = col * step * 1.5, cy = row * h * 2 + (col % 2 ? h : 0);
+        if (cx * cx + cy * cy > (r * 1.3) ** 2) continue;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = Math.PI / 3 * i;
+          const px = cx + Math.cos(a) * step * 0.5, py = cy + Math.sin(a) * step * 0.5;
+          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+    const pulse = 0.75 + 0.25 * Math.sin(t * 2.4);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.5);
+    g.addColorStop(0, "#ffffff");
+    g.addColorStop(0.35, art.glow);
+    g.addColorStop(1, rgba(art.glow, 0));
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    ctx.fillStyle = "#e3edf2";
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.82, r * 0.42, r * 0.17, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#8fa3ad";
+    ctx.lineWidth = r * 0.05;
+    ctx.stroke();
+    outline(ctx, r, art.shade);
+    specular(ctx, r);
+  }
+  var EMBER_CRACKS = [
+    [[0, 0], [0.22, -0.12], [0.38, -0.3], [0.62, -0.36], [0.8, -0.52]],
+    [[0, 0], [-0.2, -0.18], [-0.44, -0.2], [-0.66, -0.42]],
+    [[0, 0], [0.18, 0.2], [0.28, 0.44], [0.5, 0.62]],
+    [[0, 0], [-0.24, 0.16], [-0.5, 0.26], [-0.72, 0.5]],
+    [[0, 0], [0.02, -0.34], [-0.1, -0.6], [0.04, -0.84]],
+    [[0, 0], [-0.04, 0.3], [0.1, 0.56], [-0.06, 0.82]]
+  ];
+  function drawEmberForge(ctx, r, art, t) {
+    sphere(ctx, r, art.base, art.shade);
+    ctx.save();
+    clipSphere(ctx, r);
+    const pulse = 0.85 + 0.15 * Math.sin(t * 4.1);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = art.glow;
+    ctx.shadowBlur = r * 0.5;
+    ctx.strokeStyle = mix(art.accent, "#ffffff", 0.15);
+    ctx.lineWidth = r * 0.1;
+    ctx.globalAlpha = pulse;
+    for (const crack of EMBER_CRACKS) {
+      ctx.beginPath();
+      crack.forEach(([x, y], i) => i ? ctx.lineTo(x * r, y * r) : ctx.moveTo(x * r, y * r));
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.42);
+    g.addColorStop(0, "#fff3c4");
+    g.addColorStop(0.4, art.accent);
+    g.addColorStop(1, rgba(art.accent, 0));
+    ctx.fillStyle = g;
+    ctx.globalAlpha = pulse;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    ctx.strokeStyle = "#8d939d";
+    ctx.lineWidth = r * 0.085;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.02, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.4, r * 1.02, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    outline(ctx, r, art.shade);
+    specular(ctx, r);
+  }
+  function star(ctx, cx, cy, outer, inner, points, rot = 0) {
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const rad = i % 2 ? inner : outer;
+      const a = rot + Math.PI / points * i - Math.PI / 2;
+      const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+  function drawHalo(ctx, r, art, t) {
+    const tilt = -0.32;
+    ctx.save();
+    ctx.rotate(tilt);
+    ctx.strokeStyle = mix(art.accent, "#000000", 0.25);
+    ctx.lineWidth = r * 0.14;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.36, r * 0.42, 0, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.22 + 0.1 * Math.sin(t * 2);
+    ctx.strokeStyle = art.glow;
+    ctx.lineWidth = r * 0.05;
+    for (let i = 0; i < 8; i++) {
+      const a = t * 0.4 + Math.PI / 4 * i;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9);
+      ctx.lineTo(Math.cos(a) * r * 1.25, Math.sin(a) * r * 1.25);
+      ctx.stroke();
+    }
+    ctx.restore();
+    sphere(ctx, r, art.base, art.shade);
+    star(ctx, 0, 0, r * 0.36, r * 0.15, 8, t * 0.3);
+    ctx.fillStyle = art.accent;
+    ctx.fill();
+    ctx.strokeStyle = mix(art.accent, "#000000", 0.3);
+    ctx.lineWidth = r * 0.04;
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    outline(ctx, r, art.shade);
+    specular(ctx, r);
+    ctx.save();
+    ctx.rotate(tilt);
+    ctx.strokeStyle = art.accent;
+    ctx.lineWidth = r * 0.14;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.36, r * 0.42, 0, 0, Math.PI);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = r * 0.04;
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.03, r * 1.36, r * 0.42, 0, 0.3, Math.PI - 0.3);
+    ctx.stroke();
+    ctx.restore();
+  }
+  function drawCrown(ctx, r, art, t) {
+    sphere(ctx, r, art.base, art.shade);
+    ctx.save();
+    clipSphere(ctx, r);
+    ctx.strokeStyle = rgba("#b48cff", 0.35);
+    ctx.lineWidth = r * 0.1;
+    for (const rx of [0.34, 0.7]) {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * rx, r * 0.99, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(0, r);
+    ctx.stroke();
+    ctx.fillStyle = art.accent;
+    ctx.fillRect(-r, -r * 0.11, r * 2, r * 0.22);
+    ctx.fillStyle = mix(art.accent, "#000000", 0.35);
+    ctx.fillRect(-r, r * 0.07, r * 2, r * 0.04);
+    const gems = ["#ff5a6e", "#4ee27a", "#4aa8ff"];
+    [-0.46, 0, 0.46].forEach((x, i) => {
+      ctx.fillStyle = gems[i];
+      ctx.beginPath();
+      ctx.arc(x * r, 0, r * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = mix(art.accent, "#000000", 0.4);
+      ctx.lineWidth = r * 0.03;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.beginPath();
+      ctx.arc(x * r - r * 0.03, -r * 0.035, r * 0.03, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+    outline(ctx, r, art.shade);
+    specular(ctx, r);
+    const cy = -r * 0.98, w = r * 0.72, h = r * 0.36;
+    poly2(ctx, [
+      [-w / 2, cy],
+      [-w / 2, cy - h * 0.55],
+      [-w * 0.25, cy - h * 0.15],
+      [0, cy - h],
+      [w * 0.25, cy - h * 0.15],
+      [w / 2, cy - h * 0.55],
+      [w / 2, cy]
+    ]);
+    ctx.fillStyle = art.accent;
+    ctx.fill();
+    ctx.strokeStyle = "#8a6410";
+    ctx.lineWidth = r * 0.05;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    for (const [x, y] of [[-w / 2, cy - h * 0.55], [0, cy - h], [w / 2, cy - h * 0.55]]) {
+      ctx.fillStyle = "#fff1b8";
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.055, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const sp = (Math.sin(t * 5) + 1) / 2;
+    if (sp > 0.6) {
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      star(ctx, r * 0.5, -r * 0.6, r * 0.14 * (sp - 0.6) / 0.4, r * 0.04, 4);
+      ctx.fill();
+    }
+  }
+  var DESIGNS = {
+    basic_ball: drawCordbound,
+    normal_ball: drawRuneShell,
+    advanced_ball: drawCoastPrism,
+    absolute_ball: drawEmberForge,
+    god_ball: drawHalo,
+    king_ball: drawCrown
+  };
+  function drawBall(ctx, ballId, x, y, r, opts = {}) {
+    const art = BALL_ART[ballId] || BALL_ART.basic_ball;
+    const draw = DESIGNS[ballId] || drawCordbound;
+    const { t = 0, open = 0, rot = 0, alpha = 1, shadow = false } = opts;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (shadow) {
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.beginPath();
+      ctx.ellipse(x, y + r * 1.05, r * 0.9, r * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.translate(x, y);
+    if (open > 0) {
+      const g = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 2.6);
+      g.addColorStop(0, rgba(art.glow, 0.85 * open));
+      g.addColorStop(1, rgba(art.glow, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.rotate(rot);
+    draw(ctx, r, art, t);
+    if (open > 0) {
+      ctx.save();
+      clipSphere(ctx, r);
+      ctx.fillStyle = rgba("#ffffff", 0.9 * open);
+      ctx.fillRect(-r, -r * 0.16 * open, r * 2, r * 0.32 * open);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  function ballCanvas(ballId, size = 24, className = "ball-icon") {
+    var _a;
+    const c = document.createElement("canvas");
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.width = c.height = Math.round(size * dpr);
+    c.style.width = c.style.height = `${size}px`;
+    c.className = className;
+    c.title = `${((_a = BALL_ART[ballId]) == null ? void 0 : _a.look) || "Ball"}`;
+    const ctx = c.getContext("2d");
+    ctx.scale(dpr, dpr);
+    drawBall(ctx, ballId, size / 2, size / 2 + size * 0.03, size * 0.36, { t: 1.3 });
+    return c;
+  }
+  function ballLook(ballId) {
+    var _a;
+    return ((_a = BALL_ART[ballId]) == null ? void 0 : _a.look) || "Sphere";
+  }
+
   // src/ui/icons.js
   var P = {
     // ---- elements -------------------------------------------------------
@@ -11278,6 +11701,7 @@ input[type="text"].wiki-search {
       this.active = true;
       this.busy = false;
       this.particles = [];
+      this.capture = null;
       this.logLines = [];
       this.anim.player = this.freshAnim();
       this.anim.enemy = this.freshAnim();
@@ -11309,6 +11733,7 @@ input[type="text"].wiki-search {
     }
     stop() {
       this.active = false;
+      this.capture = null;
       SkillVFX.stopAllVFX();
       SkillVFX.unbind();
       if (this.ui) {
@@ -11562,8 +11987,10 @@ input[type="text"].wiki-search {
         const qty = InventoryManager.count(ballId);
         const item = getItem(ballId);
         const chance = Math.round(CaptureManager.chanceFor(target, ballId) * 100);
-        const btn = button("", { class: "action-btn", disabled: qty <= 0, onclick: () => this.tryCapture(ballId) });
-        btn.innerHTML = `<div class="ab-name">${iconSvg("orb")}<span>${item.name}</span></div><small>x${qty} \xB7 ${chance}% catch</small>`;
+        const btn = button("", { class: "action-btn ball-btn", disabled: qty <= 0, onclick: () => this.tryCapture(ballId) });
+        btn.title = `${item.name} \u2014 ${ballLook(ballId)} design. ${item.desc}`;
+        btn.appendChild(el("div", { class: "ab-name" }, [ballCanvas(ballId, 26), el("span", { text: item.name })]));
+        btn.appendChild(el("small", { text: `x${qty} \xB7 ${chance}% catch` }));
         this.actions.appendChild(btn);
         if (qty > 0) any = true;
       }
@@ -11596,7 +12023,8 @@ input[type="text"].wiki-search {
         return;
       }
       AudioManager.sfx("capture");
-      await this.captureAnimation();
+      this.pushLog(`You threw a ${getItem(ballId).name}!`);
+      await this.captureAnimation(ballId, res.success);
       if (!res.success) {
         this.pushLog(`${displayName(target)} broke free!`, true);
         AudioManager.sfx("capture-fail");
@@ -11625,6 +12053,13 @@ input[type="text"].wiki-search {
       await modal({
         title: "MYTHLING CAPTURED!",
         body: el("div", {}, [
+          el("div", { class: "caught-ball-row" }, [
+            ballCanvas(ballId, 54, "ball-icon big"),
+            el("div", {}, [
+              el("div", { class: "caught-ball-name", text: getItem(ballId).name }),
+              el("div", { class: "sub", text: `${ballLook(ballId)} design` })
+            ])
+          ]),
           el("p", { html: `<b>${displayName(caught)}</b> joined you at <b style="color:#ffd76a">Lv.1</b>!` }),
           el("p", { class: "sub", html: `It was caught at Lv.${caught.meta.caughtLevel} \u2014 every captured Mythling restarts at Lv.1 and must be raised by you.` }),
           el("div", { class: "row", style: { gap: "6px" } }, [
@@ -12056,27 +12491,97 @@ input[type="text"].wiki-search {
       document.getElementById("app").appendChild(n);
       setTimeout(() => n.remove(), cls === "ult" ? 1500 : 1100);
     }
-    async captureAnimation() {
-      const p = this.screenPos("enemy");
-      for (let i = 0; i < 14; i++) {
-        this.anim.enemy.alpha = 1 - i / 18;
-        this.particles.push({
-          x: p.x,
-          y: p.y - 60,
-          vx: (Math.random() - 0.5) * 70,
-          vy: -60 - Math.random() * 40,
-          life: 0.7,
-          max: 0.7,
-          size: 4 + Math.random() * 4,
-          color: "#ffe08a",
-          kind: "spark"
+    /**
+     * Throw → open → absorb → drop → wobble → lock (or burst), drawn with the
+     * actual ball the player picked, so a King Ball throw looks like a King Ball.
+     */
+    async captureAnimation(ballId, success) {
+      const from = this.screenPos("player"), to = this.screenPos("enemy");
+      const ea = this.anim.enemy;
+      const glow = (BALL_ART[ballId] || BALL_ART.basic_ball).glow;
+      const ball = { ballId, x: from.x + 30, y: from.y - 96, r: 17, rot: 0, open: 0, alpha: 1, shadow: false, locked: false };
+      this.capture = ball;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const tween = (ms, fn) => new Promise((resolve) => {
+        const t0 = performance.now();
+        const step = () => {
+          const k = clamp((performance.now() - t0) / ms, 0, 1);
+          fn(k);
+          if (k < 1 && this.active) requestAnimationFrame(step);
+          else resolve();
+        };
+        step();
+      });
+      const spark = (x, y, opts = {}) => this.particles.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 160,
+        vy: -40 - Math.random() * 120,
+        life: 0.7,
+        max: 0.7,
+        size: 3 + Math.random() * 3,
+        color: glow,
+        kind: "spark",
+        ...opts
+      });
+      const sx = ball.x, sy = ball.y, tx = to.x, ty = to.y - 72;
+      await tween(560, (k) => {
+        ball.x = sx + (tx - sx) * k;
+        ball.y = sy + (ty - sy) * k - Math.sin(k * Math.PI) * 130;
+        ball.rot = k * Math.PI * 4;
+      });
+      ball.rot = 0;
+      this.flash = 0.45;
+      ea.pull = { x: ball.x, y: ball.y };
+      await tween(540, (k) => {
+        ball.open = Math.min(1, k * 1.8);
+        ea.alpha = 1 - k;
+        ea.scale = 1 - 0.85 * k;
+        if (k < 0.85 && Math.random() < 0.6) {
+          spark(to.x + (Math.random() - 0.5) * 90, to.y - 60 + (Math.random() - 0.5) * 90, { tx: ball.x, ty: ball.y, speed: 7, vx: 0, vy: 0, life: 0.5, max: 0.5 });
+        }
+      });
+      ea.alpha = 0;
+      ea.scale = 1;
+      ea.pull = null;
+      await tween(160, (k) => {
+        ball.open = 1 - k;
+      });
+      const groundY = to.y + 4 - ball.r;
+      const dropFrom = ball.y;
+      await tween(300, (k) => {
+        ball.y = dropFrom + (groundY - dropFrom) * k * k;
+      });
+      ball.shadow = true;
+      await tween(220, (k) => {
+        ball.y = groundY - Math.sin(k * Math.PI) * 16;
+      });
+      const wobbles = success ? 3 : 1 + randInt(0, 2);
+      for (let i = 0; i < wobbles; i++) {
+        AudioManager.sfx("click");
+        await tween(420, (k) => {
+          ball.rot = Math.sin(k * Math.PI * 2) * 0.42;
+          ball.x = to.x + Math.sin(k * Math.PI * 2) * 5;
         });
-        await new Promise((r) => setTimeout(r, 40));
+        ball.rot = 0;
+        ball.x = to.x;
+        await wait(150);
       }
-      this.playCreatureAnim("enemy", "capture", 0.8, true);
-      this.captureWobble = 3;
-      await new Promise((r) => setTimeout(r, 900));
-      this.captureWobble = 0;
+      if (success) {
+        ball.locked = true;
+        for (let i = 0; i < 18; i++) spark(ball.x, ball.y);
+        await wait(700);
+        return;
+      }
+      ball.open = 1;
+      this.flash = 0.35;
+      for (let i = 0; i < 20; i++) spark(ball.x, ball.y, { color: "#ffffff" });
+      await tween(260, (k) => {
+        ball.alpha = 1 - k;
+        ea.alpha = k;
+      });
+      this.capture = null;
+      ea.alpha = 1;
     }
     /** Charge aura: proof the Ultimate is ready without obscuring the Mythling. */
     drawReadyAura(ctx, side) {
@@ -12177,6 +12682,13 @@ input[type="text"].wiki-search {
       const ea = this.anim.enemy;
       if (ea.alpha > 0.01) {
         const em = this.shownMythling("enemy");
+        ctx.save();
+        if (ea.pull) {
+          const k = ea.scale ?? 1;
+          ctx.translate(ea.pull.x, ea.pull.y);
+          ctx.scale(k, k);
+          ctx.translate(-ea.pull.x, -ea.pull.y);
+        }
         drawMythling(ctx, {
           speciesId: em.speciesId,
           stage: em.stage,
@@ -12189,21 +12701,22 @@ input[type="text"].wiki-search {
           animTag: "enemy",
           pose: this.creaturePose("enemy")
         });
-      }
-      if (this.captureWobble) {
-        const wob = Math.sin(this.time * 12) * 8;
-        ctx.save();
-        ctx.translate(ep.x + wob, ep.y - 40);
-        circle(ctx, 0, 0, 26, "#e8574f");
-        ctx.fillStyle = "#f4f4f4";
-        ctx.beginPath();
-        ctx.arc(0, 0, 26, 0, Math.PI);
-        ctx.fill();
-        ctx.fillStyle = "#2a2a33";
-        ctx.fillRect(-26, -3, 52, 6);
-        circle(ctx, 0, 0, 8, "#ffffff");
-        circle(ctx, 0, 0, 5, "#ffd76a");
         ctx.restore();
+      }
+      if (this.capture) {
+        const c = this.capture;
+        if (c.locked) {
+          const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
+          ctx.save();
+          ctx.globalAlpha = 0.25 + 0.25 * pulse;
+          ctx.strokeStyle = (BALL_ART[c.ballId] || BALL_ART.basic_ball).glow;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.r + 8 + pulse * 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+        drawBall(ctx, c.ballId, c.x, c.y, c.r, { t: this.time, open: c.open, rot: c.rot, alpha: c.alpha, shadow: c.shadow });
       }
       const pp = this.screenPos("player");
       const pa = this.anim.player;
@@ -12518,9 +13031,14 @@ input[type="text"].wiki-search {
       para(`<code>chance = catchRate \xD7 ballMultiplier \xD7 rarityModifier \xD7 levelFactor \xD7 hpFactor</code><br>
       A fainted wild Mythling is much easier to catch (x1.35) than a weakened one; the lower its HP, the better.
       You must <b>defeat</b> a wild Mythling before any ball will work.`),
+      para(`Every ball has its own look, and the ball you throw is the one you see in battle:`),
       table(BALL_IDS.map((id) => {
         const it = ITEMS[id];
-        return [`${it.name}`, `x${it.catchMult.toFixed(2)} catch \xB7 ${coins(it.price)} Wildcoins`];
+        const img = `<img class="ball-icon" width="28" height="28" src="${ballCanvas(id, 28).toDataURL()}" alt="">`;
+        return [
+          `<span class="wiki-ball">${img}<span>${it.name}<br><small>${ballLook(id)}</small></span></span>`,
+          `${it.guaranteed ? "<b>Guaranteed catch</b>" : `x${it.catchMult.toFixed(2)} catch`} \xB7 ${coins(it.price)} Wildcoins<br><small>${it.desc}</small>`
+        ];
       }), "balls")
     ];
   }
@@ -13240,7 +13758,7 @@ input[type="text"].wiki-search {
           el("div", { class: "mc-name" }, [
             displayName(m),
             m.level >= LEVEL_CAP ? el("span", { class: "chip max", text: "MAX" }) : null,
-            evoReady ? el("span", { class: "chip evolve" }, [icon("levelup"), el("span", { text: "EVOLVE" })]) : null,
+            evoReady ? el("span", { class: "chip evolve icon-only", title: "Ready to evolve! Open the card and press EVOLVE NOW.", "aria-label": "Ready to evolve" }, [icon("levelup")]) : null,
             mutationChip(m.mutation)
           ]),
           el("div", { class: "mc-sub", text: `Lv.${m.level} \xB7 ${sp.displayName} \xB7 ${MOODS[m.mood].name} \xB7 ${getRarity(m.rarity).name}` }),
@@ -13261,7 +13779,7 @@ input[type="text"].wiki-search {
     }
     // ---------------------------------------------------- DETAIL
     openDetail(m) {
-      var _a, _b, _c, _d;
+      var _a, _b, _c, _d, _e, _f;
       const sp = speciesOf(m);
       const stats = computeStats(m);
       const mood = moodSummary(m.mood);
@@ -13348,7 +13866,10 @@ input[type="text"].wiki-search {
           el("div", { class: "mc-sub", html: evoNext ? evoNext.locked ? `Next: <b>${evoNext.name}</b> at Lv.${evoNext.level} \u2014 <span style="color:#ff9aa2">LOCKED (future update)</span>` : `Next: <b>${evoNext.name}</b> at Lv.${evoNext.level} \u2014 ${evoNext.reached ? '<span style="color:#6de89a">READY!</span>' : `${evoNext.level - m.level} levels to go`}` : "Final form available in this version." }),
           ...locked.map((s) => el("div", { class: "mc-sub locked-row", style: { opacity: 0.6 }, html: `${iconSvg("lock", "tiny")} ${s.name} \u2014 Lv.${s.level} (future content)` })),
           el("h3", { text: "Capture Info" }),
-          el("div", { class: "mc-sub", text: ((_a = m.meta) == null ? void 0 : _a.isStarter) ? "Your starter partner \u2014 chosen at the beginning of your journey." : ((_b = m.meta) == null ? void 0 : _b.caughtLevel) ? `Caught at Lv.${m.meta.caughtLevel} with a ${((_c = getItem(m.meta.caughtWith)) == null ? void 0 : _c.name) || "ball"} in ${((_d = MAPS[m.meta.originMap]) == null ? void 0 : _d.displayName) || "the wild"} \u2014 restarted at Lv.1.` : "Origin unknown." })
+          el("div", { class: "mc-sub caught-line" }, [
+            ((_a = m.meta) == null ? void 0 : _a.caughtWith) && !((_b = m.meta) == null ? void 0 : _b.isStarter) ? ballCanvas(m.meta.caughtWith, 24) : null,
+            el("span", { text: ((_c = m.meta) == null ? void 0 : _c.isStarter) ? "Your starter partner \u2014 chosen at the beginning of your journey." : ((_d = m.meta) == null ? void 0 : _d.caughtLevel) ? `Caught at Lv.${m.meta.caughtLevel} with a ${((_e = getItem(m.meta.caughtWith)) == null ? void 0 : _e.name) || "ball"} (${ballLook(m.meta.caughtWith)}) in ${((_f = MAPS[m.meta.originMap]) == null ? void 0 : _f.displayName) || "the wild"} \u2014 restarted at Lv.1.` : "Origin unknown." })
+          ])
         ])
       ]);
       modal({ title: displayName(m).toUpperCase(), body, wide: true, buttons: [{ label: "CLOSE", value: true, primary: true }] });
@@ -13572,7 +14093,7 @@ input[type="text"].wiki-search {
           const isFood = e.item.category === "food";
           const usable = e.item.heal || e.item.healFull || e.item.revive || e.item.restoreUses || e.item.restoreAllUses;
           root.appendChild(el("div", { class: "item-row" }, [
-            icon(isFood ? "food" : cat.id === "balls" ? "orb" : cat.id === "key" ? "key" : "heal", "item-ico"),
+            cat.id === "balls" ? ballCanvas(e.item.id, 30, "item-ico ball-icon") : icon(isFood ? "food" : cat.id === "key" ? "key" : "heal", "item-ico"),
             el("div", { class: "ir-main" }, [
               el("div", { class: "ir-name", text: e.item.name }),
               el("div", { class: "ir-desc", text: e.item.desc })
@@ -14375,7 +14896,7 @@ input[type="text"].wiki-search {
           totalLabel.lastChild.textContent = coins(item.price * qty);
         };
         rows.appendChild(el("div", { class: "item-row" }, [
-          icon(item.category === "balls" ? "orb" : item.category === "food" ? "food" : item.category === "key" ? "key" : "heal", "item-ico"),
+          item.category === "balls" ? ballCanvas(item.id, 30, "item-ico ball-icon") : icon(item.category === "food" ? "food" : item.category === "key" ? "key" : "heal", "item-ico"),
           el("div", { class: "ir-main" }, [
             el("div", { class: "ir-name", text: item.name }),
             el("div", { class: "ir-desc", text: item.desc }),
