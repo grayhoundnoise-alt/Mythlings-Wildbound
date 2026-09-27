@@ -332,7 +332,7 @@ export class Battle {
     if (move.debuff && this.rng() < move.debuff.chance) {
       const res = dcb.applyDebuff(move.debuff.stat, move.debuff.amount);
       if (res.applied) {
-        events.push({ type: 'debuff', side: defSide, stat: move.debuff.stat, amount: move.debuff.amount, stacks: res.stacks });
+        events.push({ type: 'debuff', side: defSide, uid: defender.uid, stat: move.debuff.stat, amount: move.debuff.amount, stacks: res.stacks, total: res.total });
         events.push({ type: 'log', text: `${displayName(defender)}'s ${move.debuff.stat.toUpperCase()} fell!` });
       }
     }

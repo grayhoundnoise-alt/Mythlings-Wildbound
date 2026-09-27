@@ -626,3 +626,40 @@ select {
   .menu-tabs { width: 62px; align-items: center; }
   .menu-tab { justify-content: center; }
 }
+
+/* ---------- Battle: buff / debuff readout ---------- */
+.buff-row {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+  min-height: 20px; align-items: center;
+}
+.buff-row.empty .buff-none {
+  font-size: .64rem; letter-spacing: .12em; text-transform: uppercase;
+  color: rgba(159,179,201,.5);
+}
+.buff-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 999px;
+  font-size: .66rem; font-weight: 700; letter-spacing: .04em;
+  border: 1px solid transparent; white-space: nowrap;
+  animation: buffPop .32s cubic-bezier(.2,.9,.3,1.5);
+}
+@keyframes buffPop { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+.buff-chip.up {
+  background: linear-gradient(180deg, rgba(110,224,140,.24), rgba(28,96,56,.34));
+  border-color: rgba(134,240,160,.55); color: #d3ffdf;
+  box-shadow: 0 0 10px rgba(110,224,140,.22);
+}
+.buff-chip.down {
+  background: linear-gradient(180deg, rgba(255,140,150,.22), rgba(104,30,40,.34));
+  border-color: rgba(255,160,168,.5); color: #ffdfe2;
+  box-shadow: 0 0 10px rgba(255,120,130,.18);
+}
+.buff-chip .bc-arrow { font-size: .6rem; opacity: .95; }
+.buff-chip .bc-stat { opacity: .92; }
+.buff-chip .bc-val { font-weight: 800; }
+.buff-chip .bc-stacks {
+  padding: 0 4px; border-radius: 6px; font-size: .58rem; font-weight: 800;
+  background: rgba(0,0,0,.34);
+}
+/* HP drains smoothly so the drop lands with the hit rather than snapping */
+.combatant-card .bar > i { transition: width .34s cubic-bezier(.3,.8,.4,1); }

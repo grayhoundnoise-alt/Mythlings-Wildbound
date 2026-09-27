@@ -7,7 +7,8 @@ import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, ultimateMove,
   ultimateUnlocked, equippedSkill, usesLeft, librarySkills,
 } from '../core/mythling.js';
-import { getSkill, ULTIMATE_MAX_CHARGE } from '../data/skills.js';
+import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
+import { STAT_SHORT } from '../data/moods.js';
 import { ELEMENTS } from '../data/elements.js';
 import { BALL_IDS, getItem } from '../data/items.js';
 import { drawMythling } from '../render/creatures.js';
@@ -39,6 +40,30 @@ export class BattleScene {
     this.busy = false;
     this.ui = null;
     this.onEnd = null;
+    // What the HUD is currently SHOWING. The rules engine resolves a whole turn
+    // up front, so reading live HP would spoil hits that have not been animated
+    // yet ("my HP dropped before the enemy attacked"). Every card is therefore
+    // drawn from this view, which only advances when the matching event plays.
+    this.view = { player: null, enemy: null };
+  }
+
+  /** Freeze a combatant's presentable state (HP, charge, active buffs). */
+  viewOf(m, side) {
+    const buffs = {};
+    const cb = this.battle && this.battle.combatants.get(m.uid);
+    if (cb) {
+      for (const [stat, v] of Object.entries(cb.buffs)) {
+        if (v && v.stacks !== 0) buffs[stat] = { stacks: v.stacks, total: v.total };
+      }
+    }
+    return { uid: m.uid, side, hp: m.currentHp, maxHp: maxHp(m), charge: m.ultCharge, buffs };
+  }
+
+  /** Re-sync both cards with the truth — used at start and once a turn ends. */
+  syncView() {
+    if (!this.battle) return;
+    this.view.player = this.viewOf(this.battle.player, 'player');
+    this.view.enemy = this.viewOf(this.battle.enemy, 'enemy');
   }
 
   // ------------------------------------------------ lifecycle
@@ -52,6 +77,7 @@ export class BattleScene {
     this.logLines = [];
     this.anim.player = { lean: 0, tilt: 0, alpha: 1, scale: 1 };
     this.anim.enemy = { lean: 0, tilt: 0, alpha: 1, scale: 1 };
+    this.syncView();
     this.buildUI();
     const enemy = battle.enemy;
     CollectionManager.markSeen(enemy.speciesId, enemy.mutation);
@@ -94,7 +120,12 @@ export class BattleScene {
 
   combatantCard(m, side) {
     const sp = speciesOf(m);
-    const pct = hpPercent(m);
+    // HP shown is the ANIMATED value, not the resolved one (see this.view).
+    const v = (this.view[side] && this.view[side].uid === m.uid)
+      ? this.view[side]
+      : this.viewOf(m, side);
+    const hp = clamp(v.hp, 0, v.maxHp);
+    const pct = v.maxHp > 0 ? hp / v.maxHp : 0;   // 0..1, matching hpPercent()
     const rows = [
       el('div', { class: 'cc-top' }, [
         el('span', { class: 'cc-name', text: displayName(m) }),
@@ -107,33 +138,68 @@ export class BattleScene {
         el('span', { class: 'chip', text: m.mood }),
       ]),
       bar('hp', pct, hpClass(pct)),
-      el('div', { class: 'cc-hp-text', text: `${m.currentHp} / ${maxHp(m)} HP` }),
+      el('div', { class: 'cc-hp-text', text: `${hp} / ${v.maxHp} HP` }),
+      this.buffRow(v),
     ];
     if (side === 'player') {
       const pips = el('div', { class: 'ult-track' });
       for (let i = 0; i < ULTIMATE_MAX_CHARGE; i++) {
-        pips.appendChild(el('div', { class: `ult-pip ${i < m.ultCharge ? 'on' : ''}` }));
+        pips.appendChild(el('div', { class: `ult-pip ${i < v.charge ? 'on' : ''}` }));
       }
-      const ready = m.ultCharge >= ULTIMATE_MAX_CHARGE && ultimateUnlocked(m);
+      const ready = v.charge >= ULTIMATE_MAX_CHARGE && ultimateUnlocked(m);
       rows.push(pips);
       rows.push(el('div', {
         class: `ult-label ${ready ? 'ready' : ''}`,
         text: ultimateUnlocked(m)
-          ? `ULTIMATE ${m.ultCharge}/${ULTIMATE_MAX_CHARGE}${ready ? ' — READY!' : ''}`
+          ? `ULTIMATE ${v.charge}/${ULTIMATE_MAX_CHARGE}${ready ? ' — READY!' : ''}`
           : `ULTIMATE LOCKED (Lv.10)`,
       }));
     }
     return rows;
   }
 
+  /**
+   * Active buff / debuff chips: which stat, the total modifier and how many
+   * stacks are on it. Shown for BOTH sides so the player can read the enemy.
+   */
+  buffRow(v) {
+    const row = el('div', { class: 'buff-row' });
+    const entries = Object.entries(v.buffs || {}).filter(([, b]) => b && b.stacks !== 0);
+    if (!entries.length) {
+      row.classList.add('empty');
+      row.appendChild(el('span', { class: 'buff-none', text: 'No buffs' }));
+      return row;
+    }
+    entries.sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total));
+    for (const [stat, b] of entries) {
+      const up = b.total >= 0;
+      const chip = el('span', { class: `buff-chip ${up ? 'up' : 'down'}`, title:
+        `${STAT_SHORT[stat] || stat.toUpperCase()} ${up ? 'buffed' : 'lowered'} by ${Math.abs(b.total)} over ${Math.abs(b.stacks)} stack(s) — clears when the battle ends` });
+      chip.innerHTML = `<span class="bc-arrow">${up ? '\u25B2' : '\u25BC'}</span>`
+        + `<span class="bc-stat">${STAT_SHORT[stat] || stat.toUpperCase()}</span>`
+        + `<span class="bc-val">${up ? '+' : ''}${b.total}</span>`
+        + `<span class="bc-stacks">x${Math.abs(b.stacks)}</span>`;
+      row.appendChild(chip);
+    }
+    return row;
+  }
+
   refreshUI() {
     if (!this.ui) return;
     const b = this.battle;
-    this.enemyCard.innerHTML = '';
-    this.playerCard.innerHTML = '';
-    this.combatantCard(b.enemy, 'enemy').forEach((n) => this.enemyCard.appendChild(n));
-    this.combatantCard(b.player, 'player').forEach((n) => this.playerCard.appendChild(n));
+    this.rebuildCard(b.enemy, 'enemy');
+    this.rebuildCard(b.player, 'player');
     this.renderActions();
+  }
+
+  rebuildCard(m, side) {
+    const card = side === 'player' ? this.playerCard : this.enemyCard;
+    const v = (this.view[side] && this.view[side].uid === m.uid) ? this.view[side] : this.viewOf(m, side);
+    card.innerHTML = '';
+    card.dataset.uid = String(v.uid);
+    this.combatantCard(m, side).forEach((n) => card.appendChild(n));
+    const row = card.querySelector('.buff-row');
+    if (row) row.dataset.sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
   }
 
   renderActions() {
@@ -374,6 +440,20 @@ export class BattleScene {
     for (const ev of events) {
       await this.playEvent(ev);
     }
+    // the queue is done, so showing the resolved state is now correct
+    this.syncView();
+  }
+
+  /** Advance the shown HP to the value captured at the moment of this hit. */
+  applyViewHp(ev) {
+    const v = this.view[ev.side];
+    if (!v) return;
+    if (ev.mythling && ev.mythling.uid === v.uid) {
+      v.hp = ev.mythling.hp;
+      v.maxHp = ev.mythling.maxHp;
+    } else if (typeof ev.amount === 'number') {
+      v.hp = clamp(v.hp + (ev.type === 'heal' ? ev.amount : -ev.amount), 0, v.maxHp);
+    }
   }
 
   async playEvent(ev) {
@@ -406,6 +486,7 @@ export class BattleScene {
       }
       case 'damage': {
         const target = ev.side;
+        this.applyViewHp(ev);
         this.anim[target].tilt = target === 'player' ? -0.14 : 0.14;
         AudioManager.sfx(ev.isUltimate || ev.effectiveness > 1 ? 'hit-strong' : 'hit');
         if (SettingsManager.get('screenShake')) this.shake = Math.max(this.shake, ev.isUltimate ? 14 : 7);
@@ -418,6 +499,7 @@ export class BattleScene {
       }
       case 'heal':
         AudioManager.sfx('heal');
+        this.applyViewHp(ev);
         this.floatNumber(ev.side, `+${ev.amount}`, '#6de89a');
         this.refreshCards();
         await wait(330);
@@ -428,14 +510,29 @@ export class BattleScene {
         await wait(330);
         break;
       case 'buff':
-      case 'debuff':
+      case 'debuff': {
         AudioManager.sfx(ev.type === 'buff' ? 'charge' : 'cancel');
-        this.floatNumber(ev.side, `${ev.type === 'buff' ? '▲' : '▼'} ${ev.stat.toUpperCase()}`, ev.type === 'buff' ? '#b6f09b' : '#ff9aa2');
+        const v = this.view[ev.side];
+        if (v) {
+          const cur = v.buffs[ev.stat] || { stacks: 0, total: 0 };
+          // the engine sends the running totals; fall back to accumulating
+          v.buffs[ev.stat] = {
+            stacks: ev.stacks !== undefined ? ev.stacks : cur.stacks + (ev.type === 'buff' ? 1 : -1),
+            total: ev.total !== undefined ? ev.total : cur.total + (ev.type === 'buff' ? ev.amount : -ev.amount),
+          };
+        }
+        const lbl = STAT_SHORT[ev.stat] || ev.stat.toUpperCase();
+        const sign = ev.type === 'buff' ? '+' : '-';
+        this.floatNumber(ev.side, `${ev.type === 'buff' ? '\u25B2' : '\u25BC'} ${lbl} ${sign}${Math.abs(ev.amount)}`,
+          ev.type === 'buff' ? '#b6f09b' : '#ff9aa2');
         this.spawnBuff(ev.side, ev.type === 'buff');
-        await wait(260);
+        this.refreshCards();
+        await wait(420);
         break;
+      }
       case 'charge':
         AudioManager.sfx('charge');
+        if (this.view[ev.side]) this.view[ev.side].charge = ev.value;
         this.refreshCards();
         await wait(120);
         break;
@@ -455,6 +552,8 @@ export class BattleScene {
       case 'switch': {
         const a = this.anim[ev.side];
         a.alpha = 1; a.tilt = 0; a.lean = 0;
+        // a fresh combatant brings its own HP and its own buff stack
+        this.view[ev.side] = this.viewOf(ev.side === 'player' ? this.battle.player : this.battle.enemy, ev.side);
         this.refreshCards();
         await wait(360);
         break;
@@ -478,13 +577,58 @@ export class BattleScene {
     }
   }
 
+  /**
+   * Update the live parts of both cards in place. Rebuilding the whole card on
+   * every event would restart the CSS transitions, so the HP bar would snap
+   * instead of draining and every buff chip would re-pop each tick.
+   */
   refreshCards() {
     if (!this.ui) return;
-    const b = this.battle;
-    this.enemyCard.innerHTML = '';
-    this.playerCard.innerHTML = '';
-    this.combatantCard(b.enemy, 'enemy').forEach((n) => this.enemyCard.appendChild(n));
-    this.combatantCard(b.player, 'player').forEach((n) => this.playerCard.appendChild(n));
+    this.updateCard(this.battle.enemy, 'enemy');
+    this.updateCard(this.battle.player, 'player');
+  }
+
+  updateCard(m, side) {
+    const card = side === 'player' ? this.playerCard : this.enemyCard;
+    if (!card || !card.firstChild) return;
+    const v = (this.view[side] && this.view[side].uid === m.uid) ? this.view[side] : this.viewOf(m, side);
+    if (card.dataset.uid !== String(v.uid)) {   // a different Mythling is out: full rebuild
+      card.innerHTML = '';
+      card.dataset.uid = String(v.uid);
+      this.combatantCard(m, side).forEach((n) => card.appendChild(n));
+      return;
+    }
+    const hp = clamp(v.hp, 0, v.maxHp);
+    const pct = v.maxHp > 0 ? hp / v.maxHp : 0;
+    const barEl = card.querySelector('.bar.hp');
+    if (barEl) {
+      barEl.className = `bar hp ${hpClass(pct)}`;
+      const fill = barEl.querySelector('i');
+      if (fill) fill.style.width = `${pct * 100}%`;
+    }
+    const txt = card.querySelector('.cc-hp-text');
+    if (txt) txt.textContent = `${hp} / ${v.maxHp} HP`;
+
+    // buff chips: only touch the DOM when the readout actually changed
+    const oldRow = card.querySelector('.buff-row');
+    const sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
+    if (oldRow && oldRow.dataset.sig !== sig) {
+      const row = this.buffRow(v);
+      row.dataset.sig = sig;
+      oldRow.replaceWith(row);
+    }
+
+    if (side === 'player') {
+      card.querySelectorAll('.ult-pip').forEach((pip, i) => pip.classList.toggle('on', i < v.charge));
+      const lbl = card.querySelector('.ult-label');
+      if (lbl) {
+        const ready = v.charge >= ULTIMATE_MAX_CHARGE && ultimateUnlocked(m);
+        lbl.className = `ult-label ${ready ? 'ready' : ''}`;
+        lbl.textContent = ultimateUnlocked(m)
+          ? `ULTIMATE ${v.charge}/${ULTIMATE_MAX_CHARGE}${ready ? ' \u2014 READY!' : ''}`
+          : 'ULTIMATE LOCKED (Lv.10)';
+      }
+    }
   }
 
   checkPhase() {

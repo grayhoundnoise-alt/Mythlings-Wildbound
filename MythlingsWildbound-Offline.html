@@ -635,6 +635,43 @@ select {
   .menu-tab { justify-content: center; }
 }
 
+/* ---------- Battle: buff / debuff readout ---------- */
+.buff-row {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+  min-height: 20px; align-items: center;
+}
+.buff-row.empty .buff-none {
+  font-size: .64rem; letter-spacing: .12em; text-transform: uppercase;
+  color: rgba(159,179,201,.5);
+}
+.buff-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 999px;
+  font-size: .66rem; font-weight: 700; letter-spacing: .04em;
+  border: 1px solid transparent; white-space: nowrap;
+  animation: buffPop .32s cubic-bezier(.2,.9,.3,1.5);
+}
+@keyframes buffPop { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
+.buff-chip.up {
+  background: linear-gradient(180deg, rgba(110,224,140,.24), rgba(28,96,56,.34));
+  border-color: rgba(134,240,160,.55); color: #d3ffdf;
+  box-shadow: 0 0 10px rgba(110,224,140,.22);
+}
+.buff-chip.down {
+  background: linear-gradient(180deg, rgba(255,140,150,.22), rgba(104,30,40,.34));
+  border-color: rgba(255,160,168,.5); color: #ffdfe2;
+  box-shadow: 0 0 10px rgba(255,120,130,.18);
+}
+.buff-chip .bc-arrow { font-size: .6rem; opacity: .95; }
+.buff-chip .bc-stat { opacity: .92; }
+.buff-chip .bc-val { font-weight: 800; }
+.buff-chip .bc-stacks {
+  padding: 0 4px; border-radius: 6px; font-size: .58rem; font-weight: 800;
+  background: rgba(0,0,0,.34);
+}
+/* HP drains smoothly so the drop lands with the hit rather than snapping */
+.combatant-card .bar > i { transition: width .34s cubic-bezier(.3,.8,.4,1); }
+
 </style>
 </head>
 <body>
@@ -3365,7 +3402,7 @@ select {
       if (move.debuff && this.rng() < move.debuff.chance) {
         const res = dcb.applyDebuff(move.debuff.stat, move.debuff.amount);
         if (res.applied) {
-          events.push({ type: "debuff", side: defSide, stat: move.debuff.stat, amount: move.debuff.amount, stacks: res.stacks });
+          events.push({ type: "debuff", side: defSide, uid: defender.uid, stat: move.debuff.stat, amount: move.debuff.amount, stacks: res.stacks, total: res.total });
           events.push({ type: "log", text: `${displayName(defender)}'s ${move.debuff.stat.toUpperCase()} fell!` });
         }
       }
@@ -7071,6 +7108,24 @@ select {
       this.busy = false;
       this.ui = null;
       this.onEnd = null;
+      this.view = { player: null, enemy: null };
+    }
+    /** Freeze a combatant's presentable state (HP, charge, active buffs). */
+    viewOf(m, side) {
+      const buffs = {};
+      const cb = this.battle && this.battle.combatants.get(m.uid);
+      if (cb) {
+        for (const [stat, v] of Object.entries(cb.buffs)) {
+          if (v && v.stacks !== 0) buffs[stat] = { stacks: v.stacks, total: v.total };
+        }
+      }
+      return { uid: m.uid, side, hp: m.currentHp, maxHp: maxHp(m), charge: m.ultCharge, buffs };
+    }
+    /** Re-sync both cards with the truth — used at start and once a turn ends. */
+    syncView() {
+      if (!this.battle) return;
+      this.view.player = this.viewOf(this.battle.player, "player");
+      this.view.enemy = this.viewOf(this.battle.enemy, "enemy");
     }
     // ------------------------------------------------ lifecycle
     start(battle, { mapTheme = "nature", onEnd }) {
@@ -7084,6 +7139,7 @@ select {
       this.logLines = [];
       this.anim.player = { lean: 0, tilt: 0, alpha: 1, scale: 1 };
       this.anim.enemy = { lean: 0, tilt: 0, alpha: 1, scale: 1 };
+      this.syncView();
       this.buildUI();
       const enemy = battle.enemy;
       CollectionManager.markSeen(enemy.speciesId, enemy.mutation);
@@ -7121,7 +7177,9 @@ select {
     }
     combatantCard(m, side) {
       const sp = speciesOf(m);
-      const pct = hpPercent(m);
+      const v = this.view[side] && this.view[side].uid === m.uid ? this.view[side] : this.viewOf(m, side);
+      const hp = clamp(v.hp, 0, v.maxHp);
+      const pct = v.maxHp > 0 ? hp / v.maxHp : 0;
       const rows = [
         el("div", { class: "cc-top" }, [
           el("span", { class: "cc-name", text: displayName(m) }),
@@ -7134,30 +7192,59 @@ select {
           el("span", { class: "chip", text: m.mood })
         ]),
         bar("hp", pct, hpClass(pct)),
-        el("div", { class: "cc-hp-text", text: `${m.currentHp} / ${maxHp(m)} HP` })
+        el("div", { class: "cc-hp-text", text: `${hp} / ${v.maxHp} HP` }),
+        this.buffRow(v)
       ];
       if (side === "player") {
         const pips = el("div", { class: "ult-track" });
         for (let i = 0; i < ULTIMATE_MAX_CHARGE; i++) {
-          pips.appendChild(el("div", { class: `ult-pip ${i < m.ultCharge ? "on" : ""}` }));
+          pips.appendChild(el("div", { class: `ult-pip ${i < v.charge ? "on" : ""}` }));
         }
-        const ready = m.ultCharge >= ULTIMATE_MAX_CHARGE && ultimateUnlocked(m);
+        const ready = v.charge >= ULTIMATE_MAX_CHARGE && ultimateUnlocked(m);
         rows.push(pips);
         rows.push(el("div", {
           class: `ult-label ${ready ? "ready" : ""}`,
-          text: ultimateUnlocked(m) ? `ULTIMATE ${m.ultCharge}/${ULTIMATE_MAX_CHARGE}${ready ? " \u2014 READY!" : ""}` : `ULTIMATE LOCKED (Lv.10)`
+          text: ultimateUnlocked(m) ? `ULTIMATE ${v.charge}/${ULTIMATE_MAX_CHARGE}${ready ? " \u2014 READY!" : ""}` : `ULTIMATE LOCKED (Lv.10)`
         }));
       }
       return rows;
     }
+    /**
+     * Active buff / debuff chips: which stat, the total modifier and how many
+     * stacks are on it. Shown for BOTH sides so the player can read the enemy.
+     */
+    buffRow(v) {
+      const row = el("div", { class: "buff-row" });
+      const entries = Object.entries(v.buffs || {}).filter(([, b]) => b && b.stacks !== 0);
+      if (!entries.length) {
+        row.classList.add("empty");
+        row.appendChild(el("span", { class: "buff-none", text: "No buffs" }));
+        return row;
+      }
+      entries.sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total));
+      for (const [stat, b] of entries) {
+        const up = b.total >= 0;
+        const chip = el("span", { class: `buff-chip ${up ? "up" : "down"}`, title: `${STAT_SHORT[stat] || stat.toUpperCase()} ${up ? "buffed" : "lowered"} by ${Math.abs(b.total)} over ${Math.abs(b.stacks)} stack(s) \u2014 clears when the battle ends` });
+        chip.innerHTML = `<span class="bc-arrow">${up ? "\u25B2" : "\u25BC"}</span><span class="bc-stat">${STAT_SHORT[stat] || stat.toUpperCase()}</span><span class="bc-val">${up ? "+" : ""}${b.total}</span><span class="bc-stacks">x${Math.abs(b.stacks)}</span>`;
+        row.appendChild(chip);
+      }
+      return row;
+    }
     refreshUI() {
       if (!this.ui) return;
       const b = this.battle;
-      this.enemyCard.innerHTML = "";
-      this.playerCard.innerHTML = "";
-      this.combatantCard(b.enemy, "enemy").forEach((n) => this.enemyCard.appendChild(n));
-      this.combatantCard(b.player, "player").forEach((n) => this.playerCard.appendChild(n));
+      this.rebuildCard(b.enemy, "enemy");
+      this.rebuildCard(b.player, "player");
       this.renderActions();
+    }
+    rebuildCard(m, side) {
+      const card = side === "player" ? this.playerCard : this.enemyCard;
+      const v = this.view[side] && this.view[side].uid === m.uid ? this.view[side] : this.viewOf(m, side);
+      card.innerHTML = "";
+      card.dataset.uid = String(v.uid);
+      this.combatantCard(m, side).forEach((n) => card.appendChild(n));
+      const row = card.querySelector(".buff-row");
+      if (row) row.dataset.sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
     }
     renderActions() {
       const b = this.battle;
@@ -7392,6 +7479,18 @@ select {
       for (const ev of events) {
         await this.playEvent(ev);
       }
+      this.syncView();
+    }
+    /** Advance the shown HP to the value captured at the moment of this hit. */
+    applyViewHp(ev) {
+      const v = this.view[ev.side];
+      if (!v) return;
+      if (ev.mythling && ev.mythling.uid === v.uid) {
+        v.hp = ev.mythling.hp;
+        v.maxHp = ev.mythling.maxHp;
+      } else if (typeof ev.amount === "number") {
+        v.hp = clamp(v.hp + (ev.type === "heal" ? ev.amount : -ev.amount), 0, v.maxHp);
+      }
     }
     async playEvent(ev) {
       const fast = SettingsManager.get("textSpeed") === "instant";
@@ -7423,6 +7522,7 @@ select {
         }
         case "damage": {
           const target = ev.side;
+          this.applyViewHp(ev);
           this.anim[target].tilt = target === "player" ? -0.14 : 0.14;
           AudioManager.sfx(ev.isUltimate || ev.effectiveness > 1 ? "hit-strong" : "hit");
           if (SettingsManager.get("screenShake")) this.shake = Math.max(this.shake, ev.isUltimate ? 14 : 7);
@@ -7435,6 +7535,7 @@ select {
         }
         case "heal":
           AudioManager.sfx("heal");
+          this.applyViewHp(ev);
           this.floatNumber(ev.side, `+${ev.amount}`, "#6de89a");
           this.refreshCards();
           await wait(330);
@@ -7445,14 +7546,31 @@ select {
           await wait(330);
           break;
         case "buff":
-        case "debuff":
+        case "debuff": {
           AudioManager.sfx(ev.type === "buff" ? "charge" : "cancel");
-          this.floatNumber(ev.side, `${ev.type === "buff" ? "\u25B2" : "\u25BC"} ${ev.stat.toUpperCase()}`, ev.type === "buff" ? "#b6f09b" : "#ff9aa2");
+          const v = this.view[ev.side];
+          if (v) {
+            const cur = v.buffs[ev.stat] || { stacks: 0, total: 0 };
+            v.buffs[ev.stat] = {
+              stacks: ev.stacks !== void 0 ? ev.stacks : cur.stacks + (ev.type === "buff" ? 1 : -1),
+              total: ev.total !== void 0 ? ev.total : cur.total + (ev.type === "buff" ? ev.amount : -ev.amount)
+            };
+          }
+          const lbl = STAT_SHORT[ev.stat] || ev.stat.toUpperCase();
+          const sign = ev.type === "buff" ? "+" : "-";
+          this.floatNumber(
+            ev.side,
+            `${ev.type === "buff" ? "\u25B2" : "\u25BC"} ${lbl} ${sign}${Math.abs(ev.amount)}`,
+            ev.type === "buff" ? "#b6f09b" : "#ff9aa2"
+          );
           this.spawnBuff(ev.side, ev.type === "buff");
-          await wait(260);
+          this.refreshCards();
+          await wait(420);
           break;
+        }
         case "charge":
           AudioManager.sfx("charge");
+          if (this.view[ev.side]) this.view[ev.side].charge = ev.value;
           this.refreshCards();
           await wait(120);
           break;
@@ -7478,6 +7596,7 @@ select {
           a.alpha = 1;
           a.tilt = 0;
           a.lean = 0;
+          this.view[ev.side] = this.viewOf(ev.side === "player" ? this.battle.player : this.battle.enemy, ev.side);
           this.refreshCards();
           await wait(360);
           break;
@@ -7500,13 +7619,52 @@ select {
           break;
       }
     }
+    /**
+     * Update the live parts of both cards in place. Rebuilding the whole card on
+     * every event would restart the CSS transitions, so the HP bar would snap
+     * instead of draining and every buff chip would re-pop each tick.
+     */
     refreshCards() {
       if (!this.ui) return;
-      const b = this.battle;
-      this.enemyCard.innerHTML = "";
-      this.playerCard.innerHTML = "";
-      this.combatantCard(b.enemy, "enemy").forEach((n) => this.enemyCard.appendChild(n));
-      this.combatantCard(b.player, "player").forEach((n) => this.playerCard.appendChild(n));
+      this.updateCard(this.battle.enemy, "enemy");
+      this.updateCard(this.battle.player, "player");
+    }
+    updateCard(m, side) {
+      const card = side === "player" ? this.playerCard : this.enemyCard;
+      if (!card || !card.firstChild) return;
+      const v = this.view[side] && this.view[side].uid === m.uid ? this.view[side] : this.viewOf(m, side);
+      if (card.dataset.uid !== String(v.uid)) {
+        card.innerHTML = "";
+        card.dataset.uid = String(v.uid);
+        this.combatantCard(m, side).forEach((n) => card.appendChild(n));
+        return;
+      }
+      const hp = clamp(v.hp, 0, v.maxHp);
+      const pct = v.maxHp > 0 ? hp / v.maxHp : 0;
+      const barEl = card.querySelector(".bar.hp");
+      if (barEl) {
+        barEl.className = `bar hp ${hpClass(pct)}`;
+        const fill = barEl.querySelector("i");
+        if (fill) fill.style.width = `${pct * 100}%`;
+      }
+      const txt = card.querySelector(".cc-hp-text");
+      if (txt) txt.textContent = `${hp} / ${v.maxHp} HP`;
+      const oldRow = card.querySelector(".buff-row");
+      const sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
+      if (oldRow && oldRow.dataset.sig !== sig) {
+        const row = this.buffRow(v);
+        row.dataset.sig = sig;
+        oldRow.replaceWith(row);
+      }
+      if (side === "player") {
+        card.querySelectorAll(".ult-pip").forEach((pip, i) => pip.classList.toggle("on", i < v.charge));
+        const lbl = card.querySelector(".ult-label");
+        if (lbl) {
+          const ready = v.charge >= ULTIMATE_MAX_CHARGE && ultimateUnlocked(m);
+          lbl.className = `ult-label ${ready ? "ready" : ""}`;
+          lbl.textContent = ultimateUnlocked(m) ? `ULTIMATE ${v.charge}/${ULTIMATE_MAX_CHARGE}${ready ? " \u2014 READY!" : ""}` : "ULTIMATE LOCKED (Lv.10)";
+        }
+      }
     }
     checkPhase() {
       const b = this.battle;
