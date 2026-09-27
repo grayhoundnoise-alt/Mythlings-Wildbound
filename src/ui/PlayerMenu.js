@@ -6,7 +6,8 @@ import {
 } from '../systems/GameState.js';
 import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, stageData,
-  librarySkills, equipSkill, unequipSkill, ultimateMove, ultimateUnlocked, expNeeded, restoreUses,
+  libraryByLevel, equippedSkills, equipSkill, unequipSkill, moveSkill, canEquipMore,
+  MAX_EQUIPPED_SKILLS, ultimateMove, ultimateUnlocked, expNeeded, applyItemEffects,
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
@@ -21,11 +22,11 @@ import { ELEMENTS } from '../data/elements.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
 import { drawMythling } from '../render/creatures.js';
 import {
-  el, button, bar, hpClass, elementChip, rarityChip, mutationChip, toast, modal, confirmDialog,
+  el, button, bar, hpClass, elementChip, rarityChip, mutationChip, toast, modal, closeModal, confirmDialog,
   Screens, panelHeader, closeButton,
 } from './ui.js';
 import { icon, iconSvg, iconLabel } from './icons.js';
-import { buffSummary, getSkill } from '../data/skills.js';
+import { buffSummary, getSkill, SKILL_CATEGORY_LABEL, isDamageSkill } from '../data/skills.js';
 import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { AudioManager } from '../systems/AudioManager.js';
@@ -53,8 +54,16 @@ const TABS = [
  * squashed, and the backing store follows the real CSS box at device
  * resolution so it stays crisp.
  */
-/** Short labels for the three battle slots in the Skill Library. */
-export const SLOT_LABEL = { normal: 'N', special: 'S', buff: 'B' };
+/** One-line description of what a skill does, shared by the library and the detail panel. */
+export function skillMetaText(sk, m = null) {
+  const uses = Number.isFinite(sk.uses)
+    ? `${m ? `${m.uses[sk.id] ?? 0}/` : ''}${sk.uses} uses`
+    : 'Unlimited uses';
+  const what = isDamageSkill(sk)
+    ? `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`
+    : `${buffSummary(sk, ' ')} ${sk.category === 'debuff' ? 'on the foe' : 'on self'}`;
+  return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} · ${what} · ${uses}`;
+}
 
 export function mythCanvas(m, size = 66, animated = false) {
   const dpr = () => Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
@@ -274,7 +283,7 @@ export class PlayerMenu {
             const ok = await modal({ title: 'NICKNAME', body: el('div', {}, [el('p', { class: 'sub', text: 'Leave blank to use the species name.' }), input]), buttons: [{ label: 'CANCEL', value: false }, { label: 'SAVE', value: true, primary: true }] });
             if (ok) { m.nickname = input.value.trim().slice(0, 12) || null; toast('Nickname updated'); this.renderTab(); }
           } }),
-          EvolutionManager.isReady(m) ? iconTextBtn('levelup', 'EVOLVE NOW', { class: 'small primary', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.game.runEvolution(m, () => this.renderTab()); } }) : null,
+          EvolutionManager.isReady(m) ? iconTextBtn('levelup', 'EVOLVE NOW', { class: 'small primary', onclick: () => { closeModal(true); this.game.runEvolution(m, () => this.renderTab()); } }) : null,
         ]),
       ]),
       el('div', {}, [
@@ -293,13 +302,14 @@ export class PlayerMenu {
           + `<b>${stats.crit}%</b> crit chance · crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
         el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} &nbsp; ${iconSvg('down', 'tiny')} ${mood.down} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
 
-        el('h3', { text: 'Equipped Skills' }),
-        ...['normal', 'special', 'buff'].map((slot) => {
-          const sk = m.skills[slot] ? librarySkills(m).find((s) => s.id === m.skills[slot]) : null;
-          return el('div', { class: 'skill-row equipped' }, [
+        el('h3', { text: `Equipped Skills (${equippedSkills(m).length}/${MAX_EQUIPPED_SKILLS})` }),
+        ...Array.from({ length: MAX_EQUIPPED_SKILLS }, (_, i) => {
+          const sk = m.skills[i] ? getSkill(m.skills[i]) : null;
+          return el('div', { class: `skill-row ${sk ? 'equipped' : ''}` }, [
+            el('span', { class: 'slot-badge', text: String(i + 1) }),
             el('div', { style: { flex: '1' } }, [
-              el('div', { class: 'sk-name', text: sk ? sk.name : '—' }),
-              el('div', { class: 'sk-meta', html: sk ? `${slot.toUpperCase()} · ${sk.category === 'buff' ? buffSummary(sk) : `Power ${sk.power}`} · ${Number.isFinite(sk.uses) ? `${m.uses[sk.id] ?? 0}/${sk.uses} uses` : `${iconSvg('infinity', 'tiny')} unlimited`}` : '—' }),
+              el('div', { class: 'sk-name', text: sk ? sk.name : '— empty button —' }),
+              el('div', { class: 'sk-meta', text: sk ? skillMetaText(sk, m) : 'Equip a skill in the Skill Library.' }),
             ]),
           ]);
         }),
@@ -309,7 +319,7 @@ export class PlayerMenu {
             el('div', { class: 'sk-meta', text: ultimateUnlocked(m) ? `ULTIMATE · Power ${ult.power} · Charge ${m.ultCharge}/8 · cannot be replaced` : `ULTIMATE · locked until Lv.${ULTIMATE_UNLOCK_LEVEL}` }),
           ]),
         ]),
-        iconTextBtn('strike', 'Open Skill Library', { class: 'small ghost', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.tab = 'skills'; this.selected = m.uid; this.render(); } }),
+        iconTextBtn('strike', 'Open Skill Library', { class: 'small ghost', onclick: () => { closeModal(true); this.tab = 'skills'; this.selected = m.uid; this.render(); } }),
 
         el('h3', { text: 'Evolution' }),
         el('div', { class: 'mc-sub', html: evoNext
@@ -385,7 +395,11 @@ export class PlayerMenu {
   // ---------------------------------------------------- SKILLS
   renderSkills(root) {
     this.setTitle('Skill Library');
-    root.appendChild(el('p', { class: 'sub', text: 'Every Mythling has three slots and any skill it has learned can go into any of them — two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on. Leaving a slot empty is allowed and is saved as-is. Everything learned stays in the library — nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.' }));
+    root.appendChild(el('p', { class: 'sub', text:
+      `Equip up to ${MAX_EQUIPPED_SKILLS} skills — any mix of Normal, Special, Buff and Debuff. `
+      + 'The ORDER you equip them in is the order of the battle buttons: the first equipped is button 1 (leftmost), then 2, then 3. '
+      + 'Skills are listed in the order they are learned. Everything learned stays in the library — nothing is ever lost. '
+      + 'The Ultimate is fixed to the species and cannot be replaced.' }));
     const party = PartyManager.list();
     const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
     const picker = el('div', { class: 'row', style: { marginBottom: '14px' } }, party.map((m) =>
@@ -396,43 +410,68 @@ export class PlayerMenu {
     root.appendChild(picker);
     if (!sel) return;
 
+    // ---- the loadout: three battle buttons, in order ----
+    const equipped = equippedSkills(sel);
+    root.appendChild(el('h3', { text: `Battle buttons (${equipped.length}/${MAX_EQUIPPED_SKILLS})` }));
+    const strip = el('div', { class: 'loadout-strip' });
+    for (let i = 0; i < MAX_EQUIPPED_SKILLS; i++) {
+      const entry = equipped.find((e) => e.index === i) || null;
+      const sk = entry ? entry.skill : null;
+      strip.appendChild(el('div', { class: `loadout-slot ${sk ? `filled ${sk.category}` : 'empty'}` }, [
+        el('div', { class: 'ls-head' }, [
+          el('span', { class: 'slot-badge', text: String(i + 1) }),
+          el('span', { class: 'ls-name', html: sk ? `${iconSvg(sk.element || (sk.category === 'buff' ? 'shield' : sk.category === 'debuff' ? 'down' : 'strike'), sk.element || '')} ${sk.name}` : 'Empty' }),
+        ]),
+        el('div', { class: 'ls-meta', text: sk ? skillMetaText(sk, sel) : 'Pick a skill below.' }),
+        sk ? el('div', { class: 'row', style: { gap: '4px', marginTop: '6px' } }, [
+          i > 0 ? button('◀', { class: 'small ghost', title: 'Move left (earlier button)', onclick: () => { moveSkill(sel, i, i - 1); AudioManager.sfx('click'); this.renderTab(); } }) : null,
+          i < equipped.length - 1 ? button('▶', { class: 'small ghost', title: 'Move right (later button)', onclick: () => { moveSkill(sel, i, i + 1); AudioManager.sfx('click'); this.renderTab(); } }) : null,
+          button('UNEQUIP', { class: 'small ghost', onclick: () => { unequipSkill(sel, i); AudioManager.sfx('cancel'); this.renderTab(); } }),
+        ]) : null,
+      ]));
+    }
+    root.appendChild(strip);
+
     const ult = ultimateMove(sel);
     root.appendChild(el('div', { class: 'skill-row', style: { borderColor: '#ffd76a' } }, [
+      el('span', { class: 'slot-badge gold', text: '4' }),
       el('div', { style: { flex: '1' } }, [
         el('div', { class: 'sk-name', html: `${iconSvg('ultimate', 'gold')} ${ult.name} (ULTIMATE — fixed)` }),
         el('div', { class: 'sk-meta', text: ultimateUnlocked(sel) ? `Power ${ult.power} · Charge ${sel.ultCharge}/8 · upgrades with evolution` : `Locked until Lv.${ULTIMATE_UNLOCK_LEVEL}` }),
       ]),
     ]));
 
-    for (const cat of ['normal', 'special', 'buff']) {
-      root.appendChild(el('h3', { text: `${cat.toUpperCase()} SKILLS` }));
-      const skills = librarySkills(sel, cat);
-      if (!skills.length) { root.appendChild(el('p', { class: 'sub', text: 'None learned yet.' })); continue; }
-      for (const sk of skills) {
-        const slots = ['normal', 'special', 'buff'];
-        const inSlot = slots.filter((s) => sel.skills[s] === sk.id);
-        root.appendChild(el('div', { class: `skill-row ${inSlot.length ? 'equipped' : ''}` }, [
-          el('div', { style: { flex: '1' } }, [
-            el('div', { class: 'sk-name', html: `${iconSvg(sk.element || 'strike', sk.element || '')} ${sk.name}` }),
-            el('div', { class: 'sk-meta', text: `${sk.category === 'buff' ? buffSummary(sk, ' ') : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`} · ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : 'Unlimited uses'} — ${sk.desc}` }),
-          ]),
-          el('div', { class: 'skill-slots' }, [
-            ...slots.map((s) => button(SLOT_LABEL[s], {
-              class: `small ${sel.skills[s] === sk.id ? 'primary' : 'ghost'}`,
-              title: `Put ${sk.name} in the ${s} slot`,
+    // ---- the library, in unlock order ----
+    root.appendChild(el('h3', { text: 'Learned skills — by unlock level' }));
+    const entries = libraryByLevel(sel);
+    if (!entries.length) { root.appendChild(el('p', { class: 'sub', text: 'None learned yet.' })); return; }
+    let lastLevel = null;
+    for (const { skill: sk, level, index } of entries) {
+      if (level !== lastLevel) {
+        lastLevel = level;
+        root.appendChild(el('div', { class: 'lib-level', text: `Lv.${level}` }));
+      }
+      const on = index >= 0;
+      root.appendChild(el('div', { class: `skill-row ${on ? 'equipped' : ''}` }, [
+        on ? el('span', { class: 'slot-badge', text: String(index + 1) }) : el('span', { class: 'slot-badge dim', text: '·' }),
+        el('div', { style: { flex: '1' } }, [
+          el('div', { class: 'sk-name', html: `${iconSvg(sk.element || (sk.category === 'buff' ? 'shield' : sk.category === 'debuff' ? 'down' : 'strike'), sk.element || '')} ${sk.name} <span class="cat-tag ${sk.category}">${SKILL_CATEGORY_LABEL[sk.category]}</span>` }),
+          el('div', { class: 'sk-meta', text: `${skillMetaText(sk, sel)} — ${sk.desc}` }),
+        ]),
+        el('div', { class: 'skill-slots' }, [
+          on
+            ? button('UNEQUIP', { class: 'small ghost', title: `Take ${sk.name} off button ${index + 1}`, onclick: () => { unequipSkill(sel, sk.id); AudioManager.sfx('cancel'); this.renderTab(); } })
+            : button('EQUIP', {
+              class: `small ${canEquipMore(sel) ? 'primary' : 'ghost'}`,
+              title: canEquipMore(sel) ? `Equip ${sk.name} on button ${equippedSkills(sel).length + 1}` : 'All battle buttons are full — unequip one first',
               onclick: () => {
-                equipSkill(sel, s, sk.id);
-                AudioManager.sfx('confirm');
+                if (!canEquipMore(sel)) { toast(`All ${MAX_EQUIPPED_SKILLS} battle buttons are full — unequip one first.`, 'bad'); AudioManager.sfx('cancel'); return; }
+                if (equipSkill(sel, sk.id)) { AudioManager.sfx('confirm'); toast(`${sk.name} → button ${equippedSkills(sel).length}`, 'ok'); }
                 this.renderTab();
               },
-            })),
-            inSlot.length ? button('✕', {
-              class: 'small ghost', title: 'Unequip',
-              onclick: () => { for (const s of inSlot) unequipSkill(sel, s); AudioManager.sfx('cancel'); this.renderTab(); },
-            }) : null,
-          ]),
-        ]));
-      }
+            }),
+        ]),
+      ]));
     }
   }
 
@@ -461,12 +500,12 @@ export class PlayerMenu {
       const entries = InventoryManager.byCategory(cat.id);
       root.appendChild(el('h3', { text: cat.name }));
       if (cat.id === 'food') {
-        root.appendChild(el('p', { class: 'sub', text: 'Feed food to a Mythling to convert it straight into EXP — a faster way to train than battling. Food cannot push a Mythling past the level cap.' }));
+        root.appendChild(el('p', { class: 'sub', text: `Feed food to a Mythling to convert it straight into EXP — a faster way to train than battling. You can feed a whole stack at once; the amount is capped at what it takes to reach Lv.${LEVEL_CAP}, so no food is ever wasted.` }));
       }
       if (!entries.length) { root.appendChild(el('p', { class: 'sub', text: '— empty —' })); continue; }
       for (const e of entries) {
         const isFood = e.item.category === 'food';
-        const usable = e.item.heal || e.item.revive || e.item.restoreUses;
+        const usable = e.item.heal || e.item.healFull || e.item.revive || e.item.restoreUses || e.item.restoreAllUses;
         root.appendChild(el('div', { class: 'item-row' }, [
           icon(isFood ? 'food' : cat.id === 'balls' ? 'orb' : cat.id === 'key' ? 'key' : 'heal', 'item-ico'),
           el('div', { class: 'ir-main' }, [
@@ -482,20 +521,34 @@ export class PlayerMenu {
     }
   }
 
-  /** Feed a food item to a chosen party Mythling and play the level-up flow. */
+  /**
+   * Feed a food item to a chosen party Mythling and play the level-up flow.
+   * Stacks are fed in one go: a quantity picker (−/+/MAX) caps the count at
+   * what is useful — never more than you own, never past the level cap.
+   */
   async feedFromBag(itemId) {
     const item = getItem(itemId);
     const pick = await this.pickPartyTarget(`FEED ${item.name.toUpperCase()}`, (m) => {
       const need = FeedManager.toNextLevel(m, itemId);
       return m.level >= LEVEL_CAP
         ? 'MAX LEVEL — cannot gain EXP'
-        : `+${item.exp} EXP · ${need} to reach Lv.${m.level + 1}`;
+        : `+${item.exp.toLocaleString()} EXP each · ${need} to reach Lv.${m.level + 1} · ${FeedManager.toCap(m, itemId).toLocaleString()} to reach Lv.${LEVEL_CAP}`;
     });
     if (!pick) return;
-    const res = FeedManager.feed(pick, itemId);
+    const blocked = FeedManager.blockedReason(pick);
+    if (blocked) { toast(blocked, 'bad'); AudioManager.sfx('cancel'); return; }
+
+    const max = FeedManager.maxFeedable(pick, itemId);
+    let qty = 1;
+    if (max > 1) {
+      const chosen = await this.pickFeedQuantity(pick, item, max);
+      if (!chosen) return;
+      qty = chosen;
+    }
+    const res = FeedManager.feed(pick, itemId, qty);
     if (!res.ok) { toast(res.reason, 'bad'); AudioManager.sfx('cancel'); return; }
     AudioManager.sfx('heal');
-    toast(`${displayName(pick)} ate the ${item.name} — +${res.exp} EXP`, 'ok');
+    toast(`${displayName(pick)} ate ${res.count > 1 ? `${res.count}× ` : 'the '}${item.name} — +${res.exp.toLocaleString()} EXP`, 'ok');
     this.renderTab();
     if (res.result.levels.length) {
       const entries = res.result.levels.map((lv) => ({ uid: pick.uid, name: displayName(pick), ...lv }));
@@ -508,58 +561,79 @@ export class PlayerMenu {
     await this.game.autosave();
   }
 
-  /** Shared party picker used by items and food. `note` adds a per-Mythling line. */
-  pickPartyTarget(title, note = null) {
+  /** Quantity picker for feeding a stack. Resolves with the count, or 0 on cancel. */
+  pickFeedQuantity(m, item, max) {
+    let qty = 1;
+    const owned = InventoryManager.count(item.id);
+    const toCap = FeedManager.toCap(m, item.id);
+    const qtyLabel = el('b', { class: 'qty-value', text: '1' });
+    const preview = el('div', { class: 'sub feed-preview' });
+    const refresh = () => {
+      qty = Math.max(1, Math.min(max, qty));
+      qtyLabel.textContent = String(qty);
+      const p = FeedManager.preview(m, item.id, qty);
+      preview.innerHTML = `+${p.totalExp.toLocaleString()} EXP → <b>Lv.${p.level}</b>`
+        + (p.level >= LEVEL_CAP ? ' <span style="color:#ffd76a">(MAX LEVEL)</span>' : ` · ${p.exp.toLocaleString()} / ${expNeeded({ ...m, level: p.level }).toLocaleString()} EXP`)
+        + (p.levelsGained > 0 ? ` · <span style="color:#6de89a">+${p.levelsGained} level${p.levelsGained === 1 ? '' : 's'}</span>` : '')
+        + `<br>Costs ${qty} of your ${owned} ${item.name}${owned === 1 ? '' : 's'}.`;
+    };
+    const step = (d) => { qty += d; refresh(); AudioManager.sfx('click'); };
+    const body = el('div', {}, [
+      el('p', { class: 'sub', html: `How many <b>${item.name}</b> should <b>${displayName(m)}</b> (Lv.${m.level}) eat?`
+        + `<br>Max useful: <b>${max}</b>${max < owned ? ` — that is all it takes to reach Lv.${LEVEL_CAP} (${toCap} needed).` : ' (all you have).'}` }),
+      el('div', { class: 'qty-picker' }, [
+        button('−10', { class: 'small ghost', onclick: () => step(-10) }),
+        button('−', { class: 'small ghost', onclick: () => step(-1) }),
+        qtyLabel,
+        button('+', { class: 'small ghost', onclick: () => step(1) }),
+        button('+10', { class: 'small ghost', onclick: () => step(10) }),
+        button('MAX', { class: 'small primary', onclick: () => { qty = max; refresh(); AudioManager.sfx('click'); } }),
+      ]),
+      preview,
+    ]);
+    refresh();
+    return modal({
+      title: 'FEED HOW MANY?', body,
+      buttons: [{ label: 'CANCEL', value: 0 }, { label: 'FEED', value: true, primary: true }],
+      cancelValue: 0,
+    }).then((v) => (v === true ? qty : 0));
+  }
+
+  /**
+   * Shared party picker used by items and food. `note` adds a per-Mythling line.
+   * Cards close the modal through closeModal() so the dismiss handle is cleared
+   * (hiding the layer by hand left the game thinking a modal was still open).
+   */
+  async pickPartyTarget(title, note = null) {
     const list = el('div', { class: 'grid-cards' });
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (v) => {
-        if (done) return; done = true;
-        const layer = document.getElementById('modal');
-        layer.classList.add('hidden'); layer.innerHTML = '';
-        resolve(v);
-      };
-      PartyManager.list().forEach((m) => {
-        const card = this.mythCard(m, {
-          onClick: () => finish(m),
-          extra: note ? el('div', { class: 'mc-sub feed-note', text: note(m) }) : null,
-        });
-        list.appendChild(card);
-      });
-      modal({ title, body: list, buttons: [{ label: 'CANCEL', value: null }] }).then(() => finish(null));
+    PartyManager.list().forEach((m) => {
+      list.appendChild(this.mythCard(m, {
+        onClick: () => closeModal(m),
+        extra: note ? el('div', { class: 'mc-sub feed-note', text: note(m) }) : null,
+      }));
     });
+    const v = await modal({ title, body: list, buttons: [{ label: 'CANCEL', value: null }], cancelValue: null });
+    return v && v.uid ? v : null;
   }
 
   async useItemFromBag(itemId) {
     const item = getItem(itemId);
-    const pick = await this.pickPartyTarget(`USE ${item.name.toUpperCase()}`);
+    const pick = await this.pickPartyTarget(`USE ${item.name.toUpperCase()}`, (m) => {
+      const dry = applyItemEffects(item, m, { dryRun: true });
+      return dry.ok ? 'Can use' : dry.reason;
+    });
     if (!pick) return;
-    if (item.heal) {
-      if (isFainted(pick)) { toast('That Mythling has fainted — use a Revive Herb.', 'bad'); return; }
-      const before = pick.currentHp;
-      pick.currentHp = Math.min(maxHp(pick), pick.currentHp + item.heal);
-      if (pick.currentHp === before) { toast('HP is already full!', 'bad'); return; }
-      InventoryManager.remove(itemId, 1);
-      toast(`${displayName(pick)} recovered ${pick.currentHp - before} HP`, 'ok');
-    } else if (item.revive) {
-      if (!isFainted(pick)) { toast('That Mythling does not need reviving.', 'bad'); return; }
-      InventoryManager.remove(itemId, 1);
-      pick.currentHp = Math.floor(maxHp(pick) * item.revive);
-      toast(`${displayName(pick)} was revived!`, 'ok');
-    } else if (item.restoreAllUses) {
-      const before = JSON.stringify(pick.uses);
-      pick.uses = {};
-      for (const id of pick.library) { const sk = getSkill(id); if (sk && Number.isFinite(sk.uses)) pick.uses[id] = sk.uses; }
-      if (JSON.stringify(pick.uses) === before) { toast('Every skill is already at full uses!', 'bad'); return; }
-      InventoryManager.remove(itemId, 1);
-      AudioManager.sfx('heal');
-      toast(`${displayName(pick)}'s skills are fully restored`, 'ok');
-    } else if (item.restoreUses) {
-      InventoryManager.remove(itemId, 1);
-      restoreUses(pick, item.restoreUses);
-      toast(`${displayName(pick)}'s skills were restored`, 'ok');
-    }
+    if (!InventoryManager.has(itemId, 1)) { toast(`You have no ${item.name} left.`, 'bad'); return; }
+    // one routine for every healing item — it refuses to waste an item that would do nothing
+    const res = applyItemEffects(item, pick);
+    if (!res.ok) { toast(res.reason, 'bad'); AudioManager.sfx('cancel'); return; }
+    InventoryManager.remove(itemId, 1);
+    const parts = [];
+    if (res.revived) parts.push('was revived');
+    else if (res.healed > 0) parts.push(`recovered ${res.healed} HP`);
+    if (res.usesRestored) parts.push('had its skills restored');
     AudioManager.sfx('heal');
+    toast(`${displayName(pick)} ${parts.join(' and ')}!`, 'ok');
     this.renderTab();
   }
 

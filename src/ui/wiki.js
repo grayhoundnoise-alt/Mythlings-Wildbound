@@ -7,8 +7,9 @@
 import { el, Screens, closeButton, elementChip } from './ui.js';
 import { icon } from './icons.js';
 import { drawMythling } from '../render/creatures.js';
-import { SPECIES, SPECIES_IDS } from '../data/species.js';
-import { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, buffSummary } from '../data/skills.js';
+import { SPECIES, SPECIES_IDS, STARTER_IDS } from '../data/species.js';
+import { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, buffSummary, skillStrength, isDamageSkill, SKILL_CATEGORY_LABEL } from '../data/skills.js';
+import { MAX_EQUIPPED_SKILLS } from '../core/mythling.js';
 import {
   MOODS, MOOD_IDS, STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO,
   STAT_BAR_MAX, formatStat,
@@ -22,7 +23,7 @@ import {
   LEVEL_CAP, ABSOLUTE_MAX_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL,
   EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, expToNextLevel, DEFEAT_COIN_PENALTY,
   COUNTER_MAX_PERCENT, COUNTER_MAX_DODGE, COUNTER_DODGE_SCALE, counterDodgePercent,
-  CRIT_MAX_PERCENT, CRIT_MAX_MULT, GAME_VERSION,
+  CRIT_MAX_PERCENT, CRIT_MAX_MULT, GAME_VERSION, STARTER_RARITY,
 } from '../data/config.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { coins } from '../core/utils.js';
@@ -265,10 +266,11 @@ function battleSection() {
     para(`After a successful hit, the attacker rolls its <b>Crit Chance</b>. On a crit the damage is
       multiplied by <code>1 + CritDamage/100</code>, the number floats in gold and the log shouts
       <b>CRITICAL HIT!</b>.`),
-    h3('Buffs & debuffs', 'buff debuff stacks'),
+    h3('Buffs & debuffs', 'buff debuff stacks lower'),
     bullets([
-      `Buff skills raise one stat at a time and stack up to <b>${MAX_BUFF_STACKS}</b> stacks per stat.`,
-      'Buffs are shown as chips on both combatant cards (▲ up / ▼ down, total and stacks).',
+      `<b>Buff</b> skills raise one of YOUR stats at a time and stack up to <b>${MAX_BUFF_STACKS}</b> stacks per stat.`,
+      `<b>Debuff</b> skills lower one of the FOE's stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed) — they always land, never miss, and also stack up to <b>${MAX_BUFF_STACKS}</b> times. Every species learns three.`,
+      'Buffs and debuffs are shown as chips on both combatant cards (▲ up / ▼ down, total and stacks). Neither grants Ultimate Charge.',
       'Some Special skills carry a rider that debuffs the target (for example Speed).',
       'All buffs and debuffs clear when the battle ends.',
     ]),
@@ -283,7 +285,7 @@ function battleSection() {
     bullets([
       'When your Mythling faints, the next healthy one is sent out automatically — or you can switch yourself.',
       `Items and switching happen first in the turn, but the enemy still gets to act.`,
-      'You can only flee from <b>wild</b> battles; trainer battles have no escape.',
+      '<b>RUN is absolute:</b> you can flee <b>any</b> battle — wild <i>or</i> trainer — at any time, even mid-fight, and it <b>always</b> succeeds. The enemy gets no free hit. EXP already earned in that battle is kept; a trainer you walked away from can be challenged again.',
       `Losing all your Mythlings sends you back to the nearest Mythling Center and costs <b>${Math.round(DEFEAT_COIN_PENALTY * 100)}%</b> of your Wildcoins. Nothing else is lost.`,
     ]),
     h3('Trainer battles', 'trainer team party count'),
@@ -336,64 +338,82 @@ function speciesSection() {
 }
 
 function skillsSection() {
-  // reverse map: skill id -> species that learn it
+  // reverse map: skill id -> species that learn it, and the level each species learns it at
   const owners = {};
+  const learnLevels = {};
   for (const sp of Object.values(SPECIES)) {
     for (const lv of Object.keys(sp.skillUnlocks)) {
       for (const sid of sp.skillUnlocks[lv]) {
         (owners[sid] = owners[sid] || []).push(`${sp.displayName} (Lv.${lv})`);
+        (learnLevels[sid] = learnLevels[sid] || new Set()).add(Number(lv));
       }
     }
   }
-  // level each skill is learned at, lowest first (Lv.1 / 20 / 60 / 80)
-  const learnLevels = (sid) => {
-    const levels = new Set();
-    for (const sp of Object.values(SPECIES)) {
-      for (const lv of Object.keys(sp.skillUnlocks)) {
-        if (sp.skillUnlocks[lv].includes(sid)) levels.add(Number(lv));
-      }
-    }
-    return [...levels].sort((a, b) => a - b);
-  };
-  const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat).map((s) => {
-    const meta = s.category === 'buff'
-      ? `${buffSummary(s, ' ')} · ${s.uses} uses`
-      : `Power <b>${s.power}</b> · ${s.damageType === 'physical' ? 'Physical (P.ATK)' : 'Special (S.ATK)'}${s.element ? ` · ${ELEMENTS[s.element].name}` : ''} · ${Number.isFinite(s.uses) ? `${s.uses} uses` : 'unlimited'}`;
-    const levels = learnLevels(s.id).map((lv) => `Lv.${lv}`).join(' · ') || '—';
+  const firstLevel = (sid) => Math.min(...(learnLevels[sid] ? [...learnLevels[sid]] : [Infinity]));
+  const levelsText = (sid) => [...(learnLevels[sid] || [])].sort((a, b) => a - b).map((lv) => `Lv.${lv}`).join(' · ') || '—';
+  // "by level and power": the level a skill is first learned at, then its strength
+  const byRank = (a, b) => firstLevel(a.id) - firstLevel(b.id) || skillStrength(a) - skillStrength(b) || a.name.localeCompare(b.name);
+
+  const skillRow = (s) => {
+    const meta = isDamageSkill(s)
+      ? `Power <b>${s.power}</b> · ${s.damageType === 'physical' ? 'Physical (P.ATK)' : 'Special (S.ATK)'}${s.element ? ` · ${ELEMENTS[s.element].name}` : ''} · ${Number.isFinite(s.uses) ? `${s.uses} uses` : 'unlimited'}`
+      : `<b>${buffSummary(s, ' ')}</b> ${s.category === 'debuff' ? 'on the foe' : 'on self'} · ${s.uses} uses`;
+    const lv = firstLevel(s.id);
     return [
-      `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ''}`
-        + `<br><span class="wiki-learn">Learned at ${levels}</span>`,
-      `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` · ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT[s.debuff.stat]} by ${s.debuff.amount}` : ''}</span><br><span class="wiki-dim">Learned by: ${(owners[s.id] || ['—']).join(', ')}</span>`,
+      `<span class="wiki-learn">Lv.${Number.isFinite(lv) ? lv : '—'}</span> <b>${s.name}</b>`
+        + ` <span class="cat-tag ${s.category}">${SKILL_CATEGORY_LABEL[s.category]}</span>`
+        + `<br><span class="wiki-learn">Learned at ${levelsText(s.id)}</span>`,
+      `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` · ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT[s.debuff.stat]} by ${s.debuff.amount}` : ''}</span>`
+        + `<br><span class="wiki-dim">Learned by: ${(owners[s.id] || ['—']).join(', ')}</span>`,
     ];
-  });
+  };
+  const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat && s.id !== 'struggle').sort(byRank).map(skillRow);
+  const allByLevel = Object.values(SKILLS).filter((s) => s.id !== 'struggle' && learnLevels[s.id]).sort(byRank);
+
+  // Ultimates: every tier, ordered by unlock level then power
+  const ultRows = [];
+  for (const u of Object.values(ULTIMATES)) {
+    u.tiers.forEach((t, i) => ultRows.push({ u, t, i }));
+  }
+  ultRows.sort((a, b) => a.t.unlockLevel - b.t.unlockLevel || a.t.power - b.t.power || a.u.baseName.localeCompare(b.u.baseName));
+  const ultOwners = (uid) => Object.values(SPECIES).filter((sp) => sp.ultimate === uid).map((sp) => sp.displayName).join(', ') || '—';
+
   return [
-    h3('Skill slots', 'normal special buff equip slots'),
-    para(`Every Mythling has <b>three slots</b> and <b>any skill it has learned can go into any of them</b> —
-      two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on.
-      Everything a Mythling ever learns stays in its <b>Skill Library</b> forever, and leaving a slot empty is
-      allowed (nothing refills it, and the choice is saved). The Ultimate is fixed to the species.`),
+    h3('Battle buttons & the Skill Library', 'equip buttons library order loadout'),
+    para(`A Mythling takes <b>${MAX_EQUIPPED_SKILLS} skills</b> into battle — any mix of Normal, Special, Buff and Debuff,
+      there are no slot types. <b>The order you equip them in is the order of the battle buttons</b>: the first
+      skill you equip is button <b>1</b> (leftmost), the next is <b>2</b>, then <b>3</b> (keys 1 / 2 / 3). Unequip a
+      skill and the ones after it move up; ◀ ▶ in the library re-order them. Everything a Mythling ever learns stays
+      in its <b>Skill Library</b> forever, and leaving a button empty is allowed (nothing refills it, and the choice
+      is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
     bullets([
       '<b>Normal</b> skills have unlimited uses but low power — every evolution teaches a stronger one.',
       '<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.',
-      '<b>Buff</b> skills raise one stat and never grant Ultimate Charge.',
+      '<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe\'s stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.',
+      'Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.',
       'If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn.',
     ]),
+    h3('All skills by unlock level', 'all skills level order list'),
+    para('Every learnable skill, from the earliest to the latest unlock. Within a level, weaker skills come before stronger ones.'),
+    table(allByLevel.map(skillRow), 'skill level learned at rank'),
     h3('Normal skills', 'normal unlimited bite scratch peck'),
     table(catRows('normal'), 'normal skill level learned at'),
     h3('Special skills', 'special elemental power uses'),
     table(catRows('special'), 'special skill level learned at'),
     h3('Buff skills', 'buff raise stat stacks'),
     table(catRows('buff'), 'buff skill level learned at'),
-    h3('Ultimates', 'ultimate charge tier'),
-    table(Object.values(ULTIMATES).map((u) => [
-      `<b>${u.baseName}</b>`,
-      `${ELEMENTS[u.element].name} · ${u.damageType === 'physical' ? 'Physical' : 'Special'} · `
-      + u.tiers.map((t) => `${t.suffix ? `Tier${t.suffix}` : 'Base'} PWR ${t.power} (Lv.${t.unlockLevel}${t.future ? ', future' : ''})`).join(' · ')
-      + `<br><span class="wiki-dim">${u.desc}</span>`,
-    ])),
-    note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge only from
-      successful Normal and Special attacks. Only the Base and “ I ” tiers are reachable in this version
-      (the tier matches the evolution stage).`),
+    h3('Debuff skills', 'debuff lower stat foe enemy weaken'),
+    table(catRows('debuff'), 'debuff skill level learned at'),
+    h3('Ultimates — by unlock level and power', 'ultimate charge tier'),
+    table(ultRows.map(({ u, t, i }) => [
+      `<span class="wiki-learn">Lv.${t.unlockLevel}</span> <b>${u.baseName}${t.suffix}</b>${t.future ? ' <span class="wiki-dim">(late game)</span>' : ''}`
+        + `<br><span class="wiki-learn">${i === 0 ? 'Base tier' : `Tier${t.suffix}`} · evolution stage ${i + 1}</span>`,
+      `Power <b>${t.power}</b> · ${ELEMENTS[u.element].name} · ${u.damageType === 'physical' ? 'Physical' : 'Special'}`
+        + `${t.selfBuff ? ` · also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(', ')} on self` : ''}`
+        + `<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`,
+    ]), 'ultimate tier power level'),
+    note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge comes only from
+      successful Normal and Special attacks. The tier matches the evolution stage (Base → I → II → III).`),
   ];
 }
 
@@ -404,11 +424,13 @@ function itemsSection() {
     if (i.revive) effect += ` <span class="wiki-dim">(revives with ${Math.round(i.revive * 100)}% HP)</span>`;
     if (i.restoreUses) effect += ` <span class="wiki-dim">(+${i.restoreUses} uses to every limited skill)</span>`;
     if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
-    if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp} EXP)</span>`;
-    if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
+    if (i.healFull) effect += ' <span class="wiki-dim">(restores ALL HP)</span>';
+    if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp.toLocaleString()} EXP)</span>`;
+    if (i.guaranteed) effect += ' <span class="wiki-dim">(<b>100%</b> catch — guaranteed)</span>';
+    else if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
     return [
       `<b>${i.name}</b>${i.price ? '' : ' <span class="wiki-dim">(not sold)</span>'}`,
-      `${effect}${i.price ? ` · <b>${i.price}</b> Wildcoins` : ''}`,
+      `${effect}${i.price ? ` · <b>${i.price.toLocaleString()}</b> Wildcoins` : ''}`,
     ];
   });
   return [
@@ -419,8 +441,9 @@ function itemsSection() {
       h3(c.name, c.id),
       table(rowsFor(c.id)),
     ], c.name)),
-    note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP, and it can never
-      push a Mythling past the level cap.`),
+    note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP. You can feed a whole
+      <b>stack at once</b> (−/+/MAX picker) and the game caps the amount at what it takes to reach Lv.${LEVEL_CAP},
+      so no food is ever wasted. The <b>King Ball</b> is the only ball with a guaranteed catch — and it is priced like it.`),
   ];
 }
 
@@ -498,35 +521,35 @@ function controlsSection() {
     h3('World', 'controls keys movement'),
     table([
       ['W A S D / arrows', 'Move'],
+      ['Shift (held)', 'Run while moving'],
       ['E / Enter', 'Interact with people, buildings and signs'],
       ['ESC', 'Open the menu — or close whatever panel is on top'],
       ['Touch devices', 'An on-screen stick appears on first touch'],
     ]),
     h3('Battle', 'battle keys shortcuts'),
     table([
-      ['1', 'Normal skill'],
-      ['2', 'Special skill'],
-      ['3', 'Buff skill'],
+      ['1 / 2 / 3', `Battle buttons — the ${MAX_EQUIPPED_SKILLS} equipped skills, in the order you equipped them`],
       ['4 / R', 'Ultimate (when fully charged)'],
       ['Mouse / tap', 'Every action is clickable: ITEM, PARTY, CATCH, RUN'],
+      ['RUN', 'Leaves any battle — wild or trainer — instantly and always succeeds'],
     ]),
     h3('Shortcuts', 'shortcuts keys cheat coins'),
     table([
       ['Esc', 'Player menu (also the ☰ button). Esc also closes any panel or dialogue.'],
       ['Del', 'Cheat menu — instantly adds 100 / 1,000 / 100,000 / 1,000,000 Wildcoins.'],
-      ['Shift (held)', 'Run while moving in the overworld.'],
     ]),
-    p('Defeating a wild Mythling drops <b>Wildcoins</b>: the reward grows with its level and EXP '
+    para('Defeating a wild Mythling drops <b>Wildcoins</b>: the reward grows with its level and EXP '
       + 'yield and shrinks when you out-level it, so early areas cannot be farmed forever. '
-      + 'Trainer battles pay their own bounty instead.'),
+      + 'Trainer battles pay their own bounty instead.', 'wildcoins drop reward'),
     h3('Menu tabs', 'menu tabs party bag'),
     table([
       ['PARTY', 'Your team: reorder, inspect, evolve. Click a Mythling for full details.'],
       ['MYTHLINGS', 'Storage with filters and sorting.'],
-      ['SKILLS', 'Skill Library — equip Normal / Special / Buff skills.'],
-      ['BAG', 'Balls, healing, food and key items; feed food for EXP.'],
+      ['SKILLS', `Skill Library — equip up to ${MAX_EQUIPPED_SKILLS} skills of any kind; equip order = button order.`],
+      ['BAG', 'Balls, healing, food and key items; feed food (a whole stack at once) for EXP.'],
       ['MAP', 'Regions you have unlocked.'],
       ['COLLECTION', 'Species and mutations discovered.'],
+      ['INDEX', 'Every species with all four forms.'],
       ['STATS', 'Trainer record: play time, coins, progress.'],
       ['SAVE', 'Manual save, slot switching, quit to menu.'],
       ['SETTINGS', 'Audio, text speed, display, and the Game Wiki.'],
@@ -545,7 +568,7 @@ function versionSection() {
     h3(`Version ${GAME_VERSION}`, 'version number build'),
     table([
       ['Level cap', `Lv.${LEVEL_CAP}`],
-      ['Species', `${SPECIES_IDS.length} (3 starters)`],
+      ['Species', `${SPECIES_IDS.length} (${STARTER_IDS.length} starters — your partner is always ${STARTER_RARITY} rarity)`],
       ['Regions', `${MAP_ORDER.length}`],
       ['Moods', `${MOOD_IDS.length}`],
       ['Party / Storage', `${PARTY_MAX} / ${STORAGE_MAX}`],
@@ -562,6 +585,9 @@ function versionSection() {
 }
 
 // ------------------------------------------------------------------ screen
+/** The section list, exposed so tests can render every page headlessly. */
+export const WIKI_SECTIONS = SECTIONS;
+
 export function openWiki(sectionId = 'basics') {
   if (Screens.top()?.dataset.id === 'wiki') return;
   let current = sectionId;

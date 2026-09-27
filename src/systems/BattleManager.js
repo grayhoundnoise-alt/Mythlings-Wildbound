@@ -2,8 +2,8 @@
 // that the battle UI animates. No DOM access in here.
 import {
   computeStats, maxHp, displayName, stageData, speciesOf, isFainted,
-  equippedSkill, usesLeft, consumeUse, ultimateMove, ultimateReady, ultimateUnlocked, basicAttack,
-  addUltimateCharge, gainExp, hpPercent,
+  equippedSkill, equippedSkills, usesLeft, consumeUse, ultimateMove, ultimateReady, ultimateUnlocked, basicAttack,
+  addUltimateCharge, gainExp, hpPercent, applyItemEffects,
 } from '../core/mythling.js';
 import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE } from '../data/skills.js';
 import { elementMultiplier, effectivenessLabel } from '../data/elements.js';
@@ -72,7 +72,8 @@ export class Battle {
     this.mapId = cfg.mapId;
     this.party = cfg.party;
     this.enemies = cfg.enemies;
-    this.canRun = cfg.canRun !== false && this.type === BattleType.WILD;
+    // Running is absolute: any battle, wild or trainer, can be left at any time.
+    this.canRun = cfg.canRun !== false;
     this.rng = cfg.rng || Math.random;
 
     this.playerIndex = this.party.findIndex((m) => !isFainted(m));
@@ -179,55 +180,38 @@ export class Battle {
     const item = getItem(itemId);
     if (!item) return { events, ok: false };
     const target = this.party.find((m) => m.uid === targetUid) || this.player;
-    let ok = false;
-    if (item.heal) {
-      if (isFainted(target)) {
-        events.push({ type: 'log', text: `${displayName(target)} has fainted and cannot be healed.` });
-        return { events, ok: false };
-      }
-      const before = target.currentHp;
-      target.currentHp = Math.min(maxHp(target), target.currentHp + item.heal);
-      events.push({ type: 'heal', side: this.party.includes(target) ? 'player' : 'enemy', uid: target.uid, amount: target.currentHp - before, mythling: this.snapshot(target) });
-      events.push({ type: 'log', text: `${displayName(target)} recovered ${target.currentHp - before} HP!` });
-      ok = true;
-    } else if (item.revive) {
-      if (!isFainted(target)) {
-        events.push({ type: 'log', text: `${displayName(target)} does not need reviving.` });
-        return { events, ok: false };
-      }
-      target.currentHp = Math.floor(maxHp(target) * item.revive);
-      events.push({ type: 'heal', side: 'player', uid: target.uid, amount: target.currentHp, mythling: this.snapshot(target) });
-      events.push({ type: 'log', text: `${displayName(target)} was revived!` });
-      ok = true;
-    } else if (item.restoreUses) {
-      for (const id of target.library) {
-        const sk = getSkill(id);
-        if (sk && Number.isFinite(sk.uses)) target.uses[id] = Math.min(sk.uses, (target.uses[id] ?? 0) + item.restoreUses);
-      }
-      events.push({ type: 'log', text: `${displayName(target)}'s skills were restored!` });
-      ok = true;
+    const res = applyItemEffects(item, target);
+    if (!res.ok) {
+      events.push({ type: 'log', text: res.reason || 'It had no effect.' });
+      return { events, ok: false };
     }
-    return { events, ok };
+    const side = this.party.includes(target) ? 'player' : 'enemy';
+    if (res.revived) {
+      events.push({ type: 'heal', side, uid: target.uid, amount: target.currentHp, mythling: this.snapshot(target) });
+      events.push({ type: 'log', text: `${displayName(target)} was revived!` });
+    } else if (res.healed > 0) {
+      events.push({ type: 'heal', side, uid: target.uid, amount: res.healed, mythling: this.snapshot(target) });
+      events.push({ type: 'log', text: `${displayName(target)} recovered ${res.healed} HP!` });
+    }
+    if (res.usesRestored) events.push({ type: 'log', text: `${displayName(target)}'s skills were restored!` });
+    return { events, ok: true };
   }
 
+  /**
+   * Fleeing is guaranteed: the moment the player runs, the battle is over —
+   * no speed roll, no free hit for the enemy, and trainers cannot stop you.
+   * Partial rewards already earned (KO'd trainer Mythlings) are kept.
+   */
   _tryRun(events) {
     if (!this.canRun) {
-      events.push({ type: 'log', text: 'You cannot flee from a trainer battle!' });
+      events.push({ type: 'log', text: 'You cannot flee from this battle!' });
       return { events, phase: this.phase };
     }
     this.runAttempts += 1;
-    const pSpd = this.cb(this.player).stat('spd');
-    const eSpd = this.cb(this.enemy).stat('spd');
-    const chance = clamp(0.45 + (pSpd - eSpd) * 0.02 + this.runAttempts * 0.12, 0.25, 0.95);
-    if (this.rng() < chance) {
-      events.push({ type: 'log', text: 'You got away safely!' });
-      this.phase = BattlePhase.FLED;
-    } else {
-      events.push({ type: 'log', text: "You couldn't get away!" });
-      const enemyAction = this._enemyChooseAction();
-      this._resolve(this.enemy, this.player, enemyAction, events);
-      this._postTurn(events);
-    }
+    events.push({ type: 'log', text: this.type === BattleType.TRAINER
+      ? `You walked away from ${this.trainer?.name || 'the trainer'}'s challenge.`
+      : 'You got away safely!', emphasis: true });
+    this.phase = BattlePhase.FLED;
     return { events, phase: this.phase };
   }
 
@@ -257,7 +241,7 @@ export class Battle {
       return;
     }
 
-    let skillId = action.skillId || attacker.skills[action.slot];
+    let skillId = this._actionSkillId(attacker, action);
     let skill = getSkill(skillId);
     // Out of uses (or nothing equipped at all)? Fall back to the Mythling's
     // unlimited attack instead of losing the turn.
@@ -281,6 +265,17 @@ export class Battle {
       return;
     }
 
+    if (skill.category === 'debuff') {
+      // Debuffs always land on the FOE (no dodge roll) and, like buffs, grant no charge.
+      events.push({ type: 'log', text: `${displayName(attacker)} used ${skill.name}!` });
+      events.push({
+        type: 'cast', side: atkSide, kind: 'debuff', element: skill.element || null, name: skill.name,
+        skillId: skill.id, category: 'debuff', target: defSide,
+      });
+      for (const eff of skill.effects) this._applyDebuff(defender, eff, events, defSide);
+      return;
+    }
+
     events.push({
       type: 'cast', side: atkSide, kind: skill.damageType, element: skill.element, name: skill.name,
       skillId: skill.id, category: skill.category, target: defSide,
@@ -301,6 +296,32 @@ export class Battle {
     }
     events.push({ type: 'buff', side, stat: eff.stat, amount: eff.amount, stacks: res.stacks, total: res.total, uid: target.uid });
     events.push({ type: 'log', text: `${displayName(target)}'s ${eff.stat.toUpperCase()} rose! (+${res.total}, ${res.stacks}/${MAX_BUFF_STACKS} stacks)` });
+  }
+
+  _applyDebuff(target, eff, events, side) {
+    const cb = this.cb(target);
+    const res = cb.applyDebuff(eff.stat, eff.amount);
+    if (!res.applied) {
+      events.push({ type: 'log', text: `${displayName(target)}'s ${eff.stat.toUpperCase()} cannot fall any further! (max ${MAX_BUFF_STACKS} stacks)` });
+      return;
+    }
+    events.push({ type: 'debuff', side, stat: eff.stat, amount: eff.amount, stacks: res.stacks, total: res.total, uid: target.uid });
+    events.push({ type: 'log', text: `${displayName(target)}'s ${eff.stat.toUpperCase()} fell! (${res.total}, ${Math.abs(res.stacks)}/${MAX_BUFF_STACKS} stacks)` });
+  }
+
+  /**
+   * Which skill an action refers to. Actions name a skill directly
+   * (`skillId`), a battle button (`index`, 0-based) or — for older callers —
+   * a category (`slot`), which resolves to the first equipped skill of that kind.
+   */
+  _actionSkillId(m, action) {
+    if (action.skillId) return action.skillId;
+    if (Number.isInteger(action.index)) return equippedSkill(m, action.index)?.id || null;
+    if (action.slot) {
+      const hit = equippedSkills(m).find((e) => e.skill.category === action.slot);
+      return hit ? hit.id : null;
+    }
+    return null;
   }
 
   /**
@@ -394,21 +415,27 @@ export class Battle {
     if (!e || isFainted(e)) return null;
     if (ultimateReady(e)) return { type: 'ultimate' };
 
-    const special = equippedSkill(e, 'special');
-    const buff = equippedSkill(e, 'buff');
-    const normal = equippedSkill(e, 'normal');
+    // The enemy plays whatever it has on its battle buttons, by category.
+    const ready = equippedSkills(e).filter((x) => usesLeft(e, x.id) > 0);
+    const first = (cat) => ready.find((x) => x.skill.category === cat) || null;
+    const special = first('special');
+    const buff = first('buff');
+    const debuff = first('debuff');
+    const normal = first('normal');
+    const use = (x) => ({ type: 'skill', index: x.index });
 
-    const canSpecial = special && usesLeft(e, special.id) > 0;
-    const canBuff = buff && usesLeft(e, buff.id) > 0;
-
-    const r = this.rng();
-    // Buff early, then press the attack.
-    if (canBuff && this.turn <= 2 && r < 0.3) return { type: 'skill', slot: 'buff' };
-    if (canBuff && r < 0.12) return { type: 'skill', slot: 'buff' };
-    if (canSpecial && r < 0.75) return { type: 'skill', slot: 'special' };
-    if (normal) return { type: 'skill', slot: 'normal' };
-    if (canSpecial) return { type: 'skill', slot: 'special' };
-    return { type: 'skill', slot: 'normal' };
+    const r = this.rng();                       // exactly one roll per decision
+    // Buff or weaken early, then press the attack.
+    if (buff && this.turn <= 2 && r < 0.3) return use(buff);
+    if (debuff && this.turn <= 3 && r >= 0.3 && r < 0.55) return use(debuff);
+    if (buff && r < 0.12) return use(buff);
+    if (debuff && r >= 0.12 && r < 0.24) return use(debuff);
+    if (special && r < 0.75) return use(special);
+    if (normal) return use(normal);
+    if (special) return use(special);
+    if (debuff) return use(debuff);
+    if (buff) return use(buff);
+    return { type: 'skill', skillId: basicAttack(e).id };
   }
 
   // ---------------- turn bookkeeping ----------------
@@ -490,6 +517,7 @@ export class Battle {
 
 export function captureChance({ target, ballId, rngValue }) {
   const ball = getItem(ballId);
+  if (ball?.guaranteed) return 1;                 // King Ball: never fails
   const sp = speciesOf(target);
   const rarity = getRarity(target.rarity);
   const levelFactor = clamp(1.25 - target.level * 0.02, 0.4, 1.25);

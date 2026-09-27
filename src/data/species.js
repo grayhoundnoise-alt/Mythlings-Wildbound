@@ -4,8 +4,10 @@
 //   0 = base (Lv.1)   1 = first evolution (Lv.20)
 //   2 = Lv.60 (FUTURE, locked)   3 = Lv.80 (FUTURE, locked)
 //
-// The current build's level cap (30) means only stages 0 and 1 are reachable.
-// The Lv.60 / Lv.80 architecture is intentionally preserved for future updates.
+// skillUnlocks keys are LEVELS: 1 / 20 / 60 / 80 are the evolution stages
+// (one Normal, one Special and one Buff each) and 1 / 12 / 40 add the species'
+// Debuff skills (an opener, a defence breaker and a late-game curse).
+// With the level cap at 100 every stage is reachable.
 
 export const SPECIES = {
   spriggo: {
@@ -30,8 +32,10 @@ export const SPECIES = {
       { stage: 3, name: 'Floragon',  level: 80, statMult: 2.20, future: true, art: { scale: 1.65, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'vine_lash', 'brave_guard'],
+      1:  ['bite', 'vine_lash', 'brave_guard', 'sap_drain'],
+      12: ['pollen_veil'],
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
+      40: ['blight_bloom'],
       60: ['nature_burst', 'wild_instinct', 'briar_smash'],
       80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
     },
@@ -64,8 +68,10 @@ export const SPECIES = {
       { stage: 3, name: 'Leviaron', level: 80, statMult: 2.20, future: true, art: { scale: 1.62, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['scratch', 'water_shot', 'flow_focus'],
+      1:  ['scratch', 'water_shot', 'flow_focus', 'mist_veil'],
+      12: ['pressure_drop'],
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
+      40: ['riptide_pull'],
       60: ['whirlpool', 'deep_current', 'tide_smash'],
       80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
     },
@@ -98,8 +104,10 @@ export const SPECIES = {
       { stage: 3, name: 'Ignidrake', level: 80, statMult: 2.20, future: true, art: { scale: 1.70, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'flame_rawr', 'dragon_fury'],
+      1:  ['bite', 'flame_rawr', 'dragon_fury', 'scorch'],
+      12: ['ash_cloud'],
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
+      40: ['cinder_curse'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
       80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
     },
@@ -132,8 +140,10 @@ export const SPECIES = {
       { stage: 3, name: 'Maelwolf', level: 80, statMult: 2.20, future: true, art: { scale: 1.68, horns: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'water_splash', 'aqua_guard'],
+      1:  ['bite', 'water_splash', 'aqua_guard', 'soak'],
+      12: ['brine_rust'],
       20: ['heavy_wave', 'thick_fur', 'stream_jab'],
+      40: ['abyssal_chill'],
       60: ['crushing_current', 'deep_guard', 'tide_smash'],
       80: ['abyssal_wave', 'fortress_hide', 'abyss_slam'],
     },
@@ -166,8 +176,10 @@ export const SPECIES = {
       { stage: 3, name: 'Zephyrax',  level: 80, statMult: 2.20, future: true, art: { scale: 1.64, wings: true, horns: true } },
     ],
     skillUnlocks: {
-      1:  ['peck', 'leaf_shot', 'quick_breeze'],
+      1:  ['peck', 'leaf_shot', 'quick_breeze', 'bramble_snare'],
+      12: ['root_rot'],
       20: ['razor_wing', 'wind_step', 'thorn_jab'],
+      40: ['withering_curse'],
       60: ['sky_cutter', 'feather_flow', 'briar_smash'],
       80: ['sky_cyclone', 'gale_mastery', 'worldroot_slam'],
     },
@@ -198,8 +210,10 @@ export const SPECIES = {
       { stage: 3, name: 'Rootwarden', level: 80, statMult: 2.28, art: { scale: 1.63, horns: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'vine_lash', 'brave_guard'],
+      1:  ['bite', 'vine_lash', 'brave_guard', 'spore_haze'],
+      12: ['root_rot'],
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
+      40: ['withering_curse'],
       60: ['nature_burst', 'wild_instinct', 'briar_smash'],
       80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
     },
@@ -230,8 +244,10 @@ export const SPECIES = {
       { stage: 3, name: 'Worldcoil', level: 80, statMult: 2.20, art: { scale: 1.65, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'vine_lash', 'brave_guard'],
+      1:  ['bite', 'vine_lash', 'brave_guard', 'bramble_snare'],
+      12: ['pollen_veil'],
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
+      40: ['blight_bloom'],
       60: ['nature_burst', 'wild_instinct', 'briar_smash'],
       80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
     },
@@ -262,8 +278,10 @@ export const SPECIES = {
       { stage: 3, name: 'Skyblossom', level: 80, statMult: 2.15, art: { scale: 1.60, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['peck', 'vine_lash', 'brave_guard'],
+      1:  ['peck', 'vine_lash', 'brave_guard', 'spore_haze'],
+      12: ['pollen_veil'],
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
+      40: ['blight_bloom'],
       60: ['nature_burst', 'wild_instinct', 'briar_smash'],
       80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
     },
@@ -294,8 +312,10 @@ export const SPECIES = {
       { stage: 3, name: 'Abysscoil', level: 80, statMult: 2.28, art: { scale: 1.70, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'water_shot', 'flow_focus'],
+      1:  ['bite', 'water_shot', 'flow_focus', 'mist_veil'],
+      12: ['pressure_drop'],
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
+      40: ['riptide_pull'],
       60: ['whirlpool', 'deep_current', 'tide_smash'],
       80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
     },
@@ -326,8 +346,10 @@ export const SPECIES = {
       { stage: 3, name: 'Fortressshell', level: 80, statMult: 2.34, art: { scale: 1.63, horns: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'water_shot', 'flow_focus'],
+      1:  ['bite', 'water_shot', 'flow_focus', 'soak'],
+      12: ['brine_rust'],
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
+      40: ['abyssal_chill'],
       60: ['whirlpool', 'deep_current', 'tide_smash'],
       80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
     },
@@ -358,8 +380,10 @@ export const SPECIES = {
       { stage: 3, name: 'Stormcurrent', level: 80, statMult: 2.15, art: { scale: 1.62, horns: true } },
     ],
     skillUnlocks: {
-      1:  ['scratch', 'water_shot', 'flow_focus'],
+      1:  ['scratch', 'water_shot', 'flow_focus', 'undertow'],
+      12: ['brine_rust'],
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
+      40: ['abyssal_chill'],
       60: ['whirlpool', 'deep_current', 'tide_smash'],
       80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
     },
@@ -390,8 +414,10 @@ export const SPECIES = {
       { stage: 3, name: 'Infernalynx', level: 80, statMult: 2.15, art: { scale: 1.62, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['scratch', 'flame_rawr', 'dragon_fury'],
+      1:  ['scratch', 'flame_rawr', 'dragon_fury', 'singe'],
+      12: ['melt_armor'],
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
+      40: ['magma_brand'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
       80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
     },
@@ -422,8 +448,10 @@ export const SPECIES = {
       { stage: 3, name: 'Solarhawk', level: 80, statMult: 2.12, art: { scale: 1.60, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['peck', 'flame_rawr', 'dragon_fury'],
+      1:  ['peck', 'flame_rawr', 'dragon_fury', 'heat_haze'],
+      12: ['ash_cloud'],
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
+      40: ['cinder_curse'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
       80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
     },
@@ -454,8 +482,10 @@ export const SPECIES = {
       { stage: 3, name: 'Cataclysm', level: 80, statMult: 2.28, art: { scale: 1.70, horns: true, wings: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'flame_rawr', 'dragon_fury'],
+      1:  ['bite', 'flame_rawr', 'dragon_fury', 'scorch'],
+      12: ['melt_armor'],
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
+      40: ['magma_brand'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
       80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
     },
@@ -486,8 +516,10 @@ export const SPECIES = {
       { stage: 3, name: 'Duskfang', level: 80, statMult: 2.20, art: { scale: 1.63, horns: true } },
     ],
     skillUnlocks: {
-      1:  ['bite', 'flame_rawr', 'dragon_fury'],
+      1:  ['bite', 'flame_rawr', 'dragon_fury', 'singe'],
+      12: ['melt_armor'],
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
+      40: ['magma_brand'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
       80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
     },
@@ -521,4 +553,17 @@ export function skillsUnlockedAt(speciesId, level) {
     if (level >= Number(key)) out.push(...sp.skillUnlocks[key]);
   }
   return out;
+}
+
+/** The level a species learns `skillId` at (lowest table entry), or null if it never does. */
+export function skillLearnLevel(speciesId, skillId) {
+  const sp = getSpecies(speciesId);
+  if (!sp) return null;
+  let best = null;
+  for (const key of Object.keys(sp.skillUnlocks)) {
+    if (!sp.skillUnlocks[key].includes(skillId)) continue;
+    const lv = Number(key);
+    if (best == null || lv < best) best = lv;
+  }
+  return best;
 }

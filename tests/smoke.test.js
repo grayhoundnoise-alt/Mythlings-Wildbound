@@ -64,17 +64,23 @@ globalThis.localStorage = {
 
 const { createMythling, gainExp, computeStats, resetToLevelOne, canEvolve, evolve,
   ultimateUnlocked, ultimateMove, addUltimateCharge, isMaxLevel, restoreAll,
-  usesLeft, consumeUse, equipSkill, librarySkills } = await import('../src/core/mythling.js');
+  usesLeft, consumeUse, equipSkill, unequipSkill, moveSkill, equippedSkill, librarySkills,
+  applyItemEffects } = await import('../src/core/mythling.js');
 const { LEVEL_CAP, expToNextLevel } = await import('../src/data/config.js');
 const { Battle, BattleType, BattlePhase, captureChance } = await import('../src/systems/BattleManager.js');
 const { GameState, PartyManager, StorageManager, InventoryManager, CollectionManager,
   PlayerManager, createNewGameState, serialize, deserialize } = await import('../src/systems/GameState.js');
 const { CaptureManager } = await import('../src/systems/CaptureManager.js');
+const ITEMS_MOD = await import('../src/data/items.js');
+const { FeedManager } = await import('../src/systems/FeedManager.js');
 const { elementMultiplier } = await import('../src/data/elements.js');
 const { moodModifiers, MOODS, STAT_KEYS } = await import('../src/data/moods.js');
 const { counterDodgePercent, COUNTER_MAX_DODGE } = await import('../src/data/config.js');
 const { MAPS } = await import('../src/data/maps.js');
 const { SPECIES, SPECIES_IDS } = await import('../src/data/species.js');
+
+const { maxHp: maxHpOf } = await import('../src/core/mythling.js');
+const SKILLS_MOD = await import('../src/data/skills.js');
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -264,36 +270,71 @@ test('normal skill has infinite uses, special/buff limited', () => {
   assert.equal(usesLeft(m, 'vine_lash'), 19);
 });
 
-test('any learned skill can go into any slot', () => {
+test('any learned skill can be equipped — up to 3, in the order you equip them', () => {
   const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
-  assert.equal(equipSkill(m, 'special', 'thorn_spear'), true);
-  assert.equal(m.skills.special, 'thorn_spear');
-  // slots are just slots: two specials, or a buff in the normal slot, are fine
-  assert.equal(equipSkill(m, 'normal', 'thorn_armor'), true, 'a buff in the normal slot');
-  assert.equal(equipSkill(m, 'buff', 'thorn_armor'), true, 'the same skill in two slots');
-  assert.equal(m.skills.normal, 'thorn_armor');
+  m.skills = [];
+  assert.equal(equipSkill(m, 'thorn_spear'), true);
+  assert.equal(equipSkill(m, 'thorn_armor'), true, 'a buff next to a special — no slot types');
+  assert.equal(equipSkill(m, 'pollen_veil'), true, 'a debuff too');
+  assert.deepEqual(m.skills, ['thorn_spear', 'thorn_armor', 'pollen_veil'], 'equip order = button order');
+  assert.equal(equipSkill(m, 'bite'), false, 'all three buttons are full');
+  assert.equal(equipSkill(m, 'thorn_armor'), false, 'the same skill cannot sit on two buttons');
   // ...but only skills the Mythling has actually learned
-  assert.equal(equipSkill(m, 'special', 'ocean_pressure'), false, 'not in the library');
-  assert.equal(equipSkill(m, 'special', 'not_a_skill'), false, 'unknown skill');
+  assert.equal(equipSkill(m, 'ocean_pressure'), false, 'not in the library');
+  assert.equal(equipSkill(m, 'not_a_skill'), false, 'unknown skill');
+  // unequipping closes the gap and keeps the order of the rest
+  assert.equal(unequipSkill(m, 'thorn_armor'), true);
+  assert.deepEqual(m.skills, ['thorn_spear', 'pollen_veil']);
+  assert.equal(equipSkill(m, 'bite'), true);
+  assert.deepEqual(m.skills, ['thorn_spear', 'pollen_veil', 'bite'], 'a newly equipped skill takes the next button');
+  assert.equal(equippedSkill(m, 2).id, 'bite');
+  assert.equal(moveSkill(m, 2, 0), true);
+  assert.deepEqual(m.skills, ['bite', 'thorn_spear', 'pollen_veil'], 're-ordering works');
 });
 
-test('a slot can be left empty', () => {
+test('buttons can be left empty and the loadout survives a save/load', () => {
   const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
-  equipSkill(m, 'normal', null);
-  equipSkill(m, 'special', null);
-  equipSkill(m, 'buff', null);
-  assert.deepEqual(m.skills, { normal: null, special: null, buff: null });
-  // a reload must not quietly refill slots the player chose to leave empty
+  m.skills = [];
+  equipSkill(m, 'thorn_armor');
+  assert.deepEqual(m.skills, ['thorn_armor']);
+  // a reload must not quietly refill buttons the player chose to leave empty
   GameState.party = [m];
   GameState.storage = [];
   const round = deserialize(serialize());
   assert.equal(round, true);
   const reloaded = PartyManager.lead();
-  assert.deepEqual(reloaded.skills, { normal: null, special: null, buff: null },
-    'empty slots survive a save/load');
+  assert.deepEqual(reloaded.skills, ['thorn_armor'], 'the loadout survives a save/load');
 });
 
-const { getSkill: getSkillById } = await import('../src/data/skills.js');
+test('old saves with {normal, special, buff} slots migrate to the ordered loadout', () => {
+  const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  GameState.party = [m];
+  GameState.storage = [];
+  const data = serialize();
+  data.party[0].skills = { normal: 'thorn_jab', special: null, buff: 'thorn_armor' };
+  assert.equal(deserialize(data), true);
+  assert.deepEqual(PartyManager.lead().skills, ['thorn_jab', 'thorn_armor'], 'old slots become buttons, empties dropped');
+});
+
+test('every species learns three debuff skills (Lv.1, Lv.12, Lv.40)', () => {
+  const { SKILLS: allSkills } = SKILLS_MOD;
+  for (const id of SPECIES_IDS) {
+    const sp = SPECIES[id];
+    const debuffs = Object.entries(sp.skillUnlocks)
+      .flatMap(([lv, ids]) => ids.map((sid) => ({ lv: Number(lv), sk: allSkills[sid] })))
+      .filter((e) => e.sk && e.sk.category === 'debuff');
+    assert.equal(debuffs.length, 3, `${id} has three debuffs`);
+    assert.deepEqual(debuffs.map((e) => e.lv).sort((a, b) => a - b), [1, 12, 40], `${id} learns them at 1 / 12 / 40`);
+    for (const { sk } of debuffs) {
+      assert.equal(sk.effects.length, 1, `${sk.id} lowers exactly one stat`);
+      assert.ok(Number.isFinite(sk.uses) && sk.uses > 0, `${sk.id} has limited uses`);
+    }
+  }
+  const m = createMythling({ speciesId: 'emberu', level: 12 });
+  assert.ok(m.library.includes('scorch') && m.library.includes('ash_cloud'), 'debuffs land in the library');
+});
+
+const { getSkill: getSkillById } = SKILLS_MOD;
 const { basicAttack } = await import('../src/core/mythling.js');
 
 test('an exhausted move falls back to the unlimited attack instead of wasting the turn', () => {
@@ -394,6 +435,56 @@ test('buff stacking is capped at 30 stacks', () => {
   assert.equal(cb.buffs.patk.total, 90);
 });
 
+test('RUN is absolute: fleeing always works, from wild AND trainer battles', () => {
+  const player = createMythling({ speciesId: 'spriggo', level: 3 });
+  const wild = createMythling({ speciesId: 'leaflet', level: 30 });     // far faster than us
+  const b = new Battle({ type: BattleType.WILD, party: [player], enemies: [wild], mapId: 'verdant_vale', rng: () => 0.999 });
+  const r = b.act({ type: 'run' });
+  assert.equal(b.phase, BattlePhase.FLED, 'fled on the first try despite the worst roll');
+  assert.ok(!r.events.some((ev) => ev.type === 'damage'), 'the enemy gets no free hit');
+  assert.equal(player.currentHp, maxHpOf(player));
+
+  const trainerTeam = [createMythling({ speciesId: 'rivruff', level: 30 }), createMythling({ speciesId: 'aquini', level: 30 })];
+  const t = new Battle({
+    type: BattleType.TRAINER, party: [createMythling({ speciesId: 'emberu', level: 40 })], enemies: trainerTeam,
+    trainer: { name: 'Coach Nia', flag: 't_test', team: [] }, mapId: 'tidecrest', rng: () => 0.999,
+  });
+  assert.equal(t.canRun, true, 'trainer battles can be left too');
+  t.act({ type: 'skill', index: 0 });
+  assert.equal(t.phase, BattlePhase.ACTIVE);
+  const r2 = t.act({ type: 'run' });
+  assert.equal(t.phase, BattlePhase.FLED, 'walked away mid-battle');
+  assert.ok(r2.events.some((ev) => ev.type === 'log' && /walked away/i.test(ev.text)));
+});
+
+test('debuff skills lower the FOE\'s stat and grant no Ultimate Charge', () => {
+  const p = createMythling({ speciesId: 'spriggo', level: 12 });
+  p.skills = ['pollen_veil'];                                   // S.DEF -5 on the foe
+  const e = createMythling({ speciesId: 'rivruff', level: 12 });
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
+  const before = b.cb(e).stat('sdef');
+  const r = b.act({ type: 'skill', index: 0 });
+  const ev = r.events.find((x) => x.type === 'debuff' && x.side === 'enemy');
+  assert.ok(ev, 'a debuff event on the enemy side');
+  assert.equal(ev.stat, 'sdef');
+  assert.equal(b.cb(e).stat('sdef'), Math.max(1, before - 5), 'the foe\'s S.DEF dropped by 5');
+  assert.equal(b.cb(p).buffs.sdef, undefined, 'nothing happened to the caster');
+  assert.equal(p.ultCharge, 0, 'no charge from a debuff');
+  assert.equal(usesLeft(p, 'pollen_veil'), 9, 'one use spent');
+  assert.ok(r.events.some((x) => x.type === 'log' && /S\.?DEF fell/i.test(x.text)), 'the log says it fell');
+});
+
+test('battle actions address buttons by index, and a category name still resolves', () => {
+  const p = createMythling({ speciesId: 'spriggo', level: 5 });
+  assert.deepEqual(p.skills, ['bite', 'vine_lash', 'brave_guard'], 'auto-equip: normal, special, then the stat skill');
+  const e = createMythling({ speciesId: 'leaflet', level: 5 });
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
+  const r1 = b.act({ type: 'skill', index: 1 });
+  assert.ok(r1.events.some((ev) => ev.type === 'cast' && ev.side === 'player' && ev.skillId === 'vine_lash'), 'button 2 = Vine Lash');
+  const r2 = b.act({ type: 'skill', slot: 'buff' });
+  assert.ok(r2.events.some((ev) => ev.type === 'cast' && ev.side === 'player' && ev.skillId === 'brave_guard'), 'legacy category lookup');
+});
+
 test('ultimate requires 8/8 and resets to 0 after use', () => {
   const p = createMythling({ speciesId: 'emberu', level: 20 });
   const e = createMythling({ speciesId: 'rivruff', level: 30 });
@@ -443,6 +534,31 @@ test('capture chance is forgiving on low-level commons and harder at Lv.30', () 
 
 // ------------------------------------------------------------------
 section('Party / storage / inventory');
+test('the King Ball is a guaranteed catch — and costs a fortune', () => {
+  const { ITEMS: allItems } = ITEMS_MOD;
+  const nasty = createMythling({ speciesId: 'cinderhawk', level: 100, rarity: 'SSS+' });
+  nasty.currentHp = 0;
+  assert.equal(captureChance({ target: nasty, ballId: 'king_ball' }), 1, '100% on the hardest possible target');
+  assert.ok(captureChance({ target: nasty, ballId: 'god_ball' }) < 1, 'the God Ball still can fail');
+  assert.ok(allItems.king_ball.price >= 10 * allItems.god_ball.price, 'very expensive');
+  createNewGameState({ slot: 1, playerName: 'ROYAL', starterId: 'spriggo' });
+  InventoryManager.add('king_ball', 1);
+  const res = CaptureManager.attempt(nasty, 'king_ball', () => 0.999999);
+  assert.equal(res.success, true, 'never breaks free');
+  assert.equal(InventoryManager.count('king_ball'), 0, 'the ball is spent');
+});
+
+test('the starter partner is always S rarity', () => {
+  for (const id of ['spriggo', 'aquini', 'emberu']) {
+    const starter = createNewGameState({ slot: 1, playerName: 'DUMDUM', starterId: id });
+    assert.equal(starter.rarity, 'S', `${id} starter is S`);
+    assert.equal(starter.meta.isStarter, true);
+    assert.equal(PartyManager.lead().rarity, 'S');
+  }
+  // but the species itself still spawns at its normal rarity in the wild
+  assert.equal(createMythling({ speciesId: 'spriggo', level: 3 }).rarity, SPECIES.spriggo.defaultRarity);
+});
+
 test('party caps at 6, extra Mythlings go to storage', () => {
   createNewGameState({ slot: 1, playerName: 'DUMDUM', starterId: 'aquini' });
   for (let i = 0; i < 8; i++) {
@@ -469,6 +585,67 @@ test('inventory never goes negative and purchases are validated', () => {
   assert.equal(GameState.player.wildcoins, 100);
   assert.equal(PlayerManager.spendCoins(60), true);
   assert.equal(GameState.player.wildcoins, 40);
+});
+
+test('a stack of food can be fed at once and is capped at the level cap', () => {
+  createNewGameState({ slot: 1, playerName: 'CHEF', starterId: 'aquini' });
+  const m = PartyManager.lead();
+  gainExp(m, 5_000_000);                                  // Lv.100 already
+  assert.equal(FeedManager.maxFeedable(m, 'sweet_berry'), 0, 'a maxed Mythling cannot be fed');
+  const late = createMythling({ speciesId: 'leaflet', level: 95 });
+  PartyManager.add(late);
+  InventoryManager.add('wildbound_ambrosia', 50);
+  const need = FeedManager.toCap(late, 'wildbound_ambrosia');
+  assert.ok(need >= 1 && need < 50, `only ${need} ambrosia are useful from Lv.95`);
+  assert.equal(FeedManager.maxFeedable(late, 'wildbound_ambrosia'), need, 'never more than useful');
+  const prev = FeedManager.preview(late, 'wildbound_ambrosia', need);
+  assert.equal(prev.level, LEVEL_CAP, 'the preview reaches the cap');
+  const res = FeedManager.feed(late, 'wildbound_ambrosia', 50);
+  assert.equal(res.ok, true);
+  assert.equal(res.count, need, 'asked for 50, fed only what was useful');
+  assert.equal(late.level, LEVEL_CAP);
+  assert.equal(InventoryManager.count('wildbound_ambrosia'), 50 - need, 'the rest stays in the bag');
+  // small stacks: feed exactly what you asked for
+  const kid = createMythling({ speciesId: 'spriggo', level: 1 });
+  InventoryManager.add('sweet_berry', 10);
+  const r2 = FeedManager.feed(kid, 'sweet_berry', 3);
+  assert.equal(r2.count, 3);
+  assert.equal(r2.exp, 120);
+  assert.equal(InventoryManager.count('sweet_berry'), 7 + 3, 'starting berries + the rest');
+});
+
+test('the food ladder reaches high-level training and every shop sells food', () => {
+  const foods = Object.values(ITEMS_MOD.ITEMS).filter((i) => i.category === 'food');
+  assert.ok(foods.length >= 15, `${foods.length} foods (5 old + 10 new)`);
+  const best = Math.max(...foods.map((f) => f.exp));
+  assert.ok(best >= expToNextLevel(LEVEL_CAP - 1) * 5, 'the best food is worth several late levels');
+  for (const id of Object.keys(MAPS)) {
+    const shop = MAPS[id].buildings.find((b) => b.type === 'shop');
+    assert.ok(shop.stock.some((s) => ITEMS_MOD.ITEMS[s]?.category === 'food'), `${id} sells food`);
+    for (const s of shop.stock) assert.ok(ITEMS_MOD.ITEMS[s], `${id} stocks a real item (${s})`);
+  }
+});
+
+test('healing items apply every effect they carry and refuse to be wasted', () => {
+  const { ITEMS: allItems } = ITEMS_MOD;
+  const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  assert.equal(applyItemEffects(allItems.potion, m).ok, false, 'full HP: a potion does nothing');
+  m.currentHp = 1;
+  consumeUse(m, 'vine_lash'); consumeUse(m, 'vine_lash');
+  const full = applyItemEffects(allItems.full_restore, m);
+  assert.equal(full.ok, true);
+  assert.equal(m.currentHp, maxHpOf(m), 'Full Restore heals everything');
+  assert.equal(usesLeft(m, 'vine_lash'), 20, '...and refills every skill');
+  assert.equal(full.usesRestored, true);
+  m.currentHp = 0;
+  assert.equal(applyItemEffects(allItems.max_potion, m).ok, false, 'a fainted Mythling needs a revive');
+  const rev = applyItemEffects(allItems.max_revive, m);
+  assert.equal(rev.ok, true);
+  assert.equal(m.currentHp, maxHpOf(m), 'Max Revive brings it back at full HP');
+  m.currentHp = 10;
+  const dry = applyItemEffects(allItems.hyper_potion, m, { dryRun: true });
+  assert.equal(dry.ok, true);
+  assert.equal(m.currentHp, 10, 'a dry run changes nothing');
 });
 
 // ------------------------------------------------------------------
@@ -943,6 +1120,14 @@ test('the evolution canvas stays square at every size', () => {
   assert.match(cv[1], /height:\s*auto/);
 });
 
+test('the evolution summary crops the empty band under the Mythling', () => {
+  const done = cssText.match(/\.cinematic\.done canvas\s*\{([^}]*)\}/);
+  assert.ok(done, '.cinematic.done canvas rule exists');
+  assert.match(done[1], /aspect-ratio:\s*460\s*\/\s*356/, 'the done canvas is shorter than it is wide');
+  const screens = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  assert.match(screens, /DONE_HEIGHT = 356/, 'the JS backs the canvas at the same ratio');
+});
+
 // ------------------------------------------------------------------
 section('Wild encounters');
 const { EncounterManager } = await import('../src/systems/EncounterManager.js');
@@ -998,6 +1183,33 @@ test('every menu tab renders, including the Index', () => {
     menu.renderTab();
     assert.ok(menu.body.children.length > 0, `${tab} tab drew something`);
   }
+});
+
+test('every wiki section renders — including Controls & Menus', async () => {
+  const wiki = await import('../src/ui/wiki.js');
+  ScreenStack.init();
+  const node = wiki.openWiki('controls');
+  assert.ok(node, 'the wiki opened on the Controls page');
+  // walk every page through the same builders the nav buttons use; the
+  // Controls page used to throw (undefined helper) and come up blank
+  for (const [id, label, , fn] of wiki.WIKI_SECTIONS) {
+    const blocks = fn();
+    assert.ok(Array.isArray(blocks) && blocks.length > 0, `${label} (${id}) produced content`);
+  }
+  const controls = wiki.WIKI_SECTIONS.find((sec) => sec[0] === 'controls');
+  assert.ok(controls[3]().length >= 8, 'Controls & Menus has its tables');
+  ScreenStack.pop();
+});
+
+test('the modal helper never leaves a stale "modal open" flag behind', async () => {
+  const ui = await import('../src/ui/ui.js');
+  const layer = document.getElementById('modal');
+  layer.classList.add('hidden');
+  const p = ui.modal({ title: 'PICK', body: document.createElement('div'), buttons: [{ label: 'CANCEL', value: null }] });
+  assert.equal(ui.modalOpen(), true);
+  assert.equal(ui.closeModal({ uid: 'x' }), true, 'closeModal settles the open modal');
+  assert.deepEqual(await p, { uid: 'x' }, 'the promise resolves with the chosen value');
+  assert.equal(ui.modalOpen(), false, 'input is no longer blocked');
 });
 
 test('the species info popup renders for every species', () => {

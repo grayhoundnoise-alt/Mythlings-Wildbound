@@ -6,6 +6,9 @@ export const SAVE_SLOT_COUNT = 3;
 export const LEVEL_CAP = 100;         // live cap: every Mythling can reach Lv.100
 export const ABSOLUTE_MAX_LEVEL = 100; // ceiling the data structures are built for
 
+/** Rarity of the starter partner: always a top-tier S Mythling. */
+export const STARTER_RARITY = 'S';
+
 export const PARTY_MAX = 6;
 export const STORAGE_MAX = 200;
 

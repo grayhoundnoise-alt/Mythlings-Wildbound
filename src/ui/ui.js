@@ -89,12 +89,45 @@ export function toast(text, kind = '') {
 
 /** Currently open modal's dismiss handler (used by the global ESC handler). */
 let activeModalClose = null;
-export function modalOpen() { return !!activeModalClose; }
-export function dismissModal() {
+/** The `close(value)` of the modal currently on screen — lets code that built
+ *  the modal body finish it programmatically (see closeModal). */
+let activeModalFinish = null;
+
+function modalLayerVisible() {
+  const layer = document.getElementById('modal');
+  return !!layer && !layer.classList.contains('hidden');
+}
+
+/**
+ * Is a modal blocking input? Self-healing: if the #modal layer was hidden by
+ * some other path while a dismiss handle was still registered, the stale
+ * handle is dropped instead of freezing WASD/E for the rest of the session.
+ */
+export function modalOpen() {
   if (!activeModalClose) return false;
+  if (!modalLayerVisible()) { activeModalClose = null; activeModalFinish = null; return false; }
+  return true;
+}
+export function dismissModal() {
+  if (!modalOpen()) return false;
   AudioManager.sfx('cancel');
   activeModalClose();
   return true;
+}
+
+/**
+ * Close the modal that is currently open and resolve its promise with `value`.
+ * THE way to close a modal from inside its own body (a card click, a USE
+ * button, ...). Hiding the layer by hand used to leave the dismiss handle
+ * registered, so the game thought a modal was still open and ignored every
+ * key except ESC — the "everything froze after I clicked X" bug.
+ */
+export function closeModal(value) {
+  if (activeModalFinish) { activeModalFinish(value); return true; }
+  const layer = document.getElementById('modal');
+  if (layer) { layer.classList.add('hidden'); layer.innerHTML = ''; }
+  activeModalClose = null;
+  return false;
 }
 
 /**
@@ -106,13 +139,20 @@ export function dismissModal() {
  */
 export function modal({ title, body, buttons, dismissible = true, cancelValue, wide = false, scroll = true }) {
   return new Promise((resolve) => {
+    // Only one modal is ever on screen: opening a new one settles the old one
+    // (resolving its promise) BEFORE the layer is reused.
+    if (activeModalFinish) activeModalFinish(undefined);
     const layer = document.getElementById('modal');
     layer.innerHTML = '';
     layer.classList.remove('hidden');
     const btns = buttons || [{ label: 'OK', value: true, primary: true }];
+    let settled = false;
     const close = (v) => {
+      if (settled) return;
+      settled = true;
       layer.classList.add('hidden'); layer.innerHTML = '';
       if (activeModalClose === dismiss) activeModalClose = null;
+      if (activeModalFinish === close) activeModalFinish = null;
       resolve(v);
     };
     // Dismissing (X / ESC) resolves with the explicit cancel value, else the first
@@ -121,7 +161,8 @@ export function modal({ title, body, buttons, dismissible = true, cancelValue, w
       ? cancelValue
       : (btns.find((b) => !b.primary) || {}).value ?? false;
     const dismiss = () => close(fallback);
-    if (dismissible) activeModalClose = dismiss;
+    activeModalClose = dismissible ? dismiss : null;
+    activeModalFinish = close;
     const box = el('div', { class: `modal panel ${wide ? 'wide' : ''}` }, [
       el('div', { class: 'panel-head' }, [
         el('div', { class: 'panel-head-text' }, [el('h3', { text: title || '' })]),

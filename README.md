@@ -31,7 +31,7 @@ npm run build:offline   # regenerates MythlingsWildbound-Offline.html
 ```
 
 ```bash
-npm test             # 58 headless rule tests (levels, crits, capture, evolution, save/load, maps, rig, VFX…)
+npm test             # 87 headless rule tests (levels, crits, capture, evolution, save/load, maps, rig, VFX…)
 ```
 
 ## Controls
@@ -41,7 +41,7 @@ npm test             # 58 headless rule tests (levels, crits, capture, evolution
 | `W A S D` / arrows | Move (hold `Shift` to run) |
 | `E` / `Enter` | Interact: NPCs, trainers, wild Mythlings, buildings, signs |
 | `Esc` | Player menu (also the ☰ button) |
-| `1` `2` `3` | Normal / Special / Buff skill in battle |
+| `1` `2` `3` | The three battle buttons — your equipped skills, in the order you equipped them |
 | `4` or `R` | Ultimate (when 8/8) |
 | `Del` | Cheat menu (adds Wildcoins) — available anywhere in the game |
 | Mouse / touch | Everything — the whole UI is clickable; a touch stick appears on touch devices |
@@ -62,6 +62,23 @@ npm test             # 58 headless rule tests (levels, crits, capture, evolution
 | **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion), **CRIT** (crit chance %), **C.DMG** (crit damage %) |
 | **Moods** | 21 — each raises 3 stats and lowers 1. Feral / Savage / Precise / Brutal / Keen push crits |
 | **Systems** | Rarity, Mood, Skill Library, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Collection index, Save/Load/Autosave, Settings, **Game Wiki** |
+
+### Battle & training rules (latest)
+
+* **RUN is absolute** — you can leave *any* battle, wild **or** trainer, at any moment, and it
+  always succeeds. The enemy gets no free hit; EXP already earned is kept; the trainer can be
+  challenged again later.
+* **Debuff skills** — every species learns three (Lv.1 opener, Lv.12 defence breaker, Lv.40 curse)
+  that lower one stat of the **foe**: P.ATK, S.ATK, P.DEF, S.DEF or Speed. They always land and
+  stack up to 30 times, like buffs. 21 new skills in `src/data/skills.js`.
+* **Skill Library without slot types** — a Mythling takes **3 skills** into battle, any mix of
+  Normal / Special / Buff / Debuff. **The order you equip them is the order of the battle buttons**
+  (first equipped = button 1 / key `1`). Old `{normal, special, buff}` saves migrate automatically.
+* **Starter = S rarity** — whichever partner you pick starts as an S-tier Mythling.
+* **King Ball** — 50,000 Wildcoins, **100 % catch**, sold in Emberwild.
+* **Food for high levels** — 10 new foods up to *Wildbound Ambrosia* (120,000 EXP), plus Hyper /
+  Max Potion, Max Revive and Full Restore. Feed a **whole stack at once** (−/+/MAX); the amount is
+  capped at what it takes to reach the level cap so nothing is wasted.
 
 ### Combat numbers
 

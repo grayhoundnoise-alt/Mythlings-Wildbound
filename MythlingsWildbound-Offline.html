@@ -442,6 +442,16 @@ select {
 .action-btn.normal { border-color: #9fb3c9; }
 .action-btn.special { border-color: #7fd8ff; }
 .action-btn.buff { border-color: #b6f09b; }
+.action-btn.debuff { border-color: #ff9aa2; }
+.action-btn.empty { opacity: .55; border-style: dashed; }
+/* the 1 / 2 / 3 badge: battle buttons, Skill Library loadout and detail panel */
+.slot-badge {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; flex: none;
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28);
+  font-size: .72rem; font-weight: 900; color: #fff; letter-spacing: 0;
+}
+.slot-badge.dim { opacity: .4; }
+.slot-badge.gold { background: rgba(242,199,97,.22); border-color: var(--gold); color: var(--gold); }
 .action-btn.ultimate { border-color: #ffd76a; }
 .action-btn.ultimate.ready { background: linear-gradient(180deg, #d8a23e, #a5701c); color: #241804; animation: pulseGlow 1.1s infinite; }
 @keyframes pulseGlow { 0%,100% { box-shadow: 0 5px 0 rgba(0,0,0,.35), 0 0 12px rgba(255,200,90,.5);} 50% { box-shadow: 0 5px 0 rgba(0,0,0,.35), 0 0 28px rgba(255,200,90,.95);} }
@@ -570,8 +580,14 @@ select {
 .cinematic canvas {
   display: block; width: min(460px, 82vw, 56vh); height: auto; aspect-ratio: 1 / 1;
 }
-/* Once the summary appears, give the text room instead of overflowing. */
-.cinematic.done canvas { width: min(300px, 46vh, 60vw); }
+/* Once the summary appears, give the text room instead of overflowing. The
+   Mythling stands at ~72% of the square, so the empty bottom band is cropped
+   (the JS backs the canvas at the same ratio): "Congratulations!" sits right
+   under the evolved Mythling instead of a hand's width below it. */
+.cinematic.done canvas { width: min(300px, 46vh, 60vw); aspect-ratio: 460 / 356; }
+.cinematic.done .cinematic-stage { gap: 10px; }
+.cinematic.done h2 { margin: 0; }
+.cinematic.done p { margin: 0; }
 .cinematic h2 { font-size: clamp(1.4rem,4vw,2.4rem); letter-spacing: .12em; color: var(--gold); text-align:center; text-shadow: 0 0 22px rgba(255,200,90,.6); }
 .cinematic p { color: #dce9f7; font-size: 1.05rem; text-align: center; max-width: 620px; }
 
@@ -580,9 +596,36 @@ select {
 
 .levelup-list { display: flex; flex-direction: column; gap: 4px; font-size: .95rem; }
 .levelup-list .gain { color: var(--ok); }
-/* Skill Library: three slot buttons per skill (any skill, any slot) */
+/* Skill Library: EQUIP / UNEQUIP per skill, loadout strip on top */
 .skill-slots { display: flex; gap: 4px; flex: none; }
 .skill-slots .btn { min-width: 30px; padding: 5px 8px; }
+.loadout-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.loadout-slot {
+  padding: 10px 12px; border-radius: 12px; min-height: 92px;
+  background: rgba(255,255,255,.05); border: 1.5px dashed rgba(255,255,255,.18);
+}
+.loadout-slot.filled { border-style: solid; border-color: var(--gold); background: rgba(242,199,97,.08); }
+.loadout-slot.filled.special { border-color: #7fd8ff; }
+.loadout-slot.filled.buff { border-color: #b6f09b; }
+.loadout-slot.filled.debuff { border-color: #ff9aa2; }
+.loadout-slot .ls-head { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+.loadout-slot .ls-name .ico { width: 15px; height: 15px; vertical-align: -.15em; }
+.loadout-slot .ls-meta { color: var(--muted); font-size: .76rem; margin-top: 4px; }
+.loadout-slot.empty .ls-name { color: var(--muted); font-weight: 600; }
+.lib-level { color: var(--gold); font-size: .78rem; letter-spacing: .08em; font-weight: 800; margin: 12px 0 6px; }
+.cat-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; vertical-align: middle;
+  font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 800;
+  background: rgba(255,255,255,.1); color: #dce9f7;
+}
+.cat-tag.special { background: rgba(127,216,255,.18); color: #bfe9ff; }
+.cat-tag.buff { background: rgba(182,240,155,.18); color: #d9ffc7; }
+.cat-tag.debuff { background: rgba(255,154,162,.2); color: #ffc4c9; }
+/* feed-a-stack quantity picker */
+.qty-picker { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+.qty-picker .qty-value { min-width: 64px; text-align: center; font-size: 1.6rem; color: var(--gold); }
+.feed-preview { text-align: center; line-height: 1.5; }
+@media (max-width: 640px) { .loadout-strip { grid-template-columns: 1fr; } }
 
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -930,6 +973,7 @@ input[type="text"].wiki-search {
   var SAVE_PREFIX = "mythlings_wildbound";
   var SAVE_SLOT_COUNT = 3;
   var LEVEL_CAP = 100;
+  var STARTER_RARITY = "S";
   var PARTY_MAX = 6;
   var STORAGE_MAX = 200;
   var ULTIMATE_UNLOCK_LEVEL = 10;
@@ -964,6 +1008,11 @@ input[type="text"].wiki-search {
     if (level >= LEVEL_CAP) return Infinity;
     if (level <= STORY_CAP) return Math.floor(24 + 9 * Math.pow(level, 1.85));
     return Math.floor(STORY_ANCHOR * level / STORY_CAP);
+  }
+  function totalExpForLevel(level) {
+    let t = 0;
+    for (let l = 1; l < level; l++) t += expToNextLevel(l);
+    return t;
   }
   function expReward({ enemyLevel, enemyYield, winnerLevel, isTrainer }) {
     const base = enemyYield * enemyLevel / 5.2;
@@ -1032,7 +1081,7 @@ input[type="text"].wiki-search {
           w: 190,
           h: 150,
           name: "Leafrest Supplies",
-          stock: ["basic_ball", "normal_ball", "potion", "greater_potion", "skill_tonic", "sweet_berry", "honey_nut"]
+          stock: ["basic_ball", "normal_ball", "potion", "greater_potion", "skill_tonic", "sweet_berry", "crunchy_root", "honey_nut", "moon_melon"]
         },
         { id: "vale_house1", type: "house", x: 120, y: 900, w: 170, h: 130, name: "Cottage" },
         { id: "vale_house2", type: "house", x: 700, y: 950, w: 170, h: 130, name: "Cottage" }
@@ -1191,7 +1240,24 @@ input[type="text"].wiki-search {
           w: 190,
           h: 150,
           name: "Tidecrest Trading Post",
-          stock: ["basic_ball", "normal_ball", "advanced_ball", "potion", "greater_potion", "revive_herb", "skill_tonic", "honey_nut", "river_jerky"]
+          stock: [
+            "basic_ball",
+            "normal_ball",
+            "advanced_ball",
+            "potion",
+            "greater_potion",
+            "hyper_potion",
+            "revive_herb",
+            "skill_tonic",
+            "skill_elixir",
+            "honey_nut",
+            "moon_melon",
+            "river_jerky",
+            "glow_nectar",
+            "ember_roast",
+            "coral_cake",
+            "tide_pudding"
+          ]
         },
         { id: "coast_dock1", type: "dock", x: 180, y: 250, w: 300, h: 110, name: "Docks" },
         { id: "coast_dock2", type: "dock", x: 720, y: 250, w: 260, h: 110, name: "Docks" },
@@ -1344,7 +1410,30 @@ input[type="text"].wiki-search {
           w: 190,
           h: 150,
           name: "Emberwatch Quartermaster",
-          stock: ["normal_ball", "advanced_ball", "absolute_ball", "god_ball", "greater_potion", "revive_herb", "skill_tonic", "river_jerky", "ember_roast", "mythic_feast"]
+          stock: [
+            "normal_ball",
+            "advanced_ball",
+            "absolute_ball",
+            "god_ball",
+            "king_ball",
+            "greater_potion",
+            "hyper_potion",
+            "max_potion",
+            "revive_herb",
+            "max_revive",
+            "skill_tonic",
+            "skill_elixir",
+            "full_restore",
+            "river_jerky",
+            "ember_roast",
+            "mythic_feast",
+            "tide_pudding",
+            "storm_eel_stew",
+            "dragonfruit_flambe",
+            "phoenix_pepper",
+            "titan_broth",
+            "wildbound_ambrosia"
+          ]
         },
         { id: "ember_tower", type: "tower", x: 140, y: 1020, w: 160, h: 200, name: "Watchtower" }
       ],
@@ -1508,8 +1597,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Floragon", level: 80, statMult: 2.2, future: true, art: { scale: 1.65, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "vine_lash", "brave_guard"],
+        1: ["bite", "vine_lash", "brave_guard", "sap_drain"],
+        12: ["pollen_veil"],
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        40: ["blight_bloom"],
         60: ["nature_burst", "wild_instinct", "briar_smash"],
         80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
       },
@@ -1545,8 +1636,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Leviaron", level: 80, statMult: 2.2, future: true, art: { scale: 1.62, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["scratch", "water_shot", "flow_focus"],
+        1: ["scratch", "water_shot", "flow_focus", "mist_veil"],
+        12: ["pressure_drop"],
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        40: ["riptide_pull"],
         60: ["whirlpool", "deep_current", "tide_smash"],
         80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
       },
@@ -1582,8 +1675,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Ignidrake", level: 80, statMult: 2.2, future: true, art: { scale: 1.7, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "flame_rawr", "dragon_fury"],
+        1: ["bite", "flame_rawr", "dragon_fury", "scorch"],
+        12: ["ash_cloud"],
         20: ["burning_fang", "burning_scales", "ember_jab"],
+        40: ["cinder_curse"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
         80: ["dragon_inferno", "ancient_flame", "magma_slam"]
       },
@@ -1619,8 +1714,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Maelwolf", level: 80, statMult: 2.2, future: true, art: { scale: 1.68, horns: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "water_splash", "aqua_guard"],
+        1: ["bite", "water_splash", "aqua_guard", "soak"],
+        12: ["brine_rust"],
         20: ["heavy_wave", "thick_fur", "stream_jab"],
+        40: ["abyssal_chill"],
         60: ["crushing_current", "deep_guard", "tide_smash"],
         80: ["abyssal_wave", "fortress_hide", "abyss_slam"]
       },
@@ -1656,8 +1753,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Zephyrax", level: 80, statMult: 2.2, future: true, art: { scale: 1.64, wings: true, horns: true } }
       ],
       skillUnlocks: {
-        1: ["peck", "leaf_shot", "quick_breeze"],
+        1: ["peck", "leaf_shot", "quick_breeze", "bramble_snare"],
+        12: ["root_rot"],
         20: ["razor_wing", "wind_step", "thorn_jab"],
+        40: ["withering_curse"],
         60: ["sky_cutter", "feather_flow", "briar_smash"],
         80: ["sky_cyclone", "gale_mastery", "worldroot_slam"]
       },
@@ -1692,8 +1791,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Rootwarden", level: 80, statMult: 2.28, art: { scale: 1.63, horns: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "vine_lash", "brave_guard"],
+        1: ["bite", "vine_lash", "brave_guard", "spore_haze"],
+        12: ["root_rot"],
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        40: ["withering_curse"],
         60: ["nature_burst", "wild_instinct", "briar_smash"],
         80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
       },
@@ -1728,8 +1829,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Worldcoil", level: 80, statMult: 2.2, art: { scale: 1.65, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "vine_lash", "brave_guard"],
+        1: ["bite", "vine_lash", "brave_guard", "bramble_snare"],
+        12: ["pollen_veil"],
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        40: ["blight_bloom"],
         60: ["nature_burst", "wild_instinct", "briar_smash"],
         80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
       },
@@ -1764,8 +1867,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Skyblossom", level: 80, statMult: 2.15, art: { scale: 1.6, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["peck", "vine_lash", "brave_guard"],
+        1: ["peck", "vine_lash", "brave_guard", "spore_haze"],
+        12: ["pollen_veil"],
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
+        40: ["blight_bloom"],
         60: ["nature_burst", "wild_instinct", "briar_smash"],
         80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
       },
@@ -1800,8 +1905,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Abysscoil", level: 80, statMult: 2.28, art: { scale: 1.7, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "water_shot", "flow_focus"],
+        1: ["bite", "water_shot", "flow_focus", "mist_veil"],
+        12: ["pressure_drop"],
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        40: ["riptide_pull"],
         60: ["whirlpool", "deep_current", "tide_smash"],
         80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
       },
@@ -1836,8 +1943,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Fortressshell", level: 80, statMult: 2.34, art: { scale: 1.63, horns: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "water_shot", "flow_focus"],
+        1: ["bite", "water_shot", "flow_focus", "soak"],
+        12: ["brine_rust"],
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        40: ["abyssal_chill"],
         60: ["whirlpool", "deep_current", "tide_smash"],
         80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
       },
@@ -1872,8 +1981,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Stormcurrent", level: 80, statMult: 2.15, art: { scale: 1.62, horns: true } }
       ],
       skillUnlocks: {
-        1: ["scratch", "water_shot", "flow_focus"],
+        1: ["scratch", "water_shot", "flow_focus", "undertow"],
+        12: ["brine_rust"],
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
+        40: ["abyssal_chill"],
         60: ["whirlpool", "deep_current", "tide_smash"],
         80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
       },
@@ -1908,8 +2019,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Infernalynx", level: 80, statMult: 2.15, art: { scale: 1.62, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["scratch", "flame_rawr", "dragon_fury"],
+        1: ["scratch", "flame_rawr", "dragon_fury", "singe"],
+        12: ["melt_armor"],
         20: ["burning_fang", "burning_scales", "ember_jab"],
+        40: ["magma_brand"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
         80: ["dragon_inferno", "ancient_flame", "magma_slam"]
       },
@@ -1944,8 +2057,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Solarhawk", level: 80, statMult: 2.12, art: { scale: 1.6, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["peck", "flame_rawr", "dragon_fury"],
+        1: ["peck", "flame_rawr", "dragon_fury", "heat_haze"],
+        12: ["ash_cloud"],
         20: ["burning_fang", "burning_scales", "ember_jab"],
+        40: ["cinder_curse"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
         80: ["dragon_inferno", "ancient_flame", "magma_slam"]
       },
@@ -1980,8 +2095,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Cataclysm", level: 80, statMult: 2.28, art: { scale: 1.7, horns: true, wings: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "flame_rawr", "dragon_fury"],
+        1: ["bite", "flame_rawr", "dragon_fury", "scorch"],
+        12: ["melt_armor"],
         20: ["burning_fang", "burning_scales", "ember_jab"],
+        40: ["magma_brand"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
         80: ["dragon_inferno", "ancient_flame", "magma_slam"]
       },
@@ -2016,8 +2133,10 @@ input[type="text"].wiki-search {
         { stage: 3, name: "Duskfang", level: 80, statMult: 2.2, art: { scale: 1.63, horns: true } }
       ],
       skillUnlocks: {
-        1: ["bite", "flame_rawr", "dragon_fury"],
+        1: ["bite", "flame_rawr", "dragon_fury", "singe"],
+        12: ["melt_armor"],
         20: ["burning_fang", "burning_scales", "ember_jab"],
+        40: ["magma_brand"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
         80: ["dragon_inferno", "ancient_flame", "magma_slam"]
       },
@@ -2050,6 +2169,17 @@ input[type="text"].wiki-search {
       if (level >= Number(key)) out.push(...sp.skillUnlocks[key]);
     }
     return out;
+  }
+  function skillLearnLevel(speciesId, skillId) {
+    const sp = getSpecies(speciesId);
+    if (!sp) return null;
+    let best = null;
+    for (const key of Object.keys(sp.skillUnlocks)) {
+      if (!sp.skillUnlocks[key].includes(skillId)) continue;
+      const lv = Number(key);
+      if (best == null || lv < best) best = lv;
+    }
+    return best;
   }
 
   // src/data/elements.js
@@ -2089,17 +2219,36 @@ input[type="text"].wiki-search {
     advanced_ball: { id: "advanced_ball", name: "Advanced Ball", category: "balls", price: 550, catchMult: 1.5, desc: "Crafted with coast crystal. Notably more reliable." },
     absolute_ball: { id: "absolute_ball", name: "Absolute Ball", category: "balls", price: 1100, catchMult: 1.8, desc: "An ember-forged ball for stubborn Mythlings." },
     god_ball: { id: "god_ball", name: "God Ball", category: "balls", price: 3e3, catchMult: 2.5, desc: "A legendary sphere. Almost never fails." },
+    // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
+    king_ball: { id: "king_ball", name: "King Ball", category: "balls", price: 5e4, catchMult: 99, guaranteed: true, desc: "A crown-forged sphere that never fails. Guaranteed capture \u2014 for a royal price." },
     potion: { id: "potion", name: "Potion", category: "healing", price: 150, heal: 60, desc: "Restores 60 HP to one Mythling." },
     greater_potion: { id: "greater_potion", name: "Greater Potion", category: "healing", price: 380, heal: 160, desc: "Restores 160 HP to one Mythling." },
+    hyper_potion: { id: "hyper_potion", name: "Hyper Potion", category: "healing", price: 800, heal: 400, desc: "Restores 400 HP to one Mythling." },
+    max_potion: { id: "max_potion", name: "Max Potion", category: "healing", price: 1800, healFull: true, desc: "Fully restores the HP of one Mythling." },
     revive_herb: { id: "revive_herb", name: "Revive Herb", category: "healing", price: 600, revive: 0.5, desc: "Revives a fainted Mythling with half HP." },
+    max_revive: { id: "max_revive", name: "Max Revive", category: "healing", price: 1500, revive: 1, desc: "Revives a fainted Mythling with full HP." },
     skill_tonic: { id: "skill_tonic", name: "Skill Tonic", category: "healing", price: 320, restoreUses: 8, desc: "Restores 8 uses to every limited skill." },
     skill_elixir: { id: "skill_elixir", name: "Skill Elixir", category: "healing", price: 950, restoreAllUses: true, desc: "Resets every limited skill back to full uses." },
+    full_restore: { id: "full_restore", name: "Full Restore", category: "healing", price: 3200, healFull: true, restoreAllUses: true, desc: "Fully restores HP AND every skill's uses. Cannot revive." },
     // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
     sweet_berry: { id: "sweet_berry", name: "Sweet Berry", category: "food", price: 90, exp: 40, desc: "A sugary forest berry. Feeding it grants 40 EXP." },
     honey_nut: { id: "honey_nut", name: "Honey Nut", category: "food", price: 240, exp: 130, desc: "A sticky, energy-packed nut. Grants 130 EXP." },
     river_jerky: { id: "river_jerky", name: "River Jerky", category: "food", price: 620, exp: 400, desc: "Salt-cured coast fish. Grants 400 EXP." },
     ember_roast: { id: "ember_roast", name: "Ember Roast", category: "food", price: 1400, exp: 1e3, desc: "Slow-roasted over volcanic vents. Grants 1000 EXP." },
     mythic_feast: { id: "mythic_feast", name: "Mythic Feast", category: "food", price: 3200, exp: 2600, desc: "A legendary banquet for one. Grants 2600 EXP." },
+    // High-level training food: a level past Lv.30 costs thousands of EXP and a
+    // level near the cap over 16,000, so the ladder keeps climbing. Feeding a
+    // stack at once never wastes food — the game caps it at the level cap.
+    crunchy_root: { id: "crunchy_root", name: "Crunchy Root", category: "food", price: 160, exp: 80, desc: "A crisp forest root. Grants 80 EXP." },
+    moon_melon: { id: "moon_melon", name: "Moon Melon", category: "food", price: 430, exp: 250, desc: "Ripens only under moonlight. Grants 250 EXP." },
+    glow_nectar: { id: "glow_nectar", name: "Glow Nectar", category: "food", price: 980, exp: 650, desc: "Luminous nectar from coast blossoms. Grants 650 EXP." },
+    coral_cake: { id: "coral_cake", name: "Coral Cake", category: "food", price: 2400, exp: 1800, desc: "A dense, sweet cake baked by port cooks. Grants 1,800 EXP." },
+    tide_pudding: { id: "tide_pudding", name: "Tide Pudding", category: "food", price: 4800, exp: 4e3, desc: "Wobbles like the sea it came from. Grants 4,000 EXP." },
+    storm_eel_stew: { id: "storm_eel_stew", name: "Storm Eel Stew", category: "food", price: 8600, exp: 8e3, desc: "Crackles with leftover lightning. Grants 8,000 EXP." },
+    dragonfruit_flambe: { id: "dragonfruit_flambe", name: "Dragonfruit Flamb\xE9", category: "food", price: 14800, exp: 15e3, desc: "Set alight over a volcanic vent. Grants 15,000 EXP." },
+    phoenix_pepper: { id: "phoenix_pepper", name: "Phoenix Pepper", category: "food", price: 27e3, exp: 3e4, desc: "So hot it is said to bring the eater back to life. Grants 30,000 EXP." },
+    titan_broth: { id: "titan_broth", name: "Titan Broth", category: "food", price: 5e4, exp: 6e4, desc: "Simmered for a hundred days in a caldera. Grants 60,000 EXP." },
+    wildbound_ambrosia: { id: "wildbound_ambrosia", name: "Wildbound Ambrosia", category: "food", price: 92e3, exp: 12e4, desc: "The food of legends. Grants 120,000 EXP \u2014 several levels even near the cap." },
     vale_charm: { id: "vale_charm", name: "Vale Charm", category: "key", desc: "Proof that the Verdant Guardian was bested. Opens the Verdant Gate." },
     coast_pass: { id: "coast_pass", name: "Coast Pass", category: "key", desc: "Granted at Tidecrest Port. Opens the Emberwild Gate." },
     ember_sigil: { id: "ember_sigil", name: "Ember Sigil", category: "key", desc: "Awarded for completing the current Emberwild challenge." }
@@ -2188,7 +2337,35 @@ input[type="text"].wiki-search {
     sky_cutter: { id: "sky_cutter", name: "Sky Cutter", category: "special", damageType: "physical", element: "nature", power: 39, uses: 15, desc: "A diving aerial strike.", future: true },
     feather_flow: { id: "feather_flow", name: "Feather Flow", category: "buff", effects: [{ stat: "spd", amount: 5 }], uses: 8, desc: "Raises Speed.", future: true },
     sky_cyclone: { id: "sky_cyclone", name: "Sky Cyclone", category: "special", damageType: "special", element: "nature", power: 51, uses: 12, desc: "May reduce the foe's Speed.", debuff: { stat: "spd", amount: 4, chance: 0.4 }, future: true },
-    gale_mastery: { id: "gale_mastery", name: "Gale Mastery", category: "buff", effects: [{ stat: "satk", amount: 6 }], uses: 8, desc: "Raises Special Attack.", future: true }
+    gale_mastery: { id: "gale_mastery", name: "Gale Mastery", category: "buff", effects: [{ stat: "satk", amount: 6 }], uses: 8, desc: "Raises Special Attack.", future: true },
+    // ---------- DEBUFF skills (lower ONE stat of the FOE) ----------
+    // Every element has the same ladder: two -4 openers (P.ATK / S.ATK), a Speed
+    // opener, two -5 defence breakers and two -7 late-game curses. Species pick the
+    // ones that suit their role in species.js. Debuffs never grant Ultimate Charge.
+    // -- nature --
+    sap_drain: { id: "sap_drain", name: "Sap Drain", category: "debuff", effects: [{ stat: "patk", amount: 4 }], uses: 12, desc: "Saps the foe's strength. Lowers its Physical Attack." },
+    spore_haze: { id: "spore_haze", name: "Spore Haze", category: "debuff", effects: [{ stat: "satk", amount: 4 }], uses: 12, desc: "A dizzying cloud of spores. Lowers the foe's Special Attack." },
+    bramble_snare: { id: "bramble_snare", name: "Bramble Snare", category: "debuff", effects: [{ stat: "spd", amount: 4 }], uses: 12, desc: "Tangles the foe in brambles. Lowers its Speed." },
+    root_rot: { id: "root_rot", name: "Root Rot", category: "debuff", effects: [{ stat: "pdef", amount: 5 }], uses: 10, desc: "Rots the foe's guard away. Lowers its Physical Defense." },
+    pollen_veil: { id: "pollen_veil", name: "Pollen Veil", category: "debuff", effects: [{ stat: "sdef", amount: 5 }], uses: 10, desc: "Clogs the foe's senses. Lowers its Special Defense." },
+    withering_curse: { id: "withering_curse", name: "Withering Curse", category: "debuff", effects: [{ stat: "pdef", amount: 7 }], uses: 8, desc: "An old forest hex. Lowers the foe's Physical Defense sharply." },
+    blight_bloom: { id: "blight_bloom", name: "Blight Bloom", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "A flower that drinks magic. Lowers the foe's Special Defense sharply." },
+    // -- water --
+    soak: { id: "soak", name: "Soak", category: "debuff", effects: [{ stat: "patk", amount: 4 }], uses: 12, desc: "Drenches the foe to the bone. Lowers its Physical Attack." },
+    mist_veil: { id: "mist_veil", name: "Mist Veil", category: "debuff", effects: [{ stat: "satk", amount: 4 }], uses: 12, desc: "A blinding sea mist. Lowers the foe's Special Attack." },
+    undertow: { id: "undertow", name: "Undertow", category: "debuff", effects: [{ stat: "spd", amount: 4 }], uses: 12, desc: "Drags at the foe's legs. Lowers its Speed." },
+    brine_rust: { id: "brine_rust", name: "Brine Rust", category: "debuff", effects: [{ stat: "pdef", amount: 5 }], uses: 10, desc: "Salt eats through armour. Lowers the foe's Physical Defense." },
+    pressure_drop: { id: "pressure_drop", name: "Pressure Drop", category: "debuff", effects: [{ stat: "sdef", amount: 5 }], uses: 10, desc: "Deep-sea pressure. Lowers the foe's Special Defense." },
+    abyssal_chill: { id: "abyssal_chill", name: "Abyssal Chill", category: "debuff", effects: [{ stat: "pdef", amount: 7 }], uses: 8, desc: "Cold from the trench. Lowers the foe's Physical Defense sharply." },
+    riptide_pull: { id: "riptide_pull", name: "Riptide Pull", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "Tears the foe's focus away. Lowers its Special Defense sharply." },
+    // -- fire --
+    scorch: { id: "scorch", name: "Scorch", category: "debuff", effects: [{ stat: "patk", amount: 4 }], uses: 12, desc: "Burns the foe's limbs. Lowers its Physical Attack." },
+    heat_haze: { id: "heat_haze", name: "Heat Haze", category: "debuff", effects: [{ stat: "satk", amount: 4 }], uses: 12, desc: "Shimmering heat breaks concentration. Lowers the foe's Special Attack." },
+    singe: { id: "singe", name: "Singe", category: "debuff", effects: [{ stat: "spd", amount: 4 }], uses: 12, desc: "Scorches the foe's feet. Lowers its Speed." },
+    melt_armor: { id: "melt_armor", name: "Melt Armor", category: "debuff", effects: [{ stat: "pdef", amount: 5 }], uses: 10, desc: "Softens the foe's hide. Lowers its Physical Defense." },
+    ash_cloud: { id: "ash_cloud", name: "Ash Cloud", category: "debuff", effects: [{ stat: "sdef", amount: 5 }], uses: 10, desc: "Choking ash. Lowers the foe's Special Defense." },
+    magma_brand: { id: "magma_brand", name: "Magma Brand", category: "debuff", effects: [{ stat: "pdef", amount: 7 }], uses: 8, desc: "A searing brand. Lowers the foe's Physical Defense sharply." },
+    cinder_curse: { id: "cinder_curse", name: "Cinder Curse", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "Smouldering cinders cling to the foe. Lowers its Special Defense sharply." }
   };
   var ULTIMATES = {
     verdant_crush: {
@@ -2259,10 +2436,20 @@ input[type="text"].wiki-search {
   };
   var ULTIMATE_MAX_CHARGE = 8;
   var MAX_BUFF_STACKS = 30;
+  var SKILL_CATEGORY_LABEL = { normal: "Normal", special: "Special", buff: "Buff", debuff: "Debuff", ultimate: "Ultimate" };
+  function isDamageSkill(sk) {
+    return !!sk && sk.category !== "buff" && sk.category !== "debuff";
+  }
   function buffSummary(sk, joiner = " ") {
     if (!sk || !sk.effects) return "";
     const short = { hp: "HP", patk: "P.ATK", satk: "S.ATK", pdef: "P.DEF", sdef: "S.DEF", spd: "SPD", counter: "CNT" };
-    return sk.effects.map((e) => `${short[e.stat] || e.stat.toUpperCase()}${joiner}+${e.amount}`).join(", ");
+    const sign = sk.category === "debuff" ? "-" : "+";
+    return sk.effects.map((e) => `${short[e.stat] || e.stat.toUpperCase()}${joiner}${sign}${e.amount}`).join(", ");
+  }
+  function skillStrength(sk) {
+    if (!sk) return 0;
+    if (sk.category === "buff" || sk.category === "debuff") return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+    return sk.power || 0;
   }
   function getSkill(id) {
     return SKILLS[id] || null;
@@ -2598,19 +2785,19 @@ input[type="text"].wiki-search {
     if (s === 0) {
       r = g = b = l;
     } else {
-      const hue2rgb = (p3, q2, t) => {
+      const hue2rgb = (p2, q2, t) => {
         if (t < 0) t += 1;
         if (t > 1) t -= 1;
-        if (t < 1 / 6) return p3 + (q2 - p3) * 6 * t;
+        if (t < 1 / 6) return p2 + (q2 - p2) * 6 * t;
         if (t < 1 / 2) return q2;
-        if (t < 2 / 3) return p3 + (q2 - p3) * (2 / 3 - t) * 6;
-        return p3;
+        if (t < 2 / 3) return p2 + (q2 - p2) * (2 / 3 - t) * 6;
+        return p2;
       };
       const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-      const p2 = 2 * l - q;
-      r = hue2rgb(p2, q, h + 1 / 3);
-      g = hue2rgb(p2, q, h);
-      b = hue2rgb(p2, q, h - 1 / 3);
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1 / 3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1 / 3);
     }
     return [r * 255, g * 255, b * 255];
   }
@@ -2647,7 +2834,8 @@ input[type="text"].wiki-search {
       mutation,
       currentHp: 0,
       ultCharge: 0,
-      skills: { normal: null, special: null, buff: null },
+      skills: [],
+      // ordered: index = battle button (max MAX_EQUIPPED_SKILLS)
       library: [],
       uses: {},
       meta: {
@@ -2680,17 +2868,41 @@ input[type="text"].wiki-search {
     }
     return m;
   }
+  var MAX_EQUIPPED_SKILLS = 3;
   function autoEquip(m) {
-    const pick = (cat) => {
-      const owned = m.library.map(getSkill).filter((s) => s && s.category === cat);
-      if (!owned.length) return null;
-      owned.sort((a, b) => (b.power || 0) - (a.power || 0));
-      return owned[0].id;
+    if (!Array.isArray(m.skills)) m.skills = normalizeEquipped(m.skills);
+    m.skills = m.skills.filter((id) => id && m.library.includes(id) && getSkill(id));
+    const owned = (cat) => m.library.map(getSkill).filter((s) => s && s.category === cat && !m.skills.includes(s.id));
+    const strongest = (cat) => {
+      const list = owned(cat);
+      if (!list.length) return null;
+      list.sort((a, b) => skillStrength(b) - skillStrength(a));
+      return list[0];
     };
-    if (!m.skills.normal || !m.library.includes(m.skills.normal)) m.skills.normal = pick("normal");
-    if (!m.skills.special || !m.library.includes(m.skills.special)) m.skills.special = pick("special");
-    if (!m.skills.buff || !m.library.includes(m.skills.buff)) m.skills.buff = pick("buff");
+    const pick = (cats) => {
+      const best = cats.map(strongest).filter(Boolean).sort((a, b) => skillStrength(b) - skillStrength(a))[0];
+      if (best && m.skills.length < MAX_EQUIPPED_SKILLS) m.skills.push(best.id);
+    };
+    pick(["normal"]);
+    pick(["special"]);
+    pick(["buff", "debuff"]);
+    while (m.skills.length < MAX_EQUIPPED_SKILLS) {
+      const rest = m.library.map(getSkill).filter((s) => s && !m.skills.includes(s.id));
+      if (!rest.length) break;
+      rest.sort((a, b) => skillStrength(b) - skillStrength(a));
+      m.skills.push(rest[0].id);
+    }
     return m;
+  }
+  function normalizeEquipped(raw) {
+    let list = [];
+    if (Array.isArray(raw)) list = raw;
+    else if (raw && typeof raw === "object") list = ["normal", "special", "buff"].map((k) => raw[k]);
+    const out = [];
+    for (const id of list) {
+      if (typeof id === "string" && id && !out.includes(id)) out.push(id);
+    }
+    return out.slice(0, MAX_EQUIPPED_SKILLS);
   }
   function speciesOf(m) {
     return getSpecies(m.speciesId);
@@ -2855,9 +3067,20 @@ input[type="text"].wiki-search {
       ultimate: ultimateMove(m)
     };
   }
-  function equippedSkill(m, slot) {
-    const id = m.skills[slot];
+  function equippedSkill(m, index) {
+    const id = Array.isArray(m.skills) ? m.skills[index] : null;
     return id ? getSkill(id) : null;
+  }
+  function equippedSkills(m) {
+    const out = [];
+    (Array.isArray(m.skills) ? m.skills : []).forEach((id, index) => {
+      const skill = getSkill(id);
+      if (skill) out.push({ index, id, skill });
+    });
+    return out;
+  }
+  function equippedIndex(m, skillId) {
+    return Array.isArray(m.skills) ? m.skills.indexOf(skillId) : -1;
   }
   function usesLeft(m, skillId) {
     const sk = getSkill(skillId);
@@ -2870,22 +3093,35 @@ input[type="text"].wiki-search {
     if (!sk || !Number.isFinite(sk.uses)) return;
     m.uses[skillId] = Math.max(0, (m.uses[skillId] ?? sk.uses) - 1);
   }
-  function restoreUses(m, amount) {
-    for (const id of m.library) {
-      const sk = getSkill(id);
-      if (sk && Number.isFinite(sk.uses)) m.uses[id] = Math.min(sk.uses, (m.uses[id] ?? 0) + amount);
+  function equipSkill(m, skillId, index = null) {
+    if (!skillId || !getSkill(skillId)) return false;
+    if (!m.library.includes(skillId)) return false;
+    if (!Array.isArray(m.skills)) m.skills = normalizeEquipped(m.skills);
+    if (m.skills.includes(skillId)) return false;
+    if (Number.isInteger(index) && index >= 0 && index < MAX_EQUIPPED_SKILLS) {
+      if (index < m.skills.length) m.skills[index] = skillId;
+      else m.skills.push(skillId);
+      return true;
     }
-  }
-  function equipSkill(m, slot, skillId) {
-    if (!["normal", "special", "buff"].includes(slot)) return false;
-    if (skillId != null && !getSkill(skillId)) return false;
-    if (skillId != null && !m.library.includes(skillId)) return false;
-    m.skills[slot] = skillId;
+    if (m.skills.length >= MAX_EQUIPPED_SKILLS) return false;
+    m.skills.push(skillId);
     return true;
   }
-  function unequipSkill(m, slot) {
-    if (!["normal", "special", "buff"].includes(slot)) return false;
-    m.skills[slot] = null;
+  function canEquipMore(m) {
+    return (Array.isArray(m.skills) ? m.skills.length : 0) < MAX_EQUIPPED_SKILLS;
+  }
+  function unequipSkill(m, skillOrIndex) {
+    if (!Array.isArray(m.skills)) m.skills = normalizeEquipped(m.skills);
+    const idx = Number.isInteger(skillOrIndex) ? skillOrIndex : m.skills.indexOf(skillOrIndex);
+    if (idx < 0 || idx >= m.skills.length) return false;
+    m.skills.splice(idx, 1);
+    return true;
+  }
+  function moveSkill(m, from, to) {
+    if (!Array.isArray(m.skills)) return false;
+    if (from === to || from < 0 || to < 0 || from >= m.skills.length || to >= m.skills.length) return false;
+    const [id] = m.skills.splice(from, 1);
+    m.skills.splice(to, 0, id);
     return true;
   }
   function basicAttack(m) {
@@ -2902,13 +3138,67 @@ input[type="text"].wiki-search {
   function librarySkills(m, category = null) {
     return m.library.map(getSkill).filter((s) => s && (!category || s.category === category));
   }
+  function libraryByLevel(m) {
+    return librarySkills(m).map((skill) => ({ skill, level: skillLearnLevel(m.speciesId, skill.id) ?? 1, index: equippedIndex(m, skill.id) })).sort((a, b) => a.level - b.level || skillStrength(a.skill) - skillStrength(b.skill) || a.skill.name.localeCompare(b.skill.name));
+  }
+  function applyItemEffects(item, m, { dryRun = false } = {}) {
+    const out = { ok: false, reason: null, healed: 0, revived: false, usesRestored: false };
+    if (!item || !m) {
+      out.reason = "Nothing to use.";
+      return out;
+    }
+    const wantsHp = !!(item.heal || item.healFull || item.revive);
+    const wantsUses = !!(item.restoreUses || item.restoreAllUses);
+    if (!wantsHp && !wantsUses) {
+      out.reason = `${item.name || "That item"} cannot be used on a Mythling.`;
+      return out;
+    }
+    const fainted = isFainted(m);
+    const mx = maxHp(m);
+    let hp = Math.max(0, m.currentHp);
+    if (item.revive) {
+      if (!fainted) {
+        out.reason = `${displayName(m)} does not need reviving.`;
+        return out;
+      }
+      hp = Math.max(1, Math.floor(mx * item.revive));
+      out.revived = true;
+    } else if ((item.heal || item.healFull) && fainted) {
+      out.reason = `${displayName(m)} has fainted \u2014 use a Revive Herb or Max Revive.`;
+      return out;
+    }
+    if (item.healFull) hp = mx;
+    else if (item.heal) hp = Math.min(mx, hp + item.heal);
+    out.healed = Math.max(0, hp - Math.max(0, m.currentHp));
+    const nextUses = {};
+    for (const id of m.library || []) {
+      const sk = getSkill(id);
+      if (!sk || !Number.isFinite(sk.uses)) continue;
+      const cur = m.uses[id] ?? 0;
+      const to = item.restoreAllUses ? sk.uses : item.restoreUses ? Math.min(sk.uses, cur + item.restoreUses) : cur;
+      if (to > cur) {
+        nextUses[id] = to;
+        out.usesRestored = true;
+      }
+    }
+    if (!out.revived && out.healed <= 0 && !out.usesRestored) {
+      out.reason = wantsHp && !wantsUses ? "HP is already full!" : wantsUses && !wantsHp ? "Every skill is already at full uses!" : `${displayName(m)} is already at full HP and full uses!`;
+      return out;
+    }
+    out.ok = true;
+    if (!dryRun) {
+      m.currentHp = hp;
+      Object.assign(m.uses, nextUses);
+    }
+    return out;
+  }
   function resetToLevelOne(m) {
     m.level = 1;
     m.exp = 0;
     m.stage = 0;
     m.library = [];
     m.uses = {};
-    m.skills = { normal: null, special: null, buff: null };
+    m.skills = [];
     refreshLibrary(m);
     autoEquip(m);
     restoreAll(m);
@@ -3019,9 +3309,9 @@ input[type="text"].wiki-search {
       return m;
     },
     swap(i, j) {
-      const p2 = GameState.party;
-      if (i < 0 || j < 0 || i >= p2.length || j >= p2.length) return;
-      [p2[i], p2[j]] = [p2[j], p2[i]];
+      const p = GameState.party;
+      if (i < 0 || j < 0 || i >= p.length || j >= p.length) return;
+      [p[i], p[j]] = [p[j], p[i]];
       bus.emit("party:changed");
     },
     healAll() {
@@ -3200,7 +3490,7 @@ input[type="text"].wiki-search {
     GameState.meta = { playTime: 0, startedAt: Date.now(), gameVersion: GAME_VERSION, levelCap: LEVEL_CAP };
     GameState._sessionStart = Date.now();
     if (settings) GameState.settings = settings;
-    const starter = createMythling({ speciesId: starterId, level: 1, isStarter: true, originMap: "verdant_vale" });
+    const starter = createMythling({ speciesId: starterId, level: 1, isStarter: true, rarity: STARTER_RARITY, originMap: "verdant_vale" });
     PartyManager.add(starter);
     CollectionManager.markCaught(starterId, starter.mutation);
     return starter;
@@ -3244,7 +3534,8 @@ input[type="text"].wiki-search {
       currentHp: raw.currentHp ?? null,
       // null => restore to full below (old saves)
       ultCharge: clamp(raw.ultCharge ?? 0, 0, 8),
-      skills: { normal: null, special: null, buff: null, ...raw.skills || {} },
+      skills: normalizeEquipped(raw.skills),
+      // old saves stored {normal, special, buff}
       library: Array.isArray(raw.library) ? [...raw.library] : [],
       uses: { ...raw.uses || {} },
       meta: { caughtAt: null, caughtWith: null, caughtLevel: null, originMap: null, isStarter: false, ...raw.meta || {} }
@@ -3252,6 +3543,7 @@ input[type="text"].wiki-search {
     const maxStage = stageForLevel(m.speciesId, m.level);
     if (m.stage > maxStage) m.stage = maxStage;
     refreshLibrary(m);
+    m.skills = m.skills.filter((id) => m.library.includes(id));
     if (!raw.skills) autoEquip(m);
     const mx = maxHp(m);
     if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
@@ -3263,18 +3555,18 @@ input[type="text"].wiki-search {
     if (!data) return false;
     GameState.slot = data.slot ?? 1;
     const defMap = "verdant_vale";
-    const p2 = data.player || {};
-    const mapId = getMap(p2.map) ? p2.map : defMap;
+    const p = data.player || {};
+    const mapId = getMap(p.map) ? p.map : defMap;
     GameState.player = {
-      name: p2.name || "TRAINER",
-      wildcoins: Math.max(0, Math.floor(p2.wildcoins ?? STARTING_WILDCOINS)),
+      name: p.name || "TRAINER",
+      wildcoins: Math.max(0, Math.floor(p.wildcoins ?? STARTING_WILDCOINS)),
       map: mapId,
-      x: Number.isFinite(p2.x) ? p2.x : MAPS[mapId].spawn.x,
-      y: Number.isFinite(p2.y) ? p2.y : MAPS[mapId].spawn.y,
-      facing: p2.facing || "down",
-      starter: p2.starter ?? null,
-      lastHealMap: getMap(p2.lastHealMap) ? p2.lastHealMap : mapId,
-      lastHealPoint: p2.lastHealPoint || { ...MAPS[mapId].spawn }
+      x: Number.isFinite(p.x) ? p.x : MAPS[mapId].spawn.x,
+      y: Number.isFinite(p.y) ? p.y : MAPS[mapId].spawn.y,
+      facing: p.facing || "down",
+      starter: p.starter ?? null,
+      lastHealMap: getMap(p.lastHealMap) ? p.lastHealMap : mapId,
+      lastHealPoint: p.lastHealPoint || { ...MAPS[mapId].spawn }
     };
     GameState.party = (data.party || []).map(migrateMythling).filter(Boolean).slice(0, PARTY_MAX);
     GameState.storage = (data.storage || []).map(migrateMythling).filter(Boolean);
@@ -3282,7 +3574,7 @@ input[type="text"].wiki-search {
       GameState.party.push(GameState.storage.shift());
     }
     if (GameState.party.length === 0) {
-      GameState.party.push(createMythling({ speciesId: p2.starter || "spriggo", level: 1, isStarter: true }));
+      GameState.party.push(createMythling({ speciesId: p.starter || "spriggo", level: 1, isStarter: true, rarity: STARTER_RARITY }));
     }
     const inv = {};
     for (const [id, qty] of Object.entries(data.inventory || {})) {
@@ -3843,7 +4135,7 @@ input[type="text"].wiki-search {
       this.mapId = cfg.mapId;
       this.party = cfg.party;
       this.enemies = cfg.enemies;
-      this.canRun = cfg.canRun !== false && this.type === BattleType.WILD;
+      this.canRun = cfg.canRun !== false;
       this.rng = cfg.rng || Math.random;
       this.playerIndex = this.party.findIndex((m) => !isFainted(m));
       if (this.playerIndex < 0) this.playerIndex = 0;
@@ -3946,54 +4238,36 @@ input[type="text"].wiki-search {
       const item = getItem(itemId);
       if (!item) return { events, ok: false };
       const target = this.party.find((m) => m.uid === targetUid) || this.player;
-      let ok = false;
-      if (item.heal) {
-        if (isFainted(target)) {
-          events.push({ type: "log", text: `${displayName(target)} has fainted and cannot be healed.` });
-          return { events, ok: false };
-        }
-        const before = target.currentHp;
-        target.currentHp = Math.min(maxHp(target), target.currentHp + item.heal);
-        events.push({ type: "heal", side: this.party.includes(target) ? "player" : "enemy", uid: target.uid, amount: target.currentHp - before, mythling: this.snapshot(target) });
-        events.push({ type: "log", text: `${displayName(target)} recovered ${target.currentHp - before} HP!` });
-        ok = true;
-      } else if (item.revive) {
-        if (!isFainted(target)) {
-          events.push({ type: "log", text: `${displayName(target)} does not need reviving.` });
-          return { events, ok: false };
-        }
-        target.currentHp = Math.floor(maxHp(target) * item.revive);
-        events.push({ type: "heal", side: "player", uid: target.uid, amount: target.currentHp, mythling: this.snapshot(target) });
-        events.push({ type: "log", text: `${displayName(target)} was revived!` });
-        ok = true;
-      } else if (item.restoreUses) {
-        for (const id of target.library) {
-          const sk = getSkill(id);
-          if (sk && Number.isFinite(sk.uses)) target.uses[id] = Math.min(sk.uses, (target.uses[id] ?? 0) + item.restoreUses);
-        }
-        events.push({ type: "log", text: `${displayName(target)}'s skills were restored!` });
-        ok = true;
+      const res = applyItemEffects(item, target);
+      if (!res.ok) {
+        events.push({ type: "log", text: res.reason || "It had no effect." });
+        return { events, ok: false };
       }
-      return { events, ok };
+      const side = this.party.includes(target) ? "player" : "enemy";
+      if (res.revived) {
+        events.push({ type: "heal", side, uid: target.uid, amount: target.currentHp, mythling: this.snapshot(target) });
+        events.push({ type: "log", text: `${displayName(target)} was revived!` });
+      } else if (res.healed > 0) {
+        events.push({ type: "heal", side, uid: target.uid, amount: res.healed, mythling: this.snapshot(target) });
+        events.push({ type: "log", text: `${displayName(target)} recovered ${res.healed} HP!` });
+      }
+      if (res.usesRestored) events.push({ type: "log", text: `${displayName(target)}'s skills were restored!` });
+      return { events, ok: true };
     }
+    /**
+     * Fleeing is guaranteed: the moment the player runs, the battle is over —
+     * no speed roll, no free hit for the enemy, and trainers cannot stop you.
+     * Partial rewards already earned (KO'd trainer Mythlings) are kept.
+     */
     _tryRun(events) {
+      var _a;
       if (!this.canRun) {
-        events.push({ type: "log", text: "You cannot flee from a trainer battle!" });
+        events.push({ type: "log", text: "You cannot flee from this battle!" });
         return { events, phase: this.phase };
       }
       this.runAttempts += 1;
-      const pSpd = this.cb(this.player).stat("spd");
-      const eSpd = this.cb(this.enemy).stat("spd");
-      const chance = clamp(0.45 + (pSpd - eSpd) * 0.02 + this.runAttempts * 0.12, 0.25, 0.95);
-      if (this.rng() < chance) {
-        events.push({ type: "log", text: "You got away safely!" });
-        this.phase = BattlePhase.FLED;
-      } else {
-        events.push({ type: "log", text: "You couldn't get away!" });
-        const enemyAction = this._enemyChooseAction();
-        this._resolve(this.enemy, this.player, enemyAction, events);
-        this._postTurn(events);
-      }
+      events.push({ type: "log", text: this.type === BattleType.TRAINER ? `You walked away from ${((_a = this.trainer) == null ? void 0 : _a.name) || "the trainer"}'s challenge.` : "You got away safely!", emphasis: true });
+      this.phase = BattlePhase.FLED;
       return { events, phase: this.phase };
     }
     // ---------------- action resolution ----------------
@@ -4025,7 +4299,7 @@ input[type="text"].wiki-search {
         }
         return;
       }
-      let skillId = action.skillId || attacker.skills[action.slot];
+      let skillId = this._actionSkillId(attacker, action);
       let skill = getSkill(skillId);
       if (!skill || Number.isFinite(skill.uses) && usesLeft(attacker, skillId) <= 0) {
         const fallback = basicAttack(attacker);
@@ -4048,6 +4322,21 @@ input[type="text"].wiki-search {
           target: atkSide
         });
         for (const eff of skill.effects) this._applyBuff(attacker, eff, events, atkSide);
+        return;
+      }
+      if (skill.category === "debuff") {
+        events.push({ type: "log", text: `${displayName(attacker)} used ${skill.name}!` });
+        events.push({
+          type: "cast",
+          side: atkSide,
+          kind: "debuff",
+          element: skill.element || null,
+          name: skill.name,
+          skillId: skill.id,
+          category: "debuff",
+          target: defSide
+        });
+        for (const eff of skill.effects) this._applyDebuff(defender, eff, events, defSide);
         return;
       }
       events.push({
@@ -4073,6 +4362,31 @@ input[type="text"].wiki-search {
       }
       events.push({ type: "buff", side, stat: eff.stat, amount: eff.amount, stacks: res.stacks, total: res.total, uid: target.uid });
       events.push({ type: "log", text: `${displayName(target)}'s ${eff.stat.toUpperCase()} rose! (+${res.total}, ${res.stacks}/${MAX_BUFF_STACKS} stacks)` });
+    }
+    _applyDebuff(target, eff, events, side) {
+      const cb = this.cb(target);
+      const res = cb.applyDebuff(eff.stat, eff.amount);
+      if (!res.applied) {
+        events.push({ type: "log", text: `${displayName(target)}'s ${eff.stat.toUpperCase()} cannot fall any further! (max ${MAX_BUFF_STACKS} stacks)` });
+        return;
+      }
+      events.push({ type: "debuff", side, stat: eff.stat, amount: eff.amount, stacks: res.stacks, total: res.total, uid: target.uid });
+      events.push({ type: "log", text: `${displayName(target)}'s ${eff.stat.toUpperCase()} fell! (${res.total}, ${Math.abs(res.stacks)}/${MAX_BUFF_STACKS} stacks)` });
+    }
+    /**
+     * Which skill an action refers to. Actions name a skill directly
+     * (`skillId`), a battle button (`index`, 0-based) or — for older callers —
+     * a category (`slot`), which resolves to the first equipped skill of that kind.
+     */
+    _actionSkillId(m, action) {
+      var _a;
+      if (action.skillId) return action.skillId;
+      if (Number.isInteger(action.index)) return ((_a = equippedSkill(m, action.index)) == null ? void 0 : _a.id) || null;
+      if (action.slot) {
+        const hit = equippedSkills(m).find((e) => e.skill.category === action.slot);
+        return hit ? hit.id : null;
+      }
+      return null;
     }
     /**
      * @param {object} opts
@@ -4159,18 +4473,24 @@ input[type="text"].wiki-search {
       const e = this.enemy;
       if (!e || isFainted(e)) return null;
       if (ultimateReady(e)) return { type: "ultimate" };
-      const special = equippedSkill(e, "special");
-      const buff = equippedSkill(e, "buff");
-      const normal = equippedSkill(e, "normal");
-      const canSpecial = special && usesLeft(e, special.id) > 0;
-      const canBuff = buff && usesLeft(e, buff.id) > 0;
+      const ready = equippedSkills(e).filter((x) => usesLeft(e, x.id) > 0);
+      const first = (cat) => ready.find((x) => x.skill.category === cat) || null;
+      const special = first("special");
+      const buff = first("buff");
+      const debuff = first("debuff");
+      const normal = first("normal");
+      const use = (x) => ({ type: "skill", index: x.index });
       const r = this.rng();
-      if (canBuff && this.turn <= 2 && r < 0.3) return { type: "skill", slot: "buff" };
-      if (canBuff && r < 0.12) return { type: "skill", slot: "buff" };
-      if (canSpecial && r < 0.75) return { type: "skill", slot: "special" };
-      if (normal) return { type: "skill", slot: "normal" };
-      if (canSpecial) return { type: "skill", slot: "special" };
-      return { type: "skill", slot: "normal" };
+      if (buff && this.turn <= 2 && r < 0.3) return use(buff);
+      if (debuff && this.turn <= 3 && r >= 0.3 && r < 0.55) return use(debuff);
+      if (buff && r < 0.12) return use(buff);
+      if (debuff && r >= 0.12 && r < 0.24) return use(debuff);
+      if (special && r < 0.75) return use(special);
+      if (normal) return use(normal);
+      if (special) return use(special);
+      if (debuff) return use(debuff);
+      if (buff) return use(buff);
+      return { type: "skill", skillId: basicAttack(e).id };
     }
     // ---------------- turn bookkeeping ----------------
     _postTurn(events) {
@@ -4243,6 +4563,7 @@ input[type="text"].wiki-search {
   };
   function captureChance({ target, ballId, rngValue }) {
     const ball = getItem(ballId);
+    if (ball == null ? void 0 : ball.guaranteed) return 1;
     const sp = speciesOf(target);
     const rarity = getRarity(target.rarity);
     const levelFactor = clamp(1.25 - target.level * 0.02, 0.4, 1.25);
@@ -4320,15 +4641,15 @@ input[type="text"].wiki-search {
       ctx.lineTo(len * 0.92, 0);
       ctx.stroke();
       for (let i = 1; i <= veins; i++) {
-        const p2 = i / (veins + 1) * len;
+        const p = i / (veins + 1) * len;
         const s = wid * 0.55 * (1 - i / (veins + 1.4));
         ctx.beginPath();
-        ctx.moveTo(p2, 0);
-        ctx.lineTo(p2 + len * 0.12, -s);
+        ctx.moveTo(p, 0);
+        ctx.lineTo(p + len * 0.12, -s);
         ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(p2, 0);
-        ctx.lineTo(p2 + len * 0.12, s);
+        ctx.moveTo(p, 0);
+        ctx.lineTo(p + len * 0.12, s);
         ctx.stroke();
       }
     }
@@ -4557,8 +4878,8 @@ input[type="text"].wiki-search {
           ctx.quadraticCurveTo(-tl * 0.5, -tw * 1, -tl + 3, -tw * 1.2);
           ctx.stroke();
           for (let i = 1; i <= 4; i++) {
-            const p2 = i / 5;
-            const bx = -11 - (tl - 12) * p2, by = -7 - tw * 0.95 * p2;
+            const p = i / 5;
+            const bx = -11 - (tl - 12) * p, by = -7 - tw * 0.95 * p;
             line(ctx, bx, by, bx - 5, by - tw * 0.42, shadeColor(c.dark, 0.12), 1);
           }
         }
@@ -5081,9 +5402,9 @@ input[type="text"].wiki-search {
             ctx.strokeStyle = "rgba(0,0,0,.25)";
             ctx.lineWidth = 1;
             for (let i = 1; i <= 3; i++) {
-              const p2 = i / 4.2;
-              const px = sx + (tipX - sx) * p2, py = -len * 0.74 * p2 - 5;
-              line(ctx, px, py - base * 0.22, px + base * 0.18, py + base * (0.4 - p2 * 0.24), "rgba(0,0,0,.22)", 1);
+              const p = i / 4.2;
+              const px = sx + (tipX - sx) * p, py = -len * 0.74 * p - 5;
+              line(ctx, px, py - base * 0.22, px + base * 0.18, py + base * (0.4 - p * 0.24), "rgba(0,0,0,.22)", 1);
             }
           };
           horn(6.5, 0.9);
@@ -5282,8 +5603,8 @@ input[type="text"].wiki-search {
           ctx.save();
           ctx.globalAlpha *= 0.65;
           for (let i = 0; i < 3; i++) {
-            const p2 = (t * 1.1 + i * 0.33) % 1;
-            ell(ctx, r.shoX - 8 + i * 11, r.bodyY - 6 + p2 * 18, 1.8, 2.8 + p2, c.accent);
+            const p = (t * 1.1 + i * 0.33) % 1;
+            ell(ctx, r.shoX - 8 + i * 11, r.bodyY - 6 + p * 18, 1.8, 2.8 + p, c.accent);
           }
           ctx.restore();
         }
@@ -5812,20 +6133,20 @@ input[type="text"].wiki-search {
     }
     _locomote(T, root, t, run) {
       const loop = run ? 0.44 : 0.62;
-      const p2 = t / loop * Math.PI * 2;
+      const p = t / loop * Math.PI * 2;
       const amp = run ? 0.85 : 0.52;
-      const s1 = Math.sin(p2), s2 = Math.sin(p2 + Math.PI);
+      const s1 = Math.sin(p), s2 = Math.sin(p + Math.PI);
       const lift = (v) => -Math.max(0, v) * (run ? 3.2 : 1.7);
       if (T.legFL) tf(T.legFL, 0, lift(s1), s1 * amp, 1, 1);
       if (T.legFR) tf(T.legFR, 0, lift(s2), s2 * amp, 1, 1);
       if (T.legBL) tf(T.legBL, 0, lift(s2), s2 * amp * 0.92, 1, 1);
       if (T.legBR) tf(T.legBR, 0, lift(s1), s1 * amp * 0.92, 1, 1);
-      const bob = Math.abs(Math.sin(p2));
+      const bob = Math.abs(Math.sin(p));
       tf(root, 0, -bob * (run ? 2.6 : 1.4), run ? 0.09 : 0.03, 1, 1);
       if (T.body) tf(T.body, 0, 0, s1 * 0.03, 1 + bob * 0.01, 1 - bob * 0.025);
       if (T.head) tf(T.head, -s1 * (run ? 1.4 : 0.9), bob * 0.7, s1 * 0.05, 1, 1);
-      if (T.tail) tf(T.tail, 0, 0, Math.sin(p2 - 0.7) * (run ? 0.34 : 0.22) + (run ? 0.15 : 0), 1, 1);
-      if (T.mane) tf(T.mane, 0, 0, Math.sin(p2 - 0.5) * 0.09, 1, 1);
+      if (T.tail) tf(T.tail, 0, 0, Math.sin(p - 0.7) * (run ? 0.34 : 0.22) + (run ? 0.15 : 0), 1, 1);
+      if (T.mane) tf(T.mane, 0, 0, Math.sin(p - 0.5) * 0.09, 1, 1);
       if (T.earL) tf(T.earL, 0, 0, s1 * 0.12 - (run ? 0.25 : 0), 1, 1);
       if (T.earR) tf(T.earR, 0, 0, -s1 * 0.1 - (run ? 0.22 : 0), 1, 1);
       if (T.wingL) tf(T.wingL, 0, 0, -0.1 + s1 * 0.16, 1, 1);
@@ -5970,7 +6291,7 @@ input[type="text"].wiki-search {
       this.root = newTf();
       this.blink = 0;
       if (art) {
-        for (const p2 of art.parts) this.tf[p2.name] = newTf();
+        for (const p of art.parts) this.tf[p.name] = newTf();
       }
       this.anim = new CreatureAnimationController(this.tf, this.root);
     }
@@ -6017,14 +6338,14 @@ input[type="text"].wiki-search {
     if (el2 === "nature") {
       ctx.globalAlpha *= 0.5;
       for (let i = 0; i < n; i++) {
-        const p2 = (t * 0.6 + i * 0.33) % 1;
-        leaf(ctx, -34 - p2 * 14, (r.bodyY ?? -34) - 22 + Math.sin(t * 2 + i) * 6 + p2 * 12, 6, 2.2, p2 * 5, c.accent, null, 0);
+        const p = (t * 0.6 + i * 0.33) % 1;
+        leaf(ctx, -34 - p * 14, (r.bodyY ?? -34) - 22 + Math.sin(t * 2 + i) * 6 + p * 12, 6, 2.2, p * 5, c.accent, null, 0);
       }
     } else if (el2 === "water") {
       ctx.globalAlpha *= 0.55;
       for (let i = 0; i < 4; i++) {
-        const p2 = (t * 0.9 + i * 0.25) % 1;
-        ell(ctx, (r.hipX ?? -10) - 34 - p2 * 16, (r.bodyY ?? -34) - 20 - p2 * 14 + Math.sin(t * 3 + i) * 3, 2.2 - p2, 2.9 - p2, c.accent);
+        const p = (t * 0.9 + i * 0.25) % 1;
+        ell(ctx, (r.hipX ?? -10) - 34 - p * 16, (r.bodyY ?? -34) - 20 - p * 14 + Math.sin(t * 3 + i) * 3, 2.2 - p, 2.9 - p, c.accent);
       }
       ctx.save();
       ctx.globalAlpha *= 0.28;
@@ -6037,9 +6358,9 @@ input[type="text"].wiki-search {
     } else {
       ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < n; i++) {
-        const p2 = (t * (0.8 + excite * 0.6) + i * 0.27) % 1;
-        ctx.globalAlpha = (1 - p2) * 0.7;
-        ell(ctx, (r.hipX ?? -10) - 16 + Math.sin(t * 3 + i * 2) * 5, (r.bodyY ?? -34) - 8 - p2 * 36, 2 - p2, 2 - p2, "#ffb347");
+        const p = (t * (0.8 + excite * 0.6) + i * 0.27) % 1;
+        ctx.globalAlpha = (1 - p) * 0.7;
+        ell(ctx, (r.hipX ?? -10) - 16 + Math.sin(t * 3 + i * 2) * 5, (r.bodyY ?? -34) - 8 - p * 36, 2 - p, 2 - p, "#ffb347");
       }
     }
     ctx.restore();
@@ -6512,9 +6833,9 @@ input[type="text"].wiki-search {
       ctx.fill();
       ctx.globalAlpha = 0.5;
       for (let i = 0; i < 5; i++) {
-        const p2 = (t * 0.35 + i * 0.2) % 1;
+        const p = (t * 0.35 + i * 0.2) % 1;
         ctx.fillStyle = "rgba(255,255,255,0.8)";
-        ctx.fillRect(wfx - 5 + Math.sin(i * 2 + t) * 3, wfTop + p2 * wfLen, 3, 16 * (1 - p2 * 0.5));
+        ctx.fillRect(wfx - 5 + Math.sin(i * 2 + t) * 3, wfTop + p * wfLen, 3, 16 * (1 - p * 0.5));
       }
       ctx.restore();
     }
@@ -6645,8 +6966,8 @@ input[type="text"].wiki-search {
       }
       ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < 5; i++) {
-        const p2 = (t * 0.03 + i * 0.2) % 1;
-        const mx = (p2 * 1.25 - 0.15) * W * 0.7;
+        const p = (t * 0.03 + i * 0.2) % 1;
+        const mx = (p * 1.25 - 0.15) * W * 0.7;
         const my = lakeTop + H * (0.05 + i % 3 * 0.05);
         const mg2 = ctx.createRadialGradient(mx, my, 0, mx, my, W * 0.16);
         mg2.addColorStop(0, "rgba(226,244,255,0.20)");
@@ -6710,9 +7031,9 @@ input[type="text"].wiki-search {
       ctx.stroke();
       ctx.lineWidth = 1.6 * s;
       for (let i = 0; i <= 4; i++) {
-        const p2 = i / 4;
-        const x = W * (0.175 + p2 * 0.08);
-        const y = H * (0.688 - Math.sin(p2 * Math.PI) * 0.024);
+        const p = i / 4;
+        const x = W * (0.175 + p * 0.08);
+        const y = H * (0.688 - Math.sin(p * Math.PI) * 0.024);
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(x, y + H * 0.012);
@@ -6752,9 +7073,9 @@ input[type="text"].wiki-search {
     // --------------------------------------------------------- hero ground
     /** Height of the foreground ledge at normalised x (rises towards the right). */
     ledgeAt(xn, W, H) {
-      const p2 = clamp012(xn);
-      const e = p2 * p2 * (3 - 2 * p2);
-      return H * (0.945 - 0.235 * e) - Math.sin(p2 * Math.PI * 1.7) * H * 0.022;
+      const p = clamp012(xn);
+      const e = p * p * (3 - 2 * p);
+      return H * (0.945 - 0.235 * e) - Math.sin(p * Math.PI * 1.7) * H * 0.022;
     }
     heroLedge(ctx, W, H, t) {
       const L = (xn) => this.ledgeAt(xn, W, H);
@@ -7377,9 +7698,9 @@ input[type="text"].wiki-search {
       if (this.cache.has(key)) return this.cache.get(key);
       const list = [];
       for (const b of map.buildings) list.push({ x: b.x, y: b.y, w: b.w, h: b.h - 10 });
-      for (const p2 of this.props(map)) {
-        if (!p2.solid) continue;
-        list.push({ x: p2.x - 11 * p2.s, y: p2.y - 8 * p2.s, w: 22 * p2.s, h: 14 * p2.s });
+      for (const p of this.props(map)) {
+        if (!p.solid) continue;
+        list.push({ x: p.x - 11 * p.s, y: p.y - 8 * p.s, w: 22 * p.s, h: 14 * p.s });
       }
       this.cache.set(key, list);
       return list;
@@ -7477,11 +7798,11 @@ input[type="text"].wiki-search {
         ctx.fillRect(b.x + b.w - 2, b.y, 8, b.h);
       }
     }
-    drawProp(ctx, p2, time) {
-      const s = p2.s;
-      const sway = Math.sin(time * 1.4 + p2.seed) * 0.05;
+    drawProp(ctx, p, time) {
+      const s = p.s;
+      const sway = Math.sin(time * 1.4 + p.seed) * 0.05;
       ctx.save();
-      ctx.translate(p2.x, p2.y);
+      ctx.translate(p.x, p.y);
       ctx.scale(s, s);
       ctx.globalAlpha = 0.2;
       ctx.beginPath();
@@ -7490,10 +7811,10 @@ input[type="text"].wiki-search {
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.rotate(sway);
-      switch (p2.kind) {
+      switch (p.kind) {
         case "tree":
         case "bigtree": {
-          const h = p2.kind === "bigtree" ? 1.5 : 1;
+          const h = p.kind === "bigtree" ? 1.5 : 1;
           ctx.fillStyle = "#7a5433";
           ctx.fillRect(-4, -26 * h, 8, 26 * h);
           circle(ctx, -12, -34 * h, 16, "#3f8f42");
@@ -7527,7 +7848,7 @@ input[type="text"].wiki-search {
         }
         case "deadtree":
         case "burnttree": {
-          ctx.strokeStyle = p2.kind === "burnttree" ? "#2b2220" : "#4a3a32";
+          ctx.strokeStyle = p.kind === "burnttree" ? "#2b2220" : "#4a3a32";
           ctx.lineWidth = 5;
           ctx.beginPath();
           ctx.moveTo(0, 0);
@@ -7542,8 +7863,8 @@ input[type="text"].wiki-search {
           ctx.moveTo(0, -26);
           ctx.lineTo(13, -38);
           ctx.stroke();
-          if (p2.kind === "burnttree") {
-            ctx.globalAlpha = 0.6 + Math.sin(time * 4 + p2.seed) * 0.25;
+          if (p.kind === "burnttree") {
+            ctx.globalAlpha = 0.6 + Math.sin(time * 4 + p.seed) * 0.25;
             circle(ctx, 0, -34, 3, "#ff8a3a");
             ctx.globalAlpha = 1;
           }
@@ -7562,7 +7883,7 @@ input[type="text"].wiki-search {
           ctx.lineTo(0, -12);
           ctx.stroke();
           const cols = ["#ff9ec4", "#ffd76a", "#b39bff", "#ffffff"];
-          const col = cols[Math.floor(p2.seed) % cols.length];
+          const col = cols[Math.floor(p.seed) % cols.length];
           for (let i = 0; i < 5; i++) {
             const a = i / 5 * Math.PI * 2;
             circle(ctx, Math.cos(a) * 4, -12 + Math.sin(a) * 4, 3.4, col);
@@ -7597,7 +7918,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "crystal": {
-          const glow = 0.5 + Math.sin(time * 2 + p2.seed) * 0.3;
+          const glow = 0.5 + Math.sin(time * 2 + p.seed) * 0.3;
           ctx.globalAlpha = glow * 0.5;
           circle(ctx, 0, -18, 20, "#7fd8ff");
           ctx.globalAlpha = 1;
@@ -7671,7 +7992,7 @@ input[type="text"].wiki-search {
         case "lamp": {
           ctx.fillStyle = "#5b5b66";
           ctx.fillRect(-2, -34, 4, 34);
-          const glow = 0.6 + Math.sin(time * 3 + p2.seed) * 0.2;
+          const glow = 0.6 + Math.sin(time * 3 + p.seed) * 0.2;
           ctx.globalAlpha = glow * 0.45;
           circle(ctx, 0, -38, 14, "#ffe08a");
           ctx.globalAlpha = 1;
@@ -7682,7 +8003,7 @@ input[type="text"].wiki-search {
           ctx.fillStyle = "#4a4048";
           roundRect(ctx, -9, -16, 18, 16, 4);
           ctx.fill();
-          const f = 1 + Math.sin(time * 8 + p2.seed) * 0.2;
+          const f = 1 + Math.sin(time * 8 + p.seed) * 0.2;
           ctx.globalAlpha = 0.5;
           circle(ctx, 0, -24, 16 * f, "#ff8a3a");
           ctx.globalAlpha = 1;
@@ -7690,7 +8011,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "ember": {
-          const f = 0.5 + Math.sin(time * 5 + p2.seed) * 0.4;
+          const f = 0.5 + Math.sin(time * 5 + p.seed) * 0.4;
           ctx.globalAlpha = f * 0.8;
           circle(ctx, 0, -6, 8, "#ff7a2a");
           ctx.globalAlpha = 1;
@@ -8294,9 +8615,9 @@ input[type="text"].wiki-search {
       }
       ctx.restore();
       const drawables = [];
-      for (const p2 of this.renderer.props(map)) {
-        if (p2.x < this.cam.x - 80 || p2.x > this.cam.x + camW + 80) continue;
-        drawables.push({ y: p2.y, fn: () => this.renderer.drawProp(ctx, p2, this.time) });
+      for (const p of this.renderer.props(map)) {
+        if (p.x < this.cam.x - 80 || p.x > this.cam.x + camW + 80) continue;
+        drawables.push({ y: p.y, fn: () => this.renderer.drawProp(ctx, p, this.time) });
       }
       for (const b of map.buildings) drawables.push({ y: b.y + b.h, fn: () => this.renderer.drawBuilding(ctx, b, this.time) });
       for (const lm of (map.landmarks || []).filter((l) => l.type === "sign")) {
@@ -8403,18 +8724,18 @@ input[type="text"].wiki-search {
       ctx.restore();
     }
     drawPlayer(ctx) {
-      const p2 = this.player;
-      const bob = p2.moving ? Math.abs(Math.sin(p2.anim)) * 3 : Math.sin(this.time * 2) * 1.2;
+      const p = this.player;
+      const bob = p.moving ? Math.abs(Math.sin(p.anim)) * 3 : Math.sin(this.time * 2) * 1.2;
       ctx.save();
-      ctx.translate(p2.x, p2.y - bob);
-      ctx.scale(p2.facing, 1);
+      ctx.translate(p.x, p.y - bob);
+      ctx.scale(p.facing, 1);
       ctx.globalAlpha = 0.28;
       ctx.beginPath();
       ctx.ellipse(0, 4 + bob, 15, 5.5, 0, 0, Math.PI * 2);
       ctx.fillStyle = "#123";
       ctx.fill();
       ctx.globalAlpha = 1;
-      const swing = p2.moving ? Math.sin(p2.anim) * 4 : 0;
+      const swing = p.moving ? Math.sin(p.anim) * 4 : 0;
       ctx.fillStyle = "#2f3d5c";
       ctx.fillRect(-8 + swing, -15, 6, 15);
       ctx.fillRect(2 - swing, -15, 6, 15);
@@ -8446,7 +8767,7 @@ input[type="text"].wiki-search {
       ctx.arc(4, -45, 1.7, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      this.nameTag(ctx, p2.x, p2.y - 68, GameState.player.name, "#ffffff");
+      this.nameTag(ctx, p.x, p.y - 68, GameState.player.name, "#ffffff");
     }
     currentRegionName() {
       const map = this.map;
@@ -8617,34 +8938,34 @@ input[type="text"].wiki-search {
     }
     /** @returns {object|null} a pooled particle, or null when the pool is full. */
     spawn(cfg) {
-      const p2 = this.pool.pop();
-      if (!p2) return null;
-      p2.on = true;
-      p2.x = cfg.x;
-      p2.y = cfg.y;
-      p2.vx = cfg.vx || 0;
-      p2.vy = cfg.vy || 0;
-      p2.gravity = cfg.gravity || 0;
-      p2.drag = cfg.drag || 0;
-      p2.rot = cfg.rot || 0;
-      p2.rotSpeed = cfg.rotSpeed || 0;
-      p2.size = cfg.size ?? 4;
-      p2.sizeEnd = cfg.sizeEnd ?? p2.size * 0.2;
-      p2.life = 0;
-      p2.max = cfg.life ?? 0.6;
-      p2.alpha = cfg.alpha ?? 1;
-      p2.fadeIn = cfg.fadeIn || 0;
-      p2.shape = cfg.shape || "spark";
-      p2.color = cfg.color || "#ffffff";
-      p2.color2 = cfg.color2 || null;
-      p2.additive = !!cfg.additive;
-      p2.wobble = cfg.wobble || 0;
-      p2.seed = Math.random() * TAU;
-      p2.sx = cfg.sx ?? 1;
-      p2.sy = cfg.sy ?? 1;
-      p2.stretch = cfg.stretch || 0;
-      this.live.push(p2);
-      return p2;
+      const p = this.pool.pop();
+      if (!p) return null;
+      p.on = true;
+      p.x = cfg.x;
+      p.y = cfg.y;
+      p.vx = cfg.vx || 0;
+      p.vy = cfg.vy || 0;
+      p.gravity = cfg.gravity || 0;
+      p.drag = cfg.drag || 0;
+      p.rot = cfg.rot || 0;
+      p.rotSpeed = cfg.rotSpeed || 0;
+      p.size = cfg.size ?? 4;
+      p.sizeEnd = cfg.sizeEnd ?? p.size * 0.2;
+      p.life = 0;
+      p.max = cfg.life ?? 0.6;
+      p.alpha = cfg.alpha ?? 1;
+      p.fadeIn = cfg.fadeIn || 0;
+      p.shape = cfg.shape || "spark";
+      p.color = cfg.color || "#ffffff";
+      p.color2 = cfg.color2 || null;
+      p.additive = !!cfg.additive;
+      p.wobble = cfg.wobble || 0;
+      p.seed = Math.random() * TAU;
+      p.sx = cfg.sx ?? 1;
+      p.sy = cfg.sy ?? 1;
+      p.stretch = cfg.stretch || 0;
+      this.live.push(p);
+      return p;
     }
     /** Ring / slash / beam / burst primitive. */
     addEffect(cfg) {
@@ -8675,24 +8996,24 @@ input[type="text"].wiki-search {
     update(dt) {
       const live = this.live;
       for (let i = live.length - 1; i >= 0; i--) {
-        const p2 = live[i];
-        p2.life += dt;
-        if (p2.life >= p2.max) {
-          p2.on = false;
+        const p = live[i];
+        p.life += dt;
+        if (p.life >= p.max) {
+          p.on = false;
           live[i] = live[live.length - 1];
           live.pop();
-          this.pool.push(p2);
+          this.pool.push(p);
           continue;
         }
-        p2.vy += p2.gravity * dt;
-        if (p2.drag) {
-          const d = 1 - p2.drag * dt;
-          p2.vx *= d;
-          p2.vy *= d;
+        p.vy += p.gravity * dt;
+        if (p.drag) {
+          const d = 1 - p.drag * dt;
+          p.vx *= d;
+          p.vy *= d;
         }
-        p2.x += p2.vx * dt;
-        p2.y += p2.vy * dt;
-        p2.rot += p2.rotSpeed * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rot += p.rotSpeed * dt;
       }
       const fx = this.fx;
       for (let i = fx.length - 1; i >= 0; i--) {
@@ -8730,50 +9051,50 @@ input[type="text"].wiki-search {
     render(ctx) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      for (const p2 of this.live) if (p2.additive) this.drawParticle(ctx, p2);
+      for (const p of this.live) if (p.additive) this.drawParticle(ctx, p);
       for (const e of this.fx) if (e.additive && e.delay <= 0) this.drawEffect(ctx, e);
       ctx.restore();
       ctx.save();
-      for (const p2 of this.live) if (!p2.additive) this.drawParticle(ctx, p2);
+      for (const p of this.live) if (!p.additive) this.drawParticle(ctx, p);
       for (const e of this.fx) if (!e.additive && e.delay <= 0) this.drawEffect(ctx, e);
       ctx.restore();
     }
-    drawParticle(ctx, p2) {
-      const k = p2.life / p2.max;
-      const a = p2.alpha * (p2.fadeIn && k < p2.fadeIn ? k / p2.fadeIn : 1 - (k - (p2.fadeIn || 0)) / Math.max(1e-3, 1 - (p2.fadeIn || 0)));
+    drawParticle(ctx, p) {
+      const k = p.life / p.max;
+      const a = p.alpha * (p.fadeIn && k < p.fadeIn ? k / p.fadeIn : 1 - (k - (p.fadeIn || 0)) / Math.max(1e-3, 1 - (p.fadeIn || 0)));
       if (a <= 0.01) return;
-      const s = p2.size + (p2.sizeEnd - p2.size) * k;
-      const wob = p2.wobble ? Math.sin(p2.life * 6 + p2.seed) * p2.wobble : 0;
+      const s = p.size + (p.sizeEnd - p.size) * k;
+      const wob = p.wobble ? Math.sin(p.life * 6 + p.seed) * p.wobble : 0;
       ctx.globalAlpha = Math.max(0, Math.min(1, a));
       ctx.save();
-      ctx.translate(p2.x + wob, p2.y);
-      ctx.rotate(p2.rot);
-      const stretch = p2.stretch ? 1 + p2.stretch * Math.min(1, Math.hypot(p2.vx, p2.vy) / 600) : 1;
-      ctx.scale(p2.sx * stretch, p2.sy);
-      switch (p2.shape) {
+      ctx.translate(p.x + wob, p.y);
+      ctx.rotate(p.rot);
+      const stretch = p.stretch ? 1 + p.stretch * Math.min(1, Math.hypot(p.vx, p.vy) / 600) : 1;
+      ctx.scale(p.sx * stretch, p.sy);
+      switch (p.shape) {
         case "spark": {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.ellipse(0, 0, Math.max(0.4, s), Math.max(0.3, s * 0.45), 0, 0, TAU);
           ctx.fill();
           break;
         }
         case "glow": {
-          ctx.fillStyle = this.radial(ctx, s * 2.2, p2.color, "rgba(0,0,0,0)");
+          ctx.fillStyle = this.radial(ctx, s * 2.2, p.color, "rgba(0,0,0,0)");
           ctx.beginPath();
           ctx.arc(0, 0, s * 2.2, 0, TAU);
           ctx.fill();
           break;
         }
         case "leaf": {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.moveTo(-s, 0);
           ctx.quadraticCurveTo(0, -s * 0.62, s, 0);
           ctx.quadraticCurveTo(0, s * 0.62, -s, 0);
           ctx.fill();
-          if (p2.color2) {
-            ctx.strokeStyle = p2.color2;
+          if (p.color2) {
+            ctx.strokeStyle = p.color2;
             ctx.lineWidth = Math.max(0.4, s * 0.12);
             ctx.beginPath();
             ctx.moveTo(-s * 0.8, 0);
@@ -8783,7 +9104,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "petal": {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.moveTo(0, -s);
           ctx.quadraticCurveTo(s * 0.85, -s * 0.2, 0, s);
@@ -8792,7 +9113,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "droplet": {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.moveTo(0, -s * 1.5);
           ctx.quadraticCurveTo(s * 0.9, 0, 0, s);
@@ -8801,12 +9122,12 @@ input[type="text"].wiki-search {
           break;
         }
         case "bubble": {
-          ctx.strokeStyle = p2.color;
+          ctx.strokeStyle = p.color;
           ctx.lineWidth = Math.max(0.5, s * 0.22);
           ctx.beginPath();
           ctx.arc(0, 0, s, 0, TAU);
           ctx.stroke();
-          ctx.fillStyle = p2.color2 || p2.color;
+          ctx.fillStyle = p.color2 || p.color;
           ctx.globalAlpha *= 0.28;
           ctx.beginPath();
           ctx.arc(0, 0, s * 0.92, 0, TAU);
@@ -8814,7 +9135,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "shard": {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.moveTo(0, -s * 1.6);
           ctx.lineTo(s * 0.55, s * 0.5);
@@ -8825,14 +9146,14 @@ input[type="text"].wiki-search {
         }
         case "smoke": {
           ctx.globalAlpha *= 0.5;
-          ctx.fillStyle = this.radial(ctx, s * 2, p2.color, "rgba(0,0,0,0)");
+          ctx.fillStyle = this.radial(ctx, s * 2, p.color, "rgba(0,0,0,0)");
           ctx.beginPath();
           ctx.arc(0, 0, s * 2, 0, TAU);
           ctx.fill();
           break;
         }
         case "streak": {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.moveTo(-s * 2.2, -s * 0.16);
           ctx.quadraticCurveTo(0, -s * 0.42, s * 2.2, -s * 0.1);
@@ -8842,7 +9163,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "fang": {
-          ctx.strokeStyle = p2.color;
+          ctx.strokeStyle = p.color;
           ctx.lineWidth = Math.max(1, s * 0.5);
           ctx.lineCap = "round";
           ctx.beginPath();
@@ -8851,7 +9172,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "ring": {
-          ctx.strokeStyle = p2.color;
+          ctx.strokeStyle = p.color;
           ctx.lineWidth = Math.max(0.6, s * 0.3);
           ctx.beginPath();
           ctx.arc(0, 0, s, 0, TAU);
@@ -8859,7 +9180,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "star": {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           for (let i = 0; i < 8; i++) {
             const a2 = i / 8 * TAU;
@@ -8871,7 +9192,7 @@ input[type="text"].wiki-search {
           break;
         }
         default: {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.arc(0, 0, Math.max(0.4, s), 0, TAU);
           ctx.fill();
@@ -8881,29 +9202,29 @@ input[type="text"].wiki-search {
     }
     drawEffect(ctx, e) {
       const k = Math.min(1, e.life / e.max);
-      const p2 = (EASE[e.ease] || EASE.out)(k);
+      const p = (EASE[e.ease] || EASE.out)(k);
       const a = e.alpha * (1 - k * k);
       if (a <= 0.01) return;
       ctx.save();
       ctx.globalAlpha = Math.max(0, Math.min(1, a));
       ctx.translate(e.x, e.y);
-      ctx.rotate(e.rot + e.spin * p2);
+      ctx.rotate(e.rot + e.spin * p);
       if (e.kind === "ring") {
-        const r = e.r0 + (e.r1 - e.r0) * p2;
+        const r = e.r0 + (e.r1 - e.r0) * p;
         ctx.strokeStyle = e.color;
         ctx.lineWidth = Math.max(0.5, e.w * (1 - k * 0.7));
         ctx.beginPath();
         ctx.ellipse(0, 0, r, r * (e.len ? e.len : 0.42), 0, 0, TAU);
         ctx.stroke();
       } else if (e.kind === "shock") {
-        const r = e.r0 + (e.r1 - e.r0) * p2;
+        const r = e.r0 + (e.r1 - e.r0) * p;
         ctx.strokeStyle = e.color;
         ctx.lineWidth = Math.max(0.5, e.w * (1 - k));
         ctx.beginPath();
         ctx.ellipse(0, 0, r, r * 0.3, 0, 0, TAU);
         ctx.stroke();
       } else if (e.kind === "burst") {
-        const r = e.r0 + (e.r1 - e.r0) * p2;
+        const r = e.r0 + (e.r1 - e.r0) * p;
         ctx.fillStyle = this.radial(ctx, r, e.color, "rgba(0,0,0,0)");
         ctx.beginPath();
         ctx.arc(0, 0, r, 0, TAU);
@@ -8915,7 +9236,7 @@ input[type="text"].wiki-search {
         ctx.lineWidth = Math.max(1, e.w * (1 - k * 0.8));
         ctx.lineCap = "round";
         ctx.beginPath();
-        const r = e.r0 + (e.r1 - e.r0) * p2;
+        const r = e.r0 + (e.r1 - e.r0) * p;
         ctx.arc(0, 0, r, e.rot - 0.9, e.rot + 0.9);
         ctx.stroke();
       } else if (e.kind === "beam") {
@@ -8927,17 +9248,17 @@ input[type="text"].wiki-search {
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(dx * p2, dy * p2);
+        ctx.lineTo(dx * p, dy * p);
         ctx.stroke();
         ctx.globalAlpha *= 0.5;
         ctx.lineWidth = e.w * 2.2 * (1 - k * 0.6);
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(dx * p2, dy * p2);
+        ctx.lineTo(dx * p, dy * p);
         ctx.stroke();
         void L;
       } else if (e.kind === "rune") {
-        const r = e.r1 * (0.7 + 0.3 * p2);
+        const r = e.r1 * (0.7 + 0.3 * p);
         ctx.strokeStyle = e.color;
         ctx.lineWidth = Math.max(0.8, e.w * (1 - k * 0.5));
         ctx.beginPath();
@@ -8947,7 +9268,7 @@ input[type="text"].wiki-search {
         ctx.ellipse(0, 0, r * 0.72, r * 0.28, 0, 0, TAU);
         ctx.stroke();
         for (let i = 0; i < 6; i++) {
-          const a2 = i / 6 * TAU + p2 * 1.2;
+          const a2 = i / 6 * TAU + p * 1.2;
           ctx.beginPath();
           ctx.ellipse(Math.cos(a2) * r * 0.86, Math.sin(a2) * r * 0.33, e.w * 0.9, e.w * 0.9, 0, 0, TAU);
           ctx.fillStyle = e.color;
@@ -8968,7 +9289,7 @@ input[type="text"].wiki-search {
         ctx.restore();
         return;
       } else if (e.kind === "column") {
-        const h = e.len * p2;
+        const h = e.len * p;
         ctx.globalAlpha *= 1 - k * 0.8;
         ctx.fillStyle = e.color;
         ctx.beginPath();
@@ -8982,9 +9303,9 @@ input[type="text"].wiki-search {
       ctx.restore();
     }
     clear() {
-      for (const p2 of this.live) {
-        p2.on = false;
-        this.pool.push(p2);
+      for (const p of this.live) {
+        p.on = false;
+        this.pool.push(p);
       }
       this.live.length = 0;
       for (const e of this.fx) {
@@ -9006,6 +9327,8 @@ input[type="text"].wiki-search {
     normal: { cast: "none", projectile: "contact", impact: "slash", shake: 3 },
     special: { cast: "gather", projectile: "orb", impact: "burst", shake: 7 },
     buff: { cast: "gather", projectile: null, impact: null, shake: 0 },
+    // debuffs fly to the foe as a dim orb; the stat-drop effect itself is played by the 'debuff' event
+    debuff: { cast: "gather", projectile: "orb", impact: "burst", shake: 2 },
     ultimate: { cast: "charge", projectile: "orb", impact: "burst", shake: 14 }
   };
   var SKILL_VFX = {
@@ -9353,8 +9676,8 @@ input[type="text"].wiki-search {
     }
     pos(side) {
       var _a;
-      const p2 = ((_a = this.stage) == null ? void 0 : _a.pos) ? this.stage.pos(side) : null;
-      return p2 || { x: 0, y: 0 };
+      const p = ((_a = this.stage) == null ? void 0 : _a.pos) ? this.stage.pos(side) : null;
+      return p || { x: 0, y: 0 };
     }
     shake(amt) {
       var _a;
@@ -9491,31 +9814,31 @@ input[type="text"].wiki-search {
     }
     /** PROJECTILE beat: launch `def.projectile` from A to B. */
     playProjectileVFX(def, from, to, opts = {}) {
-      const p2 = def.projectile;
-      if (!p2) return null;
+      const p = def.projectile;
+      if (!p) return null;
       const pal2 = paletteFor(def.element);
-      const dur = p2.dur ?? 0.24;
+      const dur = p.dur ?? 0.24;
       const proj = {
-        style: p2.style || "orb",
+        style: p.style || "orb",
         def,
         pal: pal2,
         from: { x: from.x, y: from.y - 58 },
         to: { x: to.x, y: to.y - 58 },
         t: 0,
         dur,
-        spin: p2.spin || 0,
-        big: !!p2.big,
-        tint: p2.tint || def.element,
+        spin: p.spin || 0,
+        big: !!p.big,
+        tint: p.tint || def.element,
         side: opts.side,
         target: opts.target,
         crit: opts.crit,
         amount: opts.amount,
         effectiveness: opts.effectiveness,
-        trail: p2.trail || null,
+        trail: p.trail || null,
         acc: 0,
         rot: 0,
         arrived: false,
-        arc: p2.style === "wave" || p2.style === "orb" ? rand(60, 110) : rand(20, 60)
+        arc: p.style === "wave" || p.style === "orb" ? rand(60, 110) : rand(20, 60)
       };
       this.projectiles.push(proj);
       this.launchPuff(proj);
@@ -10074,14 +10397,14 @@ input[type="text"].wiki-search {
     }
     /** Snaps any projectile from `side` to its target (called on the damage beat). */
     finishProjectiles(side, info = {}) {
-      for (const p2 of this.projectiles) {
-        if (p2.arrived) continue;
-        if (side && p2.side && p2.side !== side) continue;
-        p2.arrived = true;
-        p2.t = p2.dur;
-        this.launchImpact(p2, info);
+      for (const p of this.projectiles) {
+        if (p.arrived) continue;
+        if (side && p.side && p.side !== side) continue;
+        p.arrived = true;
+        p.t = p.dur;
+        this.launchImpact(p, info);
       }
-      if (this.projectiles.length) this.projectiles = this.projectiles.filter((p2) => !p2.arrived);
+      if (this.projectiles.length) this.projectiles = this.projectiles.filter((p) => !p.arrived);
     }
     /** A dodged attack: the projectile dissipates instead of detonating. */
     whiff(targetSide) {
@@ -10126,19 +10449,19 @@ input[type="text"].wiki-search {
       this.time += dt;
       this.ps.update(dt);
       for (let i = this.projectiles.length - 1; i >= 0; i--) {
-        const p2 = this.projectiles[i];
-        p2.t += dt;
-        p2.rot += (p2.spin || 6) * dt;
-        p2.acc += dt;
-        const k = Math.min(1, p2.t / p2.dur);
-        p2.x = p2.from.x + (p2.to.x - p2.from.x) * k;
-        p2.y = p2.from.y + (p2.to.y - p2.from.y) * k - Math.sin(k * Math.PI) * p2.arc;
-        this.spawnTrail(p2, dt, k);
-        if (k >= 1 && !p2.arrived) {
-          p2.arrived = true;
-          this.launchImpact(p2, {});
+        const p = this.projectiles[i];
+        p.t += dt;
+        p.rot += (p.spin || 6) * dt;
+        p.acc += dt;
+        const k = Math.min(1, p.t / p.dur);
+        p.x = p.from.x + (p.to.x - p.from.x) * k;
+        p.y = p.from.y + (p.to.y - p.from.y) * k - Math.sin(k * Math.PI) * p.arc;
+        this.spawnTrail(p, dt, k);
+        if (k >= 1 && !p.arrived) {
+          p.arrived = true;
+          this.launchImpact(p, {});
         }
-        if (p2.arrived) {
+        if (p.arrived) {
           this.projectiles[i] = this.projectiles[this.projectiles.length - 1];
           this.projectiles.pop();
         }
@@ -10154,20 +10477,20 @@ input[type="text"].wiki-search {
       if (this.screen.flash > 0) this.screen.flash = Math.max(0, this.screen.flash - dt * 2.2);
       if (this.screen.pulse > 0) this.screen.pulse = Math.max(0, this.screen.pulse - dt * 2.4);
     }
-    launchImpact(p2, info) {
-      const at = { x: p2.to.x, y: p2.to.y + 58 };
-      const crit = info.crit ?? p2.crit;
-      this.playImpactVFX(p2.def, at, { crit, scale: info.scale ?? 1, effectiveness: p2.effectiveness });
+    launchImpact(p, info) {
+      const at = { x: p.to.x, y: p.to.y + 58 };
+      const crit = info.crit ?? p.crit;
+      this.playImpactVFX(p.def, at, { crit, scale: info.scale ?? 1, effectiveness: p.effectiveness });
     }
-    launchPuff(p2) {
-      const pal2 = p2.pal;
-      const dx = p2.to.x - p2.from.x, dy = p2.to.y - p2.from.y;
+    launchPuff(p) {
+      const pal2 = p.pal;
+      const dx = p.to.x - p.from.x, dy = p.to.y - p.from.y;
       const L = Math.hypot(dx, dy) || 1;
-      const n = p2.big ? 10 : 6;
+      const n = p.big ? 10 : 6;
       for (let i = 0; i < n; i++) {
         this.ps.spawn({
-          x: p2.from.x,
-          y: p2.from.y,
+          x: p.from.x,
+          y: p.from.y,
           vx: dx / L * rand(-40, 60) + rand(-40, 40),
           vy: dy / L * rand(-40, 60) + rand(-40, 40),
           gravity: 0,
@@ -10175,25 +10498,25 @@ input[type="text"].wiki-search {
           size: rand(2.5, 6),
           sizeEnd: 0,
           life: rand(0.14, 0.3),
-          shape: p2.tint === "fire" ? "spark" : p2.tint === "water" ? "droplet" : "leaf",
+          shape: p.tint === "fire" ? "spark" : p.tint === "water" ? "droplet" : "leaf",
           color: pal2.mid,
           color2: pal2.deep,
-          additive: p2.tint === "fire",
+          additive: p.tint === "fire",
           rot: rand(0, TAU2),
           rotSpeed: rand(-8, 8)
         });
       }
     }
-    spawnTrail(p2, dt, k) {
-      if (!p2.trail) return;
-      const step = p2.big ? 0.012 : 0.022;
-      if (p2.acc < step) return;
-      p2.acc = 0;
-      const pal2 = p2.pal;
-      const jitter = p2.big ? 12 : 7;
+    spawnTrail(p, dt, k) {
+      if (!p.trail) return;
+      const step = p.big ? 0.012 : 0.022;
+      if (p.acc < step) return;
+      p.acc = 0;
+      const pal2 = p.pal;
+      const jitter = p.big ? 12 : 7;
       const cfg = {
-        x: p2.x + rand(-jitter, jitter),
-        y: p2.y + rand(-jitter, jitter),
+        x: p.x + rand(-jitter, jitter),
+        y: p.y + rand(-jitter, jitter),
         vx: rand(-30, 30),
         vy: rand(-30, 30),
         drag: 1.4,
@@ -10203,13 +10526,13 @@ input[type="text"].wiki-search {
         rot: rand(0, TAU2),
         rotSpeed: rand(-9, 9)
       };
-      if (p2.trail === "ember") {
+      if (p.trail === "ember") {
         this.ps.spawn({ ...cfg, vy: -rand(20, 90), gravity: -60, shape: "spark", color: Math.random() < 0.5 ? pal2.mid : pal2.core, additive: true, stretch: 1.4 });
-      } else if (p2.trail === "droplet") {
+      } else if (p.trail === "droplet") {
         this.ps.spawn({ ...cfg, gravity: 260, shape: "droplet", color: pal2.core, color2: pal2.mid, additive: false });
-      } else if (p2.trail === "leaf") {
+      } else if (p.trail === "leaf") {
         this.ps.spawn({ ...cfg, gravity: 180, shape: "leaf", color: pal2.mid, color2: pal2.core, additive: false, wobble: 3 });
-      } else if (p2.trail === "wind") {
+      } else if (p.trail === "wind") {
         this.ps.spawn({ ...cfg, gravity: 0, shape: "streak", color: pal2.glow, additive: true, sy: 0.5 });
       } else {
         this.ps.spawn({ ...cfg, gravity: 40, shape: "spark", color: pal2.core, additive: true });
@@ -10219,19 +10542,19 @@ input[type="text"].wiki-search {
     }
     // ------------------------------------------------------------ rendering
     render(ctx) {
-      for (const p2 of this.projectiles) this.renderProjectile(ctx, p2);
+      for (const p of this.projectiles) this.renderProjectile(ctx, p);
       this.ps.render(ctx);
     }
-    renderProjectile(ctx, p2) {
-      const pal2 = p2.pal;
-      const k = Math.min(1, p2.t / p2.dur);
-      const dx = p2.to.x - p2.from.x, dy = p2.to.y - p2.from.y;
+    renderProjectile(ctx, p) {
+      const pal2 = p.pal;
+      const k = Math.min(1, p.t / p.dur);
+      const dx = p.to.x - p.from.x, dy = p.to.y - p.from.y;
       const ang = Math.atan2(dy, dx);
       ctx.save();
-      ctx.translate(p2.x, p2.y);
-      switch (p2.style) {
+      ctx.translate(p.x, p.y);
+      switch (p.style) {
         case "orb": {
-          const r = (p2.big ? 26 : 15) * (0.7 + 0.3 * Math.sin(p2.t * 30));
+          const r = (p.big ? 26 : 15) * (0.7 + 0.3 * Math.sin(p.t * 30));
           ctx.globalCompositeOperation = "lighter";
           ctx.fillStyle = this.ps.radial(ctx, r * 2.4, pal2.core, "rgba(0,0,0,0)");
           ctx.beginPath();
@@ -10248,7 +10571,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "fireball": {
-          const r = (p2.big ? 30 : 20) * (0.85 + 0.15 * Math.sin(p2.t * 24));
+          const r = (p.big ? 30 : 20) * (0.85 + 0.15 * Math.sin(p.t * 24));
           ctx.globalCompositeOperation = "lighter";
           ctx.fillStyle = this.ps.radial(ctx, r * 2.2, pal2.glow, "rgba(0,0,0,0)");
           ctx.beginPath();
@@ -10266,7 +10589,7 @@ input[type="text"].wiki-search {
         }
         case "spear": {
           ctx.rotate(ang);
-          const L = p2.big ? 64 : 46, w = p2.big ? 9 : 6;
+          const L = p.big ? 64 : 46, w = p.big ? 9 : 6;
           ctx.fillStyle = pal2.deep;
           ctx.beginPath();
           ctx.moveTo(L * 0.5, 0);
@@ -10305,7 +10628,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "leafDisc": {
-          ctx.rotate(p2.rot);
+          ctx.rotate(p.rot);
           const r = 13;
           ctx.fillStyle = pal2.mid;
           ctx.beginPath();
@@ -10330,27 +10653,27 @@ input[type="text"].wiki-search {
         }
         case "vine": {
           const t = k;
-          const ax = p2.from.x - p2.x, ay = p2.from.y - p2.y;
+          const ax = p.from.x - p.x, ay = p.from.y - p.y;
           ctx.rotate(ang);
-          const L = Math.hypot(p2.to.x - p2.from.x, p2.to.y - p2.from.y);
+          const L = Math.hypot(p.to.x - p.from.x, p.to.y - p.from.y);
           ctx.strokeStyle = pal2.deep;
           ctx.lineWidth = 7;
           ctx.lineCap = "round";
           ctx.beginPath();
           ctx.moveTo(-L * t, 0);
-          ctx.quadraticCurveTo(-L * t * 0.5, Math.sin(p2.t * 22) * 16, 0, 0);
+          ctx.quadraticCurveTo(-L * t * 0.5, Math.sin(p.t * 22) * 16, 0, 0);
           ctx.stroke();
           ctx.strokeStyle = pal2.mid;
           ctx.lineWidth = 3.4;
           ctx.beginPath();
           ctx.moveTo(-L * t, 0);
-          ctx.quadraticCurveTo(-L * t * 0.5, Math.sin(p2.t * 22) * 16, 0, 0);
+          ctx.quadraticCurveTo(-L * t * 0.5, Math.sin(p.t * 22) * 16, 0, 0);
           ctx.stroke();
           ctx.fillStyle = pal2.core;
           for (let i = 1; i <= 3; i++) {
             const f = i / 4;
             ctx.beginPath();
-            ctx.ellipse(-L * t * (1 - f), Math.sin(p2.t * 22 + i) * 10, 5, 2.4, 0.5, 0, TAU2);
+            ctx.ellipse(-L * t * (1 - f), Math.sin(p.t * 22 + i) * 10, 5, 2.4, 0.5, 0, TAU2);
             ctx.fill();
           }
           void ax;
@@ -10358,7 +10681,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "wave": {
-          const w = p2.big ? 84 : 54, h = p2.big ? 40 : 26;
+          const w = p.big ? 84 : 54, h = p.big ? 40 : 26;
           ctx.fillStyle = pal2.mid;
           ctx.beginPath();
           ctx.moveTo(-w, 6);
@@ -10376,20 +10699,20 @@ input[type="text"].wiki-search {
           break;
         }
         case "whirl": {
-          ctx.rotate(p2.rot);
+          ctx.rotate(p.rot);
           ctx.strokeStyle = pal2.mid;
           ctx.lineWidth = 5;
           ctx.lineCap = "round";
           for (let i = 0; i < 3; i++) {
             ctx.globalAlpha = 0.9 - i * 0.2;
             ctx.beginPath();
-            ctx.arc(0, 0, (p2.big ? 26 : 18) - i * 5, i * 2.1, i * 2.1 + 4.2);
+            ctx.arc(0, 0, (p.big ? 26 : 18) - i * 5, i * 2.1, i * 2.1 + 4.2);
             ctx.stroke();
           }
           break;
         }
         case "cyclone": {
-          ctx.rotate(p2.rot * 0.4);
+          ctx.rotate(p.rot * 0.4);
           ctx.strokeStyle = pal2.mid;
           ctx.lineWidth = 4;
           ctx.lineCap = "round";
@@ -10402,7 +10725,7 @@ input[type="text"].wiki-search {
           break;
         }
         case "flameCone": {
-          const L = Math.hypot(p2.to.x - p2.from.x, p2.to.y - p2.from.y) * Math.min(1, k * 1.4);
+          const L = Math.hypot(p.to.x - p.from.x, p.to.y - p.from.y) * Math.min(1, k * 1.4);
           ctx.rotate(ang);
           ctx.globalCompositeOperation = "lighter";
           const layers = [
@@ -10410,14 +10733,14 @@ input[type="text"].wiki-search {
             { c: pal2.mid, s: 0.66, a: 0.75 },
             { c: pal2.core, s: 0.32, a: 0.95 }
           ];
-          const h = p2.big ? 46 : 30;
+          const h = p.big ? 46 : 30;
           for (const Ly of layers) {
             ctx.globalAlpha = Ly.a;
             ctx.fillStyle = Ly.c;
             ctx.beginPath();
             ctx.moveTo(-L, 0);
-            ctx.quadraticCurveTo(-L * 0.5, -h * Ly.s * (0.7 + 0.4 * Math.sin(p2.t * 26)), 0, -h * 0.16 * Ly.s);
-            ctx.quadraticCurveTo(-L * 0.5, h * Ly.s * (0.7 + 0.4 * Math.cos(p2.t * 24)), -L, 0);
+            ctx.quadraticCurveTo(-L * 0.5, -h * Ly.s * (0.7 + 0.4 * Math.sin(p.t * 26)), 0, -h * 0.16 * Ly.s);
+            ctx.quadraticCurveTo(-L * 0.5, h * Ly.s * (0.7 + 0.4 * Math.cos(p.t * 24)), -L, 0);
             ctx.closePath();
             ctx.fill();
           }
@@ -10425,10 +10748,10 @@ input[type="text"].wiki-search {
         }
         case "petalStorm":
         case "leafStorm": {
-          ctx.rotate(p2.rot);
+          ctx.rotate(p.rot);
           ctx.fillStyle = pal2.mid;
           for (let i = 0; i < 5; i++) {
-            const a = i / 5 * TAU2 + p2.t * 9;
+            const a = i / 5 * TAU2 + p.t * 9;
             ctx.globalAlpha = 0.9;
             ctx.beginPath();
             ctx.ellipse(Math.cos(a) * 16, Math.sin(a) * 11, 7, 3, a, 0, TAU2);
@@ -10485,7 +10808,7 @@ input[type="text"].wiki-search {
         default: {
           ctx.globalCompositeOperation = "lighter";
           ctx.rotate(ang);
-          ctx.strokeStyle = p2.tint === "fire" ? pal2.glow : p2.tint === "nature" ? pal2.glow : "#ffffff";
+          ctx.strokeStyle = p.tint === "fire" ? pal2.glow : p.tint === "nature" ? pal2.glow : "#ffffff";
           ctx.lineWidth = 3;
           ctx.lineCap = "round";
           ctx.globalAlpha = 0.7 * (1 - k * 0.6);
@@ -10711,30 +11034,60 @@ input[type="text"].wiki-search {
     setTimeout(() => t.remove(), 2300);
   }
   var activeModalClose = null;
+  var activeModalFinish = null;
+  function modalLayerVisible() {
+    const layer = document.getElementById("modal");
+    return !!layer && !layer.classList.contains("hidden");
+  }
   function modalOpen() {
-    return !!activeModalClose;
+    if (!activeModalClose) return false;
+    if (!modalLayerVisible()) {
+      activeModalClose = null;
+      activeModalFinish = null;
+      return false;
+    }
+    return true;
   }
   function dismissModal() {
-    if (!activeModalClose) return false;
+    if (!modalOpen()) return false;
     AudioManager.sfx("cancel");
     activeModalClose();
     return true;
   }
+  function closeModal(value) {
+    if (activeModalFinish) {
+      activeModalFinish(value);
+      return true;
+    }
+    const layer = document.getElementById("modal");
+    if (layer) {
+      layer.classList.add("hidden");
+      layer.innerHTML = "";
+    }
+    activeModalClose = null;
+    return false;
+  }
   function modal({ title, body, buttons, dismissible = true, cancelValue, wide = false, scroll = true }) {
     return new Promise((resolve) => {
+      if (activeModalFinish) activeModalFinish(void 0);
       const layer = document.getElementById("modal");
       layer.innerHTML = "";
       layer.classList.remove("hidden");
       const btns = buttons || [{ label: "OK", value: true, primary: true }];
+      let settled = false;
       const close = (v) => {
+        if (settled) return;
+        settled = true;
         layer.classList.add("hidden");
         layer.innerHTML = "";
         if (activeModalClose === dismiss) activeModalClose = null;
+        if (activeModalFinish === close) activeModalFinish = null;
         resolve(v);
       };
       const fallback = cancelValue !== void 0 ? cancelValue : (btns.find((b) => !b.primary) || {}).value ?? false;
       const dismiss = () => close(fallback);
-      if (dismissible) activeModalClose = dismiss;
+      activeModalClose = dismissible ? dismiss : null;
+      activeModalFinish = close;
       const box = el("div", { class: `modal panel ${wide ? "wide" : ""}` }, [
         el("div", { class: "panel-head" }, [
           el("div", { class: "panel-head-text" }, [el("h3", { text: title || "" })]),
@@ -11106,29 +11459,27 @@ input[type="text"].wiki-search {
         return;
       }
       if (b.phase !== BattlePhase.ACTIVE) return;
-      const p2 = b.player;
-      const mk = (slot) => {
-        const sk = equippedSkill(p2, slot);
-        if (!sk) return button("\u2014", { class: `action-btn ${slot}`, disabled: true });
-        const left = usesLeft(p2, sk.id);
+      const p = b.player;
+      const mk = (index) => {
+        const sk = equippedSkill(p, index);
+        if (!sk) {
+          const empty = button("", { class: "action-btn empty", disabled: true });
+          empty.innerHTML = `<div class="ab-name"><span class="slot-badge dim">${index + 1}</span><span>\u2014</span></div><small>Empty \xB7 equip in the Skill Library</small>`;
+          return empty;
+        }
+        const left = usesLeft(p, sk.id);
         const disabled = Number.isFinite(left) && left <= 0;
-        const power = sk.category === "buff" ? buffSummary(sk, " ") : `PWR ${sk.power} \xB7 ${sk.damageType === "physical" ? "P.ATK" : "S.ATK"}`;
-        const glyph = sk.element || (sk.category === "buff" ? "shield" : "strike");
-        const btn = button("", { class: `action-btn ${slot}`, disabled, onclick: () => this.doAction({ type: "skill", slot }) });
-        btn.innerHTML = `<div class="ab-name">${iconSvg(glyph, sk.element || "")}<span>${sk.name}</span></div><small>${power} \xB7 ${Number.isFinite(left) ? `${left} uses` : `${iconSvg("infinity", "tiny")} unlimited`}</small>`;
-        btn.title = sk.desc;
+        const power = isDamageSkill(sk) ? `PWR ${sk.power} \xB7 ${sk.damageType === "physical" ? "P.ATK" : "S.ATK"}` : `${buffSummary(sk, " ")} ${sk.category === "debuff" ? "foe" : "self"}`;
+        const glyph = sk.element || (sk.category === "buff" ? "shield" : sk.category === "debuff" ? "down" : "strike");
+        const btn = button("", { class: `action-btn ${sk.category}`, disabled, onclick: () => this.doAction({ type: "skill", index }) });
+        btn.innerHTML = `<div class="ab-name"><span class="slot-badge">${index + 1}</span>${iconSvg(glyph, sk.element || "")}<span>${sk.name}</span></div><small>${power} \xB7 ${Number.isFinite(left) ? `${left} uses` : `${iconSvg("infinity", "tiny")} unlimited`}</small>`;
+        btn.title = `[${index + 1}] ${sk.desc}`;
         return btn;
       };
-      const slotsUsable = ["normal", "special", "buff"].some((slot) => {
-        const sk = equippedSkill(p2, slot);
-        if (!sk) return false;
-        const left = usesLeft(p2, sk.id);
-        return !Number.isFinite(left) || left > 0;
-      });
-      if (slotsUsable) {
-        this.actions.append(mk("normal"), mk("special"), mk("buff"));
+      if (this.anySkillUsable()) {
+        for (let i = 0; i < MAX_EQUIPPED_SKILLS; i++) this.actions.appendChild(mk(i));
       } else {
-        const basic = basicAttack(p2);
+        const basic = basicAttack(p);
         const btn = button("", {
           class: "action-btn basic",
           onclick: () => this.doAction({ type: "skill", skillId: basic.id })
@@ -11138,17 +11489,17 @@ input[type="text"].wiki-search {
         btn.style.gridColumn = "1/-1";
         this.actions.appendChild(btn);
       }
-      const ult = ultimateMove(p2);
-      const unlocked = ultimateUnlocked(p2);
-      const ready = unlocked && p2.ultCharge >= ULTIMATE_MAX_CHARGE;
+      const ult = ultimateMove(p);
+      const unlocked = ultimateUnlocked(p);
+      const ready = unlocked && p.ultCharge >= ULTIMATE_MAX_CHARGE;
       const ultBtn = button("", {
         class: `action-btn ultimate ${ready ? "ready" : ""}`,
         disabled: !ready,
         sfx: "ultimate-ready",
         onclick: () => this.doAction({ type: "ultimate" })
       });
-      ultBtn.innerHTML = unlocked ? `<div class="ab-name">${iconSvg("ultimate")}<span>${ult.name}</span></div><small>${p2.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? "\u2014 READY" : "charge"}</small>` : `<div class="ab-name">${iconSvg("lock")}<span>ULTIMATE</span></div><small>Unlocks at Lv.10</small>`;
-      const fill = el("div", { class: "ult-fill", style: { width: `${p2.ultCharge / ULTIMATE_MAX_CHARGE * 100}%` } });
+      ultBtn.innerHTML = unlocked ? `<div class="ab-name">${iconSvg("ultimate")}<span>${ult.name}</span></div><small>${p.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? "\u2014 READY" : "charge"}</small>` : `<div class="ab-name">${iconSvg("lock")}<span>ULTIMATE</span></div><small>Unlocks at Lv.10</small>`;
+      const fill = el("div", { class: "ult-fill", style: { width: `${p.ultCharge / ULTIMATE_MAX_CHARGE * 100}%` } });
       ultBtn.appendChild(fill);
       this.actions.appendChild(ultBtn);
       const itemBtn = button("", { class: "ghost", onclick: () => this.openItems() });
@@ -11165,10 +11516,37 @@ input[type="text"].wiki-search {
       catchBtn.appendChild(iconLabel("orb", "CATCH"));
       catchBtn.title = this.battle.type === BattleType.WILD ? "You must defeat the wild Mythling before catching it." : "You cannot catch another trainer's Mythling.";
       this.actions.appendChild(catchBtn);
-      const wild = this.battle.type === BattleType.WILD;
-      const runBtn = button("", { class: "ghost", disabled: !wild, onclick: () => this.doAction({ type: "run" }) });
-      runBtn.appendChild(iconLabel(wild ? "run" : "block", wild ? "RUN" : "NO ESCAPE"));
+      const runBtn = button("", { class: "ghost", disabled: !this.battle.canRun, onclick: () => this.doAction({ type: "run" }) });
+      runBtn.appendChild(iconLabel("run", "RUN"));
+      runBtn.title = this.battle.type === BattleType.TRAINER ? "Walk away from this trainer battle \u2014 it always succeeds. The trainer can be challenged again later." : "Leave the battle \u2014 it always succeeds.";
       this.actions.appendChild(runBtn);
+    }
+    /** Can any equipped skill still be used? (Otherwise the fallback attack is offered.) */
+    anySkillUsable() {
+      var _a;
+      const p = (_a = this.battle) == null ? void 0 : _a.player;
+      if (!p) return false;
+      return equippedSkills(p).some(({ id }) => {
+        const left = usesLeft(p, id);
+        return !Number.isFinite(left) || left > 0;
+      });
+    }
+    /** Keyboard 1 / 2 / 3: use the skill on that battle button (ignored when it is empty or spent). */
+    pressSlot(index) {
+      if (this.busy || !this.battle || this.battle.phase !== BattlePhase.ACTIVE) return;
+      const p = this.battle.player;
+      if (!this.anySkillUsable()) {
+        if (index === 0) this.doAction({ type: "skill", skillId: basicAttack(p).id });
+        return;
+      }
+      const sk = equippedSkill(p, index);
+      if (!sk) return;
+      const left = usesLeft(p, sk.id);
+      if (Number.isFinite(left) && left <= 0) {
+        toast(`${sk.name} has no uses left!`, "bad");
+        return;
+      }
+      this.doAction({ type: "skill", index });
     }
     renderCaptureActions() {
       const b = this.battle;
@@ -11274,56 +11652,60 @@ input[type="text"].wiki-search {
         return;
       }
       const list = el("div", {});
-      let chosen = null;
-      const close = await new Promise((resolve) => {
-        usable.forEach((entry) => {
-          list.appendChild(el("div", { class: "item-row" }, [
-            el("div", { class: "ir-main" }, [
-              el("div", { class: "ir-name", text: entry.item.name }),
-              el("div", { class: "ir-desc", text: entry.item.desc })
-            ]),
-            el("div", { class: "ir-qty", text: `x${entry.qty}` }),
-            button("USE", { class: "small primary", onclick: () => {
-              chosen = entry.id;
-              resolve(true);
-              document.getElementById("modal").classList.add("hidden");
-            } })
-          ]));
-        });
-        modal({ title: "BAG \u2014 HEALING", body: list, buttons: [{ label: "CANCEL", value: false }] }).then(() => resolve(false));
+      usable.forEach((entry) => {
+        list.appendChild(el("div", { class: "item-row" }, [
+          el("div", { class: "ir-main" }, [
+            el("div", { class: "ir-name", text: entry.item.name }),
+            el("div", { class: "ir-desc", text: entry.item.desc })
+          ]),
+          el("div", { class: "ir-qty", text: `x${entry.qty}` }),
+          button("USE", { class: "small primary", onclick: () => closeModal(entry.id) })
+        ]));
       });
-      if (!chosen) return;
-      const target = await this.pickPartyMember("Use on which Mythling?");
+      const chosen = await modal({ title: "BAG \u2014 HEALING", body: list, buttons: [{ label: "CANCEL", value: false }], cancelValue: false });
+      if (!chosen || typeof chosen !== "string") return;
+      const item = getItem(chosen);
+      const target = await this.pickPartyMember("Use on which Mythling?", () => true, (m) => {
+        const dry2 = applyItemEffects(item, m, { dryRun: true });
+        return dry2.ok ? null : dry2.reason;
+      });
       if (!target) return;
-      InventoryManager.remove(chosen, 1);
+      const dry = applyItemEffects(item, target, { dryRun: true });
+      if (!dry.ok) {
+        toast(dry.reason, "bad");
+        AudioManager.sfx("cancel");
+        return;
+      }
+      if (!InventoryManager.remove(chosen, 1)) {
+        toast(`You have no ${item.name} left!`, "bad");
+        return;
+      }
       this.doAction({ type: "item", itemId: chosen, targetUid: target.uid });
     }
-    async pickPartyMember(title, filterFn = () => true) {
+    /**
+     * Party picker. `filterFn` greys out Mythlings that cannot be chosen and
+     * `noteFn` (optional) returns a warning line per Mythling. Cards close the
+     * modal through closeModal() so the dismiss handle is always cleared.
+     */
+    async pickPartyMember(title, filterFn = () => true, noteFn = null) {
       const list = el("div", { class: "grid-cards" });
-      return new Promise((resolve) => {
-        let done = false;
-        const finish = (v) => {
-          if (done) return;
-          done = true;
-          document.getElementById("modal").classList.add("hidden");
-          document.getElementById("modal").innerHTML = "";
-          resolve(v);
-        };
-        PartyManager.list().forEach((m) => {
-          const ok = filterFn(m);
-          const card = el("div", { class: `myth-card ${isFainted(m) ? "fainted" : ""}`, style: ok ? {} : { opacity: 0.45, pointerEvents: "none" } }, [
-            this.miniCanvas(m),
-            el("div", { class: "mc-main" }, [
-              el("div", { class: "mc-name", text: displayName(m) }),
-              el("div", { class: "mc-sub", text: `Lv.${m.level} \xB7 ${m.currentHp}/${maxHp(m)} HP` }),
-              bar("hp", hpPercent(m), hpClass(hpPercent(m)))
-            ])
-          ]);
-          card.addEventListener("click", () => finish(m));
-          list.appendChild(card);
-        });
-        modal({ title, body: list, buttons: [{ label: "CANCEL", value: null }] }).then(() => finish(null));
+      PartyManager.list().forEach((m) => {
+        const ok = filterFn(m);
+        const note2 = noteFn ? noteFn(m) : null;
+        const card = el("div", { class: `myth-card ${isFainted(m) ? "fainted" : ""}`, style: ok ? {} : { opacity: 0.45, pointerEvents: "none" } }, [
+          this.miniCanvas(m),
+          el("div", { class: "mc-main" }, [
+            el("div", { class: "mc-name", text: displayName(m) }),
+            el("div", { class: "mc-sub", text: `Lv.${m.level} \xB7 ${m.currentHp}/${maxHp(m)} HP` }),
+            bar("hp", hpPercent(m), hpClass(hpPercent(m))),
+            note2 ? el("div", { class: "mc-sub feed-note", text: note2 }) : null
+          ])
+        ]);
+        card.addEventListener("click", () => closeModal(m));
+        list.appendChild(card);
       });
+      const v = await modal({ title, body: list, buttons: [{ label: "CANCEL", value: null }], cancelValue: null });
+      return v && v.uid ? v : null;
     }
     async openSwitch() {
       const current = this.battle.player;
@@ -11368,12 +11750,12 @@ input[type="text"].wiki-search {
       const a = this.anim[side];
       if (!a || !a.anim || a.anim === "battleIdle") return null;
       if (a.hold) return 1;
-      const p2 = (this.time - a.animT0) / (a.animDur || 0.6);
-      if (p2 >= 1) {
+      const p = (this.time - a.animT0) / (a.animDur || 0.6);
+      if (p >= 1) {
         a.anim = "battleIdle";
         return 1;
       }
-      return p2;
+      return p;
     }
     /** What to hand to drawMythling for one side. */
     creaturePose(side) {
@@ -11414,7 +11796,7 @@ input[type="text"].wiki-search {
           break;
         case "cast": {
           AudioManager.sfx(ev.kind === "buff" ? "heal" : "click");
-          if (ev.kind === "buff") this.playCreatureAnim(ev.side, "buff", 0.9);
+          if (ev.kind === "buff" || ev.kind === "debuff") this.playCreatureAnim(ev.side, "buff", 0.9);
           else {
             const dur = ev.category === "special" ? 0.85 : 0.55;
             this.playCreatureAnim(ev.side, ev.category === "special" ? "specialAttack" : "normalAttack", dur);
@@ -11426,7 +11808,7 @@ input[type="text"].wiki-search {
             element: ev.element,
             category: ev.category
           });
-          await wait(ev.kind === "buff" ? 260 : 230);
+          await wait(ev.kind === "buff" || ev.kind === "debuff" ? 260 : 230);
           break;
         }
         case "ultimate-cast": {
@@ -11655,8 +12037,8 @@ input[type="text"].wiki-search {
     screenPos(side) {
       const dpr = this.dpr;
       const W = this.canvas.width / dpr, H = this.canvas.height / dpr;
-      const p2 = SLOT_POS[side];
-      return { x: p2.x * W, y: p2.y * H };
+      const p = SLOT_POS[side];
+      return { x: p.x * W, y: p.y * H };
     }
     /**
      * @param {string} kind '' | 'big' (special) | 'crit' | 'ult' | 'buff'
@@ -11675,12 +12057,12 @@ input[type="text"].wiki-search {
       setTimeout(() => n.remove(), cls === "ult" ? 1500 : 1100);
     }
     async captureAnimation() {
-      const p2 = this.screenPos("enemy");
+      const p = this.screenPos("enemy");
       for (let i = 0; i < 14; i++) {
         this.anim.enemy.alpha = 1 - i / 18;
         this.particles.push({
-          x: p2.x,
-          y: p2.y - 60,
+          x: p.x,
+          y: p.y - 60,
           vx: (Math.random() - 0.5) * 70,
           vy: -60 - Math.random() * 40,
           life: 0.7,
@@ -11758,24 +12140,24 @@ input[type="text"].wiki-search {
         const a = this.anim[side];
         if (a && a.flash > 0) a.flash = Math.max(0, a.flash - dt * 3.6);
       }
-      for (const p2 of this.particles) {
-        if (p2.delay > 0) {
-          p2.delay -= dt;
+      for (const p of this.particles) {
+        if (p.delay > 0) {
+          p.delay -= dt;
           continue;
         }
-        if (p2.tx != null) {
-          p2.travel = Math.min(1, (p2.travel || 0) + dt * p2.speed);
-          p2.x += (p2.tx - p2.x) * p2.travel * 0.35;
-          p2.y += (p2.ty - p2.y) * p2.travel * 0.35;
-          if (p2.travel >= 1) p2.life -= dt * 2.4;
+        if (p.tx != null) {
+          p.travel = Math.min(1, (p.travel || 0) + dt * p.speed);
+          p.x += (p.tx - p.x) * p.travel * 0.35;
+          p.y += (p.ty - p.y) * p.travel * 0.35;
+          if (p.travel >= 1) p.life -= dt * 2.4;
         } else {
-          p2.x += p2.vx * dt;
-          p2.y += p2.vy * dt;
-          p2.vy += (p2.kind === "fire" ? -60 : 260) * dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += (p.kind === "fire" ? -60 : 260) * dt;
         }
-        p2.life -= dt;
+        p.life -= dt;
       }
-      this.particles = this.particles.filter((p2) => p2.life > 0);
+      this.particles = this.particles.filter((p) => p.life > 0);
       SkillVFX.update(dt);
     }
     render() {
@@ -11843,37 +12225,37 @@ input[type="text"].wiki-search {
       this.drawReadyAura(ctx, "player");
       this.drawReadyAura(ctx, "enemy");
       SkillVFX.render(ctx);
-      for (const p2 of this.particles) {
-        if (p2.delay > 0) continue;
-        const a = clamp(p2.life / p2.max, 0, 1);
+      for (const p of this.particles) {
+        if (p.delay > 0) continue;
+        const a = clamp(p.life / p.max, 0, 1);
         ctx.globalAlpha = a;
-        if (p2.kind === "leaf") {
+        if (p.kind === "leaf") {
           ctx.save();
-          ctx.translate(p2.x, p2.y);
-          ctx.rotate(this.time * 6 + p2.size);
-          ctx.fillStyle = p2.color;
+          ctx.translate(p.x, p.y);
+          ctx.rotate(this.time * 6 + p.size);
+          ctx.fillStyle = p.color;
           ctx.beginPath();
-          ctx.ellipse(0, 0, p2.size, p2.size * 0.45, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, p.size, p.size * 0.45, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
-        } else if (p2.kind === "water") {
-          ctx.fillStyle = p2.color;
+        } else if (p.kind === "water") {
+          ctx.fillStyle = p.color;
           ctx.beginPath();
-          ctx.ellipse(p2.x, p2.y, p2.size * 0.7, p2.size, 0, 0, Math.PI * 2);
+          ctx.ellipse(p.x, p.y, p.size * 0.7, p.size, 0, 0, Math.PI * 2);
           ctx.fill();
-        } else if (p2.kind === "fire") {
-          const g = ctx.createRadialGradient(p2.x, p2.y, 0, p2.x, p2.y, p2.size * 1.8);
+        } else if (p.kind === "fire") {
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 1.8);
           g.addColorStop(0, "#fff2b0");
-          g.addColorStop(0.5, p2.color);
+          g.addColorStop(0.5, p.color);
           g.addColorStop(1, "rgba(255,80,0,0)");
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(p2.x, p2.y, p2.size * 1.8, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          ctx.fillStyle = p2.color;
+          ctx.fillStyle = p.color;
           ctx.beginPath();
-          ctx.arc(p2.x, p2.y, p2.size * 0.6, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, p.size * 0.6, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -11892,15 +12274,15 @@ input[type="text"].wiki-search {
         water: { sky: ["#8fd8ff", "#d7f3ff"], ground: ["#f0e0b4", "#7fc4d8"], accent: "#3fa9f5" },
         fire: { sky: ["#5a1f18", "#ff9a4a"], ground: ["#5b3c34", "#33211d"], accent: "#ff7a3d" }
       };
-      const p2 = palettes[theme] || palettes.nature;
+      const p = palettes[theme] || palettes.nature;
       const sky = ctx.createLinearGradient(0, 0, 0, H * 0.7);
-      sky.addColorStop(0, p2.sky[0]);
-      sky.addColorStop(1, p2.sky[1]);
+      sky.addColorStop(0, p.sky[0]);
+      sky.addColorStop(1, p.sky[1]);
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, W, H);
       ctx.save();
       ctx.globalAlpha = 0.35;
-      ctx.fillStyle = p2.accent;
+      ctx.fillStyle = p.accent;
       for (let i = 0; i < 6; i++) {
         const x = i / 5 * W;
         const h = 90 + i * 53 % 90;
@@ -11913,8 +12295,8 @@ input[type="text"].wiki-search {
       }
       ctx.restore();
       const gr = ctx.createLinearGradient(0, H * 0.55, 0, H);
-      gr.addColorStop(0, p2.ground[0]);
-      gr.addColorStop(1, p2.ground[1]);
+      gr.addColorStop(0, p.ground[0]);
+      gr.addColorStop(1, p.ground[1]);
       ctx.fillStyle = gr;
       ctx.beginPath();
       ctx.moveTo(0, H * 0.62);
@@ -11926,7 +12308,7 @@ input[type="text"].wiki-search {
       const plat = (x, y, rx) => {
         ctx.save();
         ctx.globalAlpha = 0.45;
-        ctx.fillStyle = p2.accent;
+        ctx.fillStyle = p.accent;
         ctx.beginPath();
         ctx.ellipse(x, y, rx, rx * 0.22, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -12187,10 +12569,11 @@ input[type="text"].wiki-search {
       para(`After a successful hit, the attacker rolls its <b>Crit Chance</b>. On a crit the damage is
       multiplied by <code>1 + CritDamage/100</code>, the number floats in gold and the log shouts
       <b>CRITICAL HIT!</b>.`),
-      h3("Buffs & debuffs", "buff debuff stacks"),
+      h3("Buffs & debuffs", "buff debuff stacks lower"),
       bullets([
-        `Buff skills raise one stat at a time and stack up to <b>${MAX_BUFF_STACKS}</b> stacks per stat.`,
-        "Buffs are shown as chips on both combatant cards (\u25B2 up / \u25BC down, total and stacks).",
+        `<b>Buff</b> skills raise one of YOUR stats at a time and stack up to <b>${MAX_BUFF_STACKS}</b> stacks per stat.`,
+        `<b>Debuff</b> skills lower one of the FOE's stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed) \u2014 they always land, never miss, and also stack up to <b>${MAX_BUFF_STACKS}</b> times. Every species learns three.`,
+        "Buffs and debuffs are shown as chips on both combatant cards (\u25B2 up / \u25BC down, total and stacks). Neither grants Ultimate Charge.",
         "Some Special skills carry a rider that debuffs the target (for example Speed).",
         "All buffs and debuffs clear when the battle ends."
       ]),
@@ -12205,7 +12588,7 @@ input[type="text"].wiki-search {
       bullets([
         "When your Mythling faints, the next healthy one is sent out automatically \u2014 or you can switch yourself.",
         `Items and switching happen first in the turn, but the enemy still gets to act.`,
-        "You can only flee from <b>wild</b> battles; trainer battles have no escape.",
+        "<b>RUN is absolute:</b> you can flee <b>any</b> battle \u2014 wild <i>or</i> trainer \u2014 at any time, even mid-fight, and it <b>always</b> succeeds. The enemy gets no free hit. EXP already earned in that battle is kept; a trainer you walked away from can be challenged again.",
         `Losing all your Mythlings sends you back to the nearest Mythling Center and costs <b>${Math.round(DEFEAT_COIN_PENALTY * 100)}%</b> of your Wildcoins. Nothing else is lost.`
       ]),
       h3("Trainer battles", "trainer team party count"),
@@ -12258,56 +12641,67 @@ input[type="text"].wiki-search {
   }
   function skillsSection() {
     const owners = {};
+    const learnLevels = {};
     for (const sp of Object.values(SPECIES)) {
       for (const lv of Object.keys(sp.skillUnlocks)) {
         for (const sid of sp.skillUnlocks[lv]) {
           (owners[sid] = owners[sid] || []).push(`${sp.displayName} (Lv.${lv})`);
+          (learnLevels[sid] = learnLevels[sid] || /* @__PURE__ */ new Set()).add(Number(lv));
         }
       }
     }
-    const learnLevels = (sid) => {
-      const levels = /* @__PURE__ */ new Set();
-      for (const sp of Object.values(SPECIES)) {
-        for (const lv of Object.keys(sp.skillUnlocks)) {
-          if (sp.skillUnlocks[lv].includes(sid)) levels.add(Number(lv));
-        }
-      }
-      return [...levels].sort((a, b) => a - b);
-    };
-    const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat).map((s) => {
-      const meta = s.category === "buff" ? `${buffSummary(s, " ")} \xB7 ${s.uses} uses` : `Power <b>${s.power}</b> \xB7 ${s.damageType === "physical" ? "Physical (P.ATK)" : "Special (S.ATK)"}${s.element ? ` \xB7 ${ELEMENTS[s.element].name}` : ""} \xB7 ${Number.isFinite(s.uses) ? `${s.uses} uses` : "unlimited"}`;
-      const levels = learnLevels(s.id).map((lv) => `Lv.${lv}`).join(" \xB7 ") || "\u2014";
+    const firstLevel = (sid) => Math.min(...learnLevels[sid] ? [...learnLevels[sid]] : [Infinity]);
+    const levelsText = (sid) => [...learnLevels[sid] || []].sort((a, b) => a - b).map((lv) => `Lv.${lv}`).join(" \xB7 ") || "\u2014";
+    const byRank = (a, b) => firstLevel(a.id) - firstLevel(b.id) || skillStrength(a) - skillStrength(b) || a.name.localeCompare(b.name);
+    const skillRow = (s) => {
+      const meta = isDamageSkill(s) ? `Power <b>${s.power}</b> \xB7 ${s.damageType === "physical" ? "Physical (P.ATK)" : "Special (S.ATK)"}${s.element ? ` \xB7 ${ELEMENTS[s.element].name}` : ""} \xB7 ${Number.isFinite(s.uses) ? `${s.uses} uses` : "unlimited"}` : `<b>${buffSummary(s, " ")}</b> ${s.category === "debuff" ? "on the foe" : "on self"} \xB7 ${s.uses} uses`;
+      const lv = firstLevel(s.id);
       return [
-        `<b>${s.name}</b>${s.future ? ' <span class="wiki-dim">(future content)</span>' : ""}<br><span class="wiki-learn">Learned at ${levels}</span>`,
+        `<span class="wiki-learn">Lv.${Number.isFinite(lv) ? lv : "\u2014"}</span> <b>${s.name}</b> <span class="cat-tag ${s.category}">${SKILL_CATEGORY_LABEL[s.category]}</span><br><span class="wiki-learn">Learned at ${levelsText(s.id)}</span>`,
         `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` \xB7 ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT[s.debuff.stat]} by ${s.debuff.amount}` : ""}</span><br><span class="wiki-dim">Learned by: ${(owners[s.id] || ["\u2014"]).join(", ")}</span>`
       ];
-    });
+    };
+    const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat && s.id !== "struggle").sort(byRank).map(skillRow);
+    const allByLevel = Object.values(SKILLS).filter((s) => s.id !== "struggle" && learnLevels[s.id]).sort(byRank);
+    const ultRows = [];
+    for (const u of Object.values(ULTIMATES)) {
+      u.tiers.forEach((t, i) => ultRows.push({ u, t, i }));
+    }
+    ultRows.sort((a, b) => a.t.unlockLevel - b.t.unlockLevel || a.t.power - b.t.power || a.u.baseName.localeCompare(b.u.baseName));
+    const ultOwners = (uid2) => Object.values(SPECIES).filter((sp) => sp.ultimate === uid2).map((sp) => sp.displayName).join(", ") || "\u2014";
     return [
-      h3("Skill slots", "normal special buff equip slots"),
-      para(`Every Mythling has <b>three slots</b> and <b>any skill it has learned can go into any of them</b> \u2014
-      two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on.
-      Everything a Mythling ever learns stays in its <b>Skill Library</b> forever, and leaving a slot empty is
-      allowed (nothing refills it, and the choice is saved). The Ultimate is fixed to the species.`),
+      h3("Battle buttons & the Skill Library", "equip buttons library order loadout"),
+      para(`A Mythling takes <b>${MAX_EQUIPPED_SKILLS} skills</b> into battle \u2014 any mix of Normal, Special, Buff and Debuff,
+      there are no slot types. <b>The order you equip them in is the order of the battle buttons</b>: the first
+      skill you equip is button <b>1</b> (leftmost), the next is <b>2</b>, then <b>3</b> (keys 1 / 2 / 3). Unequip a
+      skill and the ones after it move up; \u25C0 \u25B6 in the library re-order them. Everything a Mythling ever learns stays
+      in its <b>Skill Library</b> forever, and leaving a button empty is allowed (nothing refills it, and the choice
+      is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
       bullets([
         "<b>Normal</b> skills have unlimited uses but low power \u2014 every evolution teaches a stronger one.",
         "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.",
-        "<b>Buff</b> skills raise one stat and never grant Ultimate Charge.",
+        "<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe's stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.",
+        "Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.",
         "If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn."
       ]),
+      h3("All skills by unlock level", "all skills level order list"),
+      para("Every learnable skill, from the earliest to the latest unlock. Within a level, weaker skills come before stronger ones."),
+      table(allByLevel.map(skillRow), "skill level learned at rank"),
       h3("Normal skills", "normal unlimited bite scratch peck"),
       table(catRows("normal"), "normal skill level learned at"),
       h3("Special skills", "special elemental power uses"),
       table(catRows("special"), "special skill level learned at"),
       h3("Buff skills", "buff raise stat stacks"),
       table(catRows("buff"), "buff skill level learned at"),
-      h3("Ultimates", "ultimate charge tier"),
-      table(Object.values(ULTIMATES).map((u) => [
-        `<b>${u.baseName}</b>`,
-        `${ELEMENTS[u.element].name} \xB7 ${u.damageType === "physical" ? "Physical" : "Special"} \xB7 ` + u.tiers.map((t) => `${t.suffix ? `Tier${t.suffix}` : "Base"} PWR ${t.power} (Lv.${t.unlockLevel}${t.future ? ", future" : ""})`).join(" \xB7 ") + `<br><span class="wiki-dim">${u.desc}</span>`
-      ])),
-      note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge only from
-      successful Normal and Special attacks. Only the Base and \u201C I \u201D tiers are reachable in this version
-      (the tier matches the evolution stage).`)
+      h3("Debuff skills", "debuff lower stat foe enemy weaken"),
+      table(catRows("debuff"), "debuff skill level learned at"),
+      h3("Ultimates \u2014 by unlock level and power", "ultimate charge tier"),
+      table(ultRows.map(({ u, t, i }) => [
+        `<span class="wiki-learn">Lv.${t.unlockLevel}</span> <b>${u.baseName}${t.suffix}</b>${t.future ? ' <span class="wiki-dim">(late game)</span>' : ""}<br><span class="wiki-learn">${i === 0 ? "Base tier" : `Tier${t.suffix}`} \xB7 evolution stage ${i + 1}</span>`,
+        `Power <b>${t.power}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 ${u.damageType === "physical" ? "Physical" : "Special"}${t.selfBuff ? ` \xB7 also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(", ")} on self` : ""}<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`
+      ]), "ultimate tier power level"),
+      note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge comes only from
+      successful Normal and Special attacks. The tier matches the evolution stage (Base \u2192 I \u2192 II \u2192 III).`)
     ];
   }
   function itemsSection() {
@@ -12317,11 +12711,13 @@ input[type="text"].wiki-search {
       if (i.revive) effect += ` <span class="wiki-dim">(revives with ${Math.round(i.revive * 100)}% HP)</span>`;
       if (i.restoreUses) effect += ` <span class="wiki-dim">(+${i.restoreUses} uses to every limited skill)</span>`;
       if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
-      if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp} EXP)</span>`;
-      if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
+      if (i.healFull) effect += ' <span class="wiki-dim">(restores ALL HP)</span>';
+      if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp.toLocaleString()} EXP)</span>`;
+      if (i.guaranteed) effect += ' <span class="wiki-dim">(<b>100%</b> catch \u2014 guaranteed)</span>';
+      else if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
       return [
         `<b>${i.name}</b>${i.price ? "" : ' <span class="wiki-dim">(not sold)</span>'}`,
-        `${effect}${i.price ? ` \xB7 <b>${i.price}</b> Wildcoins` : ""}`
+        `${effect}${i.price ? ` \xB7 <b>${i.price.toLocaleString()}</b> Wildcoins` : ""}`
       ];
     });
     return [
@@ -12332,8 +12728,9 @@ input[type="text"].wiki-search {
         h3(c.name, c.id),
         table(rowsFor(c.id))
       ], c.name)),
-      note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP, and it can never
-      push a Mythling past the level cap.`)
+      note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP. You can feed a whole
+      <b>stack at once</b> (\u2212/+/MAX picker) and the game caps the amount at what it takes to reach Lv.${LEVEL_CAP},
+      so no food is ever wasted. The <b>King Ball</b> is the only ball with a guaranteed catch \u2014 and it is priced like it.`)
     ];
   }
   function worldSection() {
@@ -12416,33 +12813,33 @@ input[type="text"].wiki-search {
       h3("World", "controls keys movement"),
       table([
         ["W A S D / arrows", "Move"],
+        ["Shift (held)", "Run while moving"],
         ["E / Enter", "Interact with people, buildings and signs"],
         ["ESC", "Open the menu \u2014 or close whatever panel is on top"],
         ["Touch devices", "An on-screen stick appears on first touch"]
       ]),
       h3("Battle", "battle keys shortcuts"),
       table([
-        ["1", "Normal skill"],
-        ["2", "Special skill"],
-        ["3", "Buff skill"],
+        ["1 / 2 / 3", `Battle buttons \u2014 the ${MAX_EQUIPPED_SKILLS} equipped skills, in the order you equipped them`],
         ["4 / R", "Ultimate (when fully charged)"],
-        ["Mouse / tap", "Every action is clickable: ITEM, PARTY, CATCH, RUN"]
+        ["Mouse / tap", "Every action is clickable: ITEM, PARTY, CATCH, RUN"],
+        ["RUN", "Leaves any battle \u2014 wild or trainer \u2014 instantly and always succeeds"]
       ]),
       h3("Shortcuts", "shortcuts keys cheat coins"),
       table([
         ["Esc", "Player menu (also the \u2630 button). Esc also closes any panel or dialogue."],
-        ["Del", "Cheat menu \u2014 instantly adds 100 / 1,000 / 100,000 / 1,000,000 Wildcoins."],
-        ["Shift (held)", "Run while moving in the overworld."]
+        ["Del", "Cheat menu \u2014 instantly adds 100 / 1,000 / 100,000 / 1,000,000 Wildcoins."]
       ]),
-      p("Defeating a wild Mythling drops <b>Wildcoins</b>: the reward grows with its level and EXP yield and shrinks when you out-level it, so early areas cannot be farmed forever. Trainer battles pay their own bounty instead."),
+      para("Defeating a wild Mythling drops <b>Wildcoins</b>: the reward grows with its level and EXP yield and shrinks when you out-level it, so early areas cannot be farmed forever. Trainer battles pay their own bounty instead.", "wildcoins drop reward"),
       h3("Menu tabs", "menu tabs party bag"),
       table([
         ["PARTY", "Your team: reorder, inspect, evolve. Click a Mythling for full details."],
         ["MYTHLINGS", "Storage with filters and sorting."],
-        ["SKILLS", "Skill Library \u2014 equip Normal / Special / Buff skills."],
-        ["BAG", "Balls, healing, food and key items; feed food for EXP."],
+        ["SKILLS", `Skill Library \u2014 equip up to ${MAX_EQUIPPED_SKILLS} skills of any kind; equip order = button order.`],
+        ["BAG", "Balls, healing, food and key items; feed food (a whole stack at once) for EXP."],
         ["MAP", "Regions you have unlocked."],
         ["COLLECTION", "Species and mutations discovered."],
+        ["INDEX", "Every species with all four forms."],
         ["STATS", "Trainer record: play time, coins, progress."],
         ["SAVE", "Manual save, slot switching, quit to menu."],
         ["SETTINGS", "Audio, text speed, display, and the Game Wiki."]
@@ -12460,7 +12857,7 @@ input[type="text"].wiki-search {
       h3(`Version ${GAME_VERSION}`, "version number build"),
       table([
         ["Level cap", `Lv.${LEVEL_CAP}`],
-        ["Species", `${SPECIES_IDS.length} (3 starters)`],
+        ["Species", `${SPECIES_IDS.length} (${STARTER_IDS.length} starters \u2014 your partner is always ${STARTER_RARITY} rarity)`],
         ["Regions", `${MAP_ORDER.length}`],
         ["Moods", `${MOOD_IDS.length}`],
         ["Party / Storage", `${PARTY_MAX} / ${STORAGE_MAX}`],
@@ -12556,20 +12953,56 @@ input[type="text"].wiki-search {
       if (isMaxLevel(mythling)) return `${displayName(mythling)} is already MAX LEVEL (Lv.${LEVEL_CAP}).`;
       return null;
     },
+    /** EXP still missing between where the Mythling is now and the level cap. */
+    expToCap(mythling) {
+      if (!mythling || isMaxLevel(mythling)) return 0;
+      const have = totalExpForLevel(mythling.level) + Math.max(0, mythling.exp || 0);
+      return Math.max(0, totalExpForLevel(LEVEL_CAP) - have);
+    },
+    /** How many units of this food would reach the level cap (the useful maximum). */
+    toCap(mythling, itemId) {
+      const item = getItem(itemId);
+      if (!item || !item.exp || !mythling || isMaxLevel(mythling)) return 0;
+      return Math.max(1, Math.ceil(this.expToCap(mythling) / item.exp));
+    },
     /**
-     * Feed one unit of `itemId` to `mythling`.
-     * @returns {{ok:boolean, reason?:string, exp?:number, result?:object, item?:object}}
+     * The most of `itemId` that can sensibly be fed right now:
+     * min(owned, units to reach the level cap).
+     */
+    maxFeedable(mythling, itemId) {
+      if (!this.isFood(itemId) || this.blockedReason(mythling)) return 0;
+      return Math.max(0, Math.min(InventoryManager.count(itemId), this.toCap(mythling, itemId)));
+    },
+    /** Where `count` units of this food would leave the Mythling (level + leftover EXP), without feeding. */
+    preview(mythling, itemId, count = 1) {
+      const item = getItem(itemId);
+      if (!item || !mythling) return null;
+      let level = mythling.level;
+      let exp = Math.max(0, mythling.exp || 0) + item.exp * Math.max(0, count);
+      while (level < LEVEL_CAP && exp >= expToNextLevel(level)) {
+        exp -= expToNextLevel(level);
+        level += 1;
+      }
+      if (level >= LEVEL_CAP) exp = 0;
+      return { level, exp, levelsGained: level - mythling.level, totalExp: item.exp * Math.max(0, count) };
+    },
+    /**
+     * Feed `count` units of `itemId` to `mythling` in one go. The count is capped
+     * at maxFeedable(), so asking for more than is useful just feeds the useful
+     * amount and leaves the rest in the bag.
+     * @returns {{ok:boolean, reason?:string, exp?:number, count?:number, result?:object, item?:object}}
      */
     feed(mythling, itemId, count = 1) {
       const item = getItem(itemId);
       if (!this.isFood(itemId)) return { ok: false, reason: "That item is not food." };
-      if (!InventoryManager.has(itemId, count)) return { ok: false, reason: `You have no ${item.name}.` };
+      if (!InventoryManager.has(itemId, 1)) return { ok: false, reason: `You have no ${item.name}.` };
       const blocked = this.blockedReason(mythling);
       if (blocked) return { ok: false, reason: blocked };
-      InventoryManager.remove(itemId, count);
-      const result = gainExp(mythling, item.exp * count);
-      bus.emit("mythling:fed", { mythling, item, result });
-      return { ok: true, exp: item.exp * count, result, item };
+      const qty = Math.max(1, Math.min(Math.floor(count) || 1, this.maxFeedable(mythling, itemId)));
+      InventoryManager.remove(itemId, qty);
+      const result = gainExp(mythling, item.exp * qty);
+      bus.emit("mythling:fed", { mythling, item, result, count: qty });
+      return { ok: true, exp: item.exp * qty, count: qty, result, item };
     },
     /** How many of this food it would take to reach the next level (UI hint). */
     toNextLevel(mythling, itemId) {
@@ -12593,7 +13026,11 @@ input[type="text"].wiki-search {
     ["save", "SAVE", "save"],
     ["settings", "SETTINGS", "settings"]
   ];
-  var SLOT_LABEL = { normal: "N", special: "S", buff: "B" };
+  function skillMetaText(sk, m = null) {
+    const uses = Number.isFinite(sk.uses) ? `${m ? `${m.uses[sk.id] ?? 0}/` : ""}${sk.uses} uses` : "Unlimited uses";
+    const what = isDamageSkill(sk) ? `Power ${sk.power} \xB7 ${sk.damageType === "physical" ? "Physical" : "Special"}` : `${buffSummary(sk, " ")} ${sk.category === "debuff" ? "on the foe" : "on self"}`;
+    return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} \xB7 ${what} \xB7 ${uses}`;
+  }
   function mythCanvas(m, size = 66, animated = false) {
     const dpr = () => Math.min(2, typeof window !== "undefined" && window.devicePixelRatio || 1);
     const cv = el("canvas", { width: size, height: size });
@@ -12862,7 +13299,7 @@ input[type="text"].wiki-search {
               }
             } }),
             EvolutionManager.isReady(m) ? iconTextBtn("levelup", "EVOLVE NOW", { class: "small primary", onclick: () => {
-              document.getElementById("modal").classList.add("hidden");
+              closeModal(true);
               this.game.runEvolution(m, () => this.renderTab());
             } }) : null
           ])
@@ -12884,13 +13321,14 @@ input[type="text"].wiki-search {
           el("div", { class: "stat-rows" }, statRows),
           el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) \xB7 <b>${stats.crit}%</b> crit chance \xB7 crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
           el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg("up", "tiny")} ${mood.up.join(", ")} &nbsp; ${iconSvg("down", "tiny")} ${mood.down} \u2014 magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
-          el("h3", { text: "Equipped Skills" }),
-          ...["normal", "special", "buff"].map((slot) => {
-            const sk = m.skills[slot] ? librarySkills(m).find((s) => s.id === m.skills[slot]) : null;
-            return el("div", { class: "skill-row equipped" }, [
+          el("h3", { text: `Equipped Skills (${equippedSkills(m).length}/${MAX_EQUIPPED_SKILLS})` }),
+          ...Array.from({ length: MAX_EQUIPPED_SKILLS }, (_, i) => {
+            const sk = m.skills[i] ? getSkill(m.skills[i]) : null;
+            return el("div", { class: `skill-row ${sk ? "equipped" : ""}` }, [
+              el("span", { class: "slot-badge", text: String(i + 1) }),
               el("div", { style: { flex: "1" } }, [
-                el("div", { class: "sk-name", text: sk ? sk.name : "\u2014" }),
-                el("div", { class: "sk-meta", html: sk ? `${slot.toUpperCase()} \xB7 ${sk.category === "buff" ? buffSummary(sk) : `Power ${sk.power}`} \xB7 ${Number.isFinite(sk.uses) ? `${m.uses[sk.id] ?? 0}/${sk.uses} uses` : `${iconSvg("infinity", "tiny")} unlimited`}` : "\u2014" })
+                el("div", { class: "sk-name", text: sk ? sk.name : "\u2014 empty button \u2014" }),
+                el("div", { class: "sk-meta", text: sk ? skillMetaText(sk, m) : "Equip a skill in the Skill Library." })
               ])
             ]);
           }),
@@ -12901,7 +13339,7 @@ input[type="text"].wiki-search {
             ])
           ]),
           iconTextBtn("strike", "Open Skill Library", { class: "small ghost", onclick: () => {
-            document.getElementById("modal").classList.add("hidden");
+            closeModal(true);
             this.tab = "skills";
             this.selected = m.uid;
             this.render();
@@ -12997,7 +13435,7 @@ input[type="text"].wiki-search {
     // ---------------------------------------------------- SKILLS
     renderSkills(root) {
       this.setTitle("Skill Library");
-      root.appendChild(el("p", { class: "sub", text: "Every Mythling has three slots and any skill it has learned can go into any of them \u2014 two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on. Leaving a slot empty is allowed and is saved as-is. Everything learned stays in the library \u2014 nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced." }));
+      root.appendChild(el("p", { class: "sub", text: `Equip up to ${MAX_EQUIPPED_SKILLS} skills \u2014 any mix of Normal, Special, Buff and Debuff. The ORDER you equip them in is the order of the battle buttons: the first equipped is button 1 (leftmost), then 2, then 3. Skills are listed in the order they are learned. Everything learned stays in the library \u2014 nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.` }));
       const party = PartyManager.list();
       const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
       const picker = el("div", { class: "row", style: { marginBottom: "14px" } }, party.map((m) => button(`${displayName(m)} Lv.${m.level}`, {
@@ -13009,50 +13447,88 @@ input[type="text"].wiki-search {
       })));
       root.appendChild(picker);
       if (!sel) return;
+      const equipped = equippedSkills(sel);
+      root.appendChild(el("h3", { text: `Battle buttons (${equipped.length}/${MAX_EQUIPPED_SKILLS})` }));
+      const strip2 = el("div", { class: "loadout-strip" });
+      for (let i = 0; i < MAX_EQUIPPED_SKILLS; i++) {
+        const entry = equipped.find((e) => e.index === i) || null;
+        const sk = entry ? entry.skill : null;
+        strip2.appendChild(el("div", { class: `loadout-slot ${sk ? `filled ${sk.category}` : "empty"}` }, [
+          el("div", { class: "ls-head" }, [
+            el("span", { class: "slot-badge", text: String(i + 1) }),
+            el("span", { class: "ls-name", html: sk ? `${iconSvg(sk.element || (sk.category === "buff" ? "shield" : sk.category === "debuff" ? "down" : "strike"), sk.element || "")} ${sk.name}` : "Empty" })
+          ]),
+          el("div", { class: "ls-meta", text: sk ? skillMetaText(sk, sel) : "Pick a skill below." }),
+          sk ? el("div", { class: "row", style: { gap: "4px", marginTop: "6px" } }, [
+            i > 0 ? button("\u25C0", { class: "small ghost", title: "Move left (earlier button)", onclick: () => {
+              moveSkill(sel, i, i - 1);
+              AudioManager.sfx("click");
+              this.renderTab();
+            } }) : null,
+            i < equipped.length - 1 ? button("\u25B6", { class: "small ghost", title: "Move right (later button)", onclick: () => {
+              moveSkill(sel, i, i + 1);
+              AudioManager.sfx("click");
+              this.renderTab();
+            } }) : null,
+            button("UNEQUIP", { class: "small ghost", onclick: () => {
+              unequipSkill(sel, i);
+              AudioManager.sfx("cancel");
+              this.renderTab();
+            } })
+          ]) : null
+        ]));
+      }
+      root.appendChild(strip2);
       const ult = ultimateMove(sel);
       root.appendChild(el("div", { class: "skill-row", style: { borderColor: "#ffd76a" } }, [
+        el("span", { class: "slot-badge gold", text: "4" }),
         el("div", { style: { flex: "1" } }, [
           el("div", { class: "sk-name", html: `${iconSvg("ultimate", "gold")} ${ult.name} (ULTIMATE \u2014 fixed)` }),
           el("div", { class: "sk-meta", text: ultimateUnlocked(sel) ? `Power ${ult.power} \xB7 Charge ${sel.ultCharge}/8 \xB7 upgrades with evolution` : `Locked until Lv.${ULTIMATE_UNLOCK_LEVEL}` })
         ])
       ]));
-      for (const cat of ["normal", "special", "buff"]) {
-        root.appendChild(el("h3", { text: `${cat.toUpperCase()} SKILLS` }));
-        const skills = librarySkills(sel, cat);
-        if (!skills.length) {
-          root.appendChild(el("p", { class: "sub", text: "None learned yet." }));
-          continue;
+      root.appendChild(el("h3", { text: "Learned skills \u2014 by unlock level" }));
+      const entries = libraryByLevel(sel);
+      if (!entries.length) {
+        root.appendChild(el("p", { class: "sub", text: "None learned yet." }));
+        return;
+      }
+      let lastLevel = null;
+      for (const { skill: sk, level, index } of entries) {
+        if (level !== lastLevel) {
+          lastLevel = level;
+          root.appendChild(el("div", { class: "lib-level", text: `Lv.${level}` }));
         }
-        for (const sk of skills) {
-          const slots = ["normal", "special", "buff"];
-          const inSlot = slots.filter((s) => sel.skills[s] === sk.id);
-          root.appendChild(el("div", { class: `skill-row ${inSlot.length ? "equipped" : ""}` }, [
-            el("div", { style: { flex: "1" } }, [
-              el("div", { class: "sk-name", html: `${iconSvg(sk.element || "strike", sk.element || "")} ${sk.name}` }),
-              el("div", { class: "sk-meta", text: `${sk.category === "buff" ? buffSummary(sk, " ") : `Power ${sk.power} \xB7 ${sk.damageType === "physical" ? "Physical" : "Special"}`} \xB7 ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : "Unlimited uses"} \u2014 ${sk.desc}` })
-            ]),
-            el("div", { class: "skill-slots" }, [
-              ...slots.map((s) => button(SLOT_LABEL[s], {
-                class: `small ${sel.skills[s] === sk.id ? "primary" : "ghost"}`,
-                title: `Put ${sk.name} in the ${s} slot`,
-                onclick: () => {
-                  equipSkill(sel, s, sk.id);
-                  AudioManager.sfx("confirm");
-                  this.renderTab();
-                }
-              })),
-              inSlot.length ? button("\u2715", {
-                class: "small ghost",
-                title: "Unequip",
-                onclick: () => {
-                  for (const s of inSlot) unequipSkill(sel, s);
+        const on = index >= 0;
+        root.appendChild(el("div", { class: `skill-row ${on ? "equipped" : ""}` }, [
+          on ? el("span", { class: "slot-badge", text: String(index + 1) }) : el("span", { class: "slot-badge dim", text: "\xB7" }),
+          el("div", { style: { flex: "1" } }, [
+            el("div", { class: "sk-name", html: `${iconSvg(sk.element || (sk.category === "buff" ? "shield" : sk.category === "debuff" ? "down" : "strike"), sk.element || "")} ${sk.name} <span class="cat-tag ${sk.category}">${SKILL_CATEGORY_LABEL[sk.category]}</span>` }),
+            el("div", { class: "sk-meta", text: `${skillMetaText(sk, sel)} \u2014 ${sk.desc}` })
+          ]),
+          el("div", { class: "skill-slots" }, [
+            on ? button("UNEQUIP", { class: "small ghost", title: `Take ${sk.name} off button ${index + 1}`, onclick: () => {
+              unequipSkill(sel, sk.id);
+              AudioManager.sfx("cancel");
+              this.renderTab();
+            } }) : button("EQUIP", {
+              class: `small ${canEquipMore(sel) ? "primary" : "ghost"}`,
+              title: canEquipMore(sel) ? `Equip ${sk.name} on button ${equippedSkills(sel).length + 1}` : "All battle buttons are full \u2014 unequip one first",
+              onclick: () => {
+                if (!canEquipMore(sel)) {
+                  toast(`All ${MAX_EQUIPPED_SKILLS} battle buttons are full \u2014 unequip one first.`, "bad");
                   AudioManager.sfx("cancel");
-                  this.renderTab();
+                  return;
                 }
-              }) : null
-            ])
-          ]));
-        }
+                if (equipSkill(sel, sk.id)) {
+                  AudioManager.sfx("confirm");
+                  toast(`${sk.name} \u2192 button ${equippedSkills(sel).length}`, "ok");
+                }
+                this.renderTab();
+              }
+            })
+          ])
+        ]));
       }
     }
     /** Let a Mythling go. Storage only — the party always keeps at least one. */
@@ -13086,7 +13562,7 @@ input[type="text"].wiki-search {
         const entries = InventoryManager.byCategory(cat.id);
         root.appendChild(el("h3", { text: cat.name }));
         if (cat.id === "food") {
-          root.appendChild(el("p", { class: "sub", text: "Feed food to a Mythling to convert it straight into EXP \u2014 a faster way to train than battling. Food cannot push a Mythling past the level cap." }));
+          root.appendChild(el("p", { class: "sub", text: `Feed food to a Mythling to convert it straight into EXP \u2014 a faster way to train than battling. You can feed a whole stack at once; the amount is capped at what it takes to reach Lv.${LEVEL_CAP}, so no food is ever wasted.` }));
         }
         if (!entries.length) {
           root.appendChild(el("p", { class: "sub", text: "\u2014 empty \u2014" }));
@@ -13094,7 +13570,7 @@ input[type="text"].wiki-search {
         }
         for (const e of entries) {
           const isFood = e.item.category === "food";
-          const usable = e.item.heal || e.item.revive || e.item.restoreUses;
+          const usable = e.item.heal || e.item.healFull || e.item.revive || e.item.restoreUses || e.item.restoreAllUses;
           root.appendChild(el("div", { class: "item-row" }, [
             icon(isFood ? "food" : cat.id === "balls" ? "orb" : cat.id === "key" ? "key" : "heal", "item-ico"),
             el("div", { class: "ir-main" }, [
@@ -13107,22 +13583,39 @@ input[type="text"].wiki-search {
         }
       }
     }
-    /** Feed a food item to a chosen party Mythling and play the level-up flow. */
+    /**
+     * Feed a food item to a chosen party Mythling and play the level-up flow.
+     * Stacks are fed in one go: a quantity picker (−/+/MAX) caps the count at
+     * what is useful — never more than you own, never past the level cap.
+     */
     async feedFromBag(itemId) {
       const item = getItem(itemId);
       const pick = await this.pickPartyTarget(`FEED ${item.name.toUpperCase()}`, (m) => {
         const need = FeedManager.toNextLevel(m, itemId);
-        return m.level >= LEVEL_CAP ? "MAX LEVEL \u2014 cannot gain EXP" : `+${item.exp} EXP \xB7 ${need} to reach Lv.${m.level + 1}`;
+        return m.level >= LEVEL_CAP ? "MAX LEVEL \u2014 cannot gain EXP" : `+${item.exp.toLocaleString()} EXP each \xB7 ${need} to reach Lv.${m.level + 1} \xB7 ${FeedManager.toCap(m, itemId).toLocaleString()} to reach Lv.${LEVEL_CAP}`;
       });
       if (!pick) return;
-      const res = FeedManager.feed(pick, itemId);
+      const blocked = FeedManager.blockedReason(pick);
+      if (blocked) {
+        toast(blocked, "bad");
+        AudioManager.sfx("cancel");
+        return;
+      }
+      const max = FeedManager.maxFeedable(pick, itemId);
+      let qty = 1;
+      if (max > 1) {
+        const chosen = await this.pickFeedQuantity(pick, item, max);
+        if (!chosen) return;
+        qty = chosen;
+      }
+      const res = FeedManager.feed(pick, itemId, qty);
       if (!res.ok) {
         toast(res.reason, "bad");
         AudioManager.sfx("cancel");
         return;
       }
       AudioManager.sfx("heal");
-      toast(`${displayName(pick)} ate the ${item.name} \u2014 +${res.exp} EXP`, "ok");
+      toast(`${displayName(pick)} ate ${res.count > 1 ? `${res.count}\xD7 ` : "the "}${item.name} \u2014 +${res.exp.toLocaleString()} EXP`, "ok");
       this.renderTab();
       if (res.result.levels.length) {
         const entries = res.result.levels.map((lv) => ({ uid: pick.uid, name: displayName(pick), ...lv }));
@@ -13133,74 +13626,88 @@ input[type="text"].wiki-search {
       this.renderTab();
       await this.game.autosave();
     }
-    /** Shared party picker used by items and food. `note` adds a per-Mythling line. */
-    pickPartyTarget(title, note2 = null) {
+    /** Quantity picker for feeding a stack. Resolves with the count, or 0 on cancel. */
+    pickFeedQuantity(m, item, max) {
+      let qty = 1;
+      const owned = InventoryManager.count(item.id);
+      const toCap = FeedManager.toCap(m, item.id);
+      const qtyLabel = el("b", { class: "qty-value", text: "1" });
+      const preview = el("div", { class: "sub feed-preview" });
+      const refresh = () => {
+        qty = Math.max(1, Math.min(max, qty));
+        qtyLabel.textContent = String(qty);
+        const p = FeedManager.preview(m, item.id, qty);
+        preview.innerHTML = `+${p.totalExp.toLocaleString()} EXP \u2192 <b>Lv.${p.level}</b>` + (p.level >= LEVEL_CAP ? ' <span style="color:#ffd76a">(MAX LEVEL)</span>' : ` \xB7 ${p.exp.toLocaleString()} / ${expNeeded({ ...m, level: p.level }).toLocaleString()} EXP`) + (p.levelsGained > 0 ? ` \xB7 <span style="color:#6de89a">+${p.levelsGained} level${p.levelsGained === 1 ? "" : "s"}</span>` : "") + `<br>Costs ${qty} of your ${owned} ${item.name}${owned === 1 ? "" : "s"}.`;
+      };
+      const step = (d) => {
+        qty += d;
+        refresh();
+        AudioManager.sfx("click");
+      };
+      const body = el("div", {}, [
+        el("p", { class: "sub", html: `How many <b>${item.name}</b> should <b>${displayName(m)}</b> (Lv.${m.level}) eat?<br>Max useful: <b>${max}</b>${max < owned ? ` \u2014 that is all it takes to reach Lv.${LEVEL_CAP} (${toCap} needed).` : " (all you have)."}` }),
+        el("div", { class: "qty-picker" }, [
+          button("\u221210", { class: "small ghost", onclick: () => step(-10) }),
+          button("\u2212", { class: "small ghost", onclick: () => step(-1) }),
+          qtyLabel,
+          button("+", { class: "small ghost", onclick: () => step(1) }),
+          button("+10", { class: "small ghost", onclick: () => step(10) }),
+          button("MAX", { class: "small primary", onclick: () => {
+            qty = max;
+            refresh();
+            AudioManager.sfx("click");
+          } })
+        ]),
+        preview
+      ]);
+      refresh();
+      return modal({
+        title: "FEED HOW MANY?",
+        body,
+        buttons: [{ label: "CANCEL", value: 0 }, { label: "FEED", value: true, primary: true }],
+        cancelValue: 0
+      }).then((v) => v === true ? qty : 0);
+    }
+    /**
+     * Shared party picker used by items and food. `note` adds a per-Mythling line.
+     * Cards close the modal through closeModal() so the dismiss handle is cleared
+     * (hiding the layer by hand left the game thinking a modal was still open).
+     */
+    async pickPartyTarget(title, note2 = null) {
       const list = el("div", { class: "grid-cards" });
-      return new Promise((resolve) => {
-        let done = false;
-        const finish = (v) => {
-          if (done) return;
-          done = true;
-          const layer = document.getElementById("modal");
-          layer.classList.add("hidden");
-          layer.innerHTML = "";
-          resolve(v);
-        };
-        PartyManager.list().forEach((m) => {
-          const card = this.mythCard(m, {
-            onClick: () => finish(m),
-            extra: note2 ? el("div", { class: "mc-sub feed-note", text: note2(m) }) : null
-          });
-          list.appendChild(card);
-        });
-        modal({ title, body: list, buttons: [{ label: "CANCEL", value: null }] }).then(() => finish(null));
+      PartyManager.list().forEach((m) => {
+        list.appendChild(this.mythCard(m, {
+          onClick: () => closeModal(m),
+          extra: note2 ? el("div", { class: "mc-sub feed-note", text: note2(m) }) : null
+        }));
       });
+      const v = await modal({ title, body: list, buttons: [{ label: "CANCEL", value: null }], cancelValue: null });
+      return v && v.uid ? v : null;
     }
     async useItemFromBag(itemId) {
       const item = getItem(itemId);
-      const pick = await this.pickPartyTarget(`USE ${item.name.toUpperCase()}`);
+      const pick = await this.pickPartyTarget(`USE ${item.name.toUpperCase()}`, (m) => {
+        const dry = applyItemEffects(item, m, { dryRun: true });
+        return dry.ok ? "Can use" : dry.reason;
+      });
       if (!pick) return;
-      if (item.heal) {
-        if (isFainted(pick)) {
-          toast("That Mythling has fainted \u2014 use a Revive Herb.", "bad");
-          return;
-        }
-        const before = pick.currentHp;
-        pick.currentHp = Math.min(maxHp(pick), pick.currentHp + item.heal);
-        if (pick.currentHp === before) {
-          toast("HP is already full!", "bad");
-          return;
-        }
-        InventoryManager.remove(itemId, 1);
-        toast(`${displayName(pick)} recovered ${pick.currentHp - before} HP`, "ok");
-      } else if (item.revive) {
-        if (!isFainted(pick)) {
-          toast("That Mythling does not need reviving.", "bad");
-          return;
-        }
-        InventoryManager.remove(itemId, 1);
-        pick.currentHp = Math.floor(maxHp(pick) * item.revive);
-        toast(`${displayName(pick)} was revived!`, "ok");
-      } else if (item.restoreAllUses) {
-        const before = JSON.stringify(pick.uses);
-        pick.uses = {};
-        for (const id of pick.library) {
-          const sk = getSkill(id);
-          if (sk && Number.isFinite(sk.uses)) pick.uses[id] = sk.uses;
-        }
-        if (JSON.stringify(pick.uses) === before) {
-          toast("Every skill is already at full uses!", "bad");
-          return;
-        }
-        InventoryManager.remove(itemId, 1);
-        AudioManager.sfx("heal");
-        toast(`${displayName(pick)}'s skills are fully restored`, "ok");
-      } else if (item.restoreUses) {
-        InventoryManager.remove(itemId, 1);
-        restoreUses(pick, item.restoreUses);
-        toast(`${displayName(pick)}'s skills were restored`, "ok");
+      if (!InventoryManager.has(itemId, 1)) {
+        toast(`You have no ${item.name} left.`, "bad");
+        return;
       }
+      const res = applyItemEffects(item, pick);
+      if (!res.ok) {
+        toast(res.reason, "bad");
+        AudioManager.sfx("cancel");
+        return;
+      }
+      InventoryManager.remove(itemId, 1);
+      const parts = [];
+      if (res.revived) parts.push("was revived");
+      else if (res.healed > 0) parts.push(`recovered ${res.healed} HP`);
+      if (res.usesRestored) parts.push("had its skills restored");
       AudioManager.sfx("heal");
+      toast(`${displayName(pick)} ${parts.join(" and ")}!`, "ok");
       this.renderTab();
     }
     // ---------------------------------------------------- MAP
@@ -13792,7 +14299,7 @@ input[type="text"].wiki-search {
         el("div", { class: "role", text: `${sp.breed} \xB7 ${sp.role}` }),
         el("div", { class: "row", style: { justifyContent: "center", gap: "5px", marginBottom: "8px" } }, [
           elementChip(sp.element),
-          rarityChip(sp.defaultRarity),
+          rarityChip(STARTER_RARITY),
           el("span", { class: "chip", text: MOODS[sp.defaultMood].name })
         ]),
         el("div", { class: "stat-mini" }, Object.keys(stats).map((k) => el("div", {}, [el("span", { text: STAT_SHORT[k] }), el("b", { text: String(stats[k]) })]))),
@@ -13829,7 +14336,7 @@ input[type="text"].wiki-search {
       panelHeader(
         "Choose Your First Mythling",
         onBack,
-        "Drag a Mythling to turn it around. Choose carefully \u2014 but do not worry, the others can still be found in the wild later."
+        `Drag a Mythling to turn it around. Whichever you choose joins you as a rare ${STARTER_RARITY}-tier partner \u2014 and the others can still be found in the wild later.`
       ),
       grid,
       el("div", { class: "row end", style: { marginTop: "18px" } }, [
@@ -13955,6 +14462,7 @@ input[type="text"].wiki-search {
   }
   function evolutionCinematic(mythling, result, onDone) {
     const SIZE = 460;
+    const DONE_HEIGHT = 356;
     const layer = el("div", { class: "cinematic" });
     const stage = el("div", { class: "cinematic-stage" });
     const cv = el("canvas", { width: SIZE, height: SIZE });
@@ -13974,38 +14482,41 @@ input[type="text"].wiki-search {
     let scale = 1;
     let cssW = 0;
     let lastPaint = 0;
+    let fitDone = false;
     const fit = () => {
       const w = Math.round(cv.clientWidth || SIZE);
-      if (!w || w === cssW) return;
+      const done = layer.classList.contains("done");
+      if (!w || w === cssW && done === fitDone) return;
       cssW = w;
+      fitDone = done;
       const dpr = Math.min(2, typeof window !== "undefined" && window.devicePixelRatio || 1);
       cv.width = Math.round(w * dpr);
-      cv.height = Math.round(w * dpr);
+      cv.height = Math.round(w * dpr * ((done ? DONE_HEIGHT : SIZE) / SIZE));
       scale = w * dpr / SIZE;
     };
-    const showNewForm = (t, p2) => {
-      if (p2 >= REVEAL) return true;
-      if (p2 < 0.46) return false;
-      const u = (p2 - 0.46) / (REVEAL - 0.46);
+    const showNewForm = (t, p) => {
+      if (p >= REVEAL) return true;
+      if (p < 0.46) return false;
+      const u = (p - 0.46) / (REVEAL - 0.46);
       const hz = 3 + 6 * u;
       return Math.sin(t * hz * Math.PI * 2) > 0;
     };
-    const paint = (t, p2) => {
+    const paint = (t, p) => {
       fit();
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
       ctx.clearRect(0, 0, SIZE, SIZE);
-      const flash = p2 < REVEAL ? 0 : p2 < 0.94 ? (p2 - REVEAL) / 0.08 : Math.max(0, 1 - (p2 - 0.94) / 0.06);
-      const glow = p2 < REVEAL ? 0.16 + 0.4 * p2 : 0.55 - 0.27 * ((p2 - REVEAL) / 0.14);
+      const flash = p < REVEAL ? 0 : p < 0.94 ? (p - REVEAL) / 0.08 : Math.max(0, 1 - (p - 0.94) / 0.06);
+      const glow = p < REVEAL ? 0.16 + 0.4 * p : 0.55 - 0.27 * ((p - REVEAL) / 0.14);
       const g = ctx.createRadialGradient(230, 250, 10, 230, 250, 220);
       g.addColorStop(0, `rgba(255,240,180,${glow})`);
       g.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, SIZE, SIZE);
-      const motes = p2 < REVEAL ? 40 : 18;
+      const motes = p < REVEAL ? 40 : 18;
       for (let i = 0; i < motes; i++) {
         const a = i / motes * Math.PI * 2 + t;
         const r = 40 + (t * 90 + i * 17) % 190;
-        ctx.globalAlpha = (1 - r / 230) * (p2 < REVEAL ? 0.8 : 0.45);
+        ctx.globalAlpha = (1 - r / 230) * (p < REVEAL ? 0.8 : 0.45);
         ctx.fillStyle = i % 3 === 0 ? "#fff6c8" : "#ffd76a";
         ctx.beginPath();
         ctx.arc(230 + Math.cos(a) * r * 0.7, 300 - r * 0.8, 3.2, 0, Math.PI * 2);
@@ -14014,18 +14525,18 @@ input[type="text"].wiki-search {
       ctx.globalAlpha = 1;
       ctx.save();
       ctx.translate(230, 330);
-      const s = 1 + (p2 < REVEAL ? 0.14 * p2 : 0.14 * (1 - (p2 - REVEAL) / 0.14));
+      const s = 1 + (p < REVEAL ? 0.14 * p : 0.14 * (1 - (p - REVEAL) / 0.14));
       ctx.scale(s, s);
       drawMythling(ctx, {
         speciesId: mythling.speciesId,
-        stage: showNewForm(t, p2) ? mythling.stage : fromStage,
+        stage: showNewForm(t, p) ? mythling.stage : fromStage,
         mutation: mythling.mutation,
         x: 0,
         y: 0,
         size: 190,
         t,
         facing: 1,
-        pose: p2 >= 1 ? { alpha: 1 } : { alpha: 1, anim: { name: "evolve", phase: p2 } }
+        pose: p >= 1 ? { alpha: 1 } : { alpha: 1, anim: { name: "evolve", phase: p } }
       });
       ctx.restore();
       if (flash > 0) {
@@ -14052,9 +14563,9 @@ input[type="text"].wiki-search {
     };
     const loop = (now) => {
       const t = (now - start) / 1e3;
-      const p2 = Math.min(1, (now - start) / DURATION);
-      paint(t, p2);
-      if (p2 >= 1) {
+      const p = Math.min(1, (now - start) / DURATION);
+      paint(t, p);
+      if (p >= 1) {
         finish();
         raf = requestAnimationFrame(reveal);
         return;
@@ -14241,12 +14752,12 @@ input[type="text"].wiki-search {
       } else if (this.mode === "battle") {
         const bs = this.battleScene;
         if (bs.busy || !bs.battle) return;
-        if (k === "1") bs.doAction({ type: "skill", slot: "normal" });
-        else if (k === "2") bs.doAction({ type: "skill", slot: "special" });
-        else if (k === "3") bs.doAction({ type: "skill", slot: "buff" });
+        if (k === "1") bs.pressSlot(0);
+        else if (k === "2") bs.pressSlot(1);
+        else if (k === "3") bs.pressSlot(2);
         else if (k === "4" || k === "r") {
-          const p2 = bs.battle.player;
-          if (p2.ultCharge >= 8) bs.doAction({ type: "ultimate" });
+          const p = bs.battle.player;
+          if (p.ultCharge >= 8) bs.doAction({ type: "ultimate" });
         }
       }
     }

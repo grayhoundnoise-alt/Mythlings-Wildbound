@@ -6,12 +6,18 @@ export const ITEMS = {
   advanced_ball: { id: 'advanced_ball', name: 'Advanced Ball', category: 'balls',   price: 550,  catchMult: 1.50, desc: 'Crafted with coast crystal. Notably more reliable.' },
   absolute_ball: { id: 'absolute_ball', name: 'Absolute Ball', category: 'balls',   price: 1100, catchMult: 1.80, desc: 'An ember-forged ball for stubborn Mythlings.' },
   god_ball:      { id: 'god_ball',      name: 'God Ball',      category: 'balls',   price: 3000, catchMult: 2.50, desc: 'A legendary sphere. Almost never fails.' },
+  // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
+  king_ball:     { id: 'king_ball',     name: 'King Ball',     category: 'balls',   price: 50000, catchMult: 99, guaranteed: true, desc: 'A crown-forged sphere that never fails. Guaranteed capture — for a royal price.' },
 
   potion:         { id: 'potion',         name: 'Potion',         category: 'healing', price: 150,  heal: 60,   desc: 'Restores 60 HP to one Mythling.' },
   greater_potion: { id: 'greater_potion', name: 'Greater Potion', category: 'healing', price: 380,  heal: 160,  desc: 'Restores 160 HP to one Mythling.' },
+  hyper_potion:   { id: 'hyper_potion',   name: 'Hyper Potion',   category: 'healing', price: 800,  heal: 400,  desc: 'Restores 400 HP to one Mythling.' },
+  max_potion:     { id: 'max_potion',     name: 'Max Potion',     category: 'healing', price: 1800, healFull: true, desc: 'Fully restores the HP of one Mythling.' },
   revive_herb:    { id: 'revive_herb',    name: 'Revive Herb',    category: 'healing', price: 600,  revive: 0.5, desc: 'Revives a fainted Mythling with half HP.' },
+  max_revive:     { id: 'max_revive',     name: 'Max Revive',     category: 'healing', price: 1500, revive: 1.0, desc: 'Revives a fainted Mythling with full HP.' },
   skill_tonic:    { id: 'skill_tonic',    name: 'Skill Tonic',    category: 'healing', price: 320,  restoreUses: 8, desc: 'Restores 8 uses to every limited skill.' },
   skill_elixir:   { id: 'skill_elixir',   name: 'Skill Elixir',   category: 'healing', price: 950,  restoreAllUses: true, desc: 'Resets every limited skill back to full uses.' },
+  full_restore:   { id: 'full_restore',   name: 'Full Restore',   category: 'healing', price: 3200, healFull: true, restoreAllUses: true, desc: 'Fully restores HP AND every skill\'s uses. Cannot revive.' },
 
   // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
   sweet_berry:  { id: 'sweet_berry',  name: 'Sweet Berry',  category: 'food', price: 90,   exp: 40,   desc: 'A sugary forest berry. Feeding it grants 40 EXP.' },
@@ -19,6 +25,19 @@ export const ITEMS = {
   river_jerky:  { id: 'river_jerky',  name: 'River Jerky',  category: 'food', price: 620,  exp: 400,  desc: 'Salt-cured coast fish. Grants 400 EXP.' },
   ember_roast:  { id: 'ember_roast',  name: 'Ember Roast',  category: 'food', price: 1400, exp: 1000, desc: 'Slow-roasted over volcanic vents. Grants 1000 EXP.' },
   mythic_feast: { id: 'mythic_feast', name: 'Mythic Feast', category: 'food', price: 3200, exp: 2600, desc: 'A legendary banquet for one. Grants 2600 EXP.' },
+  // High-level training food: a level past Lv.30 costs thousands of EXP and a
+  // level near the cap over 16,000, so the ladder keeps climbing. Feeding a
+  // stack at once never wastes food — the game caps it at the level cap.
+  crunchy_root:       { id: 'crunchy_root',       name: 'Crunchy Root',       category: 'food', price: 160,   exp: 80,     desc: 'A crisp forest root. Grants 80 EXP.' },
+  moon_melon:         { id: 'moon_melon',         name: 'Moon Melon',         category: 'food', price: 430,   exp: 250,    desc: 'Ripens only under moonlight. Grants 250 EXP.' },
+  glow_nectar:        { id: 'glow_nectar',        name: 'Glow Nectar',        category: 'food', price: 980,   exp: 650,    desc: 'Luminous nectar from coast blossoms. Grants 650 EXP.' },
+  coral_cake:         { id: 'coral_cake',         name: 'Coral Cake',         category: 'food', price: 2400,  exp: 1800,   desc: 'A dense, sweet cake baked by port cooks. Grants 1,800 EXP.' },
+  tide_pudding:       { id: 'tide_pudding',       name: 'Tide Pudding',       category: 'food', price: 4800,  exp: 4000,   desc: 'Wobbles like the sea it came from. Grants 4,000 EXP.' },
+  storm_eel_stew:     { id: 'storm_eel_stew',     name: 'Storm Eel Stew',     category: 'food', price: 8600,  exp: 8000,   desc: 'Crackles with leftover lightning. Grants 8,000 EXP.' },
+  dragonfruit_flambe: { id: 'dragonfruit_flambe', name: 'Dragonfruit Flambé', category: 'food', price: 14800, exp: 15000,  desc: 'Set alight over a volcanic vent. Grants 15,000 EXP.' },
+  phoenix_pepper:     { id: 'phoenix_pepper',     name: 'Phoenix Pepper',     category: 'food', price: 27000, exp: 30000,  desc: 'So hot it is said to bring the eater back to life. Grants 30,000 EXP.' },
+  titan_broth:        { id: 'titan_broth',        name: 'Titan Broth',        category: 'food', price: 50000, exp: 60000,  desc: 'Simmered for a hundred days in a caldera. Grants 60,000 EXP.' },
+  wildbound_ambrosia: { id: 'wildbound_ambrosia', name: 'Wildbound Ambrosia', category: 'food', price: 92000, exp: 120000, desc: 'The food of legends. Grants 120,000 EXP — several levels even near the cap.' },
 
   vale_charm:  { id: 'vale_charm',  name: 'Vale Charm',  category: 'key', desc: 'Proof that the Verdant Guardian was bested. Opens the Verdant Gate.' },
   coast_pass:  { id: 'coast_pass',  name: 'Coast Pass',  category: 'key', desc: 'Granted at Tidecrest Port. Opens the Emberwild Gate.' },

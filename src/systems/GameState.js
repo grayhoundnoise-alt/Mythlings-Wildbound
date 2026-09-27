@@ -1,11 +1,11 @@
 // Central mutable game state + Player/Party/Storage/Inventory/Collection managers.
 // Serialisation is validated & migrated on load so old saves never break.
-import { GAME_VERSION, PARTY_MAX, LEVEL_CAP } from '../data/config.js';
+import { GAME_VERSION, PARTY_MAX, LEVEL_CAP, STARTER_RARITY } from '../data/config.js';
 import { STARTING_INVENTORY, STARTING_WILDCOINS, getItem } from '../data/items.js';
 import { SPECIES_IDS, getSpecies } from '../data/species.js';
 import { MAPS, getMap } from '../data/maps.js';
 import {
-  createMythling, restoreAll, refreshLibrary, autoEquip, displayName,
+  createMythling, restoreAll, refreshLibrary, autoEquip, normalizeEquipped, displayName,
   maxHp, computeStats, stageForLevel,
 } from '../core/mythling.js';
 import { clamp, EventBus, deepClone } from '../core/utils.js';
@@ -260,7 +260,8 @@ export function createNewGameState({ slot, playerName, starterId, settings }) {
   GameState._sessionStart = Date.now();
   if (settings) GameState.settings = settings;
 
-  const starter = createMythling({ speciesId: starterId, level: 1, isStarter: true, originMap: 'verdant_vale' });
+  // The partner you begin with is always a top-tier (S rarity) Mythling.
+  const starter = createMythling({ speciesId: starterId, level: 1, isStarter: true, rarity: STARTER_RARITY, originMap: 'verdant_vale' });
   PartyManager.add(starter);
   CollectionManager.markCaught(starterId, starter.mutation);
   return starter;
@@ -305,7 +306,7 @@ function migrateMythling(raw) {
     mutation: raw.mutation ?? 'none',          // migration: old saves had no mutation
     currentHp: raw.currentHp ?? null,   // null => restore to full below (old saves)
     ultCharge: clamp(raw.ultCharge ?? 0, 0, 8),
-    skills: { normal: null, special: null, buff: null, ...(raw.skills || {}) },
+    skills: normalizeEquipped(raw.skills),   // old saves stored {normal, special, buff}
     library: Array.isArray(raw.library) ? [...raw.library] : [],
     uses: { ...(raw.uses || {}) },
     meta: { caughtAt: null, caughtWith: null, caughtLevel: null, originMap: null, isStarter: false, ...(raw.meta || {}) },
@@ -314,8 +315,10 @@ function migrateMythling(raw) {
   const maxStage = stageForLevel(m.speciesId, m.level);
   if (m.stage > maxStage) m.stage = maxStage;
   refreshLibrary(m);  // adds any skills introduced by a newer game version
-  // only fill empty slots for saves that predate free slot assignment: if the
-  // player chose to leave a slot empty, that choice has to survive a reload
+  // drop equipped ids this Mythling cannot actually know (edited / corrupt saves)
+  m.skills = m.skills.filter((id) => m.library.includes(id));
+  // only auto-fill for saves that predate the loadout system: if the player
+  // chose to leave a button empty, that choice has to survive a reload
   if (!raw.skills) autoEquip(m);
   const mx = maxHp(m);
   if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
@@ -350,7 +353,7 @@ export function deserialize(data) {
     GameState.party.push(GameState.storage.shift());
   }
   if (GameState.party.length === 0) {
-    GameState.party.push(createMythling({ speciesId: p.starter || 'spriggo', level: 1, isStarter: true }));
+    GameState.party.push(createMythling({ speciesId: p.starter || 'spriggo', level: 1, isStarter: true, rarity: STARTER_RARITY }));
   }
 
   const inv = {};

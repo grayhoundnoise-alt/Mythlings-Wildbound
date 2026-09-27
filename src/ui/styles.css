@@ -434,6 +434,16 @@ select {
 .action-btn.normal { border-color: #9fb3c9; }
 .action-btn.special { border-color: #7fd8ff; }
 .action-btn.buff { border-color: #b6f09b; }
+.action-btn.debuff { border-color: #ff9aa2; }
+.action-btn.empty { opacity: .55; border-style: dashed; }
+/* the 1 / 2 / 3 badge: battle buttons, Skill Library loadout and detail panel */
+.slot-badge {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; flex: none;
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28);
+  font-size: .72rem; font-weight: 900; color: #fff; letter-spacing: 0;
+}
+.slot-badge.dim { opacity: .4; }
+.slot-badge.gold { background: rgba(242,199,97,.22); border-color: var(--gold); color: var(--gold); }
 .action-btn.ultimate { border-color: #ffd76a; }
 .action-btn.ultimate.ready { background: linear-gradient(180deg, #d8a23e, #a5701c); color: #241804; animation: pulseGlow 1.1s infinite; }
 @keyframes pulseGlow { 0%,100% { box-shadow: 0 5px 0 rgba(0,0,0,.35), 0 0 12px rgba(255,200,90,.5);} 50% { box-shadow: 0 5px 0 rgba(0,0,0,.35), 0 0 28px rgba(255,200,90,.95);} }
@@ -562,8 +572,14 @@ select {
 .cinematic canvas {
   display: block; width: min(460px, 82vw, 56vh); height: auto; aspect-ratio: 1 / 1;
 }
-/* Once the summary appears, give the text room instead of overflowing. */
-.cinematic.done canvas { width: min(300px, 46vh, 60vw); }
+/* Once the summary appears, give the text room instead of overflowing. The
+   Mythling stands at ~72% of the square, so the empty bottom band is cropped
+   (the JS backs the canvas at the same ratio): "Congratulations!" sits right
+   under the evolved Mythling instead of a hand's width below it. */
+.cinematic.done canvas { width: min(300px, 46vh, 60vw); aspect-ratio: 460 / 356; }
+.cinematic.done .cinematic-stage { gap: 10px; }
+.cinematic.done h2 { margin: 0; }
+.cinematic.done p { margin: 0; }
 .cinematic h2 { font-size: clamp(1.4rem,4vw,2.4rem); letter-spacing: .12em; color: var(--gold); text-align:center; text-shadow: 0 0 22px rgba(255,200,90,.6); }
 .cinematic p { color: #dce9f7; font-size: 1.05rem; text-align: center; max-width: 620px; }
 
@@ -572,9 +588,36 @@ select {
 
 .levelup-list { display: flex; flex-direction: column; gap: 4px; font-size: .95rem; }
 .levelup-list .gain { color: var(--ok); }
-/* Skill Library: three slot buttons per skill (any skill, any slot) */
+/* Skill Library: EQUIP / UNEQUIP per skill, loadout strip on top */
 .skill-slots { display: flex; gap: 4px; flex: none; }
 .skill-slots .btn { min-width: 30px; padding: 5px 8px; }
+.loadout-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.loadout-slot {
+  padding: 10px 12px; border-radius: 12px; min-height: 92px;
+  background: rgba(255,255,255,.05); border: 1.5px dashed rgba(255,255,255,.18);
+}
+.loadout-slot.filled { border-style: solid; border-color: var(--gold); background: rgba(242,199,97,.08); }
+.loadout-slot.filled.special { border-color: #7fd8ff; }
+.loadout-slot.filled.buff { border-color: #b6f09b; }
+.loadout-slot.filled.debuff { border-color: #ff9aa2; }
+.loadout-slot .ls-head { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+.loadout-slot .ls-name .ico { width: 15px; height: 15px; vertical-align: -.15em; }
+.loadout-slot .ls-meta { color: var(--muted); font-size: .76rem; margin-top: 4px; }
+.loadout-slot.empty .ls-name { color: var(--muted); font-weight: 600; }
+.lib-level { color: var(--gold); font-size: .78rem; letter-spacing: .08em; font-weight: 800; margin: 12px 0 6px; }
+.cat-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; vertical-align: middle;
+  font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 800;
+  background: rgba(255,255,255,.1); color: #dce9f7;
+}
+.cat-tag.special { background: rgba(127,216,255,.18); color: #bfe9ff; }
+.cat-tag.buff { background: rgba(182,240,155,.18); color: #d9ffc7; }
+.cat-tag.debuff { background: rgba(255,154,162,.2); color: #ffc4c9; }
+/* feed-a-stack quantity picker */
+.qty-picker { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+.qty-picker .qty-value { min-width: 64px; text-align: center; font-size: 1.6rem; color: var(--gold); }
+.feed-preview { text-align: center; line-height: 1.5; }
+@media (max-width: 640px) { .loadout-strip { grid-template-columns: 1fr; } }
 
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

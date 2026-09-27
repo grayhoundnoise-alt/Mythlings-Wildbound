@@ -5,7 +5,8 @@ import { CaptureManager } from '../systems/CaptureManager.js';
 import { InventoryManager, PartyManager, GameState, CollectionManager, bus } from '../systems/GameState.js';
 import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, ultimateMove,
-  ultimateUnlocked, equippedSkill, usesLeft, librarySkills, basicAttack,
+  ultimateUnlocked, equippedSkill, equippedSkills, usesLeft, basicAttack, applyItemEffects,
+  MAX_EQUIPPED_SKILLS,
 } from '../core/mythling.js';
 import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
 import { STAT_SHORT } from '../data/moods.js';
@@ -14,9 +15,9 @@ import { drawMythling, prewarm } from '../render/creatures.js';
 import { SkillVFX } from '../render/vfx/SkillVFX.js';
 import { paletteFor } from '../data/skillVfx.js';
 import { roundRect, circle } from '../render/worldRenderer.js';
-import { el, button, bar, hpClass, elementChip, mutationChip, rarityChip, toast, confirmDialog, modal } from '../ui/ui.js';
+import { el, button, bar, hpClass, elementChip, mutationChip, rarityChip, toast, confirmDialog, modal, closeModal } from '../ui/ui.js';
 import { icon, iconSvg, iconLabel } from '../ui/icons.js';
-import { buffSummary } from '../data/skills.js';
+import { buffSummary, isDamageSkill } from '../data/skills.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { clamp, coins, randInt } from '../core/utils.js';
@@ -292,32 +293,31 @@ export class BattleScene {
     if (b.phase !== BattlePhase.ACTIVE) return;
 
     const p = b.player;
-    const mk = (slot) => {
-      const sk = equippedSkill(p, slot);
-      if (!sk) return button('—', { class: `action-btn ${slot}`, disabled: true });
+    // One button per equipped skill, in the order they were equipped (1 / 2 / 3).
+    const mk = (index) => {
+      const sk = equippedSkill(p, index);
+      if (!sk) {
+        const empty = button('', { class: 'action-btn empty', disabled: true });
+        empty.innerHTML = `<div class="ab-name"><span class="slot-badge dim">${index + 1}</span><span>—</span></div><small>Empty · equip in the Skill Library</small>`;
+        return empty;
+      }
       const left = usesLeft(p, sk.id);
       const disabled = Number.isFinite(left) && left <= 0;
-      const power = sk.category === 'buff'
-        ? buffSummary(sk, ' ')
-        : `PWR ${sk.power} · ${sk.damageType === 'physical' ? 'P.ATK' : 'S.ATK'}`;
-      const glyph = sk.element || (sk.category === 'buff' ? 'shield' : 'strike');
-      const btn = button('', { class: `action-btn ${slot}`, disabled, onclick: () => this.doAction({ type: 'skill', slot }) });
-      btn.innerHTML = `<div class="ab-name">${iconSvg(glyph, sk.element || '')}<span>${sk.name}</span></div>`
+      const power = isDamageSkill(sk)
+        ? `PWR ${sk.power} · ${sk.damageType === 'physical' ? 'P.ATK' : 'S.ATK'}`
+        : `${buffSummary(sk, ' ')} ${sk.category === 'debuff' ? 'foe' : 'self'}`;
+      const glyph = sk.element || (sk.category === 'buff' ? 'shield' : sk.category === 'debuff' ? 'down' : 'strike');
+      const btn = button('', { class: `action-btn ${sk.category}`, disabled, onclick: () => this.doAction({ type: 'skill', index }) });
+      btn.innerHTML = `<div class="ab-name"><span class="slot-badge">${index + 1}</span>${iconSvg(glyph, sk.element || '')}<span>${sk.name}</span></div>`
         + `<small>${power} · ${Number.isFinite(left) ? `${left} uses` : `${iconSvg('infinity', 'tiny')} unlimited`}</small>`;
-      btn.title = sk.desc;
+      btn.title = `[${index + 1}] ${sk.desc}`;
       return btn;
     };
     // If every equipped skill is empty (or nothing is equipped at all) there is
     // nothing to press, so offer the guaranteed unlimited attack instead of
     // leaving the player stuck with a dead turn.
-    const slotsUsable = ['normal', 'special', 'buff'].some((slot) => {
-      const sk = equippedSkill(p, slot);
-      if (!sk) return false;
-      const left = usesLeft(p, sk.id);
-      return !Number.isFinite(left) || left > 0;
-    });
-    if (slotsUsable) {
-      this.actions.append(mk('normal'), mk('special'), mk('buff'));
+    if (this.anySkillUsable()) {
+      for (let i = 0; i < MAX_EQUIPPED_SKILLS; i++) this.actions.appendChild(mk(i));
     } else {
       const basic = basicAttack(p);
       const btn = button('', {
@@ -363,10 +363,38 @@ export class BattleScene {
       ? 'You must defeat the wild Mythling before catching it.'
       : 'You cannot catch another trainer\'s Mythling.';
     this.actions.appendChild(catchBtn);
-    const wild = this.battle.type === BattleType.WILD;
-    const runBtn = button('', { class: 'ghost', disabled: !wild, onclick: () => this.doAction({ type: 'run' }) });
-    runBtn.appendChild(iconLabel(wild ? 'run' : 'block', wild ? 'RUN' : 'NO ESCAPE'));
+    // Running is absolute: any battle, any time, and it always works.
+    const runBtn = button('', { class: 'ghost', disabled: !this.battle.canRun, onclick: () => this.doAction({ type: 'run' }) });
+    runBtn.appendChild(iconLabel('run', 'RUN'));
+    runBtn.title = this.battle.type === BattleType.TRAINER
+      ? 'Walk away from this trainer battle — it always succeeds. The trainer can be challenged again later.'
+      : 'Leave the battle — it always succeeds.';
     this.actions.appendChild(runBtn);
+  }
+
+  /** Can any equipped skill still be used? (Otherwise the fallback attack is offered.) */
+  anySkillUsable() {
+    const p = this.battle?.player;
+    if (!p) return false;
+    return equippedSkills(p).some(({ id }) => {
+      const left = usesLeft(p, id);
+      return !Number.isFinite(left) || left > 0;
+    });
+  }
+
+  /** Keyboard 1 / 2 / 3: use the skill on that battle button (ignored when it is empty or spent). */
+  pressSlot(index) {
+    if (this.busy || !this.battle || this.battle.phase !== BattlePhase.ACTIVE) return;
+    const p = this.battle.player;
+    if (!this.anySkillUsable()) {
+      if (index === 0) this.doAction({ type: 'skill', skillId: basicAttack(p).id });
+      return;
+    }
+    const sk = equippedSkill(p, index);
+    if (!sk) return;
+    const left = usesLeft(p, sk.id);
+    if (Number.isFinite(left) && left <= 0) { toast(`${sk.name} has no uses left!`, 'bad'); return; }
+    this.doAction({ type: 'skill', index });
   }
 
   renderCaptureActions() {
@@ -476,48 +504,56 @@ export class BattleScene {
     const usable = InventoryManager.all().filter((e) => e.item.category === 'healing');
     if (!usable.length) { toast('No usable items!', 'bad'); return; }
     const list = el('div', {});
-    let chosen = null;
-    const close = await new Promise((resolve) => {
-      usable.forEach((entry) => {
-        list.appendChild(el('div', { class: 'item-row' }, [
-          el('div', { class: 'ir-main' }, [
-            el('div', { class: 'ir-name', text: entry.item.name }),
-            el('div', { class: 'ir-desc', text: entry.item.desc }),
-          ]),
-          el('div', { class: 'ir-qty', text: `x${entry.qty}` }),
-          button('USE', { class: 'small primary', onclick: () => { chosen = entry.id; resolve(true); document.getElementById('modal').classList.add('hidden'); } }),
-        ]));
-      });
-      modal({ title: 'BAG — HEALING', body: list, buttons: [{ label: 'CANCEL', value: false }] }).then(() => resolve(false));
+    usable.forEach((entry) => {
+      list.appendChild(el('div', { class: 'item-row' }, [
+        el('div', { class: 'ir-main' }, [
+          el('div', { class: 'ir-name', text: entry.item.name }),
+          el('div', { class: 'ir-desc', text: entry.item.desc }),
+        ]),
+        el('div', { class: 'ir-qty', text: `x${entry.qty}` }),
+        button('USE', { class: 'small primary', onclick: () => closeModal(entry.id) }),
+      ]));
     });
-    if (!chosen) return;
-    // pick target
-    const target = await this.pickPartyMember('Use on which Mythling?');
+    const chosen = await modal({ title: 'BAG — HEALING', body: list, buttons: [{ label: 'CANCEL', value: false }], cancelValue: false });
+    if (!chosen || typeof chosen !== 'string') return;
+    const item = getItem(chosen);
+    // pick target — the note says up front whether the item would do anything
+    const target = await this.pickPartyMember('Use on which Mythling?', () => true, (m) => {
+      const dry = applyItemEffects(item, m, { dryRun: true });
+      return dry.ok ? null : dry.reason;
+    });
     if (!target) return;
-    InventoryManager.remove(chosen, 1);
+    // Never consume an item that would do nothing (full HP, not fainted, ...).
+    const dry = applyItemEffects(item, target, { dryRun: true });
+    if (!dry.ok) { toast(dry.reason, 'bad'); AudioManager.sfx('cancel'); return; }
+    if (!InventoryManager.remove(chosen, 1)) { toast(`You have no ${item.name} left!`, 'bad'); return; }
     this.doAction({ type: 'item', itemId: chosen, targetUid: target.uid });
   }
 
-  async pickPartyMember(title, filterFn = () => true) {
+  /**
+   * Party picker. `filterFn` greys out Mythlings that cannot be chosen and
+   * `noteFn` (optional) returns a warning line per Mythling. Cards close the
+   * modal through closeModal() so the dismiss handle is always cleared.
+   */
+  async pickPartyMember(title, filterFn = () => true, noteFn = null) {
     const list = el('div', { class: 'grid-cards' });
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (v) => { if (done) return; done = true; document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').innerHTML = ''; resolve(v); };
-      PartyManager.list().forEach((m) => {
-        const ok = filterFn(m);
-        const card = el('div', { class: `myth-card ${isFainted(m) ? 'fainted' : ''}`, style: ok ? {} : { opacity: .45, pointerEvents: 'none' } }, [
-          this.miniCanvas(m),
-          el('div', { class: 'mc-main' }, [
-            el('div', { class: 'mc-name', text: displayName(m) }),
-            el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${m.currentHp}/${maxHp(m)} HP` }),
-            bar('hp', hpPercent(m), hpClass(hpPercent(m))),
-          ]),
-        ]);
-        card.addEventListener('click', () => finish(m));
-        list.appendChild(card);
-      });
-      modal({ title, body: list, buttons: [{ label: 'CANCEL', value: null }] }).then(() => finish(null));
+    PartyManager.list().forEach((m) => {
+      const ok = filterFn(m);
+      const note = noteFn ? noteFn(m) : null;
+      const card = el('div', { class: `myth-card ${isFainted(m) ? 'fainted' : ''}`, style: ok ? {} : { opacity: .45, pointerEvents: 'none' } }, [
+        this.miniCanvas(m),
+        el('div', { class: 'mc-main' }, [
+          el('div', { class: 'mc-name', text: displayName(m) }),
+          el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${m.currentHp}/${maxHp(m)} HP` }),
+          bar('hp', hpPercent(m), hpClass(hpPercent(m))),
+          note ? el('div', { class: 'mc-sub feed-note', text: note }) : null,
+        ]),
+      ]);
+      card.addEventListener('click', () => closeModal(m));
+      list.appendChild(card);
     });
+    const v = await modal({ title, body: list, buttons: [{ label: 'CANCEL', value: null }], cancelValue: null });
+    return v && v.uid ? v : null;
   }
 
   async openSwitch() {
@@ -603,7 +639,7 @@ export class BattleScene {
         break;
       case 'cast': {
         AudioManager.sfx(ev.kind === 'buff' ? 'heal' : 'click');
-        if (ev.kind === 'buff') this.playCreatureAnim(ev.side, 'buff', 0.9);
+        if (ev.kind === 'buff' || ev.kind === 'debuff') this.playCreatureAnim(ev.side, 'buff', 0.9);
         else {
           const dur = ev.category === 'special' ? 0.85 : 0.55;
           this.playCreatureAnim(ev.side, ev.category === 'special' ? 'specialAttack' : 'normalAttack', dur);
@@ -613,7 +649,7 @@ export class BattleScene {
           skillId: ev.skillId, side: ev.side, target: ev.target,
           element: ev.element, category: ev.category,
         });
-        await wait(ev.kind === 'buff' ? 260 : 230);
+        await wait(ev.kind === 'buff' || ev.kind === 'debuff' ? 260 : 230);
         break;
       }
       case 'ultimate-cast': {

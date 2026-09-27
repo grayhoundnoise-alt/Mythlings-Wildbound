@@ -1,9 +1,11 @@
-// DESIGN RULE: a Buff skill raises exactly ONE stat. `effects` stays an array so
-// the battle engine (and future multi-effect content) needs no changes, but every
-// buff in this build ships with a single entry — see buffSummary() in ui code.
+// DESIGN RULE: a Buff skill raises exactly ONE stat and a Debuff skill lowers
+// exactly ONE enemy stat. `effects` stays an array so the battle engine (and
+// future multi-effect content) needs no changes, but every buff/debuff in this
+// build ships with a single entry — see buffSummary() in ui code.
 //
-// Skill definitions. Categories: 'normal' (infinite uses), 'special', 'buff', 'ultimate'.
-// damageType: 'physical' (P.ATK vs P.DEF) | 'special' (S.ATK vs S.DEF) | null for buffs.
+// Skill definitions. Categories: 'normal' (infinite uses), 'special', 'buff',
+// 'debuff' (lowers a stat of the FOE) and 'ultimate'.
+// damageType: 'physical' (P.ATK vs P.DEF) | 'special' (S.ATK vs S.DEF) | null for buffs/debuffs.
 // Roman numerals are ONLY used for intentional stronger versions of the same skill
 // (in practice: Ultimates, which upgrade Base -> I -> II -> III).
 
@@ -78,6 +80,36 @@ export const SKILLS = {
   feather_flow:  { id: 'feather_flow',  name: 'Feather Flow',  category: 'buff', effects: [{ stat: 'spd', amount: 5 }], uses: 8, desc: 'Raises Speed.', future: true },
   sky_cyclone:   { id: 'sky_cyclone',   name: 'Sky Cyclone',   category: 'special', damageType: 'special', element: 'nature', power: 51, uses: 12, desc: 'May reduce the foe\'s Speed.', debuff: { stat: 'spd', amount: 4, chance: 0.4 }, future: true },
   gale_mastery:  { id: 'gale_mastery',  name: 'Gale Mastery',  category: 'buff', effects: [{ stat: 'satk', amount: 6 }], uses: 8, desc: 'Raises Special Attack.', future: true },
+
+  // ---------- DEBUFF skills (lower ONE stat of the FOE) ----------
+  // Every element has the same ladder: two -4 openers (P.ATK / S.ATK), a Speed
+  // opener, two -5 defence breakers and two -7 late-game curses. Species pick the
+  // ones that suit their role in species.js. Debuffs never grant Ultimate Charge.
+  // -- nature --
+  sap_drain:       { id: 'sap_drain',       name: 'Sap Drain',       category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, desc: "Saps the foe's strength. Lowers its Physical Attack." },
+  spore_haze:      { id: 'spore_haze',      name: 'Spore Haze',      category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, desc: 'A dizzying cloud of spores. Lowers the foe\'s Special Attack.' },
+  bramble_snare:   { id: 'bramble_snare',   name: 'Bramble Snare',   category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 12, desc: 'Tangles the foe in brambles. Lowers its Speed.' },
+  root_rot:        { id: 'root_rot',        name: 'Root Rot',        category: 'debuff', effects: [{ stat: 'pdef', amount: 5 }], uses: 10, desc: "Rots the foe's guard away. Lowers its Physical Defense." },
+  pollen_veil:     { id: 'pollen_veil',     name: 'Pollen Veil',     category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, desc: 'Clogs the foe\'s senses. Lowers its Special Defense.' },
+  withering_curse: { id: 'withering_curse', name: 'Withering Curse', category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'An old forest hex. Lowers the foe\'s Physical Defense sharply.' },
+  blight_bloom:    { id: 'blight_bloom',    name: 'Blight Bloom',    category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'A flower that drinks magic. Lowers the foe\'s Special Defense sharply.' },
+  // -- water --
+  soak:            { id: 'soak',            name: 'Soak',            category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, desc: 'Drenches the foe to the bone. Lowers its Physical Attack.' },
+  mist_veil:       { id: 'mist_veil',       name: 'Mist Veil',       category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, desc: 'A blinding sea mist. Lowers the foe\'s Special Attack.' },
+  undertow:        { id: 'undertow',        name: 'Undertow',        category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 12, desc: 'Drags at the foe\'s legs. Lowers its Speed.' },
+  brine_rust:      { id: 'brine_rust',      name: 'Brine Rust',      category: 'debuff', effects: [{ stat: 'pdef', amount: 5 }], uses: 10, desc: 'Salt eats through armour. Lowers the foe\'s Physical Defense.' },
+  pressure_drop:   { id: 'pressure_drop',   name: 'Pressure Drop',   category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, desc: 'Deep-sea pressure. Lowers the foe\'s Special Defense.' },
+  abyssal_chill:   { id: 'abyssal_chill',   name: 'Abyssal Chill',   category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'Cold from the trench. Lowers the foe\'s Physical Defense sharply.' },
+  riptide_pull:    { id: 'riptide_pull',    name: 'Riptide Pull',    category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'Tears the foe\'s focus away. Lowers its Special Defense sharply.' },
+  // -- fire --
+  scorch:          { id: 'scorch',          name: 'Scorch',          category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, desc: 'Burns the foe\'s limbs. Lowers its Physical Attack.' },
+  heat_haze:       { id: 'heat_haze',       name: 'Heat Haze',       category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, desc: 'Shimmering heat breaks concentration. Lowers the foe\'s Special Attack.' },
+  singe:           { id: 'singe',           name: 'Singe',           category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 12, desc: 'Scorches the foe\'s feet. Lowers its Speed.' },
+  melt_armor:      { id: 'melt_armor',      name: 'Melt Armor',      category: 'debuff', effects: [{ stat: 'pdef', amount: 5 }], uses: 10, desc: 'Softens the foe\'s hide. Lowers its Physical Defense.' },
+  ash_cloud:       { id: 'ash_cloud',       name: 'Ash Cloud',       category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, desc: 'Choking ash. Lowers the foe\'s Special Defense.' },
+  magma_brand:     { id: 'magma_brand',     name: 'Magma Brand',     category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'A searing brand. Lowers the foe\'s Physical Defense sharply.' },
+  cinder_curse:    { id: 'cinder_curse',    name: 'Cinder Curse',    category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'Smouldering cinders cling to the foe. Lowers its Special Defense sharply.' },
+
 };
 
 // ---------- Ultimates ----------
@@ -138,11 +170,37 @@ export const ULTIMATES = {
 export const ULTIMATE_MAX_CHARGE = 8;
 export const MAX_BUFF_STACKS = 30;
 
-/** Human-readable summary of a buff skill (always exactly one stat). */
+/** Battle-button / library labels for every skill category. */
+export const SKILL_CATEGORY_LABEL = { normal: 'Normal', special: 'Special', buff: 'Buff', debuff: 'Debuff', ultimate: 'Ultimate' };
+
+/** Sort order of the categories in the Skill Library and the wiki. */
+export const SKILL_CATEGORY_ORDER = ['normal', 'special', 'buff', 'debuff', 'ultimate'];
+
+/** True when a skill deals damage (Normal / Special / Ultimate). */
+export function isDamageSkill(sk) {
+  return !!sk && sk.category !== 'buff' && sk.category !== 'debuff';
+}
+
+/**
+ * Human-readable summary of a buff or debuff skill (always exactly one stat).
+ * Buffs read "P.ATK +4", debuffs read "P.DEF -5" (they lower the FOE's stat).
+ */
 export function buffSummary(sk, joiner = ' ') {
   if (!sk || !sk.effects) return '';
   const short = { hp: 'HP', patk: 'P.ATK', satk: 'S.ATK', pdef: 'P.DEF', sdef: 'S.DEF', spd: 'SPD', counter: 'CNT' };
-  return sk.effects.map((e) => `${short[e.stat] || e.stat.toUpperCase()}${joiner}+${e.amount}`).join(', ');
+  const sign = sk.category === 'debuff' ? '-' : '+';
+  return sk.effects.map((e) => `${short[e.stat] || e.stat.toUpperCase()}${joiner}${sign}${e.amount}`).join(', ');
+}
+
+/**
+ * Rank used to order skills "by level and power": lower unlock level first,
+ * then weaker before stronger (damage power, or the stat change for buffs and
+ * debuffs). `level` is the level the skill is learned at.
+ */
+export function skillStrength(sk) {
+  if (!sk) return 0;
+  if (sk.category === 'buff' || sk.category === 'debuff') return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+  return sk.power || 0;
 }
 
 export function getSkill(id) {

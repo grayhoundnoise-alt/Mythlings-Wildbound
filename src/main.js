@@ -120,9 +120,10 @@ class Game {
     } else if (this.mode === 'battle') {
       const bs = this.battleScene;
       if (bs.busy || !bs.battle) return;
-      if (k === '1') bs.doAction({ type: 'skill', slot: 'normal' });
-      else if (k === '2') bs.doAction({ type: 'skill', slot: 'special' });
-      else if (k === '3') bs.doAction({ type: 'skill', slot: 'buff' });
+      // 1 / 2 / 3 = the battle buttons, in the order the skills were equipped
+      if (k === '1') bs.pressSlot(0);
+      else if (k === '2') bs.pressSlot(1);
+      else if (k === '3') bs.pressSlot(2);
       else if (k === '4' || k === 'r') {
         const p = bs.battle.player;
         if (p.ultCharge >= 8) bs.doAction({ type: 'ultimate' });

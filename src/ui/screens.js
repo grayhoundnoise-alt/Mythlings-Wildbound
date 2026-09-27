@@ -11,7 +11,7 @@ import { SPECIES, STARTER_IDS, getSpecies } from '../data/species.js';
 import { MOODS } from '../data/moods.js';
 import { STAT_SHORT } from '../data/moods.js';
 import { getItem } from '../data/items.js';
-import { GAME_VERSION, LEVEL_CAP } from '../data/config.js';
+import { GAME_VERSION, LEVEL_CAP, STARTER_RARITY } from '../data/config.js';
 import { GameState, InventoryManager, PlayerManager, PartyManager, bus } from '../systems/GameState.js';
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
 import { drawMythling } from '../render/creatures.js';
@@ -224,7 +224,7 @@ export function starterScreen({ onChoose, onBack }) {
       el('h3', { text: sp.displayName }),
       el('div', { class: 'role', text: `${sp.breed} · ${sp.role}` }),
       el('div', { class: 'row', style: { justifyContent: 'center', gap: '5px', marginBottom: '8px' } }, [
-        elementChip(sp.element), rarityChip(sp.defaultRarity), el('span', { class: 'chip', text: MOODS[sp.defaultMood].name }),
+        elementChip(sp.element), rarityChip(STARTER_RARITY), el('span', { class: 'chip', text: MOODS[sp.defaultMood].name }),
       ]),
       el('div', { class: 'stat-mini' }, Object.keys(stats).map((k) =>
         el('div', {}, [el('span', { text: STAT_SHORT[k] }), el('b', { text: String(stats[k]) })]))),
@@ -256,7 +256,7 @@ export function starterScreen({ onChoose, onBack }) {
 
   const node = el('div', { class: 'dialog panel screen-inner', style: { maxWidth: '1080px' } }, [
     panelHeader('Choose Your First Mythling', onBack,
-      'Drag a Mythling to turn it around. Choose carefully — but do not worry, the others can still be found in the wild later.'),
+      `Drag a Mythling to turn it around. Whichever you choose joins you as a rare ${STARTER_RARITY}-tier partner — and the others can still be found in the wild later.`),
     grid,
     el('div', { class: 'row end', style: { marginTop: '18px' } }, [
       button('BACK', { class: 'ghost', onclick: onBack, sfx: 'cancel' }),
@@ -390,6 +390,10 @@ export function centerScreen({ onHeal, onParty, onStorage, onSave, onClose }) {
  */
 export function evolutionCinematic(mythling, result, onDone) {
   const SIZE = 460;                       // logical drawing units; CSS sizes the box
+  // In the summary the Mythling stands at y=330 of 460, so everything below
+  // ~356 is empty. The done-state canvas is cropped to that height (CSS keeps
+  // the same ratio) so the title sits directly under the evolved Mythling.
+  const DONE_HEIGHT = 356;
   const layer = el('div', { class: 'cinematic' });
   const stage = el('div', { class: 'cinematic-stage' });
   const cv = el('canvas', { width: SIZE, height: SIZE });
@@ -413,13 +417,16 @@ export function evolutionCinematic(mythling, result, onDone) {
 
   // Back the canvas at device resolution for whatever size CSS gave it, so the
   // Mythling is crisp instead of a 460px bitmap stretched to fit.
+  let fitDone = false;
   const fit = () => {
     const w = Math.round(cv.clientWidth || SIZE);
-    if (!w || w === cssW) return;
+    const done = layer.classList.contains('done');
+    if (!w || (w === cssW && done === fitDone)) return;
     cssW = w;
+    fitDone = done;
     const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
     cv.width = Math.round(w * dpr);
-    cv.height = Math.round(w * dpr);
+    cv.height = Math.round(w * dpr * ((done ? DONE_HEIGHT : SIZE) / SIZE));
     scale = (w * dpr) / SIZE;
   };
 

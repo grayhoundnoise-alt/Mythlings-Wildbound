@@ -29,6 +29,8 @@ const CATEGORY_FALLBACK = {
   normal:  { cast: 'none', projectile: 'contact', impact: 'slash', shake: 3 },
   special: { cast: 'gather', projectile: 'orb', impact: 'burst', shake: 7 },
   buff:    { cast: 'gather', projectile: null, impact: null, shake: 0 },
+  // debuffs fly to the foe as a dim orb; the stat-drop effect itself is played by the 'debuff' event
+  debuff:  { cast: 'gather', projectile: 'orb', impact: 'burst', shake: 2 },
   ultimate:{ cast: 'charge', projectile: 'orb', impact: 'burst', shake: 14 },
 };
 
