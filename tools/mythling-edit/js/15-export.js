@@ -93,8 +93,36 @@ const Exporter = {
       if (F.js) add(`${slug(o.name)}.object.js`, this.jsHeader(`Object: ${o.name}`) + this.js('registerObject', data));
       if (F.png) pngs.push({ name: `${slug(o.name)}.png`, canvas: customPrefabThumb(o, 256) });
     }
-    const preview = parts.join('\n\n') || '// Select at least one text format (JSON or JavaScript).';
+    if (F.game) { for (const [name, text] of this.gameFormatFiles(kind, itemId)) add(name, text); }
+    const preview = parts.join('\n\n') || '// Select at least one text format (JSON, JavaScript or Game format).';
     return { files, pngs, preview, kind, itemId };
+  },
+  /** "Game format": the item(s) rebuilt in the shape of the game's own data modules (src/data/maps.js, species.js, skills.js, skillVfx.js). */
+  gameFormatFiles(kind, itemId) {
+    if (typeof Game === 'undefined') return [];
+    const p = E.project; const out = [];
+    const lit = (v) => JSON.stringify(v, null, 2).replace(/"Infinity"/g, 'Infinity');
+    const head = (what) => `// ${what} — game-format export from MYTHLING EDIT v${EDITOR_VERSION} (${nowIso()})\n// Paste / merge into the matching src/data module. Values follow the game's schema${Game.ok ? ` as of game v${Game.meta().gameVersion} (${Game.meta().commit})` : ''}.\n`;
+    const mapEntry = (m) => { const e = Game.mapEntryFor(m); const notes = this.gameMapNotes(m); return `${head(`Map "${m.name}"`)}${notes}export const ${m.id.toUpperCase()}_MAP = ${lit(e)};\n// MAPS[${JSON.stringify(m.id)}] = ${m.id.toUpperCase()}_MAP;\n`; };
+    const speciesEntry = (my) => { const e = Game.exportSpeciesEntry(my); const ov = Game.partOverrides(my); return `${head(`Species "${my.name}"`)}${ov.length ? `// NOTE: this Mythling's game-art parts were edited in the editor; the species entry cannot express per-part offsets.\n// Part overrides (relative to the game skeleton): ${JSON.stringify(ov)}\n` : ''}${Ops.isGameRig(my) ? '' : '// NOTE: this Mythling uses an editor-built rig (not game art). Its parts / animations are in the JSON + JS exports; art.body picks the closest game body plan.\n'}export const ${e.id.toUpperCase()}_SPECIES = ${lit(e)};\n// SPECIES[${JSON.stringify(e.id)}] = ${e.id.toUpperCase()}_SPECIES;\n`; };
+    if (kind === 'map') { const m = p.maps[itemId]; if (m) out.push([`${m.id}.game.js`, mapEntry(m)]); }
+    else if (kind === 'mythling') { const my = p.mythlings[itemId]; if (my) out.push([`${my.id}.species.game.js`, speciesEntry(my)]); }
+    else if (kind === 'vfx') { const v = p.vfx[itemId]; if (v) out.push([`${v.id}.skillvfx.game.js`, `${head(`Skill VFX "${v.name}"`)}export const ${v.id.toUpperCase()}_VFX = ${lit(Game.exportVfxEntry(v))};\n// SKILL_VFX[${JSON.stringify(v.id)}] = ${v.id.toUpperCase()}_VFX;\n`]); }
+    else if (kind === 'project') {
+      const maps = Object.values(p.maps).map(mapEntry).join('\n'); if (maps) out.push([`${p.project.id}.maps.game.js`, maps]);
+      const sp = Object.values(p.mythlings).filter((m) => !/_stage\d+$/.test(m.id)).map(speciesEntry).join('\n'); if (sp) out.push([`${p.project.id}.species.game.js`, sp]);
+      const skills = Object.values(p.skills || {}); if (skills.length) out.push([`${p.project.id}.skills.game.js`, `${head('Skills')}export const SKILLS = ${lit(Object.fromEntries(skills.filter((s) => s.type !== 'ultimate').map((s) => [s.id, Game.exportSkillEntry(s)])))};\n\nexport const ULTIMATES = ${lit(Object.fromEntries(skills.filter((s) => s.type === 'ultimate').map((s) => [s.id, Game.exportSkillEntry(s)])))};\n`]);
+      const vfx = Object.values(p.vfx).filter((v) => v.game && !v.game.fallback); if (vfx.length) out.push([`${p.project.id}.skillvfx.game.js`, `${head('Skill VFX descriptors')}export const SKILL_VFX = ${lit(Object.fromEntries(vfx.map((v) => [v.id, Game.exportVfxEntry(v)])))};\n`]);
+    }
+    return out;
+  },
+  gameMapNotes(m) {
+    const props = Object.values(m.nodes).filter((n) => n.type === 'prefab' && n.prefab === 'game_prop' && !(n.parent && m.nodes[n.parent]?.locked));
+    const custom = Object.values(m.nodes).filter((n) => !n.gameId && !(n.tags || []).includes('game') && !['group', 'anchor'].includes(n.type) && !(n.type === 'prefab' && n.prefab === 'game_prop' && n.parent && m.nodes[n.parent]?.locked) && !n.behavior?.region && !n.behavior?.water);
+    let s = '';
+    if (props.length) s += `// NOTE: ${props.length} game prop(s) were placed / moved by hand. The game generates props procedurally per region (hand placement needs a props[] array or a renderer change).\n`;
+    if (custom.length) s += `// NOTE: ${custom.length} editor object(s) (${[...new Set(custom.map((n) => n.type === 'prefab' ? n.prefab : n.type))].slice(0, 8).join(', ')}) have no equivalent in the game's map schema and are only in the JSON / JS exports.\n`;
+    return s;
   },
   async download(kind, itemId, F) {
     const r = this.build(kind, itemId, F);
@@ -187,6 +215,10 @@ const Exporter = {
     lines.push('7. NPCs: kind regular/trainer/shop/healer/savepoint/quest/guide; dialogue is an ordered string array; team = [{species, level, nickname}], stock = [{item, qty, price}].');
     lines.push('8. Skills: {id,name,element,type,power,uses,animation,vfx,sound,shake}. `animation` is the caster clip name, `vfx` the VFX id, `shake` 0–1 camera shake strength.');
     lines.push('9. Evolutions: stages with level thresholds, statMult and future=true meaning locked/planned content (show as LOCKED/FUTURE in the UI).');
+    if (typeof Game !== 'undefined' && Game.ok) {
+      const gm = Object.values(p.maps).filter((m) => m.source === 'game').length, gmy = Object.values(p.mythlings).filter((m) => m.source === 'game').length;
+      lines.push(`10. GAME PRESETS: this project was started from a read-only snapshot of the game's own data (game v${Game.meta().gameVersion}, commit ${Game.meta().commit}). ${gm} map(s) and ${gmy} Mythling(s) carry source:"game" plus the original ids (node.gameId, map.game, mythling.game = {species, stage}). Nodes of type "gamepart" are the game's own creature-art layers (creatureArt.js part names: game.part) drawn live — apply the node transform on top of the game skeleton pivot; keyframes for them are additive offsets exactly like the game's CreatureAnimationController transforms (dx, dy, rot, sx, sy). Files ending in .game.js contain the same content rebuilt in the src/data schema (maps.js / species.js / skills.js / skillVfx.js) — prefer merging those into the data modules; anything without a schema equivalent is flagged with a NOTE comment.`);
+    }
     if (warnings.length) { lines.push(''); lines.push(`## VALIDATION WARNINGS (${warnings.length})`); for (const w of warnings.slice(0, 40)) lines.push(`- ${w}`); if (warnings.length > 40) lines.push(`- …and ${warnings.length - 40} more`); }
     lines.push('');
     lines.push('## SUMMARY');
@@ -212,27 +244,32 @@ const Exporter = {
       'PROJECT { project:{id,name,version,format,editorVersion,created,lastSaved,changeCount}, settings, maps{}, mythlings{}, objects{}, animations{}, vfx{}, skills{}, assets{} }',
       '',
       'NODE (map object or creature part) {',
-      '  id, type: group|rect|ellipse|polygon|path|image|text|prefab|npc|mythling|zone|spawn|warp|trigger|anchor,',
+      '  id, type: group|rect|ellipse|polygon|path|image|text|prefab|npc|mythling|zone|spawn|warp|trigger|anchor|gamepart,',
       '  name, parent, children[], x, y, rotation(deg), scaleX, scaleY, pivotX, pivotY, opacity, z, visible, locked, tags[], layer,',
       '  shape{w,h} | points[[x,y]...] (polygon/path, local space; path: closed, smooth), text/fontSize/font/bold, asset (image id), prefab (library id), variant,',
       '  fill, stroke, strokeWidth, blend, tint, brightness, glow, outline, shadow,',
       '  collision{enabled,type:rect|circle|polygon,rect[x,y,w,h],radius,points[],mode:walkable|blocked|water|trigger|special,layers{player,npc,mythling,projectile,interaction}},',
       '  behavior{interactable,text,wind:none|gentle|strong,windAmount,idle:none|bob|sway|pulse|spin,idleSpeed,idleAmount,savePoint,chest,item},',
       '  partType (creature parts), npc{kind,sprite,direction,color,dialogue[],team[],stock[],flag,reward}, mythling{species,level,behavior,facing,animation},',
-      '  zone{name,species[],minLevel,maxLevel,weight,mutationChance}, warp{toMap,toX,toY,requiredFlag,label}, trigger{event,payload,once}, spawn{kind,direction,zone,enabled}',
+      '  zone{name,species[],weights{speciesId:w},minLevel,maxLevel,weight,mutationChance}, warp{toMap,toX,toY,requiredFlag,label,lockedText}, trigger{event,payload,once}, spawn{kind,direction,zone,enabled}',
+      '  GAME PRESET fields: gameId (original id in src/data/maps.js), gameKind (game prop / landmark / building kind), seed (prop variation), behavior.region{id,terrain} (ground-terrain rectangle), behavior.water (stream|pond|sea|river|lava),',
+      '  npc{intro,defeat,reward{coins,items{}},guardian,finalBoss,gameType,sprite:"game"}; gamepart nodes: game{species,stage,part,mutation} = one live layer of the game creature art (creatureArt.js part name), owner = mythling id',
       '}',
       '',
       'MAP { id,name,width,height,cell,cols,rows,theme,music,weather,background,levelMin,levelMax,camera{minX,minY,maxX,maxY},playerSpawn,layers[{id,name,visible,locked}],',
       '      terrain{rle}, collision{rle}, terrainLegend[], collisionLegend[], nodes[], root[], encounterZones[], warps[], triggers[], spawnPoints[], npcs[], mythlings[], props[] }',
       '',
-      'MYTHLING { id,name,breed,element,rarity,mood,role,description,stage,catchRate,ultimate,bodyType,palette,stats{hp,atk,def,spd,sp},evolutions[{stage,name,level,statMult,future,skills[],ultimate,mythlingId?}],',
+      'MYTHLING { id,name,breed,element,rarity,mood,role,description,stage,catchRate,expYield,starter,spawnMaps[],skillUnlocks{level:[skillIds]},ultimate,bodyType,palette,stats{hp,patk,satk,pdef,sdef,spd,counter,crit,critMult | hp,atk,def,spd,sp},evolutions[{stage,name,level,statMult,future,art{scale,horns,wings},skills[],ultimate,mythlingId?}],',
+      '           game{species,stage,mutation,body} (present when imported from the game snapshot; source:"game"),',
       '           rig{root[],nodes[],anchors[{name,parent,x,y,worldX,worldY}],parts{ROLE:nodeId},bounds}, animations[ids or objects], vfx[ids or objects] }',
       '',
       'ANIMATION { id,name,mythlingId,duration(s),loop,fps,easing, tracks{ nodeId: { part, keys[{t,x,y,rotation,scaleX,scaleY,opacity,ease}] } } }  (values are offsets over the rest pose)',
       'VFX { id,name,category,duration, emitters[{id,name,type,attach,x,y,scale,rotation,delay,duration,opacity,color,color2,count,speed,lifetime,gravity,spread,size,glow,trail,blend}] }',
       `  type ∈ ${VFX_TYPES.join('|')}   attach ∈ ${ATTACH_POINTS.join('|')}`,
       'OBJECT (library prop) { id,name,category,w,h,behavior,root[],nodes[] }  origin = ground point',
-      'SKILL { id,name,element,type,power,uses,animation,vfx,sound,shake }',
+      'SKILL { id,name,element,type:normal|special|buff|debuff|ultimate,damageType,power,uses(0 = unlimited),effects?,tiers?(ultimates),animation,vfx,sound,shake,description,future? }',
+      'GAME FORMAT (*.game.js, optional) — the same content rebuilt in the game\'s own src/data schema: MAPS entries {id,displayName,order,element,levelRange,music,visualTheme,width,height,spawn,ambient,regions[],water[],bridges[],buildings[],landmarks[],npcs[],trainers[],encounterZones[],connections[]},',
+      '  SPECIES entries {id,displayName,breed,element,defaultRarity,defaultMood,role,starter,catchRate,expYield,description,baseStats,ultimate,spawnMaps,evolutions,skillUnlocks,art}, SKILLS/ULTIMATES and SKILL_VFX descriptors.',
       'ASSET { id,name,type,w,h,category,dataUrl }',
     ].join('\n');
   },

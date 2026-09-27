@@ -114,7 +114,7 @@ const Left = {
     const creature = isCreatureMode();
     const matches = (n) => !filter || n.name.toLowerCase().includes(filter) || n.type.includes(filter) || (n.tags || []).some((t) => t.toLowerCase().includes(filter));
     const hasMatchIn = (n) => matches(n) || n.children.some((c) => doc.nodes[c] && hasMatchIn(doc.nodes[c]));
-    const iconFor = (n) => n.type === 'group' ? (E.ui.expanded.has(n.id) ? 'folderOpen' : 'folder') : n.type === 'anchor' ? 'anchor' : n.type === 'npc' ? 'npc' : n.type === 'mythling' ? 'creature' : n.type === 'prefab' ? (PREFABS[n.prefab]?.icon || 'box') : n.type === 'zone' ? 'target' : n.type === 'warp' ? 'warp' : n.type === 'trigger' ? 'trigger' : n.type === 'spawn' ? 'spawn' : n.type === 'image' ? 'image' : n.type === 'text' ? 'text' : n.type === 'ellipse' ? 'ellipse' : n.type === 'polygon' ? 'polygon' : n.type === 'path' ? 'path' : 'rect';
+    const iconFor = (n) => n.type === 'group' ? (E.ui.expanded.has(n.id) ? 'folderOpen' : 'folder') : n.type === 'anchor' ? 'anchor' : n.type === 'npc' ? 'npc' : n.type === 'mythling' ? 'creature' : n.type === 'prefab' ? (PREFABS[n.prefab]?.icon || 'box') : n.type === 'zone' ? 'target' : n.type === 'warp' ? 'warp' : n.type === 'trigger' ? 'trigger' : n.type === 'spawn' ? 'spawn' : n.type === 'image' ? 'image' : n.type === 'text' ? 'text' : n.type === 'ellipse' ? 'ellipse' : n.type === 'polygon' ? 'polygon' : n.type === 'path' ? 'path' : n.type === 'gamepart' ? 'creature' : 'rect';
     const visit = (n, depth) => {
       if (!hasMatchIn(n)) return;
       const kids = nodeChildren(n, doc);

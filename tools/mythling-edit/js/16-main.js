@@ -19,6 +19,7 @@ const App = {
         h('div', { class: 'start-actions' }, [
           h('button', { class: 'btn big primary', onclick: () => this.newProject(), title: 'Create a new project (Ctrl+N)' }, [icon('plus'), ' NEW PROJECT']),
           h('button', { class: 'btn big', onclick: () => this.openFile(), title: 'Open a .json project file exported by MYTHLING EDIT (Ctrl+O)' }, [icon('folder'), ' OPEN PROJECT FILE']),
+          ...(Game.ok ? [h('button', { class: 'btn big', onclick: () => this.newProject({ game: true }), title: `Start from the real game data: ${Game.mapIds().length} maps, ${Game.speciesIds().length} Mythlings with the game's own art + animations, every skill and skill VFX (snapshot of game v${Game.meta().gameVersion})` }, [icon('sparkles'), ' NEW FROM GAME PRESETS'])] : []),
           h('button', { class: 'btn big', onclick: () => this.newProject({ demo: true }), title: 'Start from the bundled demo (Verdant Vale, Azure Coast, Emberwild + 5 template Mythlings)' }, [icon('sparkles'), ' NEW FROM DEMO CONTENT']),
           h('div', { class: 'hint', text: storageNote }),
           h('div', { class: 'hint', text: 'Tip: F1 or HELP → Keyboard Shortcuts. Everything you edit stays in this file; the game is never modified.' }),
@@ -32,12 +33,15 @@ const App = {
   async newProject(opts = {}) {
     if (E.project && E.dirty) { const ok = await confirmDialog('Unsaved Changes', 'You have unsaved changes. Save them before creating a new project?', 'SAVE & CONTINUE', 'DISCARD'); if (ok) await this.save(); }
     const body = h('div', { class: 'form-grid' });
-    const st = { name: 'My Wildbound Project', demo: opts.demo ?? true, templates: true };
-    body.append(fText('Project name', () => st.name, (v) => { st.name = v; }), fCheck('Include demo content (3 maps, demo NPCs, warps, zones)', () => st.demo, (v) => { st.demo = v; }), fCheck('Preload Mythling templates (Spriggo, Aquini, Emberu, Rivruff, Leaflet)', () => st.templates, (v) => { st.templates = v; }));
+    const st = { name: opts.game ? 'Mythlings Wildbound (game presets)' : 'My Wildbound Project', game: !!opts.game, demo: opts.game ? false : (opts.demo ?? true), templates: true };
+    body.append(fText('Project name', () => st.name, (v) => { st.name = v; }),
+      ...(Game.ok ? [fCheck(`Start from GAME PRESETS (${Game.mapIds().length} real maps, ${Game.speciesIds().length} Mythlings with game art + animations, all skills & VFX)`, () => st.game, (v) => { st.game = v; if (v) st.demo = false; })] : []),
+      fCheck('Include demo content (3 demo maps, demo NPCs, warps, zones)', () => st.demo, (v) => { st.demo = v; if (v) st.game = false; }), fCheck('Preload Mythling templates (Spriggo, Aquini, Emberu, Rivruff, Leaflet)', () => st.templates, (v) => { st.templates = v; }));
     const r = await dialog({ title: 'NEW PROJECT', body, buttons: [{ label: 'CANCEL', value: null }, { label: 'CREATE', value: 'ok', primary: true }] });
     if (r !== 'ok') return;
     let project;
-    if (st.demo) { project = buildDemoProject(); project.project.name = st.name || 'Untitled'; project.project.id = uid('proj'); if (!st.templates) { for (const id of Object.keys(project.mythlings)) if (id !== 'spriggo') this.stripMythling(project, id); } }
+    if (st.game && Game.ok) { project = Game.buildProject(st.name || 'Mythlings Wildbound (game presets)'); project.project.id = uid('proj'); }
+    else if (st.demo) { project = buildDemoProject(); project.project.name = st.name || 'Untitled'; project.project.id = uid('proj'); if (!st.templates) { for (const id of Object.keys(project.mythlings)) if (id !== 'spriggo') this.stripMythling(project, id); } }
     else { project = emptyProject(st.name || 'Untitled'); if (st.templates) { for (const key of Object.keys(SPECIES_TEMPLATES)) { const my = createMythlingFromTemplate(key); project.mythlings[my.id] = my; attachDefaultAnimations(project, my); } for (const v of defaultVFX()) project.vfx[v.id] = v; project.skills = defaultSkills(); } const m = newMap({ name: 'New Map', width: 1600, height: 1000 }); project.maps[m.id] = m; }
     await this.loadIntoEditor(project, { fresh: true });
     toast(`Project "${project.project.name}" created`, 'ok');
@@ -168,6 +172,37 @@ const App = {
   recentMenu() { return (E.recent || []).slice(0, 8).map((r) => ({ label: `${r.name}  —  v${r.version || 1}, ${fmtDate(r.lastSaved)}`, fn: () => this.openProjectId(r.id) })); },
   async refreshRecent() { try { E.recent = await Store.getKV('recent', []); } catch { E.recent = []; } },
   // ------------------------------------------------------------- content helpers used by menus
+  /** PROJECT → Game Presets…: pick which game maps / Mythlings / skills / VFX to add (or reset) in the current project. */
+  async gamePresets() {
+    if (!Game.ok) { toast('This build has no game data snapshot (built with --no-game)', 'warn'); return; }
+    if (!E.project) return;
+    const st = { maps: new Set(), mythlings: new Set(), skills: false, vfx: false, stage: 0 };
+    const chip = (label, on, toggle, sub) => h('button', { class: `chip ${on() ? 'active' : ''}`, title: sub || '', onclick: (e) => { toggle(); e.currentTarget.classList.toggle('active', on()); } }, [label]);
+    const mapChips = h('div', { class: 'chips' }, Game.mapIds().map((id) => chip(`${Game.map(id).displayName}${E.project.maps[id] ? ' ↺' : ''}`, () => st.maps.has(id), () => (st.maps.has(id) ? st.maps.delete(id) : st.maps.add(id)), E.project.maps[id] ? 'Already in the project — importing again RESETS it to the game version' : '')));
+    const myChips = h('div', { class: 'chips' }, Game.speciesIds().map((id) => chip(`${Game.species(id).displayName}${E.project.mythlings[id] ? ' ↺' : ''}`, () => st.mythlings.has(id), () => (st.mythlings.has(id) ? st.mythlings.delete(id) : st.mythlings.add(id)), E.project.mythlings[id] ? 'Already in the project — importing again RESETS it to the game version' : '')));
+    const meta = Game.meta();
+    const body = h('div', { class: 'form-grid' }, [
+      h('div', { class: 'hint', text: `Read-only snapshot of the game's data & art modules taken at build time (game v${meta.gameVersion}, commit ${meta.commit}, ${meta.files.length} files). Presets are copied into your project; the game itself is never modified.` }),
+      h('div', { class: 'field col' }, [h('div', { class: 'row', style: { display: 'flex', gap: '6px', alignItems: 'center' } }, [h('label', { class: 'grow', text: 'MAPS' }), h('button', { class: 'btn tiny', text: 'ALL', onclick: () => { Game.mapIds().forEach((id) => st.maps.add(id)); mapChips.querySelectorAll('.chip').forEach((c) => c.classList.add('active')); } })]), mapChips]),
+      h('div', { class: 'field col' }, [h('div', { class: 'row', style: { display: 'flex', gap: '6px', alignItems: 'center' } }, [h('label', { class: 'grow', text: 'MYTHLINGS (game art rig + 12 sampled animations)' }), h('button', { class: 'btn tiny', text: 'ALL', onclick: () => { Game.speciesIds().forEach((id) => st.mythlings.add(id)); myChips.querySelectorAll('.chip').forEach((c) => c.classList.add('active')); } })]), myChips]),
+      fSelect('Evolution stage for imported Mythlings', () => st.stage, (v) => { st.stage = +v; }, [[0, 'Base (Lv.1) — id = species'], [1, 'Stage 2 (Lv.20) — id = species_stage1'], [2, 'Stage 3 (Lv.60) — id = species_stage2'], [3, 'Stage 4 (Lv.80) — id = species_stage3']]),
+      fCheck(`All skills (${Object.keys(GameSnapshot.skills.SKILLS).length} skills + ${Object.keys(GameSnapshot.skills.ULTIMATES).length} ultimates)`, () => st.skills, (v) => { st.skills = v; }),
+      fCheck(`All skill VFX (${Object.keys(GameSnapshot.skillVfx.SKILL_VFX).length} descriptors as editable emitter VFX + element fallbacks)`, () => st.vfx, (v) => { st.vfx = v; }),
+    ]);
+    const r = await dialog({ title: 'GAME PRESETS', body, buttons: [{ label: 'CANCEL', value: null }, { label: 'IMPORT SELECTED', value: 'ok', primary: true }], wide: true });
+    if (r !== 'ok') return;
+    let n = 0;
+    History.run('Import game presets', () => {
+      if (st.skills) n += Game.importSkills(E.project);
+      if (st.vfx) { for (const vid of Object.keys(GameSnapshot.skillVfx.SKILL_VFX)) { const v = Game.importVfx(vid); if (v) { E.project.vfx[v.id] = v; n++; } } n += Game.importFallbackVfx(E.project); }
+      for (const id of st.maps) { const m = Game.importMap(id); if (m) { E.project.maps[m.id] = m; n++; } }
+      for (const id of st.mythlings) { const myId = st.stage ? `${id}_stage${st.stage}` : id; for (const aid of E.project.mythlings[myId]?.animations || []) delete E.project.animations[aid]; const my = Game.importMythling(id, { stage: st.stage, project: E.project }); if (my) { E.project.mythlings[my.id] = my; n++; } }
+    });
+    invalidateMatrices(); UI.refreshAll();
+    const firstMap = [...st.maps][0], firstMy = [...st.mythlings][0];
+    if (firstMy && !firstMap) UI.openMythling(st.stage ? `${firstMy}_stage${st.stage}` : firstMy, 'creature'); else if (firstMap) UI.openMap(firstMap);
+    toast(`${n} game preset(s) imported`, 'ok');
+  },
   addDemoContent() {
     const demo = buildDemoProject();
     History.run('Add demo content', () => {
@@ -214,6 +249,7 @@ const App = {
   },
   async boot() {
     ConsoleLog.info(`MYTHLING EDIT v${EDITOR_VERSION} starting…`);
+    try { Game.install(); Game.installLibrary(); } catch (e) { ConsoleLog.error('Game data snapshot failed to initialise: ' + e.message); }
     try { await Store.init(); } catch (e) { ConsoleLog.warn('Storage init: ' + e.message); }
     await this.refreshRecent();
     const params = new URLSearchParams(location.search);
@@ -222,11 +258,11 @@ const App = {
       // Offer the last project directly (fast path) but still show the start screen for choice
     }
     if (!E.recent.length && params.get('fresh') !== '1') {
-      // First open ever: build the demo project so the user immediately has content to explore
-      const project = buildDemoProject();
+      // First open ever: build the game-preset project (or the demo when no snapshot is embedded) so the user immediately has real content to explore
+      const project = Game.ok ? Game.buildProject() : buildDemoProject();
       await this.loadIntoEditor(project, { fresh: true });
       await this.save();
-      toast('Welcome! A demo project was created for you (Verdant Vale, Spriggo & friends).', 'ok', 5000);
+      toast(Game.ok ? `Welcome! The game's ${Game.mapIds().length} maps and ${Game.speciesIds().length} Mythlings were loaded as editable presets.` : 'Welcome! A demo project was created for you (Verdant Vale, Spriggo & friends).', 'ok', 5000);
       setTimeout(() => Screens.guide(), 600);
       return;
     }

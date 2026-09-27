@@ -335,7 +335,22 @@ const Ops = {
     E.selection = []; E.animId = my.animations[0] || null;
     UI.refreshAll();
   },
-  applyPalette(my) { History.run('~Palette', () => { const rig = buildRig(my.bodyType, my.palette); const byRole = Object.fromEntries(Object.entries(rig.parts).map(([role, id]) => [role, rig.nodes[id]])); for (const [role, id] of Object.entries(my.parts || {})) { const n = my.rig.nodes[id], src = byRole[role]; if (n && src) { n.fill = src.fill; n.stroke = src.stroke; } } }); },
+  isGameRig(my) { return !!(my && my.rig && Object.values(my.rig.nodes).some((n) => n.type === 'gamepart')); },
+  /** Game-rigged Mythlings: rebuild the parts from the game art of a species/stage (positions reset, animations re-sampled). */
+  rebuildGameRig(my, species = my.game?.species, stage = my.game?.stage || 0) {
+    if (typeof Game === 'undefined' || !Game.ok || !Game.species(species)) return false;
+    History.run('Rebuild rig from game art', () => {
+      const rig = Game.buildRig(species, stage, my.id);
+      my.rig = { nodes: rig.nodes, root: rig.root }; my.parts = rig.parts; my.game = Object.assign({}, my.game || {}, { species, stage }); my.bodyType = Game.species(species).art.body;
+      for (const aid of my.animations) delete E.project.animations[aid];
+      my.animations = [];
+      for (const a of Game.sampleAnimations(my)) { E.project.animations[a.id] = a; my.animations.push(a.id); }
+    });
+    E.selection = []; E.animId = my.animations[0] || null;
+    invalidateMatrices(); UI.refreshAll();
+    return true;
+  },
+  applyPalette(my) { if (this.isGameRig(my)) { invalidateMatrices(); Scene.invalidate(); return; } History.run('~Palette', () => { const rig = buildRig(my.bodyType, my.palette); const byRole = Object.fromEntries(Object.entries(rig.parts).map(([role, id]) => [role, rig.nodes[id]])); for (const [role, id] of Object.entries(my.parts || {})) { const n = my.rig.nodes[id], src = byRole[role]; if (n && src) { n.fill = src.fill; n.stroke = src.stroke; } } }); },
   // ------------------------------------------------------------- animations
   createAnimation(my, { name = 'New Animation', duration = 1, loop = true, fps = 60, easing = 'easeInOut' } = {}) {
     const a = { id: uid('anim'), name, mythlingId: my.id, duration, loop, fps, easing, tracks: {} };

@@ -44,8 +44,21 @@ autosave and snapshots) and exports JSON / JavaScript (`registerMythling`, `regi
 `registerAnimation`, `registerVFX`, `registerObject`), PNG previews and a **COPY FOR ARENA AI**
 implementation package that you can paste into a chat to have the content wired into the game.
 
+**Game presets.** The build embeds a *read-only snapshot* of the game's data and art modules
+(`src/data/*`, `creatureArt.js`, `creatureRig.js`, `worldRenderer.js`). A new project therefore starts
+from the real content: the 3 maps (regions, water, bridges, buildings, landmarks, NPCs, trainers,
+encounter zones, connections and the procedurally generated props, all at their game coordinates), the
+15 Mythlings (the game's art layers as live, individually editable parts with anchors; the 12 game
+animations sampled into editable keyframes; stats, evolutions, skill unlocks, palette), every skill and
+skill-VFX descriptor. `PROJECT → Game Presets…` re-imports any of them, `HELP → About the Game Data
+Snapshot` lists what was embedded, and the EXPORT screen's **Game format** option writes the edited
+content back in the `maps.js` / `species.js` / `skills.js` / `skillVfx.js` schema (also included in the
+ARENA AI package). Importing presets copies data into the project — the game files are never modified.
+
 ```bash
-node tools/build-editor.mjs   # regenerates MythlingEdit.html from tools/mythling-edit/ (sources)
+node tools/build-editor.mjs                 # regenerates MythlingEdit.html (with the game data snapshot)
+node tools/build-editor.mjs --no-game       # variant without the snapshot (demo content only)
+node tools/build-editor.mjs --check         # validate only; --out=path writes elsewhere
 ```
 
 ## Controls

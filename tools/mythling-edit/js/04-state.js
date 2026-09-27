@@ -145,6 +145,7 @@ function setWorldPosition(n, wx, wy, doc = currentDoc()) {
 }
 /** Large area markers (encounter zones / triggers) only win when nothing else is under the cursor, so they never swallow clicks on props. */
 const AREA_TYPES = ['zone', 'trigger'];
+const isAreaNode = (n) => AREA_TYPES.includes(n.type) || !!(n.behavior && (n.behavior.region || n.behavior.water));
 function hitTest(wx, wy, { includeLocked = false, includeAnchors = true, doc = currentDoc() } = {}) {
   if (!doc) return null;
   const order = drawOrder(doc);
@@ -160,7 +161,7 @@ function hitTest(wx, wy, { includeLocked = false, includeAnchors = true, doc = c
     const [lx, ly] = M.apply(inv, wx, wy);
     const tol = 4 / E.view.zoom;
     if (!hitLocal(n, lx, ly, tol)) continue;
-    if (AREA_TYPES.includes(n.type)) { if (!areaHit) areaHit = n; continue; } // props inside an area always win
+    if (isAreaNode(n)) { if (!areaHit) areaHit = n; continue; } // props inside an area (or on water / a region) always win
     return n;
   }
   return areaHit;
@@ -202,7 +203,13 @@ const History = {
     // coalesce rapid identical edits (typing in a number field, slider drags)
     const top = this.undoStack[this.undoStack.length - 1];
     if (top && top.label === lbl && lbl.startsWith('~') && now - this.lastAt < 900) { top.after = after; }
-    else { this.undoStack.push({ label: lbl, before: p.before, after }); if (this.undoStack.length > this.max) this.undoStack.shift(); }
+    else {
+      // share the string object with the previous entry when the content is identical (keeps large projects' undo memory ~halved)
+      const before = top && top.after === p.before ? top.after : p.before;
+      this.undoStack.push({ label: lbl, before, after });
+      const limit = after.length > 1.5e6 ? Math.max(20, Math.round(this.max / 2)) : this.max; // big (game-preset) projects: shorter history
+      while (this.undoStack.length > limit) this.undoStack.shift();
+    }
     this.lastAt = now; this.lastLabel = lbl;
     this.redoStack.length = 0;
     markDirty();

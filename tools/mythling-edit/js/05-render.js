@@ -52,7 +52,13 @@ function drawNodeShape(ctx, n, opts = {}) {
       ctx.restore();
       return;
     }
-    case 'npc': drawNpcSprite(ctx, n, t, n.npc?.direction); return;
+    case 'npc': if (n.npc?.sprite === 'game' && typeof Game !== 'undefined' && Game.ok) { drawGameAvatar(ctx, n, opts.still ? 0 : t); return; } drawNpcSprite(ctx, n, t, n.npc?.direction); return;
+    case 'gamepart': {
+      if (typeof Game === 'undefined' || !Game.ok) { drawMissing(ctx, n, 'Game art unavailable'); return; }
+      const my = (E.project && ((n.owner && E.project.mythlings[n.owner]) || (isCreatureMode() && E.project.mythlings[E.mythlingId]))) || opts.mythling || null;
+      Game.drawPart(ctx, n, opts.still ? 0 : t, my, { blink: opts.blink || 0, expression: opts.expression });
+      return;
+    }
     case 'mythling': {
       const my = E.project && E.project.mythlings[n.mythling?.species];
       if (!my) { drawMissing(ctx, n, 'Missing Mythling'); return; }
@@ -100,6 +106,8 @@ function drawNodeShape(ctx, n, opts = {}) {
       return;
     }
     default: {
+      if (n.type === 'rect' && n.behavior?.water) { drawGameWater(ctx, n, opts.still ? 0 : t); return; }
+      if (n.type === 'rect' && n.behavior?.region) { drawRegionRect(ctx, n, opts); return; }
       setPathFor(ctx, n);
       const hasFill = n.fill && n.fill !== 'transparent' && n.fill !== 'none';
       if (n.type === 'path' && !n.closed) { /* stroke only */ }
@@ -108,6 +116,41 @@ function drawNodeShape(ctx, n, opts = {}) {
       if (n.outline) { ctx.lineWidth = (n.strokeWidth || 2) + 2; ctx.strokeStyle = rgba('#ffffff', 0.5); ctx.stroke(); }
     }
   }
+}
+/** Water / lava rectangles imported from the game: the game's WATER_COLORS palette + animated waves. */
+function drawGameWater(ctx, n, t) {
+  const b = localBounds(n);
+  const kind = n.behavior.water || 'pond';
+  const cols = (typeof Game !== 'undefined' && Game.ok && GameSnapshot.world.WATER_COLORS[kind]) || [n.fill || '#3b82f6', n.stroke || '#60a5fa'];
+  ctx.fillStyle = cols[0]; ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.save(); ctx.beginPath(); ctx.rect(b.x, b.y, b.w, b.h); ctx.clip();
+  ctx.strokeStyle = rgba(cols[1] || '#ffffff', 0.55); ctx.lineWidth = 2;
+  const step = kind === 'sea' ? 26 : 22;
+  for (let y = b.y + 10; y < b.y + b.h; y += step) {
+    ctx.beginPath();
+    for (let x = b.x; x <= b.x + b.w; x += 12) ctx.lineTo(x, y + Math.sin(x * 0.05 + t * 1.6 + y * 0.05) * 3);
+    ctx.stroke();
+  }
+  if (kind === 'lava') { ctx.fillStyle = rgba('#ffd27a', 0.35); for (let i = 0; i < Math.max(2, (b.w * b.h) / 12000); i++) { const rx = b.x + hash2(i, n.x) * b.w, ry = b.y + hash2(n.y, i) * b.h; ctx.beginPath(); ctx.arc(rx, ry, 3 + 3 * Math.abs(Math.sin(t * 2 + i)), 0, Math.PI * 2); ctx.fill(); } }
+  ctx.restore();
+  if (n.strokeWidth > 0 && n.stroke && n.stroke !== 'none') { ctx.lineWidth = n.strokeWidth; ctx.strokeStyle = n.stroke; ctx.strokeRect(b.x, b.y, b.w, b.h); }
+}
+/** Region rectangles imported from the game (they only define which ground terrain is painted). */
+function drawRegionRect(ctx, n, opts = {}) {
+  if (!(opts.overlays === true || (opts.overlays && opts.overlays.zone))) return; // regions follow the encounter-zone overlay toggle
+  const b = localBounds(n);
+  const ti = TERRAIN_INDEX[typeof Game !== 'undefined' && Game.ok ? Game.gameTerrainId(n.behavior.region.terrain) : 'grass'];
+  const col = TERRAINS[ti]?.accent || '#ffffff';
+  ctx.setLineDash([10, 8]); ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = 1.5; ctx.strokeRect(b.x, b.y, b.w, b.h); ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const label = `${n.name} · ${n.behavior.region.terrain}`; const tw = ctx.measureText(label).width + 10;
+  ctx.fillRect(b.x + 4, b.y + 4, tw, 16); ctx.fillStyle = '#e8f0ff'; ctx.fillText(label, b.x + 9, b.y + 6);
+}
+/** NPCs / trainers imported from the game are drawn with the game's own trainer avatar. */
+function drawGameAvatar(ctx, n, t) {
+  const npc = n.npc || {};
+  GameSnapshot.world.drawTrainerAvatar(ctx, 0, 0, npc.color || '#7ad06a', t, { phase: (n.x || 0) * 0.01, cap: npc.kind === 'trainer' });
+  if (npc.kind === 'trainer' && (npc.guardian || npc.finalBoss)) { ctx.fillStyle = npc.finalBoss ? '#ffd166' : '#9fd8ff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(npc.finalBoss ? 'FINAL BOSS' : 'GUARDIAN', 0, -58); }
 }
 /** Draw a Mythling rig scaled so its ground sits at y=0 of the current transform. */
 function drawMythlingInline(ctx, my, anim, t, targetH, flip) {
@@ -191,7 +234,7 @@ function terrainPattern(ctx, idx) {
   const rnd = seededRandom(idx * 77 + 3);
   for (let i = 0; i < 26; i++) {
     const x = rnd() * 64, y = rnd() * 64;
-    if (t.id === 'grass' || t.id === 'forest') { g.fillRect(x, y, 2, 5); }
+    if (t.id === 'grass' || t.id === 'forest' || t.game) { g.fillRect(x, y, 2, 5); }
     else if (t.id === 'water') { g.fillStyle = rgba('#ffffff', 0.18); g.fillRect(x, y, 8, 1.5); g.fillStyle = t.accent; }
     else if (t.id === 'lava') { g.fillStyle = '#ffb060'; g.beginPath(); g.arc(x, y, 2, 0, 7); g.fill(); g.fillStyle = t.accent; }
     else if (t.id === 'rock' || t.id === 'cliff') { g.fillStyle = shade(t.color, 0.25); g.fillRect(x, y, 5, 3); g.fillStyle = t.accent; }

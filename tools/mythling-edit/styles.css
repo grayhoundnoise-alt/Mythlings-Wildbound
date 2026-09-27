@@ -506,7 +506,8 @@ input.search { margin: 6px 0; }
 .dlg-line { display: grid; grid-template-columns: 26px 1fr auto auto auto; gap: 6px; align-items: center; }
 .dlg-line .idx { color: var(--dim); font-family: var(--mono); font-size: 11px; text-align: right; }
 .team-list { display: flex; flex-direction: column; gap: 6px; min-width: 480px; }
-.team-row { display: grid; grid-template-columns: 1fr 80px 1fr auto; gap: 6px; align-items: center; }
+.team-row { display: grid; grid-template-columns: 1.2fr 64px 0.9fr 0.9fr 1fr auto; gap: 6px; align-items: center; }
+.team-row select, .team-row input { min-width: 0; }
 .snap-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow: auto; }
 .snap-list .list-item { border: 1px solid var(--line); background: #0e182b; }
 .snap-list .list-item .meta { color: var(--muted); font-size: 11px; }
@@ -551,3 +552,9 @@ pre.ref { font: 11.5px/1.5 var(--mono); background: #070c16; border: 1px solid v
 .pt-dialog .hint { margin-top: 6px; }
 .pt-dialog.encounter { border-color: var(--red); box-shadow: 0 0 40px rgba(248,113,113,.25); }
 #app.playtest #center-head { display: none; }
+
+/* ---- game data snapshot dialog */
+.kv-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+.kv-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 8px 4px 0; vertical-align: top; white-space: nowrap; width: 150px; }
+.kv-table td { padding: 4px 0; word-break: break-word; border-bottom: 1px solid var(--line); }
+textarea.bad, input.bad { outline: 1px solid #ef4444; }

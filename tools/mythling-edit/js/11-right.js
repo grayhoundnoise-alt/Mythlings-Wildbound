@@ -110,8 +110,25 @@ const Right = {
       h('div', { class: 'field col' }, [h('label', { text: 'Species pool' }), h('div', { class: 'chips' }, Object.values(E.project.mythlings).map((m) => h('button', { class: `chip ${n.zone.species.includes(m.id) ? 'active' : ''}`, text: m.name, onclick: (e) => { ed('Species pool', () => { n.zone.species = n.zone.species.includes(m.id) ? n.zone.species.filter((s) => s !== m.id) : [...n.zone.species, m.id]; }); e.target.classList.toggle('active'); } })))]),
       fText('Extra species ids', () => n.zone.species.filter((s) => !E.project.mythlings[s]).join(', '), (v) => ed('Species pool', () => { n.zone.species = [...n.zone.species.filter((s) => E.project.mythlings[s]), ...v.split(',').map((s) => s.trim()).filter(Boolean)]; }), { placeholder: 'ids not in this project' }),
       fRow([fNum('Min level', () => n.zone.minLevel, (v) => ed('Levels', () => { n.zone.minLevel = Math.max(1, v); }), { min: 1 }), fNum('Max level', () => n.zone.maxLevel, (v) => ed('Levels', () => { n.zone.maxLevel = Math.max(1, v); }), { min: 1 })]),
-      fRow([fNum('Weight', () => n.zone.weight, (v) => ed('Weight', () => { n.zone.weight = v; }), { min: 0 }), fNum('Mutation %', () => n.zone.mutationChance, (v) => ed('Mutation', () => { n.zone.mutationChance = v; }), { min: 0, max: 100 })]),
+      fRow([fNum('Density (weight)', () => n.zone.weight, (v) => ed('Weight', () => { n.zone.weight = v; }), { min: 0 }), fNum('Mutation %', () => n.zone.mutationChance, (v) => ed('Mutation', () => { n.zone.mutationChance = v; }), { min: 0, max: 100 })]),
+      ...(n.zone.species.length ? [h('div', { class: 'field col' }, [h('label', { text: 'Species weights (relative odds)' }), ...n.zone.species.map((sid) => { const tot = n.zone.species.reduce((a, id) => a + ((n.zone.weights || {})[id] ?? 1), 0); return fRow([fNum(E.project.mythlings[sid]?.name || sid, () => (n.zone.weights || {})[sid] ?? 1, (v) => ed('Species weight', () => { n.zone.weights = n.zone.weights || {}; n.zone.weights[sid] = Math.max(0, v); }), { min: 0 }), h('span', { class: 'dim', style: { alignSelf: 'center', minWidth: '38px', textAlign: 'right' }, text: `${tot ? Math.round((((n.zone.weights || {})[sid] ?? 1) / tot) * 100) : 0}%` })]); })])] : []),
       fRow([fNum('Width', () => n.shape.w, (v) => ed('Size', () => { n.shape.w = v; }), { key: 'w', min: 8 }), fNum('Height', () => n.shape.h, (v) => ed('Size', () => { n.shape.h = v; }), { key: 'h', min: 8 })]),
+    ]));
+    if (n.type === 'rect' && n.behavior?.region) body.appendChild(sectionEl('GAME REGION (ground terrain)', [
+      fText('Region id', () => n.behavior.region.id || '', (v) => ed('Region id', () => { n.behavior.region.id = slug(v); })),
+      fSelect('Terrain', () => n.behavior.region.terrain, (v) => ed('Region terrain', () => { n.behavior.region.terrain = v; }), Game.ok ? Object.keys(GameSnapshot.world.TERRAIN) : [n.behavior.region.terrain]),
+      fRow([fNum('Width', () => n.shape.w, (v) => ed('Size', () => { n.shape.w = v; }), { key: 'w', min: 8 }), fNum('Height', () => n.shape.h, (v) => ed('Size', () => { n.shape.h = v; }), { key: 'h', min: 8 })]),
+      h('button', { class: 'btn small', text: 'REPAINT GROUND FROM REGIONS', title: 'Re-paints the map\'s ground terrain from all region rectangles (in hierarchy order)', onclick: () => { History.run('Repaint regions', () => Game.repaintRegions(doc)); Scene.invalidate(); toast('Ground repainted from regions'); } }),
+      h('div', { class: 'hint', text: 'In the game a region only decides which ground texture / prop set is used inside its rectangle. Regions are exported to maps.js as-is.' }),
+    ]));
+    if (n.type === 'rect' && n.behavior?.water) body.appendChild(sectionEl('WATER / LAVA', [
+      fSelect('Kind', () => n.behavior.water, (v) => ed('Water kind', () => { n.behavior.water = v; const c = Game.ok && GameSnapshot.world.WATER_COLORS[v]; if (c) { n.fill = c[0]; n.stroke = c[1]; } n.collision.mode = 'water'; }), Game.ok ? Object.keys(GameSnapshot.world.WATER_COLORS) : ['stream', 'pond', 'sea', 'river', 'lava']),
+      fRow([fNum('Width', () => n.shape.w, (v) => ed('Size', () => { n.shape.w = v; n.collision.rect = [-v / 2, -n.shape.h / 2, v, n.shape.h]; }), { key: 'w', min: 8 }), fNum('Height', () => n.shape.h, (v) => ed('Size', () => { n.shape.h = v; n.collision.rect = [-n.shape.w / 2, -v / 2, n.shape.w, v]; }), { key: 'h', min: 8 })]),
+      h('div', { class: 'hint', text: 'Water blocks walking (bridges let the player cross). Exported to maps.js water[].' }),
+    ]));
+    if (n.type === 'gamepart') body.appendChild(sectionEl('GAME ART PART', [
+      kvRow('Species', n.game.species), kvRow('Part', n.game.part), kvRow('Stage', String(n.game.stage)),
+      h('div', { class: 'hint', text: 'This layer is drawn live by the game\'s creature art (palette + expression follow the Mythling). Transform / opacity / visibility / z-order are yours to edit; the vector shape itself lives in the game.' }),
     ]));
     if (n.type === 'warp') body.appendChild(sectionEl('WARP', [
       fSelect('Destination map', () => n.warp.toMap, (v) => ed('Warp', () => { n.warp.toMap = v; }), [['', '(none)'], ...Object.values(E.project.maps).map((m) => [m.id, m.name])]),
@@ -119,6 +136,7 @@ const Right = {
       h('button', { class: 'btn tiny', text: 'USE DESTINATION PLAYER SPAWN', onclick: () => { const m = E.project.maps[n.warp.toMap]; const sp = m && Object.values(m.nodes).find((x) => x.type === 'spawn' && x.spawn.kind === 'player'); if (sp) { ed('Warp', () => { n.warp.toX = sp.x; n.warp.toY = sp.y; }); this.render(); } else toast('Destination map has no player spawn', 'warn'); } }),
       fText('Required flag', () => n.warp.requiredFlag, (v) => ed('Warp', () => { n.warp.requiredFlag = v; }), { placeholder: 'e.g. beat_gym_1' }),
       fText('Label', () => n.warp.label, (v) => ed('Warp', () => { n.warp.label = v; })),
+      fText('Locked message', () => n.warp.lockedText || '', (v) => ed('Warp', () => { n.warp.lockedText = v; }), { placeholder: 'Shown when the required flag / item is missing', multiline: true }),
       fRow([fNum('Width', () => n.shape.w, (v) => ed('Size', () => { n.shape.w = v; }), { key: 'w', min: 8 }), fNum('Height', () => n.shape.h, (v) => ed('Size', () => { n.shape.h = v; }), { key: 'h', min: 8 })]),
     ]));
     if (n.type === 'trigger') body.appendChild(sectionEl('TRIGGER', [
@@ -141,11 +159,17 @@ const Right = {
     body.appendChild(sectionEl('NPC', [
       fText('Display name', () => n.name, (v) => Ops.rename(n.id, v)),
       fSelect('Type', () => n.npc.kind, (v) => ed('NPC type', () => { n.npc.kind = v; }), NPC_TYPES.map((t) => [t, t === 'savepoint' ? 'Save Point' : titleCase(t)])),
-      fSelect('Sprite', () => n.npc.sprite, (v) => ed('Sprite', () => { n.npc.sprite = v; }), ['villager', 'trainer', 'elder', 'merchant', 'nurse', 'ranger', 'child', 'guard']),
+      fSelect('Sprite', () => n.npc.sprite, (v) => ed('Sprite', () => { n.npc.sprite = v; }), [...(typeof Game !== 'undefined' && Game.ok ? [['game', 'Game avatar (drawTrainerAvatar)']] : []), 'villager', 'trainer', 'elder', 'merchant', 'nurse', 'ranger', 'child', 'guard']),
       fSelect('Direction', () => n.npc.direction, (v) => ed('Direction', () => { n.npc.direction = v; }), ['down', 'up', 'left', 'right']),
       fColor('Outfit color', () => n.npc.color, (v) => ed('NPC color', () => { n.npc.color = v; })),
       fText('Story flag', () => n.npc.flag, (v) => ed('Flag', () => { n.npc.flag = v; }), { placeholder: 'set when talked to / defeated' }),
-      fText('Reward', () => n.npc.reward || '', (v) => ed('Reward', () => { n.npc.reward = v; }), { placeholder: 'item id or coins' }),
+      ...(n.npc.kind === 'trainer' ? [
+        fText('Intro line', () => n.npc.intro ?? n.npc.dialogue[0] ?? '', (v) => ed('Intro', () => { n.npc.intro = v; if (!n.npc.dialogue.length) n.npc.dialogue = [v]; else n.npc.dialogue[0] = v; }), { multiline: true }),
+        fText('Defeat line', () => n.npc.defeat || '', (v) => ed('Defeat line', () => { n.npc.defeat = v; }), { multiline: true }),
+        fRow([fNum('Reward coins', () => (typeof n.npc.reward === 'object' && n.npc.reward ? n.npc.reward.coins : +n.npc.reward) || 0, (v) => ed('Reward', () => { n.npc.reward = Object.assign({ coins: 0, items: {} }, typeof n.npc.reward === 'object' ? n.npc.reward : {}); n.npc.reward.coins = Math.max(0, Math.round(v)); }), { min: 0, step: 10 }),
+          fText('Reward items', () => Object.entries((typeof n.npc.reward === 'object' && n.npc.reward?.items) || {}).map(([k, q]) => `${k}:${q}`).join(', '), (v) => ed('Reward', () => { n.npc.reward = Object.assign({ coins: 0, items: {} }, typeof n.npc.reward === 'object' ? n.npc.reward : {}); n.npc.reward.items = Object.fromEntries(v.split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const [id, q] = x.split(':'); return [slug(id), Math.max(1, parseInt(q, 10) || 1)]; })); }), { placeholder: 'potion:2, basic_ball:5' })]),
+        fRow([fCheck('Guardian (map boss)', () => !!n.npc.guardian, (v) => ed('Guardian', () => { n.npc.guardian = v; })), fCheck('Final boss', () => !!n.npc.finalBoss, (v) => ed('Final boss', () => { n.npc.finalBoss = v; }))]),
+      ] : [fText('Reward', () => (typeof n.npc.reward === 'object' && n.npc.reward ? `${n.npc.reward.coins || 0} coins` : n.npc.reward || ''), (v) => ed('Reward', () => { n.npc.reward = v; }), { placeholder: 'item id or coins' })]),
       h('div', { class: 'row', style: { display: 'flex', gap: '4px', padding: '6px 0', flexWrap: 'wrap' } }, [
         h('button', { class: 'btn small primary', text: 'EDIT DIALOGUE', onclick: () => Screens.editDialogue(n) }),
         h('button', { class: 'btn small', text: 'EDIT TEAM', onclick: () => Screens.editTeam(n) }),
@@ -296,8 +320,18 @@ const Right = {
   renderMythlingProps(body, my, tab) {
     const ed = (label, fn) => History.run(`~${label}`, fn);
     if (tab === 'transform' || tab === 'appearance') {
-      body.appendChild(sectionEl('PALETTE', Object.entries(my.palette || {}).map(([k, v]) => fColor(titleCase(k), () => v, (c) => { my.palette[k] = c; Ops.applyPalette(my); }))));
-      body.appendChild(sectionEl('RIG', [kvRow('Body template', my.bodyType), kvRow('Parts', String(Object.values(my.rig.nodes).filter((n) => n.type !== 'anchor').length)), kvRow('Anchors', String(Object.values(my.rig.nodes).filter((n) => n.type === 'anchor').length)), h('div', { class: 'hint', text: 'Select a part on the canvas or in CREATURE PARTS to edit its transform and appearance.' })]));
+      const gameRig = Ops.isGameRig(my);
+      body.appendChild(sectionEl('PALETTE', [...Object.entries(my.palette || {}).map(([k, v]) => fColor(titleCase(k), () => v, (c) => { ed('Palette', () => { my.palette[k] = c; }); Ops.applyPalette(my); })), ...(gameRig ? [h('div', { class: 'hint', text: 'Game-art parts are painted live: light / shadow / deep / belly-shade tones are derived from these six colours exactly like the game does.' }), h('button', { class: 'btn small', text: 'RESET TO GAME COLOURS', onclick: () => { const sp = Game.species(my.game?.species); if (!sp) return; ed('Reset palette', () => { my.palette = { primary: sp.art.primary, secondary: sp.art.secondary, belly: sp.art.belly, accent: sp.art.accent, eye: sp.art.eye, dark: sp.art.dark }; }); Ops.applyPalette(my); this.render(); } })] : [])]));
+      body.appendChild(sectionEl('RIG', [
+        gameRig ? kvRow('Source', `Game art · ${my.game?.species} · stage ${my.game?.stage ?? 0}`) : kvRow('Body template', my.bodyType),
+        kvRow('Parts', String(Object.values(my.rig.nodes).filter((n) => n.type !== 'anchor').length)), kvRow('Anchors', String(Object.values(my.rig.nodes).filter((n) => n.type === 'anchor').length)),
+        ...(gameRig ? [
+          fSelect('Mutation palette', () => my.game?.mutation || 'none', (v) => { ed('Mutation', () => { my.game.mutation = v; }); Ops.applyPalette(my); }, Object.keys(GameSnapshot.mutations.MUTATIONS)),
+          fSelect('Expression', () => my.expression || 'neutral', (v) => { ed('Expression', () => { my.expression = v; }); Scene.invalidate(); }, Object.keys(GameSnapshot.art.EXPRESSIONS)),
+          h('button', { class: 'btn small', text: 'REBUILD FROM GAME ART', title: 'Restore the original part positions of this species / stage and re-sample the 12 game animations', onclick: async () => { if (await confirmDialog('Rebuild rig', `Rebuild ${my.name} from the game art of ${my.game?.species} (stage ${my.game?.stage ?? 0})? Part edits and animation edits will be replaced by the game originals.`, 'REBUILD')) Ops.rebuildGameRig(my); } }),
+          h('div', { class: 'hint', text: 'Each part is one live layer of the game\'s creature art: move / rotate / scale / hide it, animate it on the timeline, or add extra vector parts as children.' }),
+        ] : [h('div', { class: 'hint', text: 'Select a part on the canvas or in CREATURE PARTS to edit its transform and appearance.' })]),
+      ]));
       return;
     }
     if (tab === 'behavior') { body.appendChild(sectionEl('ANIMATIONS', my.animations.map((id) => E.project.animations[id]).filter(Boolean).map((a) => h('div', { class: 'list-item compact', onclick: () => { UI.setMode('animation'); UI.setAnimation(a.id); } }, [icon('film', 'ticon'), h('span', { class: 'grow', text: a.name }), h('span', { class: 'dim', text: `${a.duration}s` })])), [h('button', { class: 'btn tiny', text: '+ NEW', onclick: () => Screens.newAnimation() })])); body.appendChild(sectionEl('VFX', [h('div', { class: 'chips' }, Object.values(E.project.vfx).map((v) => h('button', { class: `chip ${(my.vfx || []).includes(v.id) ? 'active' : ''}`, text: v.name, onclick: (e) => { ed('Mythling VFX', () => { my.vfx = (my.vfx || []).includes(v.id) ? my.vfx.filter((x) => x !== v.id) : [...(my.vfx || []), v.id]; }); e.target.classList.toggle('active'); } })))])); return; }
@@ -311,10 +345,15 @@ const Right = {
       fSelect('Mood', () => my.mood, (v) => ed('Mood', () => { my.mood = v; }), MOODS),
       fText('Role', () => my.role, (v) => ed('Role', () => { my.role = v; }), { placeholder: 'Starter · Wild · Boss' }),
       fText('Description', () => my.description, (v) => ed('Description', () => { my.description = v; }), { multiline: true }),
-      fSelect('Body template', () => my.bodyType, async (v) => { if (await confirmDialog('Rebuild Rig', `Rebuild ${my.name}'s rig with the ${v} template? Parts and animations will be regenerated.`, 'REBUILD')) Ops.rebuildRig(my, v); else this.render(); }, Object.keys(BODY_TEMPLATES)),
+      Ops.isGameRig(my)
+        ? fSelect('Game species art', () => my.game?.species, async (v) => { if (v !== my.game?.species && await confirmDialog('Rebuild Rig', `Rebuild ${my.name}'s rig from the game art of ${v}? Parts and animations will be regenerated.`, 'REBUILD')) Ops.rebuildGameRig(my, v, my.game?.stage || 0); else this.render(); }, Game.speciesIds())
+        : fSelect('Body template', () => my.bodyType, async (v) => { if (await confirmDialog('Rebuild Rig', `Rebuild ${my.name}'s rig with the ${v} template? Parts and animations will be regenerated.`, 'REBUILD')) Ops.rebuildRig(my, v); else this.render(); }, Object.keys(BODY_TEMPLATES)),
       fNum('Catch rate', () => my.catchRate, (v) => ed('Catch rate', () => { my.catchRate = clamp(v, 0, 1); }), { step: 0.05, min: 0, max: 1 }),
+      fNum('Exp yield', () => my.expYield ?? 60, (v) => ed('Exp yield', () => { my.expYield = Math.max(0, Math.round(v)); }), { step: 5, min: 0 }),
+      fCheck('Starter', () => !!my.starter, (v) => ed('Starter', () => { my.starter = !!v; })),
       fText('Ultimate', () => my.ultimate, (v) => ed('Ultimate', () => { my.ultimate = v; })),
-      fSelect('Stage', () => my.stage, (v) => ed('Stage', () => { my.stage = +v; }), [[0, 'Base (Lv.1)'], [1, 'Stage 2 (Lv.20)'], [2, 'Stage 3 (Lv.60)'], [3, 'Stage 4 (Lv.80)']]),
+      fText('Spawn maps', () => (my.spawnMaps || []).join(', '), (v) => ed('Spawn maps', () => { my.spawnMaps = v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean); }), { placeholder: 'verdant_vale, azure_coast' }),
+      fSelect('Stage', () => my.stage, (v) => { if (Ops.isGameRig(my)) { History.run('Stage', () => Game.applyStage(my, +v)); invalidateMatrices(); UI.refreshAll(); } else ed('Stage', () => { my.stage = +v; }); }, [[0, 'Base (Lv.1)'], [1, 'Stage 2 (Lv.20)'], [2, 'Stage 3 (Lv.60)'], [3, 'Stage 4 (Lv.80)']]),
     ]));
     body.appendChild(sectionEl('BASE STATS', [
       ...Object.keys(my.stats).map((k) => fRange(k.toUpperCase(), () => my.stats[k], (v) => ed('Stats', () => { my.stats[k] = Math.round(v); }), { min: 0, max: k === 'hp' ? 400 : 200, step: 1 })),

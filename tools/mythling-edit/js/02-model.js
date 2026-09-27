@@ -31,7 +31,7 @@ const VFX_CATEGORIES = ['Nature', 'Water', 'Fire', 'Universal', 'Buff', 'Debuff'
 const ATTACH_POINTS = ['AttackOrigin', 'VFXOrigin', 'Mouth', 'Head', 'Body', 'BodyCenter', 'Tail', 'TailBase', 'Root', 'Target', 'TargetCenter', 'World'];
 const NPC_TYPES = ['regular', 'trainer', 'shop', 'healer', 'savepoint', 'quest', 'guide'];
 const BLEND_MODES = ['source-over', 'lighter', 'multiply', 'screen', 'overlay'];
-const NODE_TYPES = ['group', 'rect', 'ellipse', 'polygon', 'path', 'image', 'text', 'prefab', 'npc', 'mythling', 'zone', 'spawn', 'warp', 'trigger', 'anchor'];
+const NODE_TYPES = ['group', 'rect', 'ellipse', 'polygon', 'path', 'image', 'text', 'prefab', 'npc', 'mythling', 'zone', 'spawn', 'warp', 'trigger', 'anchor', 'gamepart'];
 const CREATURE_PART_TYPES = ['Body', 'Head', 'Ear', 'Eye', 'Snout', 'Leg', 'Tail', 'Wing', 'Fin', 'Horn', 'Mane', 'Detail', 'Group'];
 
 // ---------------------------------------------------------------- node factory
@@ -54,11 +54,18 @@ function makeNode(type, props = {}) {
     n.collision = Object.assign(n.collision, { enabled: true, type: 'circle', radius: 20 });
   }
   if (type === 'text') { n.text = props.text || 'Text'; n.fontSize = props.fontSize || 18; n.fill = props.fill || '#ffffff'; }
+  if (type === 'gamepart') { n.game = Object.assign({ species: 'spriggo', stage: 0, part: 'body', mutation: 'none' }, props.game || {}); n.fill = 'transparent'; n.stroke = 'transparent'; n.strokeWidth = 0; n.shadow = false; }
   return n;
 }
 function makePrefabNode(prefabId, x, y, extra = {}) {
   const pf = PREFABS[prefabId];
   if (!pf) return makeNode('rect', { x, y });
+  if (pf.alias) {
+    const n = makePrefabNode(pf.alias, x, y, Object.assign({ name: pf.name.replace(/ \(game\)$/, ''), gameKind: pf.gameKind, layer: pf.layer || PREFABS[pf.alias].layer, shape: { w: pf.w, h: pf.h }, seed: round(Math.random() * 1000, 3) }, extra));
+    if (pf.alias === 'game_building') { n.behavior.kind = pf.gameKind; n.behavior.name = n.name; n.collision.rect = [-pf.w / 2, -pf.h, pf.w, Math.max(4, pf.h - 10)]; }
+    if (pf.alias === 'game_landmark') { n.behavior.interactable = pf.gameKind === 'sign'; if (pf.gameKind === 'sign') { n.behavior.text = 'A wooden sign.'; n.collision.rect = [-6, -8, 12, 8]; } if (pf.gameKind === 'volcano') n.collision.rect = [-120, -60, 240, 60]; }
+    return n;
+  }
   const n = makeNode('prefab', Object.assign({
     name: pf.name, prefab: prefabId, x, y, layer: pf.layer || 'objects', shape: { w: pf.w, h: pf.h }, fill: pf.fill || '#6fa8dc', variant: 0,
   }, extra));
@@ -72,7 +79,9 @@ function localBounds(n) {
     case 'group': return { x: -8, y: -8, w: 16, h: 16 };
     case 'anchor': return { x: -6, y: -6, w: 12, h: 12 };
     case 'polygon': case 'path': return boundsOfPoints(n.points || []);
-    case 'prefab': case 'npc': case 'mythling': return { x: -n.shape.w / 2, y: -n.shape.h, w: n.shape.w, h: n.shape.h };
+    case 'gamepart': return (typeof Game !== 'undefined' && Game.ok) ? Game.partBounds(n) : { x: -n.shape.w / 2, y: -n.shape.h / 2, w: n.shape.w, h: n.shape.h };
+    case 'prefab': if (n.prefab === 'game_prop' || n.prefab === 'game_landmark') { const b = (n.prefab === 'game_prop' ? GAME_PROP_BOX[n.gameKind] : GAME_LANDMARK_BOX[n.gameKind]) || [-n.shape.w / 2, -n.shape.h, n.shape.w, n.shape.h]; return { x: b[0], y: b[1], w: b[2], h: b[3] }; } // falls through
+    case 'npc': case 'mythling': return { x: -n.shape.w / 2, y: -n.shape.h, w: n.shape.w, h: n.shape.h };
     case 'text': { const w = (n.text || '').length * (n.fontSize || 18) * 0.55; return { x: -w / 2, y: -(n.fontSize || 18) * 0.7, w, h: (n.fontSize || 18) * 1.2 }; }
     default: return { x: -n.shape.w / 2, y: -n.shape.h / 2, w: n.shape.w, h: n.shape.h };
   }
@@ -176,7 +185,7 @@ const PREFABS = {
   save_point: { name: 'Save Point', category: 'General', icon: 'star', w: 44, h: 64, layer: 'objects', collision: { type: 'circle', radius: 14 }, behavior: { interactable: true, savePoint: true, animated: true },
     draw(ctx, n, t = 0) { const pulse = 0.6 + 0.4 * Math.sin(t * 3); pfEllipse(ctx, 0, 0, 22, 8, rgba('#7fd6ff', 0.35 * pulse)); pfRect(ctx, -6, -28, 12, 28, '#c8d2dc', '#5c6670', 3); ctx.save(); ctx.shadowColor = '#7fd6ff'; ctx.shadowBlur = 16 * pulse; pfPoly(ctx, [[0, -60], [10, -40], [0, -28], [-10, -40]], '#9fe4ff', '#3f86c8'); ctx.restore(); } },
 };
-const PREFAB_CATEGORIES = ['Nature', 'Water', 'Fire', 'General', 'Custom'];
+const PREFAB_CATEGORIES = ['Nature', 'Water', 'Fire', 'General', 'Custom']; // 'Game' is appended by Game.install() when a game data snapshot is embedded
 
 // NPC sprite (procedural little person) — shared by the prefab renderer, playtest and browser
 function drawNpcSprite(ctx, n, t = 0, facing = 'down') {

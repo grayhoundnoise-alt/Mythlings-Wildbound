@@ -134,12 +134,23 @@ const Playtest = {
     }
   },
   inRect(n, map, x, y) { const b = worldBounds(n, map); return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h; },
-  cellBlocked(map, x, y) { const c = Math.floor(x / map.cell), r = Math.floor(y / map.cell); if (c < 0 || r < 0 || c >= map.cols || r >= map.rows) return true; const v = map.collision[r * map.cols + c]; return v === 1 || v === 2; },
+  cellBlocked(map, x, y, onBridge = false) { const c = Math.floor(x / map.cell), r = Math.floor(y / map.cell); if (c < 0 || r < 0 || c >= map.cols || r >= map.rows) return true; const v = map.collision[r * map.cols + c]; return v === 1 || (v === 2 && !onBridge); },
+  /** Bridges / docks (behavior.bridge) let the player cross water: true when the point is on one. */
+  onBridge(map, x, y) {
+    for (const n of allNodes(map)) {
+      if (!n.behavior?.bridge || !n.visible) continue;
+      const [bx, by] = worldPos(n, map); const w = (n.shape?.w || 0) * Math.abs(n.scaleX || 1), hh = (n.shape?.h || 0) * Math.abs(n.scaleY || 1);
+      if (x >= bx - w / 2 - 6 && x <= bx + w / 2 + 6 && y >= by - hh - 6 && y <= by + 6) return true;
+    }
+    return false;
+  },
   canStand(map, x, y, r = 12, ignoreId = null) {
-    for (const [ox, oy] of [[-r, -r * 0.5], [r, -r * 0.5], [-r, r * 0.6], [r, r * 0.6]]) if (this.cellBlocked(map, x + ox, y + oy)) return false;
+    const onBridge = this.onBridge(map, x, y);
+    for (const [ox, oy] of [[-r, -r * 0.5], [r, -r * 0.5], [-r, r * 0.6], [r, r * 0.6]]) if (this.cellBlocked(map, x + ox, y + oy, onBridge)) return false;
     for (const n of allNodes(map)) {
       if (!n.collision?.enabled || !n.visible || n.id === ignoreId || !n.collision.layers?.player) continue;
       if (n.collision.mode && n.collision.mode !== 'blocked' && n.collision.mode !== 'water') continue;
+      if (n.collision.mode === 'water' && onBridge) continue;
       if (n.type === 'zone' || n.type === 'warp' || n.type === 'trigger' || n.type === 'spawn') continue;
       const s = collisionShapeWorld(n, map); if (!s) continue;
       if (s.type === 'circle') { if (Math.hypot(x - s.x, y - s.y) < s.r + r * 0.6) return false; }
@@ -153,14 +164,16 @@ const Playtest = {
     pt.zoneName = zone ? zone.zone.name : null;
     if (!zone || pt.encounterCooldown > 0) return;
     const ti = map.terrain[Math.floor(p.y / map.cell) * map.cols + Math.floor(p.x / map.cell)];
-    const tid = TERRAINS[ti]?.id; const grassy = ['grass', 'forest', 'sand', 'dirt'].includes(tid);
+    const tt = TERRAINS[ti]; const tid = tt?.id; const grassy = ['grass', 'forest', 'sand', 'dirt'].includes(tid) || !!tt?.game;
     const rate = (zone.zone.weight || 5) / 100 * (grassy ? 1 : 0.35) * (moved / 32);
     if (Math.random() < rate * 0.9) this.startEncounter(zone);
   },
   startEncounter(zone) {
     const pt = E.playtest; const z = zone.zone;
     const pool = z.species.length ? z.species : Object.keys(E.project.mythlings);
-    const sp = pool[Math.floor(Math.random() * pool.length)];
+    const weights = pool.map((id) => Math.max(0, (z.weights || {})[id] ?? 1)); const total = weights.reduce((a, b) => a + b, 0);
+    let roll = Math.random() * (total || pool.length), sp = pool[pool.length - 1];
+    for (let i = 0; i < pool.length; i++) { roll -= total ? weights[i] : 1; if (roll <= 0) { sp = pool[i]; break; } }
     const my = E.project.mythlings[sp];
     const level = Math.floor(lerp(z.minLevel, z.maxLevel + 1, Math.random()));
     const mutant = Math.random() * 100 < (z.mutationChance || 0);
@@ -188,7 +201,13 @@ const Playtest = {
     if (best.type === 'mythling') { this.msg(`${E.project.mythlings[best.mythling.species]?.name || 'Mythling'} looks at you curiously. (Lv.${best.mythling.level})`, 2.5, { title: best.name }); return; }
     if (best.behavior.savePoint || best.prefab === 'savepoint') { this.msg('Progress saved! (save point)', 2, { title: 'SAVE POINT' }); return; }
     if (best.behavior.chest || best.prefab === 'chest') { if (pt.firedOnce.has(best.id)) { this.msg('The chest is empty.', 1.5); return; } pt.firedOnce.add(best.id); this.msg(`You found ${best.behavior.item || 'a mysterious item'}!`, 2.5, { title: 'TREASURE' }); return; }
-    if (best.prefab === 'sign') { this.msg(best.behavior.text || best.name, 3, { title: 'SIGN' }); return; }
+    if (best.prefab === 'sign' || (best.prefab === 'game_landmark' && best.gameKind === 'sign')) { this.msg(best.behavior.text || best.name, 3, { title: 'SIGN' }); return; }
+    if (best.prefab === 'game_building' || best.prefab === 'building') {
+      const kind = best.behavior.kind || 'house'; const title = (best.behavior.name || best.name).toUpperCase();
+      if (kind === 'center') { this.msg('Your Mythlings are fully healed! (Mythling Center)', 2.5, { title }); return; }
+      if (kind === 'shop') { const items = typeof Game !== 'undefined' && Game.ok ? Game.items() : {}; const stock = (best.behavior.stock || []).map((id) => items[id] ? `${items[id].name} (${items[id].price}c)` : id); this.msg(stock.length ? `For sale: ${stock.join(', ')}` : 'The shop is closed.', 4, { title }); return; }
+      this.msg(kind === 'dock' ? 'Boats rock gently at the dock.' : kind === 'tower' ? 'A tall tower. The door is locked.' : 'Nobody answers the door.', 2.5, { title }); return;
+    }
     this.msg(best.behavior.text || `It's a ${best.name}.`, 2.5, { title: best.name });
   },
   showDialogueLine() { const d = E.playtest.dialogue; if (!d) return; const n = d.node; const isLast = d.i >= d.lines.length - 1; this.msg(d.lines[d.i], 0, { title: `${n.name}${n.npc.kind !== 'regular' ? ' · ' + n.npc.kind.toUpperCase() : ''}`, hint: isLast ? (n.npc.team?.length ? 'Enter — (trainer battle would start)' : 'Enter to close') : 'Enter ▸', sticky: true }); },
@@ -207,7 +226,7 @@ const Playtest = {
   doWarp(n) {
     const pt = E.playtest; const w = n.warp;
     if (pt.warpCooldown > pt.t) return;
-    if (w.requiredFlag && !pt.flags[w.requiredFlag]) { if (pt.lastBlockedWarp !== n.id) { pt.lastBlockedWarp = n.id; this.msg(`The way is blocked. (requires flag "${w.requiredFlag}")`, 2, { title: w.label || n.name }); } this.pushBack(n); return; }
+    if (w.requiredFlag && !pt.flags[w.requiredFlag]) { if (pt.lastBlockedWarp !== n.id) { pt.lastBlockedWarp = n.id; this.msg(w.lockedText ? `${w.lockedText} (requires "${w.requiredFlag}")` : `The way is blocked. (requires flag "${w.requiredFlag}")`, 2.5, { title: w.label || n.name }); } this.pushBack(n); return; }
     const dest = E.project.maps[w.toMap];
     if (!dest) { this.msg(`Warp "${n.name}" has no valid destination map.`, 2, { title: 'WARP' }); this.pushBack(n); return; }
     pt.mapId = dest.id; pt.player.x = w.toX; pt.player.y = w.toY; pt.cam.x = w.toX; pt.cam.y = w.toY; pt.warpCooldown = pt.t + 1;
