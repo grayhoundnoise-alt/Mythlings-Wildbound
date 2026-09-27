@@ -17,6 +17,7 @@ import {
 import { RARITIES, RARITY_ORDER } from '../data/rarity.js';
 import { MUTATIONS, MUTATION_IDS } from '../data/mutations.js';
 import { ITEMS, ITEM_CATEGORIES, BALL_IDS } from '../data/items.js';
+import { ballCanvas, ballLook } from '../render/balls.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
 import { ELEMENTS, EFFECTIVENESS, elementMultiplier } from '../data/elements.js';
 import {
@@ -213,9 +214,12 @@ function raritySection() {
     para(`<code>chance = catchRate × ballMultiplier × rarityModifier × levelFactor × hpFactor</code><br>
       A fainted wild Mythling is much easier to catch (x1.35) than a weakened one; the lower its HP, the better.
       You must <b>defeat</b> a wild Mythling before any ball will work.`),
+    para(`Every ball has its own look, and the ball you throw is the one you see in battle:`),
     table(BALL_IDS.map((id) => {
       const it = ITEMS[id];
-      return [`${it.name}`, `x${it.catchMult.toFixed(2)} catch · ${coins(it.price)} Wildcoins`];
+      const img = `<img class="ball-icon" width="28" height="28" src="${ballCanvas(id, 28).toDataURL()}" alt="">`;
+      return [`<span class="wiki-ball">${img}<span>${it.name}<br><small>${ballLook(id)}</small></span></span>`,
+        `${it.guaranteed ? '<b>Guaranteed catch</b>' : `x${it.catchMult.toFixed(2)} catch`} · ${coins(it.price)} Wildcoins<br><small>${it.desc}</small>`];
     }), 'balls'),
   ];
 }

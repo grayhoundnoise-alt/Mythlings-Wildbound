@@ -26,6 +26,7 @@ import {
   Screens, panelHeader, closeButton,
 } from './ui.js';
 import { icon, iconSvg, iconLabel } from './icons.js';
+import { ballCanvas, ballLook } from '../render/balls.js';
 import { buffSummary, getSkill, SKILL_CATEGORY_LABEL, isDamageSkill } from '../data/skills.js';
 import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
@@ -232,7 +233,7 @@ export class PlayerMenu {
         el('div', { class: 'mc-name' }, [
           displayName(m),
           m.level >= LEVEL_CAP ? el('span', { class: 'chip max', text: 'MAX' }) : null,
-          evoReady ? el('span', { class: 'chip evolve' }, [icon('levelup'), el('span', { text: 'EVOLVE' })]) : null,
+          evoReady ? el('span', { class: 'chip evolve icon-only', title: 'Ready to evolve! Open the card and press EVOLVE NOW.', 'aria-label': 'Ready to evolve' }, [icon('levelup')]) : null,
           mutationChip(m.mutation),
         ]),
         el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${MOODS[m.mood].name} · ${getRarity(m.rarity).name}` }),
@@ -330,11 +331,14 @@ export class PlayerMenu {
         ...locked.map((s) => el('div', { class: 'mc-sub locked-row', style: { opacity: .6 }, html: `${iconSvg('lock', 'tiny')} ${s.name} — Lv.${s.level} (future content)` })),
 
         el('h3', { text: 'Capture Info' }),
-        el('div', { class: 'mc-sub', text: m.meta?.isStarter
-          ? 'Your starter partner — chosen at the beginning of your journey.'
-          : m.meta?.caughtLevel
-            ? `Caught at Lv.${m.meta.caughtLevel} with a ${getItem(m.meta.caughtWith)?.name || 'ball'} in ${MAPS[m.meta.originMap]?.displayName || 'the wild'} — restarted at Lv.1.`
-            : 'Origin unknown.' }),
+        el('div', { class: 'mc-sub caught-line' }, [
+          m.meta?.caughtWith && !m.meta?.isStarter ? ballCanvas(m.meta.caughtWith, 24) : null,
+          el('span', { text: m.meta?.isStarter
+            ? 'Your starter partner — chosen at the beginning of your journey.'
+            : m.meta?.caughtLevel
+              ? `Caught at Lv.${m.meta.caughtLevel} with a ${getItem(m.meta.caughtWith)?.name || 'ball'} (${ballLook(m.meta.caughtWith)}) in ${MAPS[m.meta.originMap]?.displayName || 'the wild'} — restarted at Lv.1.`
+              : 'Origin unknown.' }),
+        ]),
       ]),
     ]);
 
@@ -507,7 +511,7 @@ export class PlayerMenu {
         const isFood = e.item.category === 'food';
         const usable = e.item.heal || e.item.healFull || e.item.revive || e.item.restoreUses || e.item.restoreAllUses;
         root.appendChild(el('div', { class: 'item-row' }, [
-          icon(isFood ? 'food' : cat.id === 'balls' ? 'orb' : cat.id === 'key' ? 'key' : 'heal', 'item-ico'),
+          cat.id === 'balls' ? ballCanvas(e.item.id, 30, 'item-ico ball-icon') : icon(isFood ? 'food' : cat.id === 'key' ? 'key' : 'heal', 'item-ico'),
           el('div', { class: 'ir-main' }, [
             el('div', { class: 'ir-name', text: e.item.name }),
             el('div', { class: 'ir-desc', text: e.item.desc }),

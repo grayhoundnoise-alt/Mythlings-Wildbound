@@ -6,6 +6,7 @@ import {
 } from './ui.js';
 import { settingsPanel, mythCanvas, iconTextBtn, _bindLevelUpSummary } from './PlayerMenu.js';
 import { icon, iconSvg } from './icons.js';
+import { ballCanvas } from '../render/balls.js';
 import { titleLogo } from './logo.js';
 import { SPECIES, STARTER_IDS, getSpecies } from '../data/species.js';
 import { MOODS } from '../data/moods.js';
@@ -297,7 +298,7 @@ export function shopScreen(building, { onClose }) {
         totalLabel.lastChild.textContent = coins(item.price * qty);
       };
       rows.appendChild(el('div', { class: 'item-row' }, [
-        icon(item.category === 'balls' ? 'orb' : item.category === 'food' ? 'food' : item.category === 'key' ? 'key' : 'heal', 'item-ico'),
+        item.category === 'balls' ? ballCanvas(item.id, 30, 'item-ico ball-icon') : icon(item.category === 'food' ? 'food' : item.category === 'key' ? 'key' : 'heal', 'item-ico'),
         el('div', { class: 'ir-main' }, [
           el('div', { class: 'ir-name', text: item.name }),
           el('div', { class: 'ir-desc', text: item.desc }),

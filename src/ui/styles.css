@@ -477,7 +477,7 @@ select {
 .myth-card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,199,97,.3); }
 .myth-card canvas { width: 66px; height: 66px; flex: none; }
 .myth-card .mc-main { flex: 1; min-width: 0; }
-.myth-card .mc-name { font-weight: 800; font-size: .98rem; display: flex; gap: 6px; align-items: center; }
+.myth-card .mc-name { font-weight: 800; font-size: .98rem; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
 .myth-card .mc-sub { color: var(--muted); font-size: .78rem; margin: 2px 0 4px; }
 .myth-card.fainted { filter: grayscale(.85) brightness(.75); }
 
@@ -654,6 +654,20 @@ select {
 .stat-row.down .ico { color: var(--danger); }
 .chip .ico { width: .9em; height: .9em; margin-right: 4px; }
 .chip.evolve { border-color: #ffd76a; color: #ffd76a; }
+/* icon-only EVOLVE badge: never pushes the name row out of the card */
+.chip.evolve.icon-only { padding: 3px 6px; background: rgba(255,215,106,.16); animation: evo-pulse 1.4s ease-in-out infinite; cursor: help; }
+.chip.evolve.icon-only svg { width: 14px; height: 14px; }
+@keyframes evo-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,106,.45); } 50% { box-shadow: 0 0 0 5px rgba(255,215,106,0); } }
+
+/* ---------- ball art ---------- */
+.ball-icon { flex: none; display: inline-block; vertical-align: middle; }
+.item-ico.ball-icon { width: 30px; height: 30px; }
+.action-btn.ball-btn .ab-name { align-items: center; }
+.caught-ball-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.06); }
+.caught-ball-name { font-weight: 800; }
+.caught-line { display: flex; align-items: center; gap: 8px; }
+.wiki-ball { display: inline-flex; align-items: center; gap: 8px; }
+.wiki-ball small { color: var(--muted); font-weight: 600; }
 .coin-line { display: flex; align-items: center; gap: 6px; }
 .ir-qty.price { display: inline-flex; align-items: center; gap: 5px; }
 .locked-row { display: flex; align-items: center; gap: 6px; }

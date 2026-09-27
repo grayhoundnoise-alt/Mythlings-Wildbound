@@ -14,7 +14,8 @@ import { BALL_IDS, getItem } from '../data/items.js';
 import { drawMythling, prewarm } from '../render/creatures.js';
 import { SkillVFX } from '../render/vfx/SkillVFX.js';
 import { paletteFor } from '../data/skillVfx.js';
-import { roundRect, circle } from '../render/worldRenderer.js';
+import { roundRect } from '../render/worldRenderer.js';
+import { drawBall, ballCanvas, ballLook, BALL_ART } from '../render/balls.js';
 import { el, button, bar, hpClass, elementChip, mutationChip, rarityChip, toast, confirmDialog, modal, closeModal } from '../ui/ui.js';
 import { icon, iconSvg, iconLabel } from '../ui/icons.js';
 import { buffSummary, isDamageSkill } from '../data/skills.js';
@@ -95,6 +96,7 @@ export class BattleScene {
     this.active = true;
     this.busy = false;
     this.particles = [];
+    this.capture = null;
     this.logLines = [];
     this.anim.player = this.freshAnim();
     this.anim.enemy = this.freshAnim();
@@ -127,6 +129,7 @@ export class BattleScene {
 
   stop() {
     this.active = false;
+    this.capture = null;
     SkillVFX.stopAllVFX();
     SkillVFX.unbind();
     if (this.ui) { this.ui.remove(); this.ui = null; }
@@ -411,8 +414,10 @@ export class BattleScene {
       const qty = InventoryManager.count(ballId);
       const item = getItem(ballId);
       const chance = Math.round(CaptureManager.chanceFor(target, ballId) * 100);
-      const btn = button('', { class: 'action-btn', disabled: qty <= 0, onclick: () => this.tryCapture(ballId) });
-      btn.innerHTML = `<div class="ab-name">${iconSvg('orb')}<span>${item.name}</span></div><small>x${qty} · ${chance}% catch</small>`;
+      const btn = button('', { class: 'action-btn ball-btn', disabled: qty <= 0, onclick: () => this.tryCapture(ballId) });
+      btn.title = `${item.name} — ${ballLook(ballId)} design. ${item.desc}`;
+      btn.appendChild(el('div', { class: 'ab-name' }, [ballCanvas(ballId, 26), el('span', { text: item.name })]));
+      btn.appendChild(el('small', { text: `x${qty} · ${chance}% catch` }));
       this.actions.appendChild(btn);
       if (qty > 0) any = true;
     }
@@ -446,7 +451,8 @@ export class BattleScene {
       return;
     }
     AudioManager.sfx('capture');
-    await this.captureAnimation();
+    this.pushLog(`You threw a ${getItem(ballId).name}!`);
+    await this.captureAnimation(ballId, res.success);
     if (!res.success) {
       this.pushLog(`${displayName(target)} broke free!`, true);
       AudioManager.sfx('capture-fail');
@@ -477,6 +483,13 @@ export class BattleScene {
     await modal({
       title: 'MYTHLING CAPTURED!',
       body: el('div', {}, [
+        el('div', { class: 'caught-ball-row' }, [
+          ballCanvas(ballId, 54, 'ball-icon big'),
+          el('div', {}, [
+            el('div', { class: 'caught-ball-name', text: getItem(ballId).name }),
+            el('div', { class: 'sub', text: `${ballLook(ballId)} design` }),
+          ]),
+        ]),
         el('p', { html: `<b>${displayName(caught)}</b> joined you at <b style="color:#ffd76a">Lv.1</b>!` }),
         el('p', { class: 'sub', html: `It was caught at Lv.${caught.meta.caughtLevel} — every captured Mythling restarts at Lv.1 and must be raised by you.` }),
         el('div', { class: 'row', style: { gap: '6px' } }, [
@@ -886,20 +899,86 @@ export class BattleScene {
     setTimeout(() => n.remove(), cls === 'ult' ? 1500 : 1100);
   }
 
-  async captureAnimation() {
-    const p = this.screenPos('enemy');
-    for (let i = 0; i < 14; i++) {
-      this.anim.enemy.alpha = 1 - i / 18;
-      this.particles.push({
-        x: p.x, y: p.y - 60, vx: (Math.random() - 0.5) * 70, vy: -60 - Math.random() * 40,
-        life: 0.7, max: 0.7, size: 4 + Math.random() * 4, color: '#ffe08a', kind: 'spark',
+  /**
+   * Throw → open → absorb → drop → wobble → lock (or burst), drawn with the
+   * actual ball the player picked, so a King Ball throw looks like a King Ball.
+   */
+  async captureAnimation(ballId, success) {
+    const from = this.screenPos('player'), to = this.screenPos('enemy');
+    const ea = this.anim.enemy;
+    const glow = (BALL_ART[ballId] || BALL_ART.basic_ball).glow;
+    const ball = { ballId, x: from.x + 30, y: from.y - 96, r: 17, rot: 0, open: 0, alpha: 1, shadow: false, locked: false };
+    this.capture = ball;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const tween = (ms, fn) => new Promise((resolve) => {
+      const t0 = performance.now();
+      const step = () => {
+        const k = clamp((performance.now() - t0) / ms, 0, 1);
+        fn(k);
+        if (k < 1 && this.active) requestAnimationFrame(step); else resolve();
+      };
+      step();
+    });
+    const spark = (x, y, opts = {}) => this.particles.push({
+      x, y, vx: (Math.random() - 0.5) * 160, vy: -40 - Math.random() * 120,
+      life: 0.7, max: 0.7, size: 3 + Math.random() * 3, color: glow, kind: 'spark', ...opts,
+    });
+
+    // 1. the throw: an arc from the player's side to the foe
+    const sx = ball.x, sy = ball.y, tx = to.x, ty = to.y - 72;
+    await tween(560, (k) => {
+      ball.x = sx + (tx - sx) * k;
+      ball.y = sy + (ty - sy) * k - Math.sin(k * Math.PI) * 130;
+      ball.rot = k * Math.PI * 4;
+    });
+    ball.rot = 0;
+
+    // 2. the seam opens and the Mythling is pulled inside
+    this.flash = 0.45;
+    ea.pull = { x: ball.x, y: ball.y };
+    await tween(540, (k) => {
+      ball.open = Math.min(1, k * 1.8);
+      ea.alpha = 1 - k;
+      ea.scale = 1 - 0.85 * k;
+      if (k < 0.85 && Math.random() < 0.6) {
+        spark(to.x + (Math.random() - 0.5) * 90, to.y - 60 + (Math.random() - 0.5) * 90, { tx: ball.x, ty: ball.y, speed: 7, vx: 0, vy: 0, life: 0.5, max: 0.5 });
+      }
+    });
+    ea.alpha = 0; ea.scale = 1; ea.pull = null;
+    await tween(160, (k) => { ball.open = 1 - k; });
+
+    // 3. it drops to the ground and bounces once
+    const groundY = to.y + 4 - ball.r;
+    const dropFrom = ball.y;
+    await tween(300, (k) => { ball.y = dropFrom + (groundY - dropFrom) * k * k; });
+    ball.shadow = true;
+    await tween(220, (k) => { ball.y = groundY - Math.sin(k * Math.PI) * 16; });
+
+    // 4. wobble — a guaranteed catch still rocks, a break-out gives up early
+    const wobbles = success ? 3 : 1 + randInt(0, 2);
+    for (let i = 0; i < wobbles; i++) {
+      AudioManager.sfx('click');
+      await tween(420, (k) => {
+        ball.rot = Math.sin(k * Math.PI * 2) * 0.42;
+        ball.x = to.x + Math.sin(k * Math.PI * 2) * 5;
       });
-      await new Promise((r) => setTimeout(r, 40));
+      ball.rot = 0; ball.x = to.x;
+      await wait(150);
     }
-    this.playCreatureAnim('enemy', 'capture', 0.8, true);
-    this.captureWobble = 3;
-    await new Promise((r) => setTimeout(r, 900));
-    this.captureWobble = 0;
+
+    // 5. lock in… or burst open
+    if (success) {
+      ball.locked = true;
+      for (let i = 0; i < 18; i++) spark(ball.x, ball.y);
+      await wait(700);
+      return;
+    }
+    ball.open = 1;
+    this.flash = 0.35;
+    for (let i = 0; i < 20; i++) spark(ball.x, ball.y, { color: '#ffffff' });
+    await tween(260, (k) => { ball.alpha = 1 - k; ea.alpha = k; });
+    this.capture = null;
+    ea.alpha = 1;
   }
 
   /** Charge aura: proof the Ultimate is ready without obscuring the Mythling. */
@@ -989,24 +1068,31 @@ export class BattleScene {
     const ea = this.anim.enemy;
     if (ea.alpha > 0.01) {
       const em = this.shownMythling('enemy');
+      ctx.save();
+      if (ea.pull) {
+        // being absorbed: shrink towards the open ball
+        const k = ea.scale ?? 1;
+        ctx.translate(ea.pull.x, ea.pull.y); ctx.scale(k, k); ctx.translate(-ea.pull.x, -ea.pull.y);
+      }
       drawMythling(ctx, {
         speciesId: em.speciesId, stage: em.stage, mutation: em.mutation,
         x: ep.x + ea.lean, y: ep.y, size: 150, t: this.time, facing: -1,
         animTag: 'enemy', pose: this.creaturePose('enemy'),
       });
-    }
-    if (this.captureWobble) {
-      const wob = Math.sin(this.time * 12) * 8;
-      ctx.save();
-      ctx.translate(ep.x + wob, ep.y - 40);
-      circle(ctx, 0, 0, 26, '#e8574f');
-      ctx.fillStyle = '#f4f4f4';
-      ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI); ctx.fill();
-      ctx.fillStyle = '#2a2a33';
-      ctx.fillRect(-26, -3, 52, 6);
-      circle(ctx, 0, 0, 8, '#ffffff');
-      circle(ctx, 0, 0, 5, '#ffd76a');
       ctx.restore();
+    }
+    if (this.capture) {
+      const c = this.capture;
+      if (c.locked) {
+        const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
+        ctx.save();
+        ctx.globalAlpha = 0.25 + 0.25 * pulse;
+        ctx.strokeStyle = (BALL_ART[c.ballId] || BALL_ART.basic_ball).glow;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(c.x, c.y, c.r + 8 + pulse * 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+      drawBall(ctx, c.ballId, c.x, c.y, c.r, { t: this.time, open: c.open, rot: c.rot, alpha: c.alpha, shadow: c.shadow });
     }
 
     // player
