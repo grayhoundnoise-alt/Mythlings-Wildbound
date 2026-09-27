@@ -116,6 +116,7 @@ src/
     MenuScene.js  OverworldScene.js  BattleScene.js
   ui/
     ui.js  styles.css  screens.js  PlayerMenu.js
+    logo.js                SVG wordmark + element crest for the title screen
     icons.js               hand-built SVG icon set — the game ships zero emoji
 tests/smoke.test.js        headless rule tests
 design-bible.html          live creature design bible (see below)
@@ -124,6 +125,20 @@ design-bible.html          live creature design bible (see below)
 Systems talk through a small event bus and shared managers rather than direct references, so a
 **Map 4**, a new element, a sixth Mythling or the Lv.60 evolution stage can be added by editing
 `src/data/*` alone.
+
+### Title screen
+
+The main menu is a single animated scene drawn live on the game canvas — layered
+sky, parallax cloud banks, faceted snow-capped ranges, a floating isle with its own
+waterfall, an aerial-perspective forest, a lakeside village, god rays, drifting
+pollen and four Mythlings idling on the foreground shelf while Leaflet circles
+overhead. The UI column sits on the left over a soft reading scrim so the cast on
+the right is never covered: SVG wordmark and element crest, four fantasy buttons
+with icon, hint line, hover/selected glow and a sliding sheen, the tagline bottom
+left and the build facts bottom right. Arrow keys / W / S move the selection and
+Enter confirms; hovering with the mouse selects too. Composition is tuned for
+1920x1080 and re-flows for 1600x900 and 1366x768 (narrower screens shift the cast
+right so the menu never overlaps a face).
 
 ### Creature design bible
 

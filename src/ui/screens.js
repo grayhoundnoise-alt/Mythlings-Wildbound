@@ -6,6 +6,7 @@ import {
 } from './ui.js';
 import { settingsPanel, mythCanvas, iconTextBtn, _bindLevelUpSummary } from './PlayerMenu.js';
 import { icon, iconSvg } from './icons.js';
+import { titleLogo } from './logo.js';
 import { SPECIES, STARTER_IDS, getSpecies } from '../data/species.js';
 import { MOODS } from '../data/moods.js';
 import { STAT_SHORT } from '../data/moods.js';
@@ -19,22 +20,70 @@ import { formatTime, formatDate } from '../core/utils.js';
 
 // ------------------------------------------------------------------ MAIN MENU
 export function mainMenuScreen({ onNewGame, onLoad, onSettings, onExit }) {
-  const node = el('div', { class: 'menu-overlay' }, [
-    el('div', { class: 'game-title title-font' }, [
-      el('span', { class: 't1', text: 'Mythlings' }),
-      el('span', { class: 't2', text: 'Wildbound' }),
-    ]),
-    el('div', { class: 'tagline', text: 'Small Creatures. Big Adventures.' }),
-    el('div', { class: 'menu-buttons' }, [
-      button('NEW GAME', { class: 'primary', onclick: onNewGame, sfx: 'confirm' }),
-      button('LOAD GAME', { onclick: onLoad }),
-      button('SETTINGS', { onclick: onSettings }),
-      button('EXIT', { onclick: onExit }),
-    ]),
-    el('div', { class: 'version-tag', text: `v${GAME_VERSION} · Level cap Lv.${LEVEL_CAP} · 5 Mythlings · 3 Regions` }),
-    el('div', { class: 'credits-tag', text: 'An original creature-collecting adventure' }),
+  const entries = [
+    { id: 'new', label: 'NEW GAME', hint: 'Begin a fresh adventure', ico: 'play', run: onNewGame, primary: true },
+    { id: 'load', label: 'LOAD GAME', hint: 'Continue from a save slot', ico: 'folder', run: onLoad },
+    { id: 'settings', label: 'SETTINGS', hint: 'Audio, text, display', ico: 'settings', run: onSettings },
+    { id: 'exit', label: 'EXIT', hint: 'Close the game', ico: 'power', run: onExit },
+  ];
+
+  const buttons = entries.map((e, i) => {
+    const b = el('button', { class: `menu-btn${e.primary ? ' primary' : ''}`, 'data-index': String(i) }, [
+      el('span', { class: 'mb-ico', html: iconSvg(e.ico) }),
+      el('span', { class: 'mb-text' }, [
+        el('span', { class: 'mb-label', text: e.label }),
+        el('span', { class: 'mb-hint', text: e.hint }),
+      ]),
+      el('span', { class: 'mb-arrow', html: iconSvg('chevron-right') }),
+    ]);
+    b.addEventListener('click', () => { AudioManager.sfx('confirm'); e.run(); });
+    b.addEventListener('mouseenter', () => { select(i, true); });
+    b.addEventListener('focus', () => select(i, false));
+    return b;
+  });
+
+  let index = 0;
+  function select(i, sound) {
+    index = (i + buttons.length) % buttons.length;
+    buttons.forEach((b, n) => b.classList.toggle('selected', n === index));
+    if (sound) AudioManager.sfx('hover');
+  }
+
+  const column = el('div', { class: 'menu-column' }, [
+    titleLogo(),
+    el('div', { class: 'menu-tagline', text: 'Small Creatures. Big Adventures.' }),
+    el('div', { class: 'menu-buttons' }, buttons),
   ]);
-  return Screens.replace(node, 'main-menu');
+
+  const node = el('div', { class: 'menu-overlay' }, [
+    column,
+    el('div', { class: 'menu-footnote' }, [
+      el('span', { class: 'mf-line', text: 'An original creature-collecting adventure' }),
+    ]),
+    el('div', { class: 'version-block' }, [
+      el('span', { text: `v${GAME_VERSION}` }),
+      el('span', { text: `Level Cap: Lv.${LEVEL_CAP}` }),
+      el('span', { text: '5 Mythlings' }),
+      el('span', { text: '3 Regions' }),
+    ]),
+  ]);
+
+  select(0, false);
+  const handle = Screens.replace(node, 'main-menu');
+
+  // Keyboard navigation, live for as long as the title screen is mounted.
+  // It unhooks itself once the node leaves the document, so no stale listeners
+  // survive into the overworld.
+  const onKey = (ev) => {
+    if (!node.isConnected) { window.removeEventListener('keydown', onKey, true); return; }
+    if (document.getElementById('modal') && !document.getElementById('modal').classList.contains('hidden')) return;
+    const k = (ev.key || '').toLowerCase();
+    if (k === 'arrowdown' || k === 's') { select(index + 1, true); ev.preventDefault(); }
+    else if (k === 'arrowup' || k === 'w') { select(index - 1, true); ev.preventDefault(); }
+    else if (k === 'enter' || k === ' ') { AudioManager.sfx('confirm'); entries[index].run(); ev.preventDefault(); }
+  };
+  window.addEventListener('keydown', onKey, true);
+  return handle;
 }
 
 // ------------------------------------------------------------------ SAVE SLOTS

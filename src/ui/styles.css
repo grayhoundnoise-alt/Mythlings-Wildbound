@@ -77,34 +77,156 @@ button { font-family: inherit; cursor: pointer; }
 .screen-inner { animation: popIn .28s ease; }
 
 /* ---------- Main menu ---------- */
-#menu-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* the title vista is painted on the shared #game canvas behind this overlay */
+
 .menu-overlay {
   position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 28px;
-  background: radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 35%, rgba(2,8,16,0.65) 100%);
+  display: flex; align-items: center;
+  outline: none;
 }
-.game-title { text-align: center; line-height: 0.92; }
-.game-title .t1 {
-  display: block;
-  font-size: clamp(3rem, 10vw, 7.2rem);
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  background: linear-gradient(180deg, #fff6d8 0%, #ffd873 45%, #c98a22 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 6px 0 rgba(60,30,0,0.45)) drop-shadow(0 0 28px rgba(255,200,90,0.55));
+
+.menu-column {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: clamp(10px, 1.6vh, 22px);
+  padding-left: clamp(26px, 6vw, 118px);
+  width: min(560px, 46vw);
+  animation: menuRise .6s cubic-bezier(.16,.84,.34,1) both;
 }
-.game-title .t2 {
-  display: block;
-  font-size: clamp(1.4rem, 4.2vw, 3.1rem);
-  font-weight: 800; letter-spacing: 0.55em; margin-left: 0.55em;
-  color: #eaf6ff; text-shadow: 0 3px 0 rgba(20,40,70,0.7), 0 0 22px rgba(120,210,255,0.7);
+@keyframes menuRise { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+
+/* --- logo --- */
+.logo-wrap { width: 100%; filter: drop-shadow(0 14px 26px rgba(2,10,22,.55)); }
+.logo-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.logo-text {
+  font-family: "Trebuchet MS", "Gill Sans", Georgia, serif;
+  font-size: 92px; font-weight: 900; letter-spacing: 2px; paint-order: stroke fill;
 }
-.tagline { font-size: clamp(.85rem,2vw,1.15rem); letter-spacing: .3em; color: #cfe6ff; text-transform: uppercase; opacity: .9; }
-.menu-buttons { display: flex; flex-direction: column; gap: 14px; width: min(340px, 78vw); }
-.menu-buttons .btn { font-size: 1.15rem; padding: 15px; }
-.version-tag { position: absolute; bottom: 14px; right: 18px; color: #8fa6bd; font-size: .78rem; letter-spacing: .1em; }
-.credits-tag { position: absolute; bottom: 14px; left: 18px; color: #8fa6bd; font-size: .78rem; }
+.logo-subtext {
+  font-family: "Trebuchet MS", "Gill Sans", Georgia, serif;
+  font-size: 34px; font-weight: 800; letter-spacing: 13px;
+}
+.logo-crest { animation: crestFloat 5.5s ease-in-out infinite; transform-origin: 360px 62px; }
+@keyframes crestFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-5px) scale(1.015); }
+}
+.logo-main  { animation: logoSheen 7s ease-in-out infinite; }
+@keyframes logoSheen {
+  0%, 100% { filter: url(#lg-soft) drop-shadow(0 0 0 rgba(140,220,255,0)); }
+  50%      { filter: url(#lg-soft) drop-shadow(0 0 18px rgba(140,220,255,.55)); }
+}
+
+.menu-tagline {
+  font-family: "Trebuchet MS", Georgia, serif;
+  font-size: clamp(.78rem, 1.35vw, 1.05rem);
+  letter-spacing: .42em; text-transform: uppercase;
+  color: #d7ecff; text-shadow: 0 2px 10px rgba(0,0,0,.8);
+  padding-left: 6px; opacity: .95;
+}
+
+/* --- buttons --- */
+.menu-buttons {
+  display: flex; flex-direction: column; gap: clamp(8px, 1.3vh, 14px);
+  width: 100%; margin-top: clamp(6px, 1.4vh, 18px);
+}
+.menu-btn {
+  --accent: #7fd6ff;
+  position: relative; display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: clamp(10px, 1.5vh, 16px) 20px;
+  border-radius: 14px; cursor: pointer; overflow: hidden;
+  border: 1.5px solid rgba(150,196,236,.34);
+  background:
+    linear-gradient(180deg, rgba(30,54,85,.94), rgba(11,24,42,.96));
+  box-shadow: 0 8px 20px rgba(3,10,20,.5), inset 0 1px 0 rgba(255,255,255,.14);
+  color: #dce9f8; text-align: left;
+  transition: transform .16s cubic-bezier(.2,.9,.3,1.3), box-shadow .16s ease,
+              border-color .16s ease, background .16s ease;
+}
+/* sliding sheen */
+.menu-btn::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.16), transparent);
+  transform: skewX(-18deg); opacity: 0; transition: opacity .2s ease;
+}
+.menu-btn:hover::after, .menu-btn.selected::after { opacity: 1; animation: sheen 1.5s ease-in-out infinite; }
+@keyframes sheen { 0% { left: -60%; } 70%, 100% { left: 120%; } }
+
+.menu-btn .mb-ico {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 38px; height: 38px; border-radius: 11px;
+  background: linear-gradient(180deg, rgba(126,200,246,.22), rgba(40,86,132,.32));
+  border: 1px solid rgba(160,214,255,.3);
+  color: var(--accent);
+  transition: color .16s ease, background .16s ease, transform .16s ease;
+}
+.menu-btn .mb-ico .ico { width: 20px; height: 20px; }
+.menu-btn .mb-text { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.menu-btn .mb-label {
+  font-family: "Trebuchet MS", Georgia, serif;
+  font-size: clamp(1rem, 1.5vw, 1.24rem); font-weight: 800; letter-spacing: .16em;
+}
+.menu-btn .mb-hint {
+  font-size: clamp(.64rem, .9vw, .76rem); letter-spacing: .1em;
+  color: #92b1cd; text-transform: uppercase;
+}
+.menu-btn .mb-arrow { color: rgba(160,200,236,.45); display: grid; place-items: center; transition: .16s ease; }
+.menu-btn .mb-arrow .ico { width: 16px; height: 16px; }
+
+.menu-btn:hover, .menu-btn.selected {
+  transform: translateX(10px) scale(1.022);
+  border-color: rgba(190,236,255,.8);
+  background: linear-gradient(180deg, rgba(46,86,130,.96), rgba(16,38,64,.97));
+  box-shadow: 0 10px 26px rgba(3,10,20,.55), 0 0 26px rgba(110,200,255,.32),
+              inset 0 1px 0 rgba(255,255,255,.22);
+}
+.menu-btn:hover .mb-arrow, .menu-btn.selected .mb-arrow { color: var(--accent); transform: translateX(4px); }
+.menu-btn:hover .mb-ico, .menu-btn.selected .mb-ico { transform: scale(1.06); background: linear-gradient(180deg, rgba(150,220,255,.32), rgba(48,102,156,.4)); }
+.menu-btn:active { transform: translateX(6px) scale(.995); }
+
+/* the highlighted entry gets a gold-on-cyan treatment */
+.menu-btn.primary { --accent: #ffd979; border-color: rgba(242,199,97,.55); }
+.menu-btn.primary .mb-ico { background: linear-gradient(180deg, rgba(255,210,110,.28), rgba(150,96,20,.32)); border-color: rgba(255,222,140,.45); }
+.menu-btn.primary.selected, .menu-btn.primary:hover {
+  border-color: #ffe6a6;
+  background: linear-gradient(180deg, rgba(74,104,62,0) 0%, rgba(38,74,116,.97) 100%),
+              linear-gradient(180deg, rgba(56,100,146,.96), rgba(18,42,70,.97));
+  box-shadow: 0 10px 26px rgba(3,10,20,.55), 0 0 30px rgba(255,206,110,.4),
+              inset 0 1px 0 rgba(255,255,255,.26);
+}
+/* selection caret */
+.menu-btn::before {
+  content: ''; position: absolute; left: 0; top: 12%; bottom: 12%; width: 4px;
+  border-radius: 0 4px 4px 0; background: var(--accent);
+  opacity: 0; transform: scaleY(.4); transition: .16s ease;
+}
+.menu-btn:hover::before, .menu-btn.selected::before { opacity: 1; transform: scaleY(1); box-shadow: 0 0 14px var(--accent); }
+
+/* --- corners --- */
+.menu-footnote {
+  position: absolute; bottom: 16px; left: clamp(26px, 6vw, 118px);
+  color: #9db6cf; font-size: .76rem; letter-spacing: .14em; text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0,0,0,.7);
+}
+.version-block {
+  position: absolute; bottom: 14px; right: 20px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  color: #a9c1d8; font-size: .72rem; letter-spacing: .1em; opacity: .72;
+  text-shadow: 0 2px 8px rgba(0,0,0,.75);
+}
+.version-block span:first-child { color: #d9ebff; font-weight: 700; letter-spacing: .18em; }
+
+@media (max-width: 1400px) {
+  .menu-column { width: min(468px, 41vw); padding-left: clamp(22px, 4.5vw, 70px); }
+  .menu-footnote { left: clamp(22px, 4.5vw, 70px); }
+}
+@media (max-width: 900px) {
+  .menu-column { width: min(92vw, 520px); padding-left: clamp(18px, 5vw, 40px); }
+  .menu-btn .mb-hint { display: none; }
+}
+@media (max-height: 720px) {
+  .logo-wrap { width: 84%; }
+  .menu-btn { padding: 9px 16px; }
+}
 
 /* ---------- Generic dialog / forms ---------- */
 .dialog {
