@@ -1070,10 +1070,24 @@ export const SPECIES_ART = {
   leaflet: LEAFLET,
 };
 
+/**
+ * Body plans, so a new species can reuse a silhouette instead of needing a
+ * hand-authored one: `art: { body: 'wolf', ...your own colours }` is enough.
+ * Palette, horns, wings and scale still come from the species itself, so two
+ * species on the same plan still read as different Mythlings.
+ */
+export const BODY_PLANS = {
+  fox: SPRIGGO,
+  feline: AQUINI,
+  dragon: EMBERU,
+  wolf: RIVRUFF,
+  avian: LEAFLET,
+};
+
 export function artFor(speciesId) {
   if (SPECIES_ART[speciesId]) return SPECIES_ART[speciesId];
   const sp = getSpecies(speciesId);
-  return SPECIES_ART[sp?.art?.body] || null;
+  return BODY_PLANS[sp?.art?.body] || SPECIES_ART[sp?.art?.body] || null;
 }
 
 /** Builds the `ex` (art context) the layers and faces are authored against. */

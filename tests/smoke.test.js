@@ -60,13 +60,24 @@ function section(t) { console.log(`\n${t}`); }
 
 // ------------------------------------------------------------------
 section('Species & stats');
-test('all 5 species exist with base stats', () => {
-  assert.equal(Object.keys(SPECIES).length, 5);
+test('every species exists with base stats and a filled-in roster', () => {
+  assert.equal(Object.keys(SPECIES).length, 15, '5 starters + 3 nature, 3 water, 4 fire');
   assert.equal(SPECIES.spriggo.baseStats.hp, 110);
   assert.equal(SPECIES.aquini.baseStats.spd, 19);
   assert.equal(SPECIES.emberu.baseStats.patk, 18);
   assert.equal(SPECIES.rivruff.baseStats.pdef, 17);
   assert.equal(SPECIES.leaflet.baseStats.counter, 18);
+  // five of each element, and every new Mythling is fully specified
+  const byEl = {};
+  for (const id of Object.keys(SPECIES)) {
+    const sp = SPECIES[id];
+    byEl[sp.element] = (byEl[sp.element] || 0) + 1;
+    assert.ok(sp.role, `${id} has a role`);
+    assert.ok(sp.evolutions.length === 4, `${id} has four stages`);
+    assert.ok(sp.ultimate, `${id} has an ultimate`);
+    assert.ok(sp.art && sp.art.body, `${id} names a body plan`);
+  }
+  assert.deepEqual(byEl, { nature: 5, water: 5, fire: 5 });
 });
 
 test('rarity D applies no mood modifier, higher rarity does', () => {
@@ -611,17 +622,29 @@ test('the coin reward is clamped to at least one coin at any level gap', () => {
 // ------------------------------------------------------------------
 section('Creature rig (layered 2D puppet)');
 const { CreatureRig, ANIMATIONS, ANIM_IDS, drawMythling, prewarm, creatureAssets } = await import('../src/render/creatures.js');
-const { SPECIES_ART } = await import('../src/render/creatureArt.js');
+const { SPECIES_ART, BODY_PLANS, artFor } = await import('../src/render/creatureArt.js');
 
-test('every species exposes 8-12 rig layers plus a face spec', () => {
+test('every species resolves to a rig with 8-12 layers plus a face spec', () => {
   for (const id of Object.keys(SPECIES)) {
-    const art = SPECIES_ART[id];
+    // a species either owns hand-authored art or borrows a named body plan
+    const art = artFor(id);
     assert.ok(art, `${id} has art`);
     const parts = art.parts.map((p) => p.name);
     assert.ok(parts.length >= 7 && parts.length <= 12, `${id} has ${parts.length} layers`);
     assert.ok(art.face && art.face.eyes.length === 2, `${id} has two eyes`);
     assert.ok(art.parts.some((p) => p.name === 'head'), `${id} has a head`);
     assert.ok(art.parts.some((p) => p.name === 'body'), `${id} has a body`);
+  }
+});
+
+test('body plans are reusable by name, so new species need no bespoke art', () => {
+  assert.deepEqual(Object.keys(BODY_PLANS).sort(), ['avian', 'dragon', 'feline', 'fox', 'wolf']);
+  for (const [plan, art] of Object.entries(BODY_PLANS)) {
+    assert.ok(art.parts.length >= 7, `${plan} plan is a complete rig`);
+  }
+  // every species lands on a plan, including the ten added after launch
+  for (const id of Object.keys(SPECIES)) {
+    if (!SPECIES_ART[id]) assert.ok(BODY_PLANS[SPECIES[id].art.body], `${id} resolves through its body plan`);
   }
 });
 
