@@ -527,11 +527,24 @@ select {
 
 /* ---------- Evolution / cinematic overlays ---------- */
 .cinematic {
-  position: absolute; inset: 0; z-index: 70; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 18px;
+  position: absolute; inset: 0; z-index: 70; display: flex;
+  overflow-y: auto; overflow-x: hidden;
   background: radial-gradient(ellipse at center, rgba(20,40,70,.9), rgba(2,5,10,.98));
 }
-.cinematic canvas { width: min(460px, 82vw); height: min(460px, 52vh); }
+/* A single `margin:auto` child: centres the cinematic but still scrolls
+   instead of clipping when the content is taller than the window. */
+.cinematic-stage {
+  margin: auto; width: min(760px, 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 28px 18px;
+}
+/* Square at every size: the canvas used to be stretched wide and short, which
+   squashed the Mythling. JS backs it at device resolution for sharpness. */
+.cinematic canvas {
+  display: block; width: min(460px, 82vw, 56vh); height: auto; aspect-ratio: 1 / 1;
+}
+/* Once the summary appears, give the text room instead of overflowing. */
+.cinematic.done canvas { width: min(300px, 46vh, 60vw); }
 .cinematic h2 { font-size: clamp(1.4rem,4vw,2.4rem); letter-spacing: .12em; color: var(--gold); text-align:center; text-shadow: 0 0 22px rgba(255,200,90,.6); }
 .cinematic p { color: #dce9f7; font-size: 1.05rem; text-align: center; max-width: 620px; }
 
@@ -13301,77 +13314,134 @@ input[type="text"].wiki-search {
     Screens.replace(node, "center", onClose);
   }
   function evolutionCinematic(mythling, result, onDone) {
+    const SIZE = 460;
     const layer = el("div", { class: "cinematic" });
-    const cv = el("canvas", { width: 460, height: 460 });
+    const stage = el("div", { class: "cinematic-stage" });
+    const cv = el("canvas", { width: SIZE, height: SIZE });
     const title = el("h2", { text: `${result.from} is evolving...` });
     const sub = el("p", { text: "Do not look away!" });
-    layer.append(cv, title, sub);
+    stage.append(cv, title, sub);
+    layer.appendChild(stage);
     document.getElementById("app").appendChild(layer);
     AudioManager.playTheme("evolve");
     AudioManager.sfx("evolve");
     const ctx = cv.getContext("2d");
+    const fromStage = Math.max(0, mythling.stage - 1);
     const start = performance.now();
     const DURATION = 4200;
-    let raf;
-    const loop = (now) => {
-      const t = (now - start) / 1e3;
-      const p2 = Math.min(1, (now - start) / DURATION);
-      ctx.clearRect(0, 0, 460, 460);
+    const REVEAL = 0.86;
+    let raf = 0;
+    let scale = 1;
+    let cssW = 0;
+    let lastPaint = 0;
+    const fit = () => {
+      const w = Math.round(cv.clientWidth || SIZE);
+      if (!w || w === cssW) return;
+      cssW = w;
+      const dpr = Math.min(2, typeof window !== "undefined" && window.devicePixelRatio || 1);
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(w * dpr);
+      scale = w * dpr / SIZE;
+    };
+    const showNewForm = (t, p2) => {
+      if (p2 >= REVEAL) return true;
+      if (p2 < 0.46) return false;
+      const u = (p2 - 0.46) / (REVEAL - 0.46);
+      const hz = 3 + 6 * u;
+      return Math.sin(t * hz * Math.PI * 2) > 0;
+    };
+    const paint = (t, p2) => {
+      fit();
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const flash = p2 < REVEAL ? 0 : p2 < 0.94 ? (p2 - REVEAL) / 0.08 : Math.max(0, 1 - (p2 - 0.94) / 0.06);
+      const glow = p2 < REVEAL ? 0.16 + 0.4 * p2 : 0.55 - 0.27 * ((p2 - REVEAL) / 0.14);
       const g = ctx.createRadialGradient(230, 250, 10, 230, 250, 220);
-      g.addColorStop(0, `rgba(255,240,180,${0.25 + p2 * 0.65})`);
+      g.addColorStop(0, `rgba(255,240,180,${glow})`);
       g.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, 460, 460);
-      const flickerRate = 2 + p2 * 26;
-      const showNew = p2 > 0.92 ? true : Math.sin(t * flickerRate) > 0;
-      ctx.save();
-      ctx.translate(230, 330);
-      const glow = 1 + p2 * 0.25;
-      ctx.scale(glow, glow);
-      drawMythling(ctx, {
-        speciesId: mythling.speciesId,
-        stage: showNew ? mythling.stage : Math.max(0, mythling.stage - 1),
-        mutation: mythling.mutation,
-        x: 0,
-        y: 0,
-        size: 190,
-        t,
-        facing: 1,
-        pose: { alpha: 1, anim: { name: "evolve", phase: p2 } }
-      });
-      ctx.restore();
-      for (let i = 0; i < 40; i++) {
-        const a = i / 40 * Math.PI * 2 + t;
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      const motes = p2 < REVEAL ? 40 : 18;
+      for (let i = 0; i < motes; i++) {
+        const a = i / motes * Math.PI * 2 + t;
         const r = 40 + (t * 90 + i * 17) % 190;
-        const alpha = 1 - r / 230;
-        ctx.globalAlpha = alpha * 0.8;
+        ctx.globalAlpha = (1 - r / 230) * (p2 < REVEAL ? 0.8 : 0.45);
         ctx.fillStyle = i % 3 === 0 ? "#fff6c8" : "#ffd76a";
         ctx.beginPath();
         ctx.arc(230 + Math.cos(a) * r * 0.7, 300 - r * 0.8, 3.2, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.translate(230, 330);
+      const s = 1 + (p2 < REVEAL ? 0.14 * p2 : 0.14 * (1 - (p2 - REVEAL) / 0.14));
+      ctx.scale(s, s);
+      drawMythling(ctx, {
+        speciesId: mythling.speciesId,
+        stage: showNewForm(t, p2) ? mythling.stage : fromStage,
+        mutation: mythling.mutation,
+        x: 0,
+        y: 0,
+        size: 190,
+        t,
+        facing: 1,
+        pose: p2 >= 1 ? { alpha: 1 } : { alpha: 1, anim: { name: "evolve", phase: p2 } }
+      });
+      ctx.restore();
+      if (flash > 0) {
+        ctx.globalAlpha = flash * 0.92;
+        ctx.fillStyle = "#fff8e0";
+        ctx.fillRect(0, 0, SIZE, SIZE);
+        ctx.globalAlpha = 1;
+      }
+    };
+    const stop = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+    const reveal = (now) => {
+      if (!layer.isConnected) {
+        raf = 0;
+        return;
+      }
+      if (now - lastPaint >= 32) {
+        lastPaint = now;
+        paint((now - start) / 1e3, 1);
+      }
+      raf = requestAnimationFrame(reveal);
+    };
+    const loop = (now) => {
+      const t = (now - start) / 1e3;
+      const p2 = Math.min(1, (now - start) / DURATION);
+      paint(t, p2);
       if (p2 >= 1) {
-        cancelAnimationFrame(raf);
         finish();
+        raf = requestAnimationFrame(reveal);
         return;
       }
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
     const finish = () => {
       AudioManager.sfx("levelup");
+      layer.classList.add("done");
       title.textContent = "Congratulations!";
       sub.innerHTML = `<b>${result.from}</b> evolved into <b style="color:#ffd76a">${result.to}</b>!`;
       const gains = el("div", { class: "levelup-list" }, Object.entries(result.gains).filter(([, v]) => v !== 0).map(([k, v]) => el("div", { class: "gain", text: `${STAT_SHORT2[k]} ${v > 0 ? "+" : ""}${v}` })));
       const skills = result.newSkills.length ? el("p", { html: `New skills added to the Skill Library: <b>${result.newSkills.map((s) => s.replace(/_/g, " ")).join(", ")}</b>` }) : null;
       const ult = el("p", { html: `Ultimate upgraded to <b style="color:#ffd76a">${result.ultimate.name}</b>!` });
-      const btn = button("CONTINUE", { class: "primary", onclick: () => {
-        layer.remove();
-        onDone();
-      } });
-      layer.append(gains, skills || el("span"), ult, btn);
+      const btn = button("CONTINUE", {
+        class: "primary",
+        onclick: () => {
+          stop();
+          layer.remove();
+          onDone();
+        }
+      });
+      stage.append(gains, skills || el("span"), ult, btn);
+      setTimeout(() => btn.focus && btn.focus(), 0);
     };
+    fit();
+    raf = requestAnimationFrame(loop);
   }
   function groupLevelUps(entries) {
     const groups = [];
@@ -13416,7 +13486,9 @@ input[type="text"].wiki-search {
   }
   function versionCompleteScreen(onDone) {
     const layer = el("div", { class: "cinematic" });
-    layer.append(
+    const stage = el("div", { class: "cinematic-stage" });
+    layer.appendChild(stage);
+    stage.append(
       el("h2", { text: "EMBERWILD COMPLETE" }),
       el("h2", { style: { fontSize: "1.4rem", color: "#eaf3ff" }, text: "Current Version Complete" }),
       el("p", { text: "You have bested the Flame Warden and cleared every region of the current build of Wildbound." }),

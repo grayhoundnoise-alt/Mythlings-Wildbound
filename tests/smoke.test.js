@@ -1,5 +1,6 @@
 // Headless verification of the rules that matter most (no DOM required).
 // Run with:  npm test
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
 // minimal browser shims used by a couple of modules at import time
@@ -825,6 +826,27 @@ test('the player side waits for its own switch event too', () => {
   assert.ok(sw, 'a switch event is emitted for the player');
   scene.view.player = { uid: battle.player.uid };
   assert.equal(scene.shownMythling('player').uid, battle.player.uid);
+});
+
+// ------------------------------------------------------------------
+section('Evolution cinematic layout');
+const cssText = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+
+test('the cinematic overlay scrolls instead of clipping the summary', () => {
+  const overlay = cssText.match(/\.cinematic\s*\{([^}]*)\}/);
+  assert.ok(overlay, '.cinematic rule exists');
+  assert.match(overlay[1], /overflow-y:\s*auto/, 'the overlay scrolls');
+  // a single margin:auto child centres the content without cutting off the top
+  const stage = cssText.match(/\.cinematic-stage\s*\{([^}]*)\}/);
+  assert.ok(stage, '.cinematic-stage rule exists');
+  assert.match(stage[1], /margin:\s*auto/);
+});
+
+test('the evolution canvas stays square at every size', () => {
+  const cv = cssText.match(/\.cinematic canvas\s*\{([^}]*)\}/);
+  assert.ok(cv, '.cinematic canvas rule exists');
+  assert.match(cv[1], /aspect-ratio:\s*1\s*\/\s*1/, 'the Mythling is never squashed');
+  assert.match(cv[1], /height:\s*auto/);
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

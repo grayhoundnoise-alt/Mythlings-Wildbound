@@ -519,11 +519,24 @@ select {
 
 /* ---------- Evolution / cinematic overlays ---------- */
 .cinematic {
-  position: absolute; inset: 0; z-index: 70; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 18px;
+  position: absolute; inset: 0; z-index: 70; display: flex;
+  overflow-y: auto; overflow-x: hidden;
   background: radial-gradient(ellipse at center, rgba(20,40,70,.9), rgba(2,5,10,.98));
 }
-.cinematic canvas { width: min(460px, 82vw); height: min(460px, 52vh); }
+/* A single `margin:auto` child: centres the cinematic but still scrolls
+   instead of clipping when the content is taller than the window. */
+.cinematic-stage {
+  margin: auto; width: min(760px, 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 28px 18px;
+}
+/* Square at every size: the canvas used to be stretched wide and short, which
+   squashed the Mythling. JS backs it at device resolution for sharpness. */
+.cinematic canvas {
+  display: block; width: min(460px, 82vw, 56vh); height: auto; aspect-ratio: 1 / 1;
+}
+/* Once the summary appears, give the text room instead of overflowing. */
+.cinematic.done canvas { width: min(300px, 46vh, 60vw); }
 .cinematic h2 { font-size: clamp(1.4rem,4vw,2.4rem); letter-spacing: .12em; color: var(--gold); text-align:center; text-shadow: 0 0 22px rgba(255,200,90,.6); }
 .cinematic p { color: #dce9f7; font-size: 1.05rem; text-align: center; max-width: 620px; }
 
