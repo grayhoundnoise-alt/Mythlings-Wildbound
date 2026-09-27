@@ -12,12 +12,23 @@ by the game's own code.
 
 ## Run it
 
+**Easiest — no server, no install:** download **`MythlingsWildbound-Offline.html`** and double-click it.
+It is the whole game (code + styles) inlined into one self-contained file.
+
+**As a normal web project:**
+
 ```bash
 npm start            # serves the folder on http://localhost:3000
 # or any static server:  npx serve .   |   python3 -m http.server 3000
 ```
 
-Then open the page. Everything is ES modules loaded straight from `index.html`.
+Then open the page. Everything is ES modules loaded straight from `index.html` — which is why
+opening `index.html` directly from disk shows a black screen: browsers block `file://` module
+imports. Use the offline build above for that, or rebuild it after changing the source:
+
+```bash
+npm run build:offline   # regenerates MythlingsWildbound-Offline.html
+```
 
 ```bash
 npm test             # 31 headless rule tests (levels, capture, evolution, save/load, maps…)
