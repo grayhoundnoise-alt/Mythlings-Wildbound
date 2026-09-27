@@ -25,6 +25,7 @@ import {
   CRIT_MAX_PERCENT, CRIT_MAX_MULT, GAME_VERSION,
 } from '../data/config.js';
 import { AudioManager } from '../systems/AudioManager.js';
+import { coins } from '../core/utils.js';
 
 // ------------------------------------------------------------------ helpers
 function h3(text, search = '') {
@@ -211,7 +212,7 @@ function raritySection() {
       You must <b>defeat</b> a wild Mythling before any ball will work.`),
     table(BALL_IDS.map((id) => {
       const it = ITEMS[id];
-      return [`${it.name}`, `x${it.catchMult.toFixed(2)} catch · ${it.price} Wildcoins`];
+      return [`${it.name}`, `x${it.catchMult.toFixed(2)} catch · ${coins(it.price)} Wildcoins`];
     }), 'balls'),
   ];
 }

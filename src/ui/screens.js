@@ -16,7 +16,7 @@ import { GameState, InventoryManager, PlayerManager, PartyManager, bus } from '.
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
 import { drawMythling } from '../render/creatures.js';
 import { AudioManager } from '../systems/AudioManager.js';
-import { formatTime, formatDate } from '../core/utils.js';
+import { coins, formatTime, formatDate } from '../core/utils.js';
 
 // ------------------------------------------------------------------ MAIN MENU
 export function mainMenuScreen({ onNewGame, onLoad, onSettings, onExit }) {
@@ -289,12 +289,12 @@ export function shopScreen(building, { onClose }) {
     for (const id of building.stock) {
       const item = getItem(id);
       let qty = 1;
-      const totalLabel = el('div', { class: 'ir-qty price' }, [icon('coin', 'gold'), el('span', { text: String(item.price) })]);
+      const totalLabel = el('div', { class: 'ir-qty price' }, [icon('coin', 'gold'), el('span', { text: coins(item.price) })]);
       const qtyLabel = el('b', { text: '1' });
       const setQty = (n) => {
         qty = Math.max(1, Math.min(99, n));
         qtyLabel.textContent = String(qty);
-        totalLabel.lastChild.textContent = String(item.price * qty);
+        totalLabel.lastChild.textContent = coins(item.price * qty);
       };
       rows.appendChild(el('div', { class: 'item-row' }, [
         icon(item.category === 'balls' ? 'orb' : item.category === 'food' ? 'food' : item.category === 'key' ? 'key' : 'heal', 'item-ico'),
@@ -314,7 +314,7 @@ export function shopScreen(building, { onClose }) {
           onclick: async () => {
             const total = item.price * qty;
             if (GameState.player.wildcoins < total) { toast('Not enough Wildcoins!', 'bad'); AudioManager.sfx('cancel'); return; }
-            const ok = await confirmDialog('CONFIRM PURCHASE', `Buy <b>${qty}× ${item.name}</b> for <b>${total} Wildcoins</b>?`, 'BUY', 'CANCEL');
+            const ok = await confirmDialog('CONFIRM PURCHASE', `Buy <b>${qty}× ${item.name}</b> for <b>${coins(total)} Wildcoins</b>?`, 'BUY', 'CANCEL');
             if (!ok) return;
             if (!PlayerManager.spendCoins(total)) { toast('Not enough Wildcoins!', 'bad'); return; }
             InventoryManager.add(id, qty);
@@ -335,7 +335,7 @@ export function shopScreen(building, { onClose }) {
       panelHeader(building.name, onClose),
       el('p', { class: 'sub coin-line' }, [
         el('span', { text: 'Wildcoins:' }), icon('coin', 'gold'),
-        el('b', { style: { color: '#ffe08a' }, text: String(GameState.player.wildcoins) }),
+        el('b', { style: { color: '#ffe08a' }, text: coins(GameState.player.wildcoins) }),
       ]),
       render(),
       el('div', { class: 'row end', style: { marginTop: '16px' } }, [button('LEAVE SHOP', { class: 'primary', onclick: onClose, sfx: 'cancel' })]),

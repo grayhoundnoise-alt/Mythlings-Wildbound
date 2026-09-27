@@ -26,7 +26,7 @@ import {
   handleGlobalEscape, modalOpen,
 } from './ui/ui.js';
 import { icon, iconSvg } from './ui/icons.js';
-import { clamp, formatTime } from './core/utils.js';
+import { clamp, coins, formatTime } from './core/utils.js';
 
 class Game {
   constructor() {
@@ -428,7 +428,7 @@ class Game {
     // Wildcoins dropped by defeated wild Mythlings (trainer bounties are paid below).
     if (battle.rewards.coins > 0) {
       PlayerManager.addCoins(battle.rewards.coins);
-      toast(`+${battle.rewards.coins} Wildcoins`, 'ok');
+      toast(`+${coins(battle.rewards.coins)} Wildcoins`, 'ok');
       this.updateHud();
     }
 
@@ -445,7 +445,7 @@ class Game {
         if (rw.coins) PlayerManager.addCoins(rw.coins);
         for (const [id, qty] of Object.entries(rw.items || {})) InventoryManager.add(id, qty);
         AudioManager.sfx('coin');
-        await Dialogue.show([t.defeat, `You received ${rw.coins || 0} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}× ${i.replace(/_/g, ' ')}`).join(', ')}` : ''}!`], t.name);
+        await Dialogue.show([t.defeat, `You received ${coins(rw.coins || 0)} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}× ${i.replace(/_/g, ' ')}`).join(', ')}` : ''}!`], t.name);
         if (t.guardian) toast(`${t.name} defeated — a new path has opened!`, 'ok');
         await this.autosave();
         if (t.finalBoss) {
@@ -486,7 +486,7 @@ class Game {
     PlayerManager.addCoins(-penalty);
     await modal({
       title: 'YOU WERE DEFEATED',
-      body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${penalty} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
+      body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${coins(penalty)} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
       buttons: [{ label: 'CONTINUE', value: true, primary: true }],
     });
     PartyManager.healAll();
@@ -595,7 +595,7 @@ class Game {
       chip.addEventListener('click', () => this.openMenu('party'));
       strip.appendChild(chip);
     }
-    document.getElementById('hud-coins').textContent = String(GameState.player.wildcoins);
+    document.getElementById('hud-coins').textContent = coins(GameState.player.wildcoins);
     document.getElementById('hud-location').textContent = this.overworld.currentRegionName();
 
     const obj = document.getElementById('objective');

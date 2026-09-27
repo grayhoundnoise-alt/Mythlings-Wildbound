@@ -19,7 +19,7 @@ import { icon, iconSvg, iconLabel } from '../ui/icons.js';
 import { buffSummary } from '../data/skills.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
-import { clamp, randInt } from '../core/utils.js';
+import { clamp, coins, randInt } from '../core/utils.js';
 import { LEVEL_CAP } from '../data/config.js';
 
 const SLOT_POS = {
@@ -645,7 +645,7 @@ export class BattleScene {
       case 'coins':
         if (ev.amount > 0) {
           AudioManager.sfx('coin');
-          this.pushLog(`The defeated Mythling dropped ${ev.amount} Wildcoins!`);
+          this.pushLog(`The defeated Mythling dropped ${coins(ev.amount)} Wildcoins!`);
           this.floatNumber(ev.side === 'enemy' ? 'enemy' : 'player', `+${ev.amount}`, '#ffe08a');
           await wait(320);
         }

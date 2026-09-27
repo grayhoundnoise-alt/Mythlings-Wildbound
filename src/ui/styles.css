@@ -315,7 +315,7 @@ select {
   background: rgba(10,18,30,0.75); border: 1.5px solid rgba(255,255,255,0.14);
   text-align: center; font-size: .72rem; backdrop-filter: blur(4px);
 }
-.party-chip canvas { width: 100%; height: 44px; display: block; }
+.party-chip canvas { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
 .party-chip .pc-name { font-weight: 800; font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .party-chip .pc-lv { color: var(--muted); font-size: .68rem; }
 .party-chip.fainted { filter: grayscale(1) brightness(.6); }
@@ -745,7 +745,12 @@ select {
 .levelup-body h3 { margin: 0 0 6px; font-size: 1rem; color: var(--gold); letter-spacing: .06em; }
 .levelup-body h3:not(:first-child) { margin-top: 14px; }
 .levelup-body p { margin: 6px 0 0; }
-.levelup-list { display: flex; flex-wrap: wrap; gap: 6px; }
+/* six across, then wrap onto a new row — a vertical column of nine stats was
+   far too tall for the evolution and level-up summaries */
+.levelup-list {
+  display: grid; grid-template-columns: repeat(6, auto);
+  justify-content: center; gap: 6px;
+}
 .levelup-list .gain {
   padding: 3px 9px; border-radius: 999px; font-size: .78rem; font-weight: 800; letter-spacing: .04em;
   background: rgba(110, 224, 140, .16); border: 1px solid rgba(134, 240, 160, .45); color: #d3ffdf;

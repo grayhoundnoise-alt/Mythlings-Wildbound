@@ -29,7 +29,7 @@ import { buffSummary } from '../data/skills.js';
 import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { AudioManager } from '../systems/AudioManager.js';
-import { formatTime } from '../core/utils.js';
+import { coins, formatTime } from '../core/utils.js';
 
 const TABS = [
   ['party', 'PARTY', 'dna'],
@@ -43,25 +43,69 @@ const TABS = [
   ['settings', 'SETTINGS', 'settings'],
 ];
 
+/**
+ * A Mythling portrait.
+ *
+ * `size` is the design box, but the CSS is free to give the canvas any shape
+ * (party chips are wide and short, the starter art is a banner). The drawing is
+ * always scaled by the SHORTER side and centred, so a Mythling is never
+ * squashed, and the backing store follows the real CSS box at device
+ * resolution so it stays crisp.
+ */
 export function mythCanvas(m, size = 66, animated = false) {
+  const dpr = () => Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
   const cv = el('canvas', { width: size, height: size });
   const ctx = cv.getContext('2d');
+  let bw = 0, bh = 0;
+  let clock = 0;
+
+  const fit = () => {
+    const d = dpr();
+    const w = Math.max(1, Math.round((cv.clientWidth || size) * d));
+    const h = Math.max(1, Math.round((cv.clientHeight || size) * d));
+    if (w === bw && h === bh) return false;
+    bw = w; bh = h;
+    cv.width = w; cv.height = h;
+    return true;
+  };
+
   const draw = (t = 0) => {
-    ctx.clearRect(0, 0, size, size);
-    ctx.save(); ctx.translate(size / 2, size * 0.88);
+    clock = t;
+    fit();
+    const d = dpr();
+    const w = bw / d, h = bh / d;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const s = Math.min(w, h) / size;              // uniform: never stretch
+    ctx.translate((w - size * s) / 2, (h - size * s) / 2);
+    ctx.scale(s, s);
+    ctx.save();
+    ctx.translate(size / 2, size * 0.88);
     drawMythling(ctx, {
       speciesId: m.speciesId, stage: m.stage ?? 0, mutation: m.mutation || 'none',
       x: -size * 0.06, y: 0, size: size * 0.78, t, facing: 1, shadow: false,
     });
     ctx.restore();
   };
+
   draw(0);
+  // the element usually has no layout yet on the first paint: repaint once it has
+  const repaint = () => { if (fit()) draw(clock); };
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(repaint);
+    ro.observe(cv);
+    cv._ro = ro;
+  } else if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(repaint);
+  }
   if (animated) {
     let raf, t0 = performance.now();
     const loop = (now) => { draw((now - t0) / 1000); raf = requestAnimationFrame(loop); };
     raf = requestAnimationFrame(loop);
-    cv._stop = () => cancelAnimationFrame(raf);
+    const prevStop = cv._stop;
+    cv._stop = () => { cancelAnimationFrame(raf); cv._ro && cv._ro.disconnect(); prevStop && prevStop(); };
   }
+  cv.redraw = repaint;
   return cv;
 }
 
@@ -371,7 +415,7 @@ export class PlayerMenu {
   renderBag(root) {
     this.setTitle('Bag');
     root.appendChild(el('div', { class: 'coin-pill', style: { display: 'inline-flex', marginBottom: '12px' } },
-      [icon('coin', 'gold'), el('span', { text: `${GameState.player.wildcoins} Wildcoins` })]));
+      [icon('coin', 'gold'), el('span', { text: `${coins(GameState.player.wildcoins)} Wildcoins` })]));
     for (const cat of ITEM_CATEGORIES) {
       const entries = InventoryManager.byCategory(cat.id);
       root.appendChild(el('h3', { text: cat.name }));
@@ -541,7 +585,7 @@ export class PlayerMenu {
     this.setTitle('Trainer Record');
     const rows = [
       ['Trainer', GameState.player.name],
-      ['Wildcoins', String(GameState.player.wildcoins)],
+      ['Wildcoins', coins(GameState.player.wildcoins)],
       ['Play time', formatTime(PlayerManager.playTime())],
       ['Current region', MAPS[GameState.player.map].displayName],
       ['Starter', GameState.player.starter ? SPECIES[GameState.player.starter].displayName : '—'],
