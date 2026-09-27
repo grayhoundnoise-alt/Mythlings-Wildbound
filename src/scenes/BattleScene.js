@@ -49,6 +49,25 @@ export class BattleScene {
   }
 
   /** Freeze a combatant's presentable state (HP, charge, active buffs). */
+  /**
+   * The Mythling currently ON SCREEN for a side.
+   *
+   * A turn resolves all at once inside BattleManager.act() — by the time the
+   * event list is played the engine has already moved `battle.enemy` /
+   * `battle.player` on to the next combatant. Anything drawn straight from
+   * those getters swaps to the replacement while the finishing blow is still
+   * animating, so every visual path resolves through this method instead.
+   */
+  shownMythling(side) {
+    const v = this.view && this.view[side];
+    if (v && this.battle) {
+      const list = side === 'player' ? this.battle.party : this.battle.enemies;
+      const found = list && list.find((m) => m.uid === v.uid);
+      if (found) return found;
+    }
+    return side === 'player' ? this.battle?.player : this.battle?.enemy;
+  }
+
   viewOf(m, side) {
     const buffs = {};
     const cb = this.battle && this.battle.combatants.get(m.uid);
@@ -184,10 +203,21 @@ export class BattleScene {
    * fight. Lets the player see immediately whether the enemy is down to its
    * last Mythling.
    */
+  // How many of the trainer's Mythlings are still standing *on screen*. The
+  // engine has already advanced to the replacement, so a Mythling that has
+  // fainted but is still being shown stays in the count until its switch
+  // event plays — otherwise the counter blinks down before the KO finishes.
+  teamLeft() {
+    const b = this.battle;
+    const left = b.enemies.filter((m) => !isFainted(m)).length;
+    const shown = this.shownMythling('enemy');
+    return shown && isFainted(shown) ? left + 1 : left;
+  }
+
   teamRow() {
     const b = this.battle;
     const total = b.enemies.length;
-    const left = b.enemies.filter((m) => !isFainted(m)).length;
+    const left = this.teamLeft();
     const name = b.trainer?.name || 'Trainer';
     const row = el('div', { class: `team-row ${left === 1 ? 'last' : ''}` });
     row.dataset.sig = `${left}/${total}`;
@@ -700,8 +730,8 @@ export class BattleScene {
    */
   refreshCards() {
     if (!this.ui) return;
-    this.updateCard(this.battle.enemy, 'enemy');
-    this.updateCard(this.battle.player, 'player');
+    this.updateCard(this.shownMythling('enemy'), 'enemy');
+    this.updateCard(this.shownMythling('player'), 'player');
   }
 
   updateCard(m, side) {
@@ -818,17 +848,19 @@ export class BattleScene {
   drawReadyAura(ctx, side) {
     const b = this.battle;
     const v = this.view[side];
-    const m = side === 'player' ? b?.player : b?.enemy;
-    if (!m || !v || !ultimateUnlocked(m)) return;
+    const m = this.shownMythling(side);
+    if (!m || !v || v.uid !== m.uid || !ultimateUnlocked(m)) return;
     if (v.charge < ULTIMATE_MAX_CHARGE) return;
     if (this.anim[side].alpha < 0.05) return;
     const el = speciesOf(m).element;
     const pal = paletteFor(el);
     const { x, y } = this.screenPos(side);
     const pulse = 0.55 + 0.45 * Math.sin(this.time * 2.6);
+    // fade the aura out with the creature so a KO reads cleanly
+    const a = this.anim[side].alpha;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.16 + 0.12 * pulse;
+    ctx.globalAlpha = (0.16 + 0.12 * pulse) * a;
     const g = ctx.createRadialGradient(x, y - 60, 8, x, y - 60, 96);
     g.addColorStop(0, pal.core);
     g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -836,7 +868,7 @@ export class BattleScene {
     ctx.beginPath(); ctx.ellipse(x, y - 60, 96, 92, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     ctx.save();
-    ctx.globalAlpha = 0.35 + 0.25 * pulse;
+    ctx.globalAlpha = (0.35 + 0.25 * pulse) * a;
     ctx.strokeStyle = pal.glow;
     ctx.lineWidth = 2.4;
     const r = 44 + pulse * 5;
@@ -898,8 +930,9 @@ export class BattleScene {
     const ep = this.screenPos('enemy');
     const ea = this.anim.enemy;
     if (ea.alpha > 0.01) {
+      const em = this.shownMythling('enemy');
       drawMythling(ctx, {
-        speciesId: b.enemy.speciesId, stage: b.enemy.stage, mutation: b.enemy.mutation,
+        speciesId: em.speciesId, stage: em.stage, mutation: em.mutation,
         x: ep.x + ea.lean, y: ep.y, size: 150, t: this.time, facing: -1,
         animTag: 'enemy', pose: this.creaturePose('enemy'),
       });
@@ -922,8 +955,9 @@ export class BattleScene {
     const pp = this.screenPos('player');
     const pa = this.anim.player;
     if (pa.alpha > 0.01) {
+      const pm = this.shownMythling('player');
       drawMythling(ctx, {
-        speciesId: b.player.speciesId, stage: b.player.stage, mutation: b.player.mutation,
+        speciesId: pm.speciesId, stage: pm.stage, mutation: pm.mutation,
         x: pp.x + pa.lean, y: pp.y, size: 176, t: this.time, facing: 1,
         animTag: 'player', pose: this.creaturePose('player'),
       });

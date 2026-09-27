@@ -742,5 +742,90 @@ test('element palettes are distinct (nature is organic, water fluid, fire alive)
   for (const [k, v] of Object.entries(BUFF_VFX)) assert.ok(v.icon.startsWith('↑'), `${k} reads as a stat rise`);
 });
 
+// ------------------------------------------------------------------
+section('Fainting: the display never skips ahead to the replacement');
+const { BattleScene } = await import('../src/scenes/BattleScene.js');
+
+// A turn resolves all at once: run a trainer battle until the enemy is KO'd.
+function koTrainerBattle() {
+  const team = [createMythling({ speciesId: 'aquini', level: 3 }), createMythling({ speciesId: 'leaflet', level: 3 })];
+  const trainer = { name: 'Ranger Vi', intro: '', defeat: '', flag: 'f_vi', reward: { coins: 200 }, team };
+  const battle = new Battle({ type: BattleType.TRAINER, party: [createMythling({ speciesId: 'emberu', level: 30 })], enemies: team, trainer, mapId: 'verdant_vale' });
+  const fainted = battle.enemy;
+  let g = 0, events = [];
+  while (battle.phase === BattlePhase.ACTIVE && g++ < 40) {
+    const res = battle.act({ type: 'skill', slot: 'special' });
+    events = events.concat(res.events || []);
+    if (events.some((e) => e.type === 'faint')) break;
+  }
+  return { battle, fainted, events };
+}
+
+test('the engine advances to the next combatant before the events are played', () => {
+  const { battle, fainted } = koTrainerBattle();
+  // this is the pitfall the scene works around: battle.enemy is ALREADY the
+  // replacement while the KO events are still queued.
+  assert.notEqual(battle.enemy.uid, fainted.uid);
+  assert.equal(fainted.currentHp, 0);
+});
+
+test('a KO is emitted as damage -> faint -> switch, in that order', () => {
+  const { events } = koTrainerBattle();
+  const order = events.map((e) => e.type);
+  const dmg = order.lastIndexOf('damage');
+  const faint = order.indexOf('faint');
+  const sw = order.indexOf('switch');
+  assert.ok(dmg >= 0 && faint > dmg, `damage (${dmg}) before faint (${faint})`);
+  assert.ok(sw > faint, `faint (${faint}) before switch (${sw})`);
+  const lastDamage = events[dmg];
+  assert.equal(lastDamage.mythling.hp, 0, 'the finishing blow leaves it at 0 HP');
+});
+
+test('shownMythling() shows the fainted Mythling until the switch event plays', () => {
+  const { battle, fainted, events } = koTrainerBattle();
+  const next = battle.enemy;
+  const scene = Object.create(BattleScene.prototype);   // no DOM: method only
+  scene.battle = battle;
+  scene.view = { enemy: { uid: fainted.uid }, player: { uid: battle.player.uid } };
+  // while the damage + faint events play, the view still points at the KO'd one
+  const koEvents = events.filter((e) => ['damage', 'faint', 'exp'].includes(e.type));
+  for (const _ of koEvents) {
+    assert.equal(scene.shownMythling('enemy').uid, fainted.uid, 'still showing the fainting Mythling');
+  }
+  // the switch event is what advances the display
+  scene.view.enemy = { uid: next.uid };
+  assert.equal(scene.shownMythling('enemy').uid, next.uid);
+});
+
+test('shownMythling() falls back to the live combatant when no view is set', () => {
+  const { battle } = koTrainerBattle();
+  const scene = Object.create(BattleScene.prototype);
+  scene.battle = battle;
+  scene.view = {};
+  assert.equal(scene.shownMythling('enemy'), battle.enemy);
+  assert.equal(scene.shownMythling('player'), battle.player);
+});
+
+test('the player side waits for its own switch event too', () => {
+  const party = [createMythling({ speciesId: 'aquini', level: 2 }), createMythling({ speciesId: 'leaflet', level: 2 })];
+  const battle = new Battle({ type: BattleType.WILD, party, enemies: [createMythling({ speciesId: 'emberu', level: 30 })], mapId: 'emberwild' });
+  const fainted = battle.player;
+  const scene = Object.create(BattleScene.prototype);
+  scene.battle = battle;
+  scene.view = { player: { uid: fainted.uid } };
+  let g = 0, events = [];
+  while (battle.phase === BattlePhase.ACTIVE && g++ < 40) {
+    const res = battle.act({ type: 'skill', slot: 'special' });
+    events = events.concat(res.events || []);
+    if (events.some((e) => e.type === 'faint' && e.side === 'player')) break;
+  }
+  // the engine has queued the replacement, the display has not
+  assert.equal(scene.shownMythling('player').uid, fainted.uid);
+  const sw = events.find((e) => e.type === 'switch' && e.side === 'player');
+  assert.ok(sw, 'a switch event is emitted for the player');
+  scene.view.player = { uid: battle.player.uid };
+  assert.equal(scene.shownMythling('player').uid, battle.player.uid);
+});
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
