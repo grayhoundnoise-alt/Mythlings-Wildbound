@@ -341,7 +341,17 @@ const UI = {
       const sel = h('select', { class: 'map-select', title: 'Switch map', onchange: (e) => this.openMap(e.target.value) });
       for (const m of Object.values(E.project.maps)) sel.appendChild(h('option', { value: m.id, selected: m.id === E.mapId, text: `${m.name}  (${m.width}×${m.height})` }));
       sel.appendChild(h('option', { value: '__new', text: '+ New Map…' }));
-      sel.onchange = (e) => { if (e.target.value === '__new') { e.target.value = E.mapId; Screens.newMap(); } else this.openMap(e.target.value); };
+      if (typeof Game !== 'undefined' && Game.ok) for (const gid of Game.mapIds()) sel.appendChild(h('option', { value: `__game:${gid}`, text: `⬇ ${Game.map(gid).displayName} — real game map${E.project.maps[gid] ? ' (reset to game version)' : ''}` }));
+      sel.onchange = async (e) => {
+        const v = e.target.value;
+        if (v === '__new') { e.target.value = E.mapId; Screens.newMap(); return; }
+        if (v.startsWith('__game:')) {
+          const gid = v.slice(7); e.target.value = E.mapId;
+          if (E.project.maps[gid] && !(await confirmDialog('Reset map', `"${E.project.maps[gid].name}" already exists in this project. Replace it with the original game version? Your edits to it will be lost (undoable).`, 'RESET', 'CANCEL', true))) return;
+          Game.addPreset('map', gid); this.openMap(gid); toast(`${Game.map(gid).displayName} imported from the game`, 'ok'); return;
+        }
+        this.openMap(v);
+      };
       crumb.appendChild(sel);
     } else if (isCreatureMode()) {
       const sel = h('select', { class: 'map-select', title: 'Switch Mythling' });

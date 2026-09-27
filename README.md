@@ -61,6 +61,9 @@ node tools/build-editor.mjs --no-game       # variant without the snapshot (demo
 node tools/build-editor.mjs --check         # validate only; --out=path writes elsewhere
 ```
 
+Optional headless regression test for the editor (drives the built file in jsdom with a real canvas):
+`npm i --no-save jsdom @napi-rs/canvas` then `node tools/mythling-edit/test/game-presets.test.mjs`.
+
 ## Controls
 
 | Input | Action |

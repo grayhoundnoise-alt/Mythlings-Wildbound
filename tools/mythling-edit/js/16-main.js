@@ -54,6 +54,10 @@ const App = {
       if (!data) { toast('Project not found in storage', 'err'); const recent = (await Store.getKV('recent', [])).filter((r) => r.id !== id); await Store.setKV('recent', recent); this.showStart(); return; }
       await this.loadIntoEditor(data);
       toast(`Opened "${data.project.name}"`, 'ok');
+      if (Game.ok && data.project.source !== 'game' && !Object.values(data.maps).some((m) => m.source === 'game') && !Object.values(data.mythlings).some((m) => m.source === 'game')) {
+        const seen = await Store.getKV('gamePresetHintSeen', false);
+        if (!seen) { await Store.setKV('gamePresetHintSeen', true); setTimeout(() => toast('This project uses demo content. The REAL game maps & Mythlings are one click away: PROJECT → Game Presets… (or the map dropdown above the canvas).', 'info', 9000), 800); }
+      }
     } catch (e) { ConsoleLog.error('Open failed: ' + e.message); toast('Could not open project: ' + e.message, 'err'); }
   },
   async openFile() {

@@ -248,13 +248,13 @@ const Game = {
     const evo = S.species.getEvolutionStage(species, stage);
     const ult = S.skills.ULTIMATES[sp.ultimate];
     const my = {
-      id: myId, name: evo?.name || sp.displayName, breed: sp.breed || '', element: sp.element, rarity: sp.defaultRarity || 'D', mood: sp.defaultMood || 'brave', role: sp.role || '', description: sp.description || '',
+      id: myId, name: stage ? (evo?.name || sp.displayName) : sp.displayName, breed: sp.breed || '', element: sp.element, rarity: sp.defaultRarity || 'D', mood: sp.defaultMood || 'brave', role: sp.role || '', description: sp.description || '',
       bodyType: sp.art?.body || 'fox', catchRate: sp.catchRate ?? 0.5, expYield: sp.expYield ?? 60, starter: !!sp.starter, stage, level: evo?.level || 1, ultimate: sp.ultimate || '', spawnMaps: [...(sp.spawnMaps || [])],
       palette: { primary: sp.art.primary, secondary: sp.art.secondary, belly: sp.art.belly, accent: sp.art.accent, eye: sp.art.eye, dark: sp.art.dark },
       stats: deepClone(sp.baseStats), rig: { nodes: rig.nodes, root: rig.root }, parts: rig.parts, animations: [], vfx: [], assets: [],
       skillUnlocks: deepClone(sp.skillUnlocks || {}),
       evolutions: (sp.evolutions || []).map((e, i) => ({ stage: e.stage ?? i, name: e.name, level: e.level, statMult: e.statMult, future: !!e.future, art: deepClone(e.art || {}), skills: [...((sp.skillUnlocks || {})[e.level] || [])], ultimate: ult ? `${ult.baseName}${ult.tiers[i]?.suffix || ''}` : '' })),
-      source: 'game', game: { species, stage, mutation: 'none', body: sp.art.body },
+      source: 'game', game: { species, stage, mutation: 'none', body: sp.art.body, displayName: sp.displayName },
     };
     // skills this Mythling can learn → VFX list
     const skillIds = [...new Set(Object.values(sp.skillUnlocks || {}).flat())];
@@ -354,12 +354,13 @@ const Game = {
     for (const e of my.evolutions || []) if (e.skills?.length) skillUnlocks[e.level] = [...e.skills];
     for (const [lvl, list] of Object.entries(my.skillUnlocks || {})) if (!skillUnlocks[lvl] && list?.length) skillUnlocks[lvl] = [...list];
     const entry = {
-      id: my.id.replace(/_stage\d+$/, ''), displayName: my.evolutions?.[0]?.name || my.name, breed: my.breed, element: my.element, defaultRarity: my.rarity, defaultMood: my.mood, role: my.role,
-      starter: !!my.starter, catchRate: my.catchRate ?? 0.5, expYield: my.expYield ?? 60, description: my.description, baseStats: deepClone(my.stats), ultimate: my.ultimate || sp.ultimate || '', spawnMaps: [...(my.spawnMaps || sp.spawnMaps || [])],
+      id: my.id.replace(/_stage\d+$/, ''), displayName: my.game?.displayName || (my.game?.stage ? my.evolutions?.[0]?.name : my.name) || my.name, breed: my.breed, element: my.element, defaultRarity: my.rarity, defaultMood: my.mood, role: my.role,
+      catchRate: my.catchRate ?? 0.5, expYield: my.expYield ?? 60, description: my.description, baseStats: deepClone(my.stats), ultimate: my.ultimate || sp.ultimate || '', spawnMaps: [...(my.spawnMaps || sp.spawnMaps || [])],
       evolutions: (my.evolutions || []).map((e, i) => { const o = { stage: e.stage ?? i, name: e.name, level: e.level, statMult: e.statMult }; if (e.future) o.future = true; o.art = Object.assign({ scale: 1 }, e.art || {}); return o; }),
       skillUnlocks: Object.fromEntries(Object.entries(skillUnlocks).sort((a, b) => +a[0] - +b[0])),
       art: Object.assign({ body: my.bodyType || my.game?.body || 'fox' }, my.palette || {}),
     };
+    if (my.starter || (sp && 'starter' in sp)) entry.starter = !!my.starter;
     return entry;
   },
 
