@@ -249,12 +249,15 @@ export class PlayerMenu {
     const pct = hpPercent(m);
     const evoReady = EvolutionManager.isReady(m);
     const card = el('div', { class: `myth-card ${isFainted(m) ? 'fainted' : ''}` }, [
-      portrait(m, 66),
+      // portrait column: the art, and — in the free space under it — the EVOLVE badge when a stage is ready
+      el('div', { class: 'mc-side' }, [
+        portrait(m, 66),
+        evoReady ? el('span', { class: 'chip evolve mc-evolve', title: 'Ready to evolve! Open the card and press EVOLVE NOW.', 'aria-label': 'Ready to evolve' }, [icon('levelup'), el('span', { text: 'EVOLVE' })]) : null,
+      ]),
       el('div', { class: 'mc-main' }, [
         el('div', { class: 'mc-name' }, [
           nameWithElement(m),
           m.level >= LEVEL_CAP ? el('span', { class: 'chip max', text: 'MAX' }) : null,
-          evoReady ? el('span', { class: 'chip evolve icon-only', title: 'Ready to evolve! Open the card and press EVOLVE NOW.', 'aria-label': 'Ready to evolve' }, [icon('levelup')]) : null,
           mutationChip(m.mutation),
         ]),
         el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${getMood(m.mood).name} · ${rationalSummary(m.rational).name} · ${getRarity(m.rarity).name}` }),

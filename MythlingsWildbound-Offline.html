@@ -689,6 +689,10 @@ select {
 /* icon-only EVOLVE badge: never pushes the name row out of the card */
 .chip.evolve.icon-only { padding: 3px 6px; background: rgba(255,215,106,.16); animation: evo-pulse 1.4s ease-in-out infinite; cursor: help; }
 .chip.evolve.icon-only svg { width: 14px; height: 14px; }
+/* portrait column on cards: the art with the EVOLVE badge tucked under it */
+.myth-card .mc-side { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: none; width: 66px; }
+.chip.evolve.mc-evolve { padding: 2px 7px; font-size: .62rem; letter-spacing: .05em; gap: 3px; background: rgba(255,215,106,.16); animation: evo-pulse 1.4s ease-in-out infinite; cursor: help; white-space: nowrap; }
+.chip.evolve.mc-evolve svg { width: 12px; height: 12px; }
 @keyframes evo-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,106,.45); } 50% { box-shadow: 0 0 0 5px rgba(255,215,106,0); } }
 
 /* ---------- ball art ---------- */
@@ -18337,12 +18341,15 @@ h3 .name-el { vertical-align: middle; }
       const pct = hpPercent(m);
       const evoReady = EvolutionManager.isReady(m);
       const card = el("div", { class: `myth-card ${isFainted(m) ? "fainted" : ""}` }, [
-        portrait(m, 66),
+        // portrait column: the art, and — in the free space under it — the EVOLVE badge when a stage is ready
+        el("div", { class: "mc-side" }, [
+          portrait(m, 66),
+          evoReady ? el("span", { class: "chip evolve mc-evolve", title: "Ready to evolve! Open the card and press EVOLVE NOW.", "aria-label": "Ready to evolve" }, [icon("levelup"), el("span", { text: "EVOLVE" })]) : null
+        ]),
         el("div", { class: "mc-main" }, [
           el("div", { class: "mc-name" }, [
             nameWithElement(m),
             m.level >= LEVEL_CAP ? el("span", { class: "chip max", text: "MAX" }) : null,
-            evoReady ? el("span", { class: "chip evolve icon-only", title: "Ready to evolve! Open the card and press EVOLVE NOW.", "aria-label": "Ready to evolve" }, [icon("levelup")]) : null,
             mutationChip(m.mutation)
           ]),
           el("div", { class: "mc-sub", text: `Lv.${m.level} \xB7 ${sp.displayName} \xB7 ${getMood(m.mood).name} \xB7 ${rationalSummary(m.rational).name} \xB7 ${getRarity(m.rarity).name}` }),
