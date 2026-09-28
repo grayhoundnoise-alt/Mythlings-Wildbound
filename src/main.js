@@ -26,7 +26,7 @@ import {
   handleGlobalEscape, modalOpen,
 } from './ui/ui.js';
 import { icon, iconSvg } from './ui/icons.js';
-import { clamp, formatTime } from './core/utils.js';
+import { clamp, coins, formatTime } from './core/utils.js';
 
 class Game {
   constructor() {
@@ -101,6 +101,14 @@ class Game {
       e.preventDefault();
       if (handleGlobalEscape()) return;
       if (this.mode === 'overworld' && !Dialogue.open) this.openMenu();
+      return;
+    }
+    // DEL anywhere in the game opens the cheat menu (never while typing).
+    if (k === 'delete') {
+      const ae = document.activeElement;
+      if (ae && /input|textarea|select/i.test(ae.tagName || '')) return;
+      e.preventDefault();
+      this.openCheatMenu();
       return;
     }
     if (modalOpen()) return;
@@ -371,8 +379,12 @@ class Game {
   startTrainerBattle(trainer) {
     const lead = PartyManager.firstHealthy();
     if (!lead) { toast('All your Mythlings have fainted!', 'bad'); this.handleWhiteout(); return; }
+    // Post-game: a trainer's team keeps pace with the party so rematches and
+    // late grinding stay worth doing on the way to Lv.100.
+    const teamTop = Math.max(...trainer.team.map((s) => s.level || 1));
+    const bump = Math.max(0, PartyManager.topLevel() - teamTop);
     const enemies = trainer.team.map((spec) => createMythling({
-      speciesId: spec.species, level: spec.level,
+      speciesId: spec.species, level: Math.min(LEVEL_CAP, (spec.level || 1) + bump),
       rarity: spec.rarity || SPECIES[spec.species].defaultRarity,
       mood: spec.mood || SPECIES[spec.species].defaultMood,
       mutation: 'none',
@@ -405,7 +417,7 @@ class Game {
     // level-up + evolution follow-ups
     const levelEntries = [];
     for (const r of battle.rewards.exp) {
-      for (const lv of r.result.levels) levelEntries.push({ name: r.name, ...lv });
+      for (const lv of r.result.levels) levelEntries.push({ uid: r.uid, name: r.name, ...lv });
     }
 
     await fade(true);
@@ -416,6 +428,13 @@ class Game {
     await fade(false);
 
     if (outcome === 'lost') { await this.handleWhiteout(); return; }
+
+    // Wildcoins dropped by defeated wild Mythlings (trainer bounties are paid below).
+    if (battle.rewards.coins > 0) {
+      PlayerManager.addCoins(battle.rewards.coins);
+      toast(`+${coins(battle.rewards.coins)} Wildcoins`, 'ok');
+      this.updateHud();
+    }
 
     if (levelEntries.length) {
       await new Promise((res) => levelUpSummary(levelEntries, res));
@@ -430,7 +449,7 @@ class Game {
         if (rw.coins) PlayerManager.addCoins(rw.coins);
         for (const [id, qty] of Object.entries(rw.items || {})) InventoryManager.add(id, qty);
         AudioManager.sfx('coin');
-        await Dialogue.show([t.defeat, `You received ${rw.coins || 0} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}× ${i.replace(/_/g, ' ')}`).join(', ')}` : ''}!`], t.name);
+        await Dialogue.show([t.defeat, `You received ${coins(rw.coins || 0)} Wildcoins${Object.keys(rw.items || {}).length ? ` and ${Object.entries(rw.items).map(([i, q]) => `${q}× ${i.replace(/_/g, ' ')}`).join(', ')}` : ''}!`], t.name);
         if (t.guardian) toast(`${t.name} defeated — a new path has opened!`, 'ok');
         await this.autosave();
         if (t.finalBoss) {
@@ -471,7 +490,7 @@ class Game {
     PlayerManager.addCoins(-penalty);
     await modal({
       title: 'YOU WERE DEFEATED',
-      body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${penalty} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
+      body: `All of your Mythlings fainted. You hurried back to the nearest Mythling Center and paid <b>${coins(penalty)} Wildcoins</b> in care fees.<br><br>Your Mythlings, items and progress are all safe.`,
       buttons: [{ label: 'CONTINUE', value: true, primary: true }],
     });
     PartyManager.healAll();
@@ -485,6 +504,42 @@ class Game {
     await this.enterWorld(healMap, point);
     toast('Your team was fully healed.', 'ok');
     await this.autosave();
+  }
+
+  // ------------------------------------------------------------ cheat menu
+  /** Press DEL any time during play. Adds Wildcoins instantly. */
+  openCheatMenu() {
+    if (this.mode === 'menu') return;
+    const layer = document.getElementById('modal');
+    if (layer && !layer.classList.contains('hidden')) return;   // never stack on a modal
+    AudioManager.sfx('confirm');
+
+    const bal = el('b', { style: { color: '#ffe08a', fontSize: '1.15rem' }, text: GameState.player.wildcoins.toLocaleString() });
+    const add = (n) => {
+      PlayerManager.addCoins(n);
+      AudioManager.sfx('coin');
+      bal.textContent = GameState.player.wildcoins.toLocaleString();
+      this.updateHud();
+      toast(`+${n.toLocaleString()} Wildcoins`, 'ok');
+    };
+    const coinBtn = (n) => button(`+${n.toLocaleString()}`, {
+      class: 'small primary', sfx: 'coin',
+      title: `Add ${n.toLocaleString()} Wildcoins`,
+      onclick: () => add(n),
+    });
+
+    const body = el('div', {}, [
+      el('p', { class: 'sub', text: 'Cheat menu — press DEL again any time to reopen it. Wildcoins are added instantly.' }),
+      el('div', { class: 'coin-pill', style: { display: 'inline-flex', marginBottom: '14px' } }, [
+        icon('coin', 'gold'), el('span', { text: 'Wildcoins:' }), bal,
+      ]),
+      el('div', { class: 'row', style: { gap: '8px' } }, [100, 1000, 100000, 1000000].map(coinBtn)),
+      el('div', { style: { height: '12px' } }),
+      el('p', { class: 'sub', style: { margin: 0 }, text: 'Spend them in any region shop: balls, potions, revive herbs and EXP food.' }),
+    ]);
+
+    modal({ title: 'CHEAT MENU', body, buttons: [{ label: 'CLOSE', value: true, primary: true }] })
+      .then(() => this.autosave());
   }
 
   // ------------------------------------------------------------ saving
@@ -532,13 +587,19 @@ class Game {
         mythCanvas(m, 76),
         el('div', { class: 'pc-name', text: displayName(m) }),
         el('div', { class: 'pc-lv', text: `Lv.${m.level}${m.level >= LEVEL_CAP ? ' MAX' : ''}` }),
-        bar('hp', pct, hpClass(pct)),
-        bar('ult', m.ultCharge / 8),
+        // Labelled bars: green is HP, orange is Ultimate Charge. Neither is EXP —
+        // EXP is only shown (and only ever grows) on the party cards in the menu.
+        el('div', { class: 'pc-bar', title: `HP ${m.currentHp}/${maxHp(m)}` }, [
+          el('span', { class: 'pc-tag', text: 'HP' }), bar('hp', pct, hpClass(pct)),
+        ]),
+        el('div', { class: 'pc-bar', title: `Ultimate Charge ${m.ultCharge}/8 — reset to 0 by a Center heal, never affects EXP` }, [
+          el('span', { class: 'pc-tag', text: 'ULT' }), bar('ult', m.ultCharge / 8),
+        ]),
       ]);
       chip.addEventListener('click', () => this.openMenu('party'));
       strip.appendChild(chip);
     }
-    document.getElementById('hud-coins').textContent = String(GameState.player.wildcoins);
+    document.getElementById('hud-coins').textContent = coins(GameState.player.wildcoins);
     document.getElementById('hud-location').textContent = this.overworld.currentRegionName();
 
     const obj = document.getElementById('objective');

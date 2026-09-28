@@ -5,20 +5,21 @@ import { CaptureManager } from '../systems/CaptureManager.js';
 import { InventoryManager, PartyManager, GameState, CollectionManager, bus } from '../systems/GameState.js';
 import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, ultimateMove,
-  ultimateUnlocked, equippedSkill, usesLeft, librarySkills,
+  ultimateUnlocked, equippedSkill, usesLeft, librarySkills, basicAttack,
 } from '../core/mythling.js';
 import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
 import { STAT_SHORT } from '../data/moods.js';
-import { ELEMENTS } from '../data/elements.js';
 import { BALL_IDS, getItem } from '../data/items.js';
-import { drawMythling } from '../render/creatures.js';
+import { drawMythling, prewarm } from '../render/creatures.js';
+import { SkillVFX } from '../render/vfx/SkillVFX.js';
+import { paletteFor } from '../data/skillVfx.js';
 import { roundRect, circle } from '../render/worldRenderer.js';
 import { el, button, bar, hpClass, elementChip, mutationChip, rarityChip, toast, confirmDialog, modal } from '../ui/ui.js';
 import { icon, iconSvg, iconLabel } from '../ui/icons.js';
 import { buffSummary } from '../data/skills.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
-import { clamp, randInt } from '../core/utils.js';
+import { clamp, coins, randInt } from '../core/utils.js';
 import { LEVEL_CAP } from '../data/config.js';
 
 const SLOT_POS = {
@@ -36,7 +37,7 @@ export class BattleScene {
     this.particles = [];
     this.shake = 0;
     this.flash = 0;
-    this.anim = { player: { lean: 0, tilt: 0, alpha: 1, scale: 1 }, enemy: { lean: 0, tilt: 0, alpha: 1, scale: 1 } };
+    this.anim = { player: this.freshAnim(), enemy: this.freshAnim() };
     this.busy = false;
     this.ui = null;
     this.onEnd = null;
@@ -48,6 +49,25 @@ export class BattleScene {
   }
 
   /** Freeze a combatant's presentable state (HP, charge, active buffs). */
+  /**
+   * The Mythling currently ON SCREEN for a side.
+   *
+   * A turn resolves all at once inside BattleManager.act() — by the time the
+   * event list is played the engine has already moved `battle.enemy` /
+   * `battle.player` on to the next combatant. Anything drawn straight from
+   * those getters swaps to the replacement while the finishing blow is still
+   * animating, so every visual path resolves through this method instead.
+   */
+  shownMythling(side) {
+    const v = this.view && this.view[side];
+    if (v && this.battle) {
+      const list = side === 'player' ? this.battle.party : this.battle.enemies;
+      const found = list && list.find((m) => m.uid === v.uid);
+      if (found) return found;
+    }
+    return side === 'player' ? this.battle?.player : this.battle?.enemy;
+  }
+
   viewOf(m, side) {
     const buffs = {};
     const cb = this.battle && this.battle.combatants.get(m.uid);
@@ -75,14 +95,17 @@ export class BattleScene {
     this.busy = false;
     this.particles = [];
     this.logLines = [];
-    this.anim.player = { lean: 0, tilt: 0, alpha: 1, scale: 1 };
-    this.anim.enemy = { lean: 0, tilt: 0, alpha: 1, scale: 1 };
+    this.anim.player = this.freshAnim();
+    this.anim.enemy = this.freshAnim();
+    this.bindVFX();
+    // bake the combatants' layers once so the first attack never hitches
+    prewarm([battle.player.speciesId, battle.enemy.speciesId], [battle.player.stage, battle.enemy.stage], 176);
     this.syncView();
     this.buildUI();
     const enemy = battle.enemy;
     CollectionManager.markSeen(enemy.speciesId, enemy.mutation);
     const intro = battle.type === BattleType.TRAINER
-      ? `${battle.trainer.name} wants to battle!`
+      ? `${battle.trainer.name} wants to battle! (${battle.enemies.length} Mythlings)`
       : `A wild ${displayName(enemy)} Lv.${enemy.level} appeared!`;
     this.pushLog(intro, true);
     if (battle.type === BattleType.TRAINER) this.pushLog(`${battle.trainer.name}: ${battle.trainer.intro}`);
@@ -90,8 +113,21 @@ export class BattleScene {
     this.refreshUI();
   }
 
+  /** Gives the VFX layer screen positions and the feedback hooks it needs. */
+  bindVFX() {
+    SkillVFX.stopAllVFX();
+    SkillVFX.bind({
+      pos: (side) => this.screenPos(side),
+      shake: (amt) => { if (SettingsManager.get('screenShake')) this.shake = Math.max(this.shake, amt); },
+      flash: (amt) => { this.flash = Math.max(this.flash, Math.min(0.85, amt)); },
+      float: (side, text, color, kind) => this.floatNumber(side, text, color, kind),
+    });
+  }
+
   stop() {
     this.active = false;
+    SkillVFX.stopAllVFX();
+    SkillVFX.unbind();
     if (this.ui) { this.ui.remove(); this.ui = null; }
   }
 
@@ -132,6 +168,10 @@ export class BattleScene {
         mutationChip(m.mutation),
         el('span', { class: 'cc-lv', text: `Lv.${m.level}` }),
       ]),
+    ];
+    // Trainer battles: how big is their team and how much of it is left?
+    if (side === 'enemy' && this.battle.type === BattleType.TRAINER) rows.push(this.teamRow());
+    rows.push(
       el('div', { class: 'row', style: { gap: '6px', margin: '4px 0' } }, [
         elementChip(sp.element),
         rarityChip(m.rarity),
@@ -140,7 +180,7 @@ export class BattleScene {
       bar('hp', pct, hpClass(pct)),
       el('div', { class: 'cc-hp-text', text: `${hp} / ${v.maxHp} HP` }),
       this.buffRow(v),
-    ];
+    );
     if (side === 'player') {
       const pips = el('div', { class: 'ult-track' });
       for (let i = 0; i < ULTIMATE_MAX_CHARGE; i++) {
@@ -156,6 +196,45 @@ export class BattleScene {
       }));
     }
     return rows;
+  }
+
+  /**
+   * Trainer party readout: one pip per team member, filled while it can still
+   * fight. Lets the player see immediately whether the enemy is down to its
+   * last Mythling.
+   */
+  // How many of the trainer's Mythlings are still standing *on screen*. The
+  // engine has already advanced to the replacement, so a Mythling that has
+  // fainted but is still being shown stays in the count until its switch
+  // event plays — otherwise the counter blinks down before the KO finishes.
+  teamLeft() {
+    const b = this.battle;
+    const left = b.enemies.filter((m) => !isFainted(m)).length;
+    const shown = this.shownMythling('enemy');
+    return shown && isFainted(shown) ? left + 1 : left;
+  }
+
+  teamRow() {
+    const b = this.battle;
+    const total = b.enemies.length;
+    const left = this.teamLeft();
+    const name = b.trainer?.name || 'Trainer';
+    const row = el('div', { class: `team-row ${left === 1 ? 'last' : ''}` });
+    row.dataset.sig = `${left}/${total}`;
+    const pips = el('div', { class: 'team-pips' });
+    for (let i = 0; i < total; i++) {
+      pips.appendChild(el('div', { class: `team-pip ${i < left ? 'alive' : 'down'}` }));
+    }
+    row.append(
+      el('div', { class: 'team-name', text: name }),
+      pips,
+      el('div', {
+        class: 'team-count',
+        text: left === 1 ? `1/${total} LEFT — LAST MYTHLING!` : `${left}/${total} LEFT`,
+      }),
+    );
+    row.title = `${name} has ${left} of ${total} Mythlings still able to battle.`;
+    return row;
   }
 
   /**
@@ -228,7 +307,29 @@ export class BattleScene {
       btn.title = sk.desc;
       return btn;
     };
-    this.actions.append(mk('normal'), mk('special'), mk('buff'));
+    // If every equipped skill is empty (or nothing is equipped at all) there is
+    // nothing to press, so offer the guaranteed unlimited attack instead of
+    // leaving the player stuck with a dead turn.
+    const slotsUsable = ['normal', 'special', 'buff'].some((slot) => {
+      const sk = equippedSkill(p, slot);
+      if (!sk) return false;
+      const left = usesLeft(p, sk.id);
+      return !Number.isFinite(left) || left > 0;
+    });
+    if (slotsUsable) {
+      this.actions.append(mk('normal'), mk('special'), mk('buff'));
+    } else {
+      const basic = basicAttack(p);
+      const btn = button('', {
+        class: 'action-btn basic',
+        onclick: () => this.doAction({ type: 'skill', skillId: basic.id }),
+      });
+      btn.innerHTML = `<div class="ab-name">${iconSvg(basic.element || 'strike', basic.element || '')}<span>${basic.name}</span></div>`
+        + `<small>Out of uses · PWR ${basic.power} · ${iconSvg('infinity', 'tiny')} unlimited</small>`;
+      btn.title = basic.desc;
+      btn.style.gridColumn = '1/-1';
+      this.actions.appendChild(btn);
+    }
 
     // Ultimate
     const ult = ultimateMove(p);
@@ -435,6 +536,42 @@ export class BattleScene {
     return cv;
   }
 
+  /** Per-combatant render state: pose offsets + the rig animation playing. */
+  freshAnim() {
+    return {
+      lean: 0, tilt: 0, alpha: 1, scale: 1,
+      anim: 'battleIdle', animT0: 0, animDur: 0.6, hold: false, flash: 0,
+    };
+  }
+
+  /** Starts a creature rig animation (see ANIMATIONS in creatureRig.js). */
+  playCreatureAnim(side, name, dur, hold = false) {
+    const a = this.anim[side];
+    if (!a) return;
+    a.anim = name; a.animT0 = this.time; a.animDur = dur || 0.6; a.hold = hold;
+  }
+
+  /** 0..1 progress of the current one-shot animation, or null when looping. */
+  animPhase(side) {
+    const a = this.anim[side];
+    if (!a || !a.anim || a.anim === 'battleIdle') return null;
+    if (a.hold) return 1;
+    const p = (this.time - a.animT0) / (a.animDur || 0.6);
+    if (p >= 1) { a.anim = 'battleIdle'; return 1; }
+    return p;
+  }
+
+  /** What to hand to drawMythling for one side. */
+  creaturePose(side) {
+    const a = this.anim[side];
+    const ph = this.animPhase(side);
+    return {
+      alpha: a.alpha, tilt: a.tilt,
+      anim: ph === null ? 'battleIdle' : { name: a.anim, phase: ph },
+      flash: a.flash,
+    };
+  }
+
   // ------------------------------------------------ event playback
   async playEvents(events) {
     for (const ev of events) {
@@ -465,36 +602,53 @@ export class BattleScene {
         await wait(ev.emphasis ? 620 : 460);
         break;
       case 'cast': {
-        const a = this.anim[ev.side];
-        a.lean = ev.side === 'player' ? 26 : -26;
         AudioManager.sfx(ev.kind === 'buff' ? 'heal' : 'click');
-        this.spawnCastParticles(ev.side, ev.element, ev.kind);
-        await wait(230);
-        a.lean = 0;
+        if (ev.kind === 'buff') this.playCreatureAnim(ev.side, 'buff', 0.9);
+        else {
+          const dur = ev.category === 'special' ? 0.85 : 0.55;
+          this.playCreatureAnim(ev.side, ev.category === 'special' ? 'specialAttack' : 'normalAttack', dur);
+        }
+        // CAST beat: elemental gathering at the caster, then the projectile.
+        SkillVFX.playSkillVFX({
+          skillId: ev.skillId, side: ev.side, target: ev.target,
+          element: ev.element, category: ev.category,
+        });
+        await wait(ev.kind === 'buff' ? 260 : 230);
         break;
       }
       case 'ultimate-cast': {
-        const a = this.anim[ev.side];
         AudioManager.sfx('ultimate');
         this.flash = 1;
-        this.spawnUltimate(ev.side, ev.element);
-        a.lean = ev.side === 'player' ? 40 : -40;
+        this.playCreatureAnim(ev.side, 'ultimate', 1.5);
+        SkillVFX.playUltimateVFX(ev.side, ev.target, { element: ev.element, skillId: ev.skillId });
         if (SettingsManager.get('screenShake')) this.shake = 16;
-        await wait(700);
-        a.lean = 0;
+        await wait(760);
         break;
       }
       case 'damage': {
         const target = ev.side;
         this.applyViewHp(ev);
-        this.anim[target].tilt = target === 'player' ? -0.14 : 0.14;
-        AudioManager.sfx(ev.isUltimate || ev.effectiveness > 1 ? 'hit-strong' : 'hit');
-        if (SettingsManager.get('screenShake')) this.shake = Math.max(this.shake, ev.isUltimate ? 14 : 7);
-        this.spawnHit(target, ev.effectiveness);
-        if (SettingsManager.get('damageNumbers')) this.floatNumber(target, `-${ev.amount}`, ev.effectiveness > 1 ? '#ffd76a' : ev.effectiveness < 1 ? '#9fb3c9' : '#ff8a8a');
+        this.playCreatureAnim(target, 'hit', 0.42);
+        this.anim[target].flash = ev.crit ? 1 : (ev.effectiveness > 1 ? 0.8 : 0.6);
+        AudioManager.sfx(ev.crit ? 'crit' : (ev.isUltimate || ev.effectiveness > 1) ? 'hit-strong' : 'hit');
+        if (SettingsManager.get('screenShake')) this.shake = Math.max(this.shake, ev.isUltimate || ev.crit ? 14 : 7);
+        // IMPACT beat: the in-flight projectile snaps home, then detonates.
+        SkillVFX.finishProjectiles(ev.source, { crit: ev.crit, scale: ev.isUltimate ? 1.3 : 1 });
+        SkillVFX.playHitReaction(target, { crit: ev.crit, effectiveness: ev.effectiveness, element: ev.element });
+        if (ev.crit) this.flash = Math.max(this.flash, 0.75);
+        if (SettingsManager.get('damageNumbers')) {
+          const kind = ev.isUltimate ? 'ult' : ev.crit ? 'crit' : ev.category === 'special' ? 'big' : '';
+          const accent = ev.element ? paletteFor(ev.element).core : null;
+          const label = ev.crit ? `-${ev.amount} CRIT!` : `-${ev.amount}`;
+          if (ev.isUltimate || ev.crit || ev.category === 'special') {
+            this.floatNumber(target, label, ev.crit ? '#ffd76a' : (accent || '#ffb0b0'), kind);
+          } else {
+            this.floatNumber(target, label,
+              ev.effectiveness > 1 ? '#ffd76a' : ev.effectiveness < 1 ? '#9fb3c9' : '#ff8a8a', kind);
+          }
+        }
         this.refreshCards();
-        await wait(400);
-        this.anim[target].tilt = 0;
+        await wait(ev.crit ? 520 : 400);
         break;
       }
       case 'heal':
@@ -506,8 +660,17 @@ export class BattleScene {
         break;
       case 'miss':
         AudioManager.sfx('miss');
+        SkillVFX.whiff(ev.side);
         this.floatNumber(ev.side, 'MISS', '#cfe6ff');
         await wait(330);
+        break;
+      case 'coins':
+        if (ev.amount > 0) {
+          AudioManager.sfx('coin');
+          this.pushLog(`The defeated Mythling dropped ${coins(ev.amount)} Wildcoins!`);
+          this.floatNumber(ev.side === 'enemy' ? 'enemy' : 'player', `+${ev.amount}`, '#ffe08a');
+          await wait(320);
+        }
         break;
       case 'buff':
       case 'debuff': {
@@ -524,8 +687,11 @@ export class BattleScene {
         const lbl = STAT_SHORT[ev.stat] || ev.stat.toUpperCase();
         const sign = ev.type === 'buff' ? '+' : '-';
         this.floatNumber(ev.side, `${ev.type === 'buff' ? '\u25B2' : '\u25BC'} ${lbl} ${sign}${Math.abs(ev.amount)}`,
-          ev.type === 'buff' ? '#b6f09b' : '#ff9aa2');
-        this.spawnBuff(ev.side, ev.type === 'buff');
+          ev.type === 'buff' ? '#b6f09b' : '#ff9aa2', ev.type === 'buff' ? 'buff' : '');
+        SkillVFX.playBuffVFX(ev.side, {
+          stat: ev.stat, up: ev.type === 'buff',
+          element: speciesOf(this.battle[ev.side] || {}).element || 'none',
+        });
         this.refreshCards();
         await wait(420);
         break;
@@ -544,14 +710,16 @@ export class BattleScene {
       case 'faint': {
         AudioManager.sfx('faint');
         const a = this.anim[ev.side];
-        for (let i = 0; i < 12; i++) { a.alpha = 1 - i / 12; a.tilt = (i / 12) * (ev.side === 'player' ? -0.8 : 0.8); await wait(26); }
+        this.playCreatureAnim(ev.side, 'faint', 1.0, true);
+        for (let i = 0; i < 12; i++) { a.alpha = 1 - i / 12; await wait(26); }
         a.alpha = 0;
         await wait(240);
         break;
       }
       case 'switch': {
         const a = this.anim[ev.side];
-        a.alpha = 1; a.tilt = 0; a.lean = 0;
+        a.alpha = 1; a.tilt = 0; a.lean = 0; a.flash = 0;
+        a.anim = 'battleIdle'; a.hold = false;
         // a fresh combatant brings its own HP and its own buff stack
         this.view[ev.side] = this.viewOf(ev.side === 'player' ? this.battle.player : this.battle.enemy, ev.side);
         this.refreshCards();
@@ -584,8 +752,8 @@ export class BattleScene {
    */
   refreshCards() {
     if (!this.ui) return;
-    this.updateCard(this.battle.enemy, 'enemy');
-    this.updateCard(this.battle.player, 'player');
+    this.updateCard(this.shownMythling('enemy'), 'enemy');
+    this.updateCard(this.shownMythling('player'), 'player');
   }
 
   updateCard(m, side) {
@@ -608,6 +776,13 @@ export class BattleScene {
     }
     const txt = card.querySelector('.cc-hp-text');
     if (txt) txt.textContent = `${hp} / ${v.maxHp} HP`;
+
+    // trainer team: rebuild only when the count actually changed
+    const oldTeam = card.querySelector('.team-row');
+    if (oldTeam && this.battle.type === BattleType.TRAINER) {
+      const sig = `${this.battle.enemies.filter((m) => !isFainted(m)).length}/${this.battle.enemies.length}`;
+      if (oldTeam.dataset.sig !== sig) oldTeam.replaceWith(this.teamRow());
+    }
 
     // buff chips: only touch the DOM when the readout actually changed
     const oldRow = card.querySelector('.buff-row');
@@ -658,79 +833,21 @@ export class BattleScene {
     return { x: p.x * W, y: p.y * H };
   }
 
-  floatNumber(side, text, color) {
+  /**
+   * @param {string} kind '' | 'big' (special) | 'crit' | 'ult' | 'buff'
+   *   Normal hits stay small, specials read larger, ultimates are emphasised.
+   */
+  floatNumber(side, text, color, kind = '') {
+    const cls = kind === true ? 'crit' : (kind || '');
     const { x, y } = this.screenPos(side);
-    const n = el('div', { class: 'dmg-float', text, style: { left: `${x - 24}px`, top: `${y - 110}px`, color } });
+    const wide = cls === 'crit' || cls === 'ult';
+    const n = el('div', {
+      class: `dmg-float ${cls}`,
+      text,
+      style: { left: `${x - (wide ? 60 : 24)}px`, top: `${y - 110}px`, color },
+    });
     document.getElementById('app').appendChild(n);
-    setTimeout(() => n.remove(), 1100);
-  }
-
-  spawnCastParticles(side, element, kind) {
-    const from = this.screenPos(side);
-    const to = this.screenPos(side === 'player' ? 'enemy' : 'player');
-    const color = element ? ELEMENTS[element].color : '#ffe08a';
-    const glow = element ? ELEMENTS[element].glow : '#fff4c9';
-    const n = kind === 'buff' ? 22 : 28;
-    for (let i = 0; i < n; i++) {
-      if (kind === 'buff') {
-        this.particles.push({
-          x: from.x + (Math.random() - 0.5) * 70, y: from.y - Math.random() * 40,
-          vx: (Math.random() - 0.5) * 20, vy: -60 - Math.random() * 60,
-          life: 0.9, max: 0.9, size: 3 + Math.random() * 4, color: '#b6f09b', kind: 'spark',
-        });
-      } else {
-        const t = i / n;
-        this.particles.push({
-          x: from.x + (to.x - from.x) * 0.05, y: from.y - 60,
-          tx: to.x, ty: to.y - 60,
-          vx: 0, vy: 0, travel: 0, speed: 2.4 + Math.random() * 1.6, delay: t * 0.22,
-          life: 1.0, max: 1.0, size: 4 + Math.random() * 6,
-          color: Math.random() < 0.5 ? color : glow, kind: element === 'fire' ? 'fire' : element === 'water' ? 'water' : 'leaf',
-        });
-      }
-    }
-  }
-
-  spawnUltimate(side, element) {
-    const to = this.screenPos(side === 'player' ? 'enemy' : 'player');
-    const color = element ? ELEMENTS[element].color : '#ffe08a';
-    const glow = element ? ELEMENTS[element].glow : '#fff4c9';
-    for (let i = 0; i < 90; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = 20 + Math.random() * 170;
-      this.particles.push({
-        x: to.x + Math.cos(a) * r, y: to.y - 60 + Math.sin(a) * r * 0.6,
-        vx: -Math.cos(a) * 180, vy: -Math.sin(a) * 120,
-        life: 1.1, max: 1.1, size: 5 + Math.random() * 9,
-        color: Math.random() < 0.5 ? color : glow,
-        kind: element === 'fire' ? 'fire' : element === 'water' ? 'water' : 'leaf',
-      });
-    }
-  }
-
-  spawnHit(side, effectiveness) {
-    const p = this.screenPos(side);
-    const color = effectiveness > 1 ? '#ffd76a' : effectiveness < 1 ? '#9fb3c9' : '#ffffff';
-    for (let i = 0; i < 20; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const sp = 90 + Math.random() * 190;
-      this.particles.push({
-        x: p.x, y: p.y - 60, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40,
-        life: 0.5, max: 0.5, size: 3 + Math.random() * 5, color, kind: 'spark',
-      });
-    }
-  }
-
-  spawnBuff(side, up) {
-    const p = this.screenPos(side);
-    for (let i = 0; i < 16; i++) {
-      this.particles.push({
-        x: p.x + (Math.random() - 0.5) * 80, y: p.y - Math.random() * 20,
-        vx: 0, vy: up ? -80 - Math.random() * 40 : 70 + Math.random() * 30,
-        life: 0.8, max: 0.8, size: 3 + Math.random() * 3,
-        color: up ? '#b6f09b' : '#ff9aa2', kind: 'spark',
-      });
-    }
+    setTimeout(() => n.remove(), cls === 'ult' ? 1500 : 1100);
   }
 
   async captureAnimation() {
@@ -743,9 +860,53 @@ export class BattleScene {
       });
       await new Promise((r) => setTimeout(r, 40));
     }
+    this.playCreatureAnim('enemy', 'capture', 0.8, true);
     this.captureWobble = 3;
     await new Promise((r) => setTimeout(r, 900));
     this.captureWobble = 0;
+  }
+
+  /** Charge aura: proof the Ultimate is ready without obscuring the Mythling. */
+  drawReadyAura(ctx, side) {
+    const b = this.battle;
+    const v = this.view[side];
+    const m = this.shownMythling(side);
+    if (!m || !v || v.uid !== m.uid || !ultimateUnlocked(m)) return;
+    if (v.charge < ULTIMATE_MAX_CHARGE) return;
+    if (this.anim[side].alpha < 0.05) return;
+    const el = speciesOf(m).element;
+    const pal = paletteFor(el);
+    const { x, y } = this.screenPos(side);
+    const pulse = 0.55 + 0.45 * Math.sin(this.time * 2.6);
+    // fade the aura out with the creature so a KO reads cleanly
+    const a = this.anim[side].alpha;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (0.16 + 0.12 * pulse) * a;
+    const g = ctx.createRadialGradient(x, y - 60, 8, x, y - 60, 96);
+    g.addColorStop(0, pal.core);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(x, y - 60, 96, 92, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = (0.35 + 0.25 * pulse) * a;
+    ctx.strokeStyle = pal.glow;
+    ctx.lineWidth = 2.4;
+    const r = 44 + pulse * 5;
+    ctx.beginPath(); ctx.ellipse(x, y - 4, r, r * 0.3, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    // a few slow motes — deliberately sparse so the creature stays readable
+    if (Math.random() < 0.35) {
+      SkillVFX.ps.spawn({
+        x: x + (Math.random() - 0.5) * 70, y: y - 6,
+        vx: (Math.random() - 0.5) * 10, vy: -20 - Math.random() * 30,
+        gravity: -8, drag: 0.6, size: 2 + Math.random() * 2.5, sizeEnd: 0,
+        life: 0.9 + Math.random() * 0.6, shape: el === 'fire' ? 'spark' : el === 'water' ? 'bubble' : 'leaf',
+        color: pal.mid, color2: pal.deep, additive: el === 'fire',
+        rot: Math.random() * 6.28, rotSpeed: (Math.random() - 0.5) * 4,
+      });
+    }
   }
 
   // ------------------------------------------------ rendering
@@ -753,6 +914,10 @@ export class BattleScene {
     this.time += dt;
     this.shake = Math.max(0, this.shake - dt * 42);
     this.flash = Math.max(0, this.flash - dt * 2.4);
+    for (const side of ['player', 'enemy']) {
+      const a = this.anim[side];
+      if (a && a.flash > 0) a.flash = Math.max(0, a.flash - dt * 3.6);
+    }
     for (const p of this.particles) {
       if (p.delay > 0) { p.delay -= dt; continue; }
       if (p.tx != null) {
@@ -767,6 +932,7 @@ export class BattleScene {
       p.life -= dt;
     }
     this.particles = this.particles.filter((p) => p.life > 0);
+    SkillVFX.update(dt);
   }
 
   render() {
@@ -786,10 +952,11 @@ export class BattleScene {
     const ep = this.screenPos('enemy');
     const ea = this.anim.enemy;
     if (ea.alpha > 0.01) {
+      const em = this.shownMythling('enemy');
       drawMythling(ctx, {
-        speciesId: b.enemy.speciesId, stage: b.enemy.stage, mutation: b.enemy.mutation,
+        speciesId: em.speciesId, stage: em.stage, mutation: em.mutation,
         x: ep.x + ea.lean, y: ep.y, size: 150, t: this.time, facing: -1,
-        pose: { alpha: ea.alpha, tilt: ea.tilt },
+        animTag: 'enemy', pose: this.creaturePose('enemy'),
       });
     }
     if (this.captureWobble) {
@@ -810,12 +977,20 @@ export class BattleScene {
     const pp = this.screenPos('player');
     const pa = this.anim.player;
     if (pa.alpha > 0.01) {
+      const pm = this.shownMythling('player');
       drawMythling(ctx, {
-        speciesId: b.player.speciesId, stage: b.player.stage, mutation: b.player.mutation,
+        speciesId: pm.speciesId, stage: pm.stage, mutation: pm.mutation,
         x: pp.x + pa.lean, y: pp.y, size: 176, t: this.time, facing: 1,
-        pose: { alpha: pa.alpha, tilt: pa.tilt },
+        animTag: 'player', pose: this.creaturePose('player'),
       });
     }
+
+    // a Mythling at full Ultimate charge keeps a subtle elemental aura
+    this.drawReadyAura(ctx, 'player');
+    this.drawReadyAura(ctx, 'enemy');
+
+    // skill VFX (projectiles, impacts, particles)
+    SkillVFX.render(ctx);
 
     // particles
     for (const p of this.particles) {
@@ -847,6 +1022,7 @@ export class BattleScene {
       ctx.fillStyle = `rgba(255,245,210,${this.flash * 0.45})`;
       ctx.fillRect(0, 0, W, H);
     }
+    SkillVFX.renderScreen(ctx, W, H);
   }
 
   drawArena(ctx, W, H) {

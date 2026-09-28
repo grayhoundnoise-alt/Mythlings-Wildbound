@@ -16,7 +16,7 @@ import { GameState, InventoryManager, PlayerManager, PartyManager, bus } from '.
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
 import { drawMythling } from '../render/creatures.js';
 import { AudioManager } from '../systems/AudioManager.js';
-import { formatTime, formatDate } from '../core/utils.js';
+import { coins, formatTime, formatDate } from '../core/utils.js';
 
 // ------------------------------------------------------------------ MAIN MENU
 export function mainMenuScreen({ onNewGame, onLoad, onSettings, onExit }) {
@@ -289,12 +289,12 @@ export function shopScreen(building, { onClose }) {
     for (const id of building.stock) {
       const item = getItem(id);
       let qty = 1;
-      const totalLabel = el('div', { class: 'ir-qty price' }, [icon('coin', 'gold'), el('span', { text: String(item.price) })]);
+      const totalLabel = el('div', { class: 'ir-qty price' }, [icon('coin', 'gold'), el('span', { text: coins(item.price) })]);
       const qtyLabel = el('b', { text: '1' });
       const setQty = (n) => {
         qty = Math.max(1, Math.min(99, n));
         qtyLabel.textContent = String(qty);
-        totalLabel.lastChild.textContent = String(item.price * qty);
+        totalLabel.lastChild.textContent = coins(item.price * qty);
       };
       rows.appendChild(el('div', { class: 'item-row' }, [
         icon(item.category === 'balls' ? 'orb' : item.category === 'food' ? 'food' : item.category === 'key' ? 'key' : 'heal', 'item-ico'),
@@ -314,7 +314,7 @@ export function shopScreen(building, { onClose }) {
           onclick: async () => {
             const total = item.price * qty;
             if (GameState.player.wildcoins < total) { toast('Not enough Wildcoins!', 'bad'); AudioManager.sfx('cancel'); return; }
-            const ok = await confirmDialog('CONFIRM PURCHASE', `Buy <b>${qty}× ${item.name}</b> for <b>${total} Wildcoins</b>?`, 'BUY', 'CANCEL');
+            const ok = await confirmDialog('CONFIRM PURCHASE', `Buy <b>${qty}× ${item.name}</b> for <b>${coins(total)} Wildcoins</b>?`, 'BUY', 'CANCEL');
             if (!ok) return;
             if (!PlayerManager.spendCoins(total)) { toast('Not enough Wildcoins!', 'bad'); return; }
             InventoryManager.add(id, qty);
@@ -335,7 +335,7 @@ export function shopScreen(building, { onClose }) {
       panelHeader(building.name, onClose),
       el('p', { class: 'sub coin-line' }, [
         el('span', { text: 'Wildcoins:' }), icon('coin', 'gold'),
-        el('b', { style: { color: '#ffe08a' }, text: String(GameState.player.wildcoins) }),
+        el('b', { style: { color: '#ffe08a' }, text: coins(GameState.player.wildcoins) }),
       ]),
       render(),
       el('div', { class: 'row end', style: { marginTop: '16px' } }, [button('LEAVE SHOP', { class: 'primary', onclick: onClose, sfx: 'cancel' })]),
@@ -376,51 +376,85 @@ export function centerScreen({ onHeal, onParty, onStorage, onSave, onClose }) {
 }
 
 // ------------------------------------------------------------------ EVOLUTION CINEMATIC
+/**
+ * Evolution is staged like a transformation, not a jump cut: the old form is
+ * held, then cracks between forms faster and faster, then a short flash lands
+ * on the new one — which then stays on screen, idling, behind the summary.
+ *
+ * Two things this used to get wrong, both now fixed:
+ *  - the canvas was 460x460 but stretched by CSS into a wide, short box, so
+ *    the Mythling came out squashed and blurry. It is now square at every
+ *    size and backed at device resolution.
+ *  - the summary was appended under a full-size canvas in a non-scrolling
+ *    overlay, so on short windows the CONTINUE button sat off screen.
+ */
 export function evolutionCinematic(mythling, result, onDone) {
+  const SIZE = 460;                       // logical drawing units; CSS sizes the box
   const layer = el('div', { class: 'cinematic' });
-  const cv = el('canvas', { width: 460, height: 460 });
+  const stage = el('div', { class: 'cinematic-stage' });
+  const cv = el('canvas', { width: SIZE, height: SIZE });
   const title = el('h2', { text: `${result.from} is evolving...` });
   const sub = el('p', { text: 'Do not look away!' });
-  layer.append(cv, title, sub);
+  stage.append(cv, title, sub);
+  layer.appendChild(stage);
   document.getElementById('app').appendChild(layer);
   AudioManager.playTheme('evolve');
   AudioManager.sfx('evolve');
 
   const ctx = cv.getContext('2d');
+  const fromStage = Math.max(0, mythling.stage - 1);
   const start = performance.now();
   const DURATION = 4200;
-  let raf;
-  const loop = (now) => {
-    const t = (now - start) / 1000;
-    const p = Math.min(1, (now - start) / DURATION);
-    ctx.clearRect(0, 0, 460, 460);
+  const REVEAL = 0.86;                    // the new form stops flickering here
+  let raf = 0;
+  let scale = 1;
+  let cssW = 0;
+  let lastPaint = 0;
+
+  // Back the canvas at device resolution for whatever size CSS gave it, so the
+  // Mythling is crisp instead of a 460px bitmap stretched to fit.
+  const fit = () => {
+    const w = Math.round(cv.clientWidth || SIZE);
+    if (!w || w === cssW) return;
+    cssW = w;
+    const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(w * dpr);
+    scale = (w * dpr) / SIZE;
+  };
+
+  // held -> flickering -> locked to the new form
+  const showNewForm = (t, p) => {
+    if (p >= REVEAL) return true;
+    if (p < 0.46) return false;
+    const u = (p - 0.46) / (REVEAL - 0.46);
+    const hz = 3 + 6 * u;                 // 3 -> 9 Hz: it crackles, it never strobes
+    return Math.sin(t * hz * Math.PI * 2) > 0;
+  };
+
+  const paint = (t, p) => {
+    fit();
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    // a short deliberate burst that has fully cleared by the time p hits 1,
+    // so the evolved Mythling is never left behind a white blob
+    const flash = p < REVEAL ? 0
+      : p < 0.94 ? (p - REVEAL) / 0.08
+        : Math.max(0, 1 - (p - 0.94) / 0.06);
+    const glow = p < REVEAL ? 0.16 + 0.4 * p : 0.55 - 0.27 * ((p - REVEAL) / 0.14);
+
     const g = ctx.createRadialGradient(230, 250, 10, 230, 250, 220);
-    g.addColorStop(0, `rgba(255,240,180,${0.25 + p * 0.65})`);
+    g.addColorStop(0, `rgba(255,240,180,${glow})`);
     g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 460, 460);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, SIZE, SIZE);
 
-    // flicker between forms, faster as it progresses
-    const flickerRate = 2 + p * 26;
-    const showNew = p > 0.92 ? true : Math.sin(t * flickerRate) > 0;
-    ctx.save();
-    ctx.translate(230, 330);
-    const glow = 1 + p * 0.25;
-    ctx.scale(glow, glow);
-    drawMythling(ctx, {
-      speciesId: mythling.speciesId,
-      stage: showNew ? mythling.stage : Math.max(0, mythling.stage - 1),
-      mutation: mythling.mutation,
-      x: 0, y: 0, size: 190, t, facing: 1,
-      pose: { alpha: 1 },
-    });
-    ctx.restore();
-
-    // rising energy particles
-    for (let i = 0; i < 40; i++) {
-      const a = (i / 40) * Math.PI * 2 + t;
+    const motes = p < REVEAL ? 40 : 18;
+    for (let i = 0; i < motes; i++) {
+      const a = (i / motes) * Math.PI * 2 + t;
       const r = 40 + ((t * 90 + i * 17) % 190);
-      const alpha = 1 - r / 230;
-      ctx.globalAlpha = alpha * 0.8;
+      ctx.globalAlpha = (1 - r / 230) * (p < REVEAL ? 0.8 : 0.45);
       ctx.fillStyle = i % 3 === 0 ? '#fff6c8' : '#ffd76a';
       ctx.beginPath();
       ctx.arc(230 + Math.cos(a) * r * 0.7, 300 - r * 0.8, 3.2, 0, Math.PI * 2);
@@ -428,17 +462,55 @@ export function evolutionCinematic(mythling, result, onDone) {
     }
     ctx.globalAlpha = 1;
 
+    ctx.save();
+    ctx.translate(230, 330);
+    const s = 1 + (p < REVEAL ? 0.14 * p : 0.14 * (1 - (p - REVEAL) / 0.14));
+    ctx.scale(s, s);
+    drawMythling(ctx, {
+      speciesId: mythling.speciesId,
+      stage: showNewForm(t, p) ? mythling.stage : fromStage,
+      mutation: mythling.mutation,
+      x: 0, y: 0, size: 190, t, facing: 1,
+      pose: p >= 1 ? { alpha: 1 } : { alpha: 1, anim: { name: 'evolve', phase: p } },
+    });
+    ctx.restore();
+
+    if (flash > 0) {
+      ctx.globalAlpha = flash * 0.92;
+      ctx.fillStyle = '#fff8e0';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+      ctx.globalAlpha = 1;
+    }
+  };
+
+  const stop = () => {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  };
+
+  // Keep the evolved Mythling alive and idling behind the summary (throttled
+  // to ~30fps: it is decoration while the player reads).
+  const reveal = (now) => {
+    if (!layer.isConnected) { raf = 0; return; }
+    if (now - lastPaint >= 32) { lastPaint = now; paint((now - start) / 1000, 1); }
+    raf = requestAnimationFrame(reveal);
+  };
+
+  const loop = (now) => {
+    const t = (now - start) / 1000;
+    const p = Math.min(1, (now - start) / DURATION);
+    paint(t, p);
     if (p >= 1) {
-      cancelAnimationFrame(raf);
       finish();
+      raf = requestAnimationFrame(reveal);
       return;
     }
     raf = requestAnimationFrame(loop);
   };
-  raf = requestAnimationFrame(loop);
 
   const finish = () => {
     AudioManager.sfx('levelup');
+    layer.classList.add('done');           // shrink the canvas so the summary fits
     title.textContent = 'Congratulations!';
     sub.innerHTML = `<b>${result.from}</b> evolved into <b style="color:#ffd76a">${result.to}</b>!`;
     const gains = el('div', { class: 'levelup-list' }, Object.entries(result.gains)
@@ -448,33 +520,73 @@ export function evolutionCinematic(mythling, result, onDone) {
       ? el('p', { html: `New skills added to the Skill Library: <b>${result.newSkills.map((s) => s.replace(/_/g, ' ')).join(', ')}</b>` })
       : null;
     const ult = el('p', { html: `Ultimate upgraded to <b style="color:#ffd76a">${result.ultimate.name}</b>!` });
-    const btn = button('CONTINUE', { class: 'primary', onclick: () => { layer.remove(); onDone(); } });
-    layer.append(gains, skills || el('span'), ult, btn);
+    const btn = button('CONTINUE', {
+      class: 'primary',
+      onclick: () => { stop(); layer.remove(); onDone(); },
+    });
+    stage.append(gains, skills || el('span'), ult, btn);
+    setTimeout(() => btn.focus && btn.focus(), 0);
   };
+
+  fit();
+  raf = requestAnimationFrame(loop);
 }
 
 // ------------------------------------------------------------------ LEVEL UP SUMMARY
+/**
+ * Collapses a (possibly long) list of level events into ONE entry per Mythling
+ * ("Lv.12 → Lv.15" with the combined stat gains) and puts the whole thing in a
+ * scrollable box, so a whole party levelling up at once stays readable.
+ */
+export function groupLevelUps(entries) {
+  const groups = [];
+  const byKey = new Map();
+  for (const e of entries) {
+    const key = e.uid || e.name;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { uid: e.uid || null, name: e.name, from: e.level - 1, to: e.level, gains: {}, milestones: [] };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+    g.from = Math.min(g.from, e.level - 1);
+    g.to = Math.max(g.to, e.level);
+    for (const [k, v] of Object.entries(e.gains || {})) g.gains[k] = (g.gains[k] || 0) + v;
+    for (const ms of e.milestones || []) if (!g.milestones.includes(ms)) g.milestones.push(ms);
+  }
+  return groups;
+}
+
 export function levelUpSummary(entries, onDone) {
   if (!entries.length) { onDone(); return; }
-  const body = el('div', {});
-  for (const e of entries) {
-    body.appendChild(el('h3', { text: `${e.name} → Lv.${e.level}` }));
-    body.appendChild(el('div', { class: 'levelup-list' }, Object.entries(e.gains)
-      .filter(([, v]) => v !== 0)
-      .map(([k, v]) => el('div', { class: 'gain', text: `${STAT_SHORT[k]} ${v > 0 ? '+' : ''}${v}` }))));
-    for (const ms of e.milestones) {
+  const groups = groupLevelUps(entries);
+  const body = el('div', { class: 'levelup-body' });
+  for (const g of groups) {
+    body.appendChild(el('h3', { text: `${g.name}  ·  Lv.${g.from} → Lv.${g.to}` }));
+    const gains = Object.entries(g.gains).filter(([, v]) => v !== 0);
+    body.appendChild(el('div', { class: 'levelup-list' }, gains.length
+      ? gains.map(([k, v]) => el('div', {
+        class: `gain ${v > 0 ? 'up' : 'down'}`,
+        text: `${STAT_SHORT[k]} ${v > 0 ? '+' : ''}${v}`,
+      }))
+      : [el('div', { class: 'gain', text: 'no stat change' })]));
+    for (const ms of g.milestones) {
       if (ms === 'ultimate') body.appendChild(el('p', { html: `${iconSvg('ultimate', 'gold')} <b style="color:#ffd76a">ULTIMATE UNLOCKED!</b> Charge it by attacking — 8 charges to unleash it.` }));
       if (ms === 'evolution') body.appendChild(el('p', { html: `${iconSvg('levelup', 'good')} <b style="color:#6de89a">EVOLUTION AVAILABLE!</b>` }));
       if (ms === 'maxlevel') body.appendChild(el('p', { html: `<b style="color:#ffd76a">MAX LEVEL Lv.${LEVEL_CAP} REACHED!</b> Further levels arrive in a future update.` }));
     }
   }
-  modal({ title: 'LEVEL UP!', body, buttons: [{ label: 'NICE!', value: true, primary: true }] }).then(onDone);
+  const title = groups.length > 1 ? `LEVEL UP! (${groups.length} Mythlings)` : 'LEVEL UP!';
+  // .levelup-body scrolls itself, so the modal wrapper must not add a second scrollbar.
+  modal({ title, body, scroll: false, buttons: [{ label: 'NICE!', value: true, primary: true }] }).then(onDone);
 }
 
 // ------------------------------------------------------------------ VERSION COMPLETE
 export function versionCompleteScreen(onDone) {
   const layer = el('div', { class: 'cinematic' });
-  layer.append(
+  const stage = el('div', { class: 'cinematic-stage' });
+  layer.appendChild(stage);
+  stage.append(
     el('h2', { text: 'EMBERWILD COMPLETE' }),
     el('h2', { style: { fontSize: '1.4rem', color: '#eaf3ff' }, text: 'Current Version Complete' }),
     el('p', { text: 'You have bested the Flame Warden and cleared every region of the current build of Wildbound.' }),

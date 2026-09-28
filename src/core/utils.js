@@ -32,6 +32,12 @@ export function uid(prefix = 'm') {
   return `${prefix}_${Date.now().toString(36)}_${uidCounter.toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
 
+/** Wildcoins always read with thousands separators: 1,000 / 1,000,000. */
+export function coins(n) {
+  const v = Math.floor(Number(n) || 0);
+  return v.toLocaleString('en-US');
+}
+
 export function formatTime(ms) {
   const total = Math.floor(ms / 1000);
   const h = Math.floor(total / 3600);

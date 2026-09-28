@@ -1,4 +1,7 @@
-// Mutations are (currently) purely cosmetic. Architecture supports more types later.
+/**
+ * Mutations are cosmetic AND a small flat bonus to every stat:
+ * Shiny +1, Darkness +2 (applied after caps, so the bonus always lands).
+ */
 export const MUTATIONS = {
   none: {
     id: 'none', name: 'Normal', icon: null, color: '#cfd8e3',
@@ -9,12 +12,14 @@ export const MUTATIONS = {
   shiny: {
     id: 'shiny', name: 'Shiny', icon: 'shiny', color: '#ffe680',
     chance: 0.035,
+    statBonus: 1,
     palette: { hueShift: 40, saturate: 1.25, lighten: 1.12 },
     aura: { color: 'rgba(255,240,150,0.85)', particles: 'sparkle' },
   },
   darkness: {
     id: 'darkness', name: 'Darkness', icon: 'darkness', color: '#b07cff',
     chance: 0.02,
+    statBonus: 2,
     palette: { hueShift: -25, saturate: 0.55, lighten: 0.48 },
     aura: { color: 'rgba(150,90,255,0.8)', particles: 'shadow' },
   },

@@ -167,6 +167,12 @@ class AudioManagerImpl {
       case 'coin': this._note(1319, t, 0.06, 'square', 0.14); this._note(1760, t + 0.06, 0.12, 'square', 0.12); break;
       case 'encounter': this._sweep(200, 900, 0.35, 'square', 0.2); this._sweep(900, 200, 0.35, 'square', 0.15); break;
       case 'step': this._noise(0.05, 0.05, 500); break;
+      case 'crit':
+        this._noise(0.26, 0.36, 2200);
+        this._sweep(1200, 240, 0.3, 'square', 0.22);
+        this._note(1568, t + 0.04, 0.16, 'triangle', 0.16);
+        this._note(2093, t + 0.1, 0.14, 'triangle', 0.12);
+        break;
       default: break;
     }
   }

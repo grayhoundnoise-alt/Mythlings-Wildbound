@@ -1,7 +1,7 @@
 // Exploration scene: movement, camera, roaming wild Mythlings, NPCs, trainers,
 // interaction prompts and map transitions.
 import { getMap, regionAt } from '../data/maps.js';
-import { GameState, PlayerManager, WorldManager, InventoryManager, CollectionManager, bus } from '../systems/GameState.js';
+import { GameState, PartyManager, PlayerManager, WorldManager, InventoryManager, CollectionManager, bus } from '../systems/GameState.js';
 import { EncounterManager } from '../systems/EncounterManager.js';
 import { WorldRenderer, drawTrainerAvatar, roundRect } from '../render/worldRenderer.js';
 import { drawMythling } from '../render/creatures.js';
@@ -60,11 +60,11 @@ export class OverworldScene {
       const x = zx + Math.random() * zw;
       const y = zy + Math.random() * zh;
       if (!initial && dist(x, y, this.player.x, this.player.y) < 420) continue;
-      const m = EncounterManager.spawnForZone(zone, map.id);
+      const m = EncounterManager.spawnForZone(zone, map.id, Math.random, { partyLevel: PartyManager.topLevel() });
       this.wild.push({
         m, x, y, zone,
         hx: x, hy: y,
-        vx: 0, vy: 0,
+        vx: 0, vy: 0, moving: false,
         t: Math.random() * 10,
         facing: Math.random() < 0.5 ? 1 : -1,
         seen: false,
@@ -127,6 +127,7 @@ export class OverworldScene {
         w.vy = Math.sin(a) * 22;
         if (w.vx !== 0) w.facing = w.vx > 0 ? 1 : -1;
       }
+      w.moving = Math.hypot(w.vx, w.vy) > 6;
       const tx = w.x + w.vx * dt, ty = w.y + w.vy * dt;
       const [zx, zy, zw, zh] = w.zone.rect;
       w.x = clamp(tx, zx, zx + zw);
@@ -329,6 +330,7 @@ export class OverworldScene {
         drawMythling(ctx, {
           speciesId: w.m.speciesId, stage: w.m.stage, mutation: w.m.mutation,
           x: w.x, y: w.y, size: 62, t: this.time + w.hx * 0.01, facing: w.facing,
+          animTag: 'wild', pose: { anim: w.moving ? 'walk' : 'idle' },
         });
         this.nameTag(ctx, w.x, w.y - 62, `${displayName(w.m)} Lv.${w.m.level}`, '#ffffff', w.m.mutation);
       } });

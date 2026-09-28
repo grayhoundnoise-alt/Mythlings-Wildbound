@@ -6,11 +6,13 @@ import {
 } from '../systems/GameState.js';
 import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, stageData,
-  librarySkills, equipSkill, ultimateMove, ultimateUnlocked, expNeeded, restoreUses,
+  librarySkills, equipSkill, unequipSkill, ultimateMove, ultimateUnlocked, expNeeded, restoreUses,
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
-import { MOODS, STAT_LABELS, STAT_KEYS, moodSummary } from '../data/moods.js';
+import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat } from '../data/moods.js';
+import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE } from '../data/config.js';
+import { openWiki } from './wiki.js';
 import { RARITY_ORDER, getRarity } from '../data/rarity.js';
 import { MUTATIONS } from '../data/mutations.js';
 import { ITEM_CATEGORIES, getItem } from '../data/items.js';
@@ -23,11 +25,11 @@ import {
   Screens, panelHeader, closeButton,
 } from './ui.js';
 import { icon, iconSvg, iconLabel } from './icons.js';
-import { buffSummary } from '../data/skills.js';
+import { buffSummary, getSkill } from '../data/skills.js';
 import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { AudioManager } from '../systems/AudioManager.js';
-import { formatTime } from '../core/utils.js';
+import { coins, formatTime } from '../core/utils.js';
 
 const TABS = [
   ['party', 'PARTY', 'dna'],
@@ -36,31 +38,92 @@ const TABS = [
   ['bag', 'BAG', 'bag'],
   ['map', 'MAP', 'map'],
   ['collection', 'COLLECTION', 'book'],
+  ['index', 'INDEX', 'book'],
   ['stats', 'STATS', 'user'],
   ['save', 'SAVE', 'save'],
   ['settings', 'SETTINGS', 'settings'],
 ];
 
+/**
+ * A Mythling portrait.
+ *
+ * `size` is the design box, but the CSS is free to give the canvas any shape
+ * (party chips are wide and short, the starter art is a banner). The drawing is
+ * always scaled by the SHORTER side and centred, so a Mythling is never
+ * squashed, and the backing store follows the real CSS box at device
+ * resolution so it stays crisp.
+ */
+/** Short labels for the three battle slots in the Skill Library. */
+export const SLOT_LABEL = { normal: 'N', special: 'S', buff: 'B' };
+
 export function mythCanvas(m, size = 66, animated = false) {
+  const dpr = () => Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
   const cv = el('canvas', { width: size, height: size });
   const ctx = cv.getContext('2d');
+  let bw = 0, bh = 0;
+  let clock = 0;
+
+  const fit = () => {
+    const d = dpr();
+    const w = Math.max(1, Math.round((cv.clientWidth || size) * d));
+    const h = Math.max(1, Math.round((cv.clientHeight || size) * d));
+    if (w === bw && h === bh) return false;
+    bw = w; bh = h;
+    cv.width = w; cv.height = h;
+    return true;
+  };
+
   const draw = (t = 0) => {
-    ctx.clearRect(0, 0, size, size);
-    ctx.save(); ctx.translate(size / 2, size * 0.88);
+    clock = t;
+    fit();
+    const d = dpr();
+    const w = bw / d, h = bh / d;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const s = Math.min(w, h) / size;              // uniform: never stretch
+    ctx.translate((w - size * s) / 2, (h - size * s) / 2);
+    ctx.scale(s, s);
+    ctx.save();
+    ctx.translate(size / 2, size * 0.88);
     drawMythling(ctx, {
       speciesId: m.speciesId, stage: m.stage ?? 0, mutation: m.mutation || 'none',
       x: -size * 0.06, y: 0, size: size * 0.78, t, facing: 1, shadow: false,
     });
     ctx.restore();
   };
+
   draw(0);
+  // the element usually has no layout yet on the first paint: repaint once it has
+  const repaint = () => { if (fit()) draw(clock); };
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(repaint);
+    ro.observe(cv);
+    cv._ro = ro;
+  } else if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(repaint);
+  }
   if (animated) {
     let raf, t0 = performance.now();
     const loop = (now) => { draw((now - t0) / 1000); raf = requestAnimationFrame(loop); };
     raf = requestAnimationFrame(loop);
-    cv._stop = () => cancelAnimationFrame(raf);
+    const prevStop = cv._stop;
+    cv._stop = () => { cancelAnimationFrame(raf); cv._ro && cv._ro.disconnect(); prevStop && prevStop(); };
   }
+  cv.redraw = repaint;
   return cv;
+}
+
+/** A bar with a small legend above it, so HP and EXP can never be confused. */
+export function labeledBar(kind, label, value, pct, extraClass = '', title = '') {
+  const wrap = el('div', { class: 'bar-wrap' }, [
+    el('div', { class: 'bar-label' }, [
+      el('span', { text: label }),
+      el('span', { class: 'bar-value', text: value }),
+    ]),
+    bar(kind, pct, extraClass),
+  ]);
+  if (title) wrap.title = title;
+  return wrap;
 }
 
 export class PlayerMenu {
@@ -125,6 +188,7 @@ export class PlayerMenu {
       case 'bag': this.renderBag(b); break;
       case 'map': this.renderMap(b); break;
       case 'collection': this.renderCollection(b); break;
+      case 'index': this.renderIndex(b); break;
       case 'stats': this.renderStats(b); break;
       case 'save': this.renderSave(b); break;
       case 'settings': this.renderSettings(b); break;
@@ -163,9 +227,11 @@ export class PlayerMenu {
           mutationChip(m.mutation),
         ]),
         el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${MOODS[m.mood].name} · ${getRarity(m.rarity).name}` }),
-        bar('hp', pct, hpClass(pct)),
-        el('div', { class: 'mc-sub', text: `${m.currentHp}/${maxHp(m)} HP` }),
-        bar('exp', m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m)),
+        labeledBar('hp', 'HP', `${m.currentHp}/${maxHp(m)}`, pct, hpClass(pct)),
+        labeledBar('exp', 'EXP',
+          m.level >= LEVEL_CAP ? 'MAX LEVEL' : `${m.exp} / ${expNeeded(m)}`,
+          m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m),
+          '', 'EXP is kept forever — healing only restores HP, skill uses and Ultimate Charge.'),
         extra || null,
       ]),
     ]);
@@ -185,11 +251,11 @@ export class PlayerMenu {
     const statRows = STAT_KEYS.map((k) => {
       const isUp = MOODS[m.mood].up.includes(k);
       const isDown = MOODS[m.mood].down === k;
-      const maxRef = k === 'hp' ? 600 : k === 'counter' ? 35 : 90;
-      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}` }, [
+      const maxRef = STAT_BAR_MAX[k] || 90;
+      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}`, title: STAT_INFO[k] }, [
         el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), isUp ? icon('up', 'tiny') : isDown ? icon('down', 'tiny') : null]),
         el('div', { class: 'sbar' }, [el('i', { style: { width: `${Math.min(100, (stats[k] / maxRef) * 100)}%` } })]),
-        el('b', { text: String(stats[k]) }),
+        el('b', { text: formatStat(k, stats[k]) }),
       ]);
     });
 
@@ -215,11 +281,16 @@ export class PlayerMenu {
         el('h3', { text: `${displayName(m)}  ·  Lv.${m.level}${m.level >= LEVEL_CAP ? '  (MAX LEVEL)' : ''}` }),
         el('div', { class: 'mc-sub', text: `Species: ${sp.displayName} · Breed: ${sp.breed} · Role: ${sp.role} · Form: ${stageData(m).name} (stage ${m.stage + 1})` }),
         el('div', { style: { margin: '8px 0' } }, [
-          el('div', { class: 'mc-sub', text: m.level >= LEVEL_CAP ? 'EXP: MAX LEVEL REACHED' : `EXP: ${m.exp} / ${expNeeded(m)}` }),
-          bar('exp', m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m)),
+          labeledBar('exp', 'EXP',
+            m.level >= LEVEL_CAP ? 'MAX LEVEL' : `${m.exp} / ${expNeeded(m)}`,
+            m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m),
+            '', 'EXP is never lost when healing — only HP, skill uses and Ultimate Charge are restored.'),
         ]),
         el('h3', { text: 'Stats' }),
         el('div', { class: 'stat-rows' }, statRows),
+        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html:
+          `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) · `
+          + `<b>${stats.crit}%</b> crit chance · crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
         el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} &nbsp; ${iconSvg('down', 'tiny')} ${mood.down} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
 
         el('h3', { text: 'Equipped Skills' }),
@@ -257,7 +328,8 @@ export class PlayerMenu {
       ]),
     ]);
 
-    modal({ title: displayName(m).toUpperCase(), body, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
+    // Wide + scrollable: this panel used to run far past the bottom of the screen.
+    modal({ title: displayName(m).toUpperCase(), body, wide: true, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
   }
 
   // ---------------------------------------------------- STORAGE
@@ -296,10 +368,16 @@ export class PlayerMenu {
     }
     for (const m of list) {
       this.storageList.appendChild(this.mythCard(m, {
-        extra: iconTextBtn('dna', 'Party', {
-          class: 'small primary', disabled: PartyManager.isFull(),
-          onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
-        }),
+        extra: el('div', { class: 'row', style: { gap: '6px' } }, [
+          iconTextBtn('dna', 'Party', {
+            class: 'small primary', disabled: PartyManager.isFull(),
+            onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
+          }),
+          button('RELEASE', {
+            class: 'small ghost',
+            onclick: (e) => { e.stopPropagation(); this.releaseFromStorage(m); },
+          }),
+        ]),
       }));
     }
   }
@@ -307,7 +385,7 @@ export class PlayerMenu {
   // ---------------------------------------------------- SKILLS
   renderSkills(root) {
     this.setTitle('Skill Library');
-    root.appendChild(el('p', { class: 'sub', text: 'Each Mythling equips 1 Normal, 1 Special and 1 Buff skill. Everything it has learned stays in its library — nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.' }));
+    root.appendChild(el('p', { class: 'sub', text: 'Every Mythling has three slots and any skill it has learned can go into any of them — two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on. Leaving a slot empty is allowed and is saved as-is. Everything learned stays in the library — nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.' }));
     const party = PartyManager.list();
     const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
     const picker = el('div', { class: 'row', style: { marginBottom: '14px' } }, party.map((m) =>
@@ -331,24 +409,54 @@ export class PlayerMenu {
       const skills = librarySkills(sel, cat);
       if (!skills.length) { root.appendChild(el('p', { class: 'sub', text: 'None learned yet.' })); continue; }
       for (const sk of skills) {
-        const equipped = sel.skills[cat] === sk.id;
-        root.appendChild(el('div', { class: `skill-row ${equipped ? 'equipped' : ''}` }, [
+        const slots = ['normal', 'special', 'buff'];
+        const inSlot = slots.filter((s) => sel.skills[s] === sk.id);
+        root.appendChild(el('div', { class: `skill-row ${inSlot.length ? 'equipped' : ''}` }, [
           el('div', { style: { flex: '1' } }, [
             el('div', { class: 'sk-name', html: `${iconSvg(sk.element || 'strike', sk.element || '')} ${sk.name}` }),
             el('div', { class: 'sk-meta', text: `${sk.category === 'buff' ? buffSummary(sk, ' ') : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`} · ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : 'Unlimited uses'} — ${sk.desc}` }),
           ]),
-          equipped ? el('span', { class: 'chip', text: 'EQUIPPED' })
-            : button('EQUIP', { class: 'small primary', onclick: () => { equipSkill(sel, cat, sk.id); AudioManager.sfx('confirm'); this.renderTab(); } }),
+          el('div', { class: 'skill-slots' }, [
+            ...slots.map((s) => button(SLOT_LABEL[s], {
+              class: `small ${sel.skills[s] === sk.id ? 'primary' : 'ghost'}`,
+              title: `Put ${sk.name} in the ${s} slot`,
+              onclick: () => {
+                equipSkill(sel, s, sk.id);
+                AudioManager.sfx('confirm');
+                this.renderTab();
+              },
+            })),
+            inSlot.length ? button('✕', {
+              class: 'small ghost', title: 'Unequip',
+              onclick: () => { for (const s of inSlot) unequipSkill(sel, s); AudioManager.sfx('cancel'); this.renderTab(); },
+            }) : null,
+          ]),
         ]));
       }
     }
+  }
+
+  /** Let a Mythling go. Storage only — the party always keeps at least one. */
+  async releaseFromStorage(m) {
+    const ok = await confirmDialog(
+      'RELEASE MYTHLING',
+      `Release <b>${displayName(m)}</b> (Lv.${m.level}) for good?<br><br>It leaves your storage and cannot be recovered.`,
+      'RELEASE', 'KEEP',
+    );
+    if (!ok) return;
+    if (!StorageManager.remove(m.uid)) { toast('That Mythling is no longer in storage.', 'bad'); return; }
+    CollectionManager.markSeen(m.speciesId, m.mutation);   // it still counts as discovered
+    AudioManager.sfx('cancel');
+    toast(`${displayName(m)} was released into the wild`, 'ok');
+    this.renderStorageList();
+    if (this.game && this.game.autosave) this.game.autosave();
   }
 
   // ---------------------------------------------------- BAG
   renderBag(root) {
     this.setTitle('Bag');
     root.appendChild(el('div', { class: 'coin-pill', style: { display: 'inline-flex', marginBottom: '12px' } },
-      [icon('coin', 'gold'), el('span', { text: `${GameState.player.wildcoins} Wildcoins` })]));
+      [icon('coin', 'gold'), el('span', { text: `${coins(GameState.player.wildcoins)} Wildcoins` })]));
     for (const cat of ITEM_CATEGORIES) {
       const entries = InventoryManager.byCategory(cat.id);
       root.appendChild(el('h3', { text: cat.name }));
@@ -390,7 +498,7 @@ export class PlayerMenu {
     toast(`${displayName(pick)} ate the ${item.name} — +${res.exp} EXP`, 'ok');
     this.renderTab();
     if (res.result.levels.length) {
-      const entries = res.result.levels.map((lv) => ({ name: displayName(pick), ...lv }));
+      const entries = res.result.levels.map((lv) => ({ uid: pick.uid, name: displayName(pick), ...lv }));
       await new Promise((done) => levelUpSummaryRef(entries, done));
       this.renderTab();
     }
@@ -438,6 +546,14 @@ export class PlayerMenu {
       InventoryManager.remove(itemId, 1);
       pick.currentHp = Math.floor(maxHp(pick) * item.revive);
       toast(`${displayName(pick)} was revived!`, 'ok');
+    } else if (item.restoreAllUses) {
+      const before = JSON.stringify(pick.uses);
+      pick.uses = {};
+      for (const id of pick.library) { const sk = getSkill(id); if (sk && Number.isFinite(sk.uses)) pick.uses[id] = sk.uses; }
+      if (JSON.stringify(pick.uses) === before) { toast('Every skill is already at full uses!', 'bad'); return; }
+      InventoryManager.remove(itemId, 1);
+      AudioManager.sfx('heal');
+      toast(`${displayName(pick)}'s skills are fully restored`, 'ok');
     } else if (item.restoreUses) {
       InventoryManager.remove(itemId, 1);
       restoreUses(pick, item.restoreUses);
@@ -467,6 +583,50 @@ export class PlayerMenu {
   }
 
   // ---------------------------------------------------- COLLECTION
+  // ---------------------------------------------------- INDEX
+  /**
+   * Mythling Index: every species with all four evolution stages drawn side by
+   * side, so you can see exactly what a Mythling grows into and at what level.
+   */
+  renderIndex(root) {
+    const seen = SPECIES_IDS.filter((id) => CollectionManager.entry(id)?.seen).length;
+    this.setTitle(`Mythling Index — ${seen}/${SPECIES_IDS.length} discovered`);
+    root.appendChild(el('p', {
+      class: 'sub',
+      text: 'Every Mythling and all four of its forms. Stages unlock at Lv.20, Lv.60 and Lv.80 — raise a Mythling to the level and it evolves on its own.',
+    }));
+
+    const list = el('div', { class: 'index-list' });
+    for (const id of SPECIES_IDS) {
+      const sp = SPECIES[id];
+      const entry = CollectionManager.entry(id);
+      const known = !!(entry && (entry.seen || entry.caught));
+      const card = el('div', { class: `index-card ${known ? '' : 'locked'}` }, [
+        el('div', { class: 'index-head' }, [
+          el('b', { text: known ? sp.displayName : '???' }),
+          elementChip(sp.element),
+          el('span', { class: 'role', text: sp.role }),
+          el('span', { class: 'role', text: `· ${sp.breed} · ${sp.spawnMaps?.[0]?.replace(/_/g, ' ') || ''}` }),
+        ]),
+        el('div', { class: 'index-stages' }, sp.evolutions.map((ev, stage) => {
+          const unlocked = known;
+          return el('div', { class: `index-stage ${unlocked ? '' : 'locked'}` }, [
+            unlocked
+              ? mythCanvas({ speciesId: id, stage, mutation: 'none' }, 96)
+              : el('div', { class: 'index-blank', text: '?' }),
+            el('div', { class: 'is-name', text: unlocked ? ev.name : '???' }),
+            el('div', { class: 'is-lv', text: stage === 0 ? 'Base form' : `Lv.${ev.level}` }),
+            ev.art?.horns || ev.art?.wings
+              ? el('div', { class: 'is-tag', text: [ev.art.horns ? 'Horns' : '', ev.art.wings ? 'Wings' : ''].filter(Boolean).join(' + ') })
+              : null,
+          ]);
+        })),
+      ]);
+      list.appendChild(card);
+    }
+    root.appendChild(list);
+  }
+
   renderCollection(root) {
     const s = CollectionManager.stats();
     this.setTitle(`Collection — ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen`);
@@ -500,16 +660,16 @@ export class PlayerMenu {
         el('div', {}, [
           el('div', { class: 'row', style: { gap: '6px' } }, [elementChip(sp.element), el('span', { class: 'chip', text: sp.breed }), el('span', { class: 'chip', text: sp.role })]),
           el('p', { class: 'sub', text: sp.description }),
-          el('div', { class: 'mc-sub', text: `Base stats — HP ${sp.baseStats.hp}, P.ATK ${sp.baseStats.patk}, S.ATK ${sp.baseStats.satk}, P.DEF ${sp.baseStats.pdef}, S.DEF ${sp.baseStats.sdef}, SPD ${sp.baseStats.spd}, CNT ${sp.baseStats.counter}` }),
+          el('div', { class: 'mc-sub', text: `Base stats — ${STAT_KEYS.map((k) => `${STAT_SHORT[k]} ${formatStat(k, sp.baseStats[k])}`).join(', ')}` }),
           el('div', { class: 'mc-sub', text: `Found in: ${sp.spawnMaps.map((mp) => MAPS[mp].displayName).join(', ')}` }),
         ]),
       ]),
       el('h3', { text: 'Evolution line' }),
-      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev) => el('div', { class: 'chip', style: ev.future ? { opacity: .55 } : {} }, [
+      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev) => el('div', { class: 'chip', style: ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE ? { opacity: .55 } : {} }, [
         el('span', { text: `${ev.name} (Lv.${ev.level})` }), ev.future ? icon('lock', 'tiny') : null,
       ]))),
     ]);
-    modal({ title: sp.displayName.toUpperCase(), body, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
+    modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
   }
 
   // ---------------------------------------------------- STATS
@@ -518,7 +678,7 @@ export class PlayerMenu {
     this.setTitle('Trainer Record');
     const rows = [
       ['Trainer', GameState.player.name],
-      ['Wildcoins', String(GameState.player.wildcoins)],
+      ['Wildcoins', coins(GameState.player.wildcoins)],
       ['Play time', formatTime(PlayerManager.playTime())],
       ['Current region', MAPS[GameState.player.map].displayName],
       ['Starter', GameState.player.starter ? SPECIES[GameState.player.starter].displayName : '—'],
@@ -619,7 +779,16 @@ export function settingsPanel() {
     return el('div', { class: 'item-row' }, [el('div', { class: 'ir-main' }, [el('div', { class: 'ir-name', text: label })]), b]);
   };
 
+  // Wiki: every rule, Mythling, mood, stat, skill and item in the game.
+  const wikiBtn = iconTextBtn('book', 'OPEN WIKI', { class: 'primary small', sfx: 'confirm', onclick: () => openWiki() });
   wrap.append(
+    el('div', { class: 'item-row', style: { borderColor: 'rgba(242,199,97,.5)', background: 'rgba(242,199,97,.08)' } }, [
+      el('div', { class: 'ir-main' }, [
+        el('div', { class: 'ir-name', text: 'Game Wiki' }),
+        el('div', { class: 'ir-desc', text: 'Stats, moods, rarities, elements, species, skills, items, battle rules and the world — all in one place.' }),
+      ]),
+      wikiBtn,
+    ]),
     slider('Master Volume', 'masterVolume', 0, 1, 0.05),
     slider('Music Volume', 'musicVolume', 0, 1, 0.05),
     slider('SFX Volume', 'sfxVolume', 0, 1, 0.05),

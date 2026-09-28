@@ -85,6 +85,10 @@ export const PartyManager = {
   lead() { return GameState.party[0] || null; },
   firstHealthy() { return GameState.party.find((m) => m.currentHp > 0) || null; },
   allFainted() { return GameState.party.length > 0 && GameState.party.every((m) => m.currentHp <= 0); },
+  /** Highest level in the party — wild spawns and trainer teams keep pace with it. */
+  topLevel() {
+    return GameState.party.reduce((top, m) => Math.max(top, m.level || 1), 1);
+  },
   add(m) {
     if (this.isFull()) return false;
     GameState.party.push(m);
@@ -310,7 +314,9 @@ function migrateMythling(raw) {
   const maxStage = stageForLevel(m.speciesId, m.level);
   if (m.stage > maxStage) m.stage = maxStage;
   refreshLibrary(m);  // adds any skills introduced by a newer game version
-  autoEquip(m);
+  // only fill empty slots for saves that predate free slot assignment: if the
+  // player chose to leave a slot empty, that choice has to survive a reload
+  if (!raw.skills) autoEquip(m);
   const mx = maxHp(m);
   if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
   if (m.currentHp < 0) m.currentHp = 0;

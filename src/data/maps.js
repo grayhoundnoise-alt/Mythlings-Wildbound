@@ -76,11 +76,11 @@ export const MAPS = {
     ],
     encounterZones: [
       { id: 'vz1', rect: [1040, 150, 820, 1000], levelRange: [1, 4], density: 5,
-        species: [{ id: 'spriggo', weight: 50 }, { id: 'leaflet', weight: 50 }] },
+        species: [{ id: 'spriggo', weight: 30 }, { id: 'leaflet', weight: 30 }, { id: 'mosscoil', weight: 20 }, { id: 'thornhound', weight: 10 }, { id: 'petalwisp', weight: 10 }] },
       { id: 'vz2', rect: [1920, 150, 840, 1200], levelRange: [4, 8], density: 6,
-        species: [{ id: 'spriggo', weight: 45 }, { id: 'leaflet', weight: 55 }] },
+        species: [{ id: 'spriggo', weight: 25 }, { id: 'leaflet', weight: 30 }, { id: 'mosscoil', weight: 20 }, { id: 'thornhound', weight: 15 }, { id: 'petalwisp', weight: 10 }] },
       { id: 'vz3', rect: [2830, 200, 700, 1100], levelRange: [7, 10], density: 5,
-        species: [{ id: 'spriggo', weight: 55 }, { id: 'leaflet', weight: 45 }] },
+        species: [{ id: 'spriggo', weight: 30 }, { id: 'leaflet', weight: 20 }, { id: 'mosscoil', weight: 15 }, { id: 'thornhound', weight: 20 }, { id: 'petalwisp', weight: 15 }] },
     ],
     connections: [
       { id: 'to_azure', rect: [3500, 600, 100, 320], toMap: 'azure_coast', toPoint: { x: 220, y: 900 },
@@ -165,11 +165,11 @@ export const MAPS = {
     ],
     encounterZones: [
       { id: 'az1', rect: [1140, 320, 820, 780], levelRange: [10, 13], density: 6,
-        species: [{ id: 'aquini', weight: 50 }, { id: 'rivruff', weight: 50 }] },
+        species: [{ id: 'aquini', weight: 30 }, { id: 'rivruff', weight: 30 }, { id: 'currentkit', weight: 20 }, { id: 'shelldrake', weight: 10 }, { id: 'tidewyrm', weight: 10 }] },
       { id: 'az2', rect: [2380, 320, 480, 1050], levelRange: [13, 16], density: 5,
-        species: [{ id: 'aquini', weight: 55 }, { id: 'rivruff', weight: 45 }] },
+        species: [{ id: 'aquini', weight: 25 }, { id: 'rivruff', weight: 25 }, { id: 'currentkit', weight: 20 }, { id: 'shelldrake', weight: 15 }, { id: 'tidewyrm', weight: 15 }] },
       { id: 'az3', rect: [2930, 320, 620, 520], levelRange: [16, 20], density: 5,
-        species: [{ id: 'aquini', weight: 45 }, { id: 'rivruff', weight: 55 }] },
+        species: [{ id: 'aquini', weight: 20 }, { id: 'rivruff', weight: 25 }, { id: 'currentkit', weight: 15 }, { id: 'shelldrake', weight: 20 }, { id: 'tidewyrm', weight: 20 }] },
     ],
     connections: [
       { id: 'back_vale', rect: [0, 600, 60, 320], toMap: 'verdant_vale', toPoint: { x: 3420, y: 760 }, label: 'To Verdant Vale' },
@@ -259,13 +259,13 @@ export const MAPS = {
     ],
     encounterZones: [
       { id: 'ez1', rect: [1040, 250, 820, 850], levelRange: [20, 23], density: 6,
-        species: [{ id: 'emberu', weight: 80 }, { id: 'spriggo', weight: 20 }] },
+        species: [{ id: 'emberu', weight: 45 }, { id: 'emberlynx', weight: 20 }, { id: 'cinderhawk', weight: 15 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 5 }] },
       { id: 'ez2', rect: [1930, 300, 730, 1050], levelRange: [23, 26], density: 6,
-        species: [{ id: 'emberu', weight: 75 }, { id: 'leaflet', weight: 25 }] },
+        species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 20 }, { id: 'cinderhawk', weight: 20 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 5 }] },
       { id: 'ez3', rect: [2740, 500, 620, 520], levelRange: [25, 28], density: 5,
-        species: [{ id: 'emberu', weight: 85 }, { id: 'rivruff', weight: 15 }] },
+        species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 15 }, { id: 'cinderhawk', weight: 15 }, { id: 'ashpup', weight: 20 }, { id: 'magmataur', weight: 10 }] },
       { id: 'ez4', rect: [3440, 800, 700, 620], levelRange: [27, 30], density: 5,
-        species: [{ id: 'emberu', weight: 100 }] },
+        species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 15 }, { id: 'cinderhawk', weight: 10 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 20 }] },
     ],
     connections: [
       { id: 'back_coast', rect: [0, 580, 60, 320], toMap: 'azure_coast', toPoint: { x: 3840, y: 780 }, label: 'To Azure Coast' },

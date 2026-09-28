@@ -6,7 +6,7 @@ frameworks and no external assets** — every creature, map, effect and sound is
 by the game's own code.
 
 > **The core loop:** Explore → Encounter → Battle → **Defeat** → Catch → **the caught Mythling becomes Lv.1** →
-> Train → Evolve at Lv.20 → Explore stronger regions → Repeat.
+> Train → Evolve at Lv.20 / Lv.60 / Lv.80 → Explore stronger regions → Repeat.
 
 ---
 
@@ -31,7 +31,8 @@ npm run build:offline   # regenerates MythlingsWildbound-Offline.html
 ```
 
 ```bash
-npm test             # 31 headless rule tests (levels, capture, evolution, save/load, maps…)
+npm test             # 74 headless rule tests (levels, crits, capture, evolution, save/load, maps, rig, VFX…)
+                     # including screens that run for real: every region, every menu tab, species popups
 ```
 
 ## Controls
@@ -43,6 +44,7 @@ npm test             # 31 headless rule tests (levels, capture, evolution, save/
 | `Esc` | Player menu (also the ☰ button) |
 | `1` `2` `3` | Normal / Special / Buff skill in battle |
 | `4` or `R` | Ultimate (when 8/8) |
+| `Del` | Cheat menu (adds Wildcoins) — available anywhere in the game |
 | Mouse / touch | Everything — the whole UI is clickable; a touch stick appears on touch devices |
 
 ---
@@ -51,14 +53,114 @@ npm test             # 31 headless rule tests (levels, capture, evolution, save/
 
 | | |
 |---|---|
-| **Mythlings** | 5 species — Spriggo, Aquini, Emberu, Rivruff, Leaflet |
+| **Mythlings** | 15 species — 5 starters + Thornhound, Mosscoil, Petalwisp, Tidewyrm, Shelldrake, Currentkit, Emberlynx, Cinderhawk, Magmataur, Ashpup |
 | **Regions** | 3 — Verdant Vale (Lv.1–10), Azure Coast (Lv.10–20), Emberwild (Lv.20–30) |
 | **Elements** | 🌿 Nature > 💧 Water > 🔥 Fire > 🌿 Nature (1.5× / 0.75× / 1.0×) |
-| **Level cap** | Lv.30 (EXP hard-stops; architecture supports raising it) |
-| **Evolution** | Lv.20 first evolution only. Lv.60 / Lv.80 stages exist in data but are **locked** |
+| **Level cap** | Lv.100. Wild spawns and trainer teams keep pace with your party once you out-level them |
+| **Evolution** | Four stages — Lv.20, Lv.60, Lv.80 — each with its own Special, Buff and unlimited Normal move |
 | **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades to tier " I" on evolution |
-| **Mutations** | Shiny ✧ and Darkness ☾ — cosmetic only, never a power boost |
-| **Systems** | Rarity, Mood, Skill Library, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Collection index, Save/Load/Autosave, Settings |
+| **Mutations** | Shiny ✧ +1 to every stat, Darkness ☾ +2 — plus palette, aura and particles |
+| **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion), **CRIT** (crit chance %), **C.DMG** (crit damage %) |
+| **Moods** | 21 — each raises 3 stats and lowers 1. Feral / Savage / Precise / Brutal / Keen push crits |
+| **Systems** | Rarity, Mood, Skill Library, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Collection index, Save/Load/Autosave, Settings, **Game Wiki** |
+
+### Skill slots, uses and running dry
+
+Every Mythling has **three slots and any learned skill can go into any of them** — two Specials,
+three Buffs, whatever you like. The slot only decides which battle button the skill sits on, and
+leaving a slot empty is allowed (nothing refills it, and the choice is saved).
+
+* Evolutions used to grant only Specials and Buffs, so a Mythling's unlimited attack sat at Lv.1
+  power forever. Every stage now also teaches a stronger **unlimited Normal** move.
+* If every equipped skill is out of uses, the Mythling falls back on its strongest unlimited attack
+  instead of losing the turn — and the action bar shows that attack rather than three dead buttons.
+* **Skill Tonic** restores 8 uses to every limited skill; **Skill Elixir** resets them all to full.
+
+### Mythling Index and storage
+
+The **INDEX** tab shows every species with all four of its evolution forms drawn side by side, with
+the level each form arrives at. **Storage** cards carry a **RELEASE** button: releasing a Mythling is
+permanent, but the species stays marked as seen in your Collection.
+
+### Combat numbers
+
+* **Counter (evasion)** — every point of Counter is **0.5 % dodge**, capped at **18 %** (Counter itself
+  caps at 35). It used to be a full 1 % per point, which made attacks miss far too often.
+* **Crits** — Crit Chance is the % chance an attack lands critically (caps at 60 %); Crit Damage is the
+  bonus damage on a crit (`+50 %` = a 1.5× hit, caps at `+200 %`). Five moods feed them.
+* **Battle log** — every attack line now reports the exact damage:
+  `Emberu used Burning Fang! — 163 damage! CRITICAL HIT! (x2.15)`.
+* **Trainer teams** — the enemy card shows a pip strip and a `2/3 LEFT` counter, and shouts
+  `LAST MYTHLING!` when you are down to the trainer's final Mythling.
+* **Level ups** — a whole party levelling at once collapses into one entry per Mythling
+  (`Lv.12 → Lv.15`) in a scrollable summary.
+
+### Wildcoins from winning
+
+Defeating a **wild** Mythling drops Wildcoins: the reward scales with its level and EXP yield
+(`coinReward()` in `src/data/config.js`) and falls off when you are heavily over-levelled, so low
+areas cannot be farmed forever. Trainer battles still pay their own bounty — a defeated trainer
+Mythling never double-pays. Need coins right now? Press **`Del`** anywhere for the cheat menu
+(`+100`, `+1,000`, `+100,000`, `+1,000,000`).
+
+### Creature rig — Mythlings are puppets, not pictures
+
+Every Mythling is still drawn procedurally (this project ships **zero external art**), but the
+renderer is now a lightweight **2D puppet rig** instead of one monolithic drawing pass:
+
+```
+src/render/creatureArt.js    the artwork, authored as 8-12 animatable layers per species
+src/render/creatureRig.js    asset baking/cache, animation controller, compositor
+src/render/creatures.js      drawMythling() — the entry point every game system calls
+```
+
+* **8-12 transforms per creature** — `ROOT · BODY · HEAD · FRONT_LEG_L/R · BACK_LEG_L/R · TAIL`
+  plus `EAR_L/R` (Spriggo, Aquini, Rivruff), `WING_L/R` (Emberu, Leaflet) and Rivruff's water
+  `MANE`. Fur tufts, leaf veins, claws, scales, feathers and markings are **baked into the layer
+  they belong to** — no bone is ever spent on a detail.
+* **Layers are baked once** into cached offscreen canvases (`CreatureAssetLoader`, LRU-capped,
+  keyed by species | stage | mutation | size bucket) and re-composited with ~10 `drawImage` calls
+  per frame instead of hundreds of paths. Layers are authored so they read as **one seamless
+  creature** at rest — the split exists only so parts can move.
+* **`CreatureAnimationController`** drives 12 states — `idle, walk, run, battleIdle, normalAttack,
+  specialAttack, buff, ultimate, hit, faint, capture, evolve` — with simple easing and procedural
+  interpolation, no keyframe tables. Idle breathes and flicks an ear every few seconds instead of
+  shaking; attacks anticipate → strike → recover with squash & stretch; hits recoil without
+  distorting the model; faints lower and fade.
+* **The face stays live** (eyes, brows, mouth are drawn on top of the baked head), so expressions,
+  blinking and eye shape cost nothing to bake and can change at any time.
+* Shiny and Darkness reuse **the same rig** — palette + aura + particles only.
+
+### Skill VFX
+
+`src/render/vfx/SkillVFX.js` + `src/data/skillVfx.js` turn every skill into a data-driven
+sequence: **CAST → ATTACK MOTION → PROJECTILE → IMPACT → AFTERMATH → DAMAGE NUMBER**. Cast
+100-250 ms, travel 150-500 ms, impact 100-300 ms, aftermath 200-700 ms, ultimates 0.8-1.8 s.
+
+* Element identity is baked into the palettes and shapes: **nature** grows leaves, vines, petals,
+  roots and pollen; **water** throws droplets, splash arcs, ribbons, bubbles, foam and wave rings;
+  **fire** is alive with flame tongues, embers, smoke and sparks. No generic colour clouds.
+* Buffs read as a stat rising (`↑P.ATK` + upward energy), defensive buffs get a shield ring, speed
+  buffs get wind trails. Debuffs stay subtle and never cover the target.
+* Ultimates are cinematic — camera emphasis → charge → big sequence → impact → aftermath — and
+  `ocean_guard` is flagged `defensive` so it raises a barrier instead of looking like an attack.
+  A Mythling sitting on 8/8 charge keeps a soft elemental aura.
+* Camera: a nudge for normals, a small shake on special impacts, a controlled one for ultimates.
+  Never constant, never enough to lose track of the battle.
+* Performance: a pooled particle system (hard cap 340), cached gradients, zero per-frame
+  allocation, no DOM elements. A fireball is one glow + one core + one trail + ~20 sparks, not 500.
+
+### Game Wiki
+
+`SETTINGS → OPEN WIKI` (also on the title screen's Settings) opens a searchable reference built
+straight from `src/data/*`: getting started, all nine stats, every mood and rarity, mutations, the
+element chart, the full battle rules and damage formula, all fifteen species with base stats and
+evolution lines, every skill with the level it is learned at, every Ultimate, all items, the three
+regions with their trainers, the EXP curve, controls and the roadmap. It is generated from the same
+data files the game runs on, so it can never drift out of date.
+
+The **INDEX** tab in the player menu is the visual counterpart: every species with all four of its
+forms drawn side by side, labelled with the form name and the level it arrives at.
 
 ### The rule that never bends
 
@@ -81,7 +183,12 @@ Emberwatch Outpost → Ashen Trail → Cinder Forest → Molten Cavern → Volca
 ```
 
 Gates are item-locked, so Emberwild can never be reached at Lv.1. After the Flame Warden the world
-stays fully open for collecting, mutation hunting and training to Lv.30.
+stays fully open for collecting, mutation hunting and training all the way to Lv.100.
+
+The story content tops out at Lv.30, so past it two things keep the climb honest: the EXP curve
+flattens to a straight line through the Lv.30 cost (a level always costs roughly what a
+level-appropriate battle pays out), and wild Mythlings plus trainer teams scale up with your party
+instead of paying nothing for being out-levelled.
 
 ---
 
@@ -95,7 +202,9 @@ src/
     config.js              level cap, EXP curve, growth, damage constants
     species.js             the 5 Mythlings + full 4-stage evolution lines (Lv.60/80 marked future)
     skills.js              skills, buffs, debuff riders, Ultimates (base → I → II → III)
+    skillVfx.js            per-skill VFX data (element, category, cast/projectile/impact/aftermath)
     moods.js  rarity.js  mutations.js  elements.js  items.js
+    config.js also owns the Counter->dodge curve and the crit caps
     maps.js                3 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
   core/
     mythling.js            the Mythling model: stats, EXP/levels, evolution, skills, resetToLevelOne()
@@ -109,13 +218,19 @@ src/
     SaveManager.js         IndexedDB with localStorage fallback — save/load/hasSave/deleteSlot/listSlots
     SettingsManager.js  AudioManager.js (procedural music + SFX, no copyrighted audio)
   render/
-    creatures.js           original procedural Mythling art (fox/feline/dragon/wolf/avian body plans),
-                           per-species faces with 7 expressions, evolution growth, mutation palettes
+    creatureArt.js         original procedural Mythling art (fox/feline/dragon/wolf/avian body plans),
+                           authored as 8-12 rig layers per species + per-species faces (7 expressions)
+    creatureRig.js         layer baking/LRU cache, animation controller, compositor, drawMythling()
+    creatures.js           the public entry point every game system imports
     worldRenderer.js       terrain, water, props, buildings, weather
+    vfx/
+      particles.js         pooled particle + effect system (rings, slashes, bursts, columns)
+      SkillVFX.js          data-driven skill sequences: cast → projectile → impact → aftermath
   scenes/
     MenuScene.js  OverworldScene.js  BattleScene.js
   ui/
     ui.js  styles.css  screens.js  PlayerMenu.js
+    wiki.js                 searchable in-game reference generated from src/data/*
     logo.js                SVG wordmark + element crest for the title screen
     icons.js               hand-built SVG icon set — the game ships zero emoji
 tests/smoke.test.js        headless rule tests
@@ -144,8 +259,8 @@ right so the menu never overlaps a face).
 
 `design-bible.html` (run `npm start`, then open <http://localhost:3000/design-bible.html>) is a
 living style guide rendered by the **same** `src/render/creatures.js` the game uses — roster line-up,
-per-species turnaround, the seven expressions, the full evolution line with the Lv.60/Lv.80 stages
-marked as locked future content, both mutations, and a scale comparison against the trainer.
+per-species turnaround, the seven expressions, the full four-stage evolution line, both mutations,
+and a scale comparison against the trainer.
 It needs the dev server because it imports ES modules (the double-click offline build is the game
 only). Design rules the renderer enforces:
 
@@ -166,7 +281,7 @@ only). Design rules the renderer enforces:
 (map change, capture, evolution, trainer win, purchase, healing) with a debounce so nothing is ever
 granted twice. Loads are **validated and migrated**: unknown items are dropped, missing fields get
 safe defaults (`mutation: none`, full HP, relearned skills), levels above the cap are clamped and
-future evolution stages are rejected. Every save stores its `gameVersion`.
+evolution stages are clamped to what the build allows. Every save stores its `gameVersion`.
 
 ---
 
@@ -180,7 +295,6 @@ trademarks are used or reproduced.
 
 ## Roadmap (intentionally not implemented yet)
 
-Lv.60 `Verdantor / Tideron / Inferno / Cascadon / Galecrest` and Lv.80 `Floragon / Leviaron /
-Ignidrake / Maelwolf / Zephyrax` stages, their skills, Ultimate tiers II & III, Map 4+, new elements
-and mutations, tournaments, quests, breeding, weather and day/night — the data structures and
-managers already account for them.
+Map 4+ and new regions, new elements and mutation types, tournaments, quests, breeding, weather
+and day/night — the data structures and managers already account for them. The Lv.60 / Lv.80
+evolution stages, their skills and Ultimate tiers II & III shipped with the Lv.100 cap.
