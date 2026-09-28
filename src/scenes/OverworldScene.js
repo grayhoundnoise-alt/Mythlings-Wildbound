@@ -3,12 +3,18 @@
 import { getMap, regionAt } from '../data/maps.js';
 import { GameState, PartyManager, PlayerManager, WorldManager, InventoryManager, CollectionManager, bus } from '../systems/GameState.js';
 import { EncounterManager } from '../systems/EncounterManager.js';
-import { WorldRenderer, drawTrainerAvatar, roundRect, terrainColor } from '../render/worldRenderer.js';
+import { ChestManager } from '../systems/ChestManager.js';
+import { getChestTier } from '../data/chests.js';
+import { WorldRenderer, drawTrainerAvatar, roundRect, terrainColor, drawChest } from '../render/worldRenderer.js';
 import { drawMythling } from '../render/creatures.js';
 import { displayName, speciesOf } from '../core/mythling.js';
 import { getSpecies } from '../data/species.js';
+import { ELEMENTS } from '../data/elements.js';
+import { drawIconGlyph } from '../ui/icons.js';
 import { clamp, dist, rectsOverlap, randInt } from '../core/utils.js';
 import { AudioManager } from '../systems/AudioManager.js';
+import { SettingsManager } from '../systems/SettingsManager.js';
+import { CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP } from '../data/config.js';
 
 const PLAYER_SPEED = 230;
 const INTERACT_RANGE = 74;
@@ -44,10 +50,14 @@ export class OverworldScene {
     WorldManager.visit(this.mapId);
     PlayerManager.setPosition(this.mapId, this.player.x, this.player.y);
     this.populate(true);
+    // treasure chests for this map (rolled on first visit, re-rolled after a while)
+    ChestManager.ensure(this.mapId, ChestManager.makeFreeTest(map, this.renderer.colliders(map)));
     bus.emit('overworld:map', map);
   }
 
   get map() { return getMap(this.mapId); }
+  /** The chests currently standing on this map. */
+  get chests() { return ChestManager.list(this.mapId); }
 
   // ------------- wild population -------------
   populate(initial = false) {
@@ -216,6 +226,10 @@ export class OverworldScene {
       const d = dist(px, py, lm.x, lm.y);
       if (d < bestD) { bestD = d; best = { kind: 'sign', ref: lm, label: 'Read sign' }; }
     }
+    for (const c of this.chests) {
+      const d = dist(px, py, c.x, c.y);
+      if (d < bestD) { bestD = d; best = { kind: 'chest', ref: c, label: `Open ${getChestTier(c.tier)?.name || 'chest'}` }; }
+    }
     // defeated trainers can still be talked to
     if (!best) {
       for (const t of map.trainers) {
@@ -244,6 +258,8 @@ export class OverworldScene {
       bus.emit('overworld:shop', n.ref);
     } else if (n.kind === 'sign') {
       bus.emit('overworld:sign', n.ref);
+    } else if (n.kind === 'chest') {
+      bus.emit('overworld:chest', n.ref);
     }
   }
 
@@ -260,7 +276,10 @@ export class OverworldScene {
     const dpr = this.dpr || 1;
     const vw = W / dpr, vh = H / dpr;
 
-    const zoom = clamp(Math.min(vw / 1180, vh / 720) * 1.35, 0.72, 1.6);
+    // The player's chosen zoom (Settings → Camera Zoom, or the mouse wheel / +- keys in the
+    // world), scaled to the viewport so small screens still see enough of the map.
+    const wanted = clamp(Number(SettingsManager.get('cameraZoom')) || 1.35, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+    const zoom = clamp(Math.min(vw / 1180, vh / 720) * wanted, 0.72, 2.2);
     const camW = vw / zoom, camH = vh / zoom;
     this.cam.x = clamp(this.player.x - camW / 2, 0, Math.max(0, map.width - camW));
     this.cam.y = clamp(this.player.y - camH / 2, 0, Math.max(0, map.height - camH));
@@ -310,6 +329,13 @@ export class OverworldScene {
     for (const lm of (map.landmarks || []).filter((l) => l.type === 'sign')) {
       drawables.push({ y: lm.y, fn: () => this.renderer.drawLandmark(ctx, lm, this.time) });
     }
+    for (const c of this.chests) {
+      if (c.x < this.cam.x - 80 || c.x > this.cam.x + camW + 80) continue;
+      drawables.push({ y: c.y, fn: () => {
+        drawChest(ctx, c, this.time, this.nearest?.ref === c);
+        if (dist(c.x, c.y, this.player.x, this.player.y) < 220) this.nameTag(ctx, c.x, c.y - 44, getChestTier(c.tier)?.name || 'Chest', getChestTier(c.tier)?.colors.trim || '#fff');
+      } });
+    }
     for (const n of map.npcs) {
       drawables.push({ y: n.y, fn: () => {
         drawTrainerAvatar(ctx, n.x, n.y, n.color, this.time, { phase: n.x });
@@ -332,7 +358,7 @@ export class OverworldScene {
           x: w.x, y: w.y, size: 62, t: this.time + w.hx * 0.01, facing: w.facing,
           animTag: 'wild', pose: { anim: w.moving ? 'walk' : 'idle' },
         });
-        this.nameTag(ctx, w.x, w.y - 62, `${displayName(w.m)} Lv.${w.m.level}`, '#ffffff', w.m.mutation);
+        this.nameTag(ctx, w.x, w.y - 62, `${displayName(w.m)} Lv.${w.m.level}`, '#ffffff', w.m.mutation, { element: getSpecies(w.m.speciesId).element });
       } });
     }
     drawables.push({ y: this.player.y, fn: () => this.drawPlayer(ctx) });
@@ -382,7 +408,8 @@ export class OverworldScene {
     ctx.save();
     ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
     ctx.textAlign = 'center';
-    const tw = ctx.measureText(text).width + 16 + (opts.mark ? 14 : 0);
+    const lead = opts.mark ? 14 : opts.element ? 16 : 0;   // room for a trainer mark or the element glyph
+    const tw = ctx.measureText(text).width + 16 + lead;
     ctx.fillStyle = 'rgba(10,18,28,0.6)';
     roundRect(ctx, x - tw / 2, y - 12, tw, 18, 8); ctx.fill();
     if (mutation && mutation !== 'none') {
@@ -390,8 +417,12 @@ export class OverworldScene {
       ctx.lineWidth = 1.5; ctx.stroke();
     }
     ctx.fillStyle = color;
-    ctx.fillText(text, x + (opts.mark ? 7 : 0), y + 1);
+    ctx.fillText(text, x + lead / 2, y + 1);
     if (opts.mark) drawTagMark(ctx, opts.mark, x - tw / 2 + 10, y - 3, color);
+    else if (opts.element) {
+      const e = ELEMENTS[opts.element];
+      drawIconGlyph(ctx, e?.icon || 'spark', x - tw / 2 + 5, y - 9, 12, e?.glow || color);
+    }
     ctx.restore();
   }
 
@@ -439,6 +470,14 @@ export class OverworldScene {
     const map = this.map;
     const r = regionAt(map, this.player.x, this.player.y);
     return `${map.displayName} — ${r.name}`;
+  }
+
+  /** Zoom the camera in (+) or out (-) by one step, within the allowed range. Persists as a setting. */
+  zoomBy(steps) {
+    const cur = clamp(Number(SettingsManager.get('cameraZoom')) || 1.35, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+    const next = clamp(Math.round((cur + steps * CAMERA_ZOOM_STEP) * 100) / 100, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+    if (next !== cur) SettingsManager.set('cameraZoom', next);
+    return next;
   }
 
   minimapData() {

@@ -411,7 +411,8 @@ select {
 }
 .combatant-card.player { bottom: 210px; right: 18px; }
 .cc-top { display: flex; align-items: center; gap: 8px; }
-.cc-name { font-weight: 900; letter-spacing: .04em; font-size: 1.02rem; }
+.cc-name { font-weight: 900; letter-spacing: .04em; font-size: 1.02rem; display: inline-flex; align-items: center; gap: 6px; }
+.cc-name .ico { width: 1em; height: 1em; }
 .cc-lv { color: var(--gold); font-weight: 800; margin-left: auto; font-size: .95rem; }
 .cc-hp-text { font-size: .78rem; color: var(--muted); text-align: right; }
 .ult-track { display: flex; gap: 3px; margin-top: 6px; align-items: center; }
@@ -496,12 +497,16 @@ select {
 .detail-art { border-radius: 16px; background: radial-gradient(circle at 50% 60%, rgba(90,140,190,.35), rgba(8,14,24,.7)); padding: 10px; }
 .detail-art canvas { width: 100%; height: 230px; display: block; }
 .stat-rows { display: flex; flex-direction: column; gap: 6px; }
-.stat-row { display: grid; grid-template-columns: 150px 1fr 54px; align-items: center; gap: 10px; font-size: .9rem; }
+.stat-row { display: grid; grid-template-columns: 150px 1fr 64px; align-items: center; gap: 10px; font-size: .9rem; }
 .stat-row .sbar { height: 9px; border-radius: 5px; background: rgba(0,0,0,.45); overflow: hidden; }
 .stat-row .sbar > i { display: block; height: 100%; background: linear-gradient(90deg, #7fd8ff, #3fa9f5); }
-.stat-row b { text-align: right; }
+.stat-row b { text-align: right; display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
 .stat-row.up b { color: var(--ok); }
 .stat-row.down b { color: var(--danger); }
+/* the net Mood + Rational change, e.g. (+15) / (+5) / (-7) */
+.stat-row .stat-net { font-size: .68rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.stat-row .stat-net.up { color: var(--ok); }
+.stat-row .stat-net.down { color: var(--danger); }
 
 .skill-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
@@ -951,6 +956,14 @@ input[type="text"].wiki-search {
 .portrait .el-badge.rock   { background: var(--rock);   color: #2c2114; }
 .myth-card .portrait { width: 66px; height: 66px; }
 
+/* ---- element icon in front of every Mythling name ---- */
+.name-el { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.name-el .ico { width: 1em; height: 1em; flex: none; }
+h3 .name-el { vertical-align: middle; }
+/* the Release button: plain text, light red */
+.btn.release, button.release { color: #ff9a9a; border-color: rgba(255,120,120,.45); background: rgba(255,90,90,.08); }
+.btn.release:hover, button.release:hover { background: rgba(255,90,90,.18); color: #ffb3b3; }
+
 /* ---- storage card actions: always side by side ---- */
 .myth-card .mc-actions { display: flex; gap: 6px; flex-wrap: nowrap; margin-top: 6px; }
 .myth-card .mc-actions .btn { flex: 1 1 0; min-width: 0; padding: 6px 8px; justify-content: center; white-space: nowrap; }
@@ -1087,13 +1100,17 @@ input[type="text"].wiki-search {
     if (diff > 0) scale = Math.max(0.25, 1 - diff * 0.06);
     return Math.max(1, Math.floor((2.2 * enemyLevel + enemyYield * 0.55) * scale));
   }
+  var CAMERA_ZOOM_MIN = 1.1;
+  var CAMERA_ZOOM_MAX = 1.8;
+  var CAMERA_ZOOM_STEP = 0.05;
   var DEFAULT_SETTINGS = {
     masterVolume: 0.7,
     musicVolume: 0.5,
     sfxVolume: 0.75,
     textSpeed: "normal",
     // slow | normal | fast | instant
-    cameraSensitivity: 1,
+    cameraZoom: 1.35,
+    // overworld camera zoom, CAMERA_ZOOM_MIN..CAMERA_ZOOM_MAX (this is a 2D game: no "sensitivity")
     fullscreen: false,
     graphicsQuality: "high",
     // low | medium | high
@@ -1103,7 +1120,76 @@ input[type="text"].wiki-search {
     confirmImportantActions: true
   };
 
+  // src/data/items.js
+  var ITEMS = {
+    basic_ball: { id: "basic_ball", name: "Basic Ball", category: "balls", price: 120, catchMult: 1, desc: "A simple binding sphere. Works best on weakened Mythlings." },
+    normal_ball: { id: "normal_ball", name: "Normal Ball", category: "balls", price: 260, catchMult: 1.25, desc: "A refined ball with a stronger binding field." },
+    advanced_ball: { id: "advanced_ball", name: "Advanced Ball", category: "balls", price: 550, catchMult: 1.5, desc: "Crafted with coast crystal. Notably more reliable." },
+    absolute_ball: { id: "absolute_ball", name: "Absolute Ball", category: "balls", price: 1100, catchMult: 1.8, desc: "An ember-forged ball for stubborn Mythlings." },
+    // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
+    god_ball: { id: "god_ball", name: "God Ball", category: "balls", price: 12e3, catchMult: 99, guaranteed: true, desc: "The supreme binding sphere. Never fails \u2014 a guaranteed capture." },
+    // `forceMutation` turns the caught Mythling into that mutation, every time.
+    shiny_ball: { id: "shiny_ball", name: "Shiny Ball", category: "balls", price: 6e4, catchMult: 99, guaranteed: true, forceMutation: "shiny", desc: "Forged from starlight. Guaranteed capture, and the Mythling always emerges SHINY." },
+    dark_ball: { id: "dark_ball", name: "Dark Ball", category: "balls", price: 9e4, catchMult: 99, guaranteed: true, forceMutation: "darkness", desc: "Cut from an eclipse. Guaranteed capture, and the Mythling always emerges as a DARKNESS mutation." },
+    potion: { id: "potion", name: "Potion", category: "healing", price: 150, heal: 60, desc: "Restores 60 HP to one Mythling." },
+    greater_potion: { id: "greater_potion", name: "Greater Potion", category: "healing", price: 380, heal: 160, desc: "Restores 160 HP to one Mythling." },
+    hyper_potion: { id: "hyper_potion", name: "Hyper Potion", category: "healing", price: 800, heal: 400, desc: "Restores 400 HP to one Mythling." },
+    max_potion: { id: "max_potion", name: "Max Potion", category: "healing", price: 1800, healFull: true, desc: "Fully restores the HP of one Mythling." },
+    revive_herb: { id: "revive_herb", name: "Revive Herb", category: "healing", price: 600, revive: 0.5, desc: "Revives a fainted Mythling with half HP." },
+    max_revive: { id: "max_revive", name: "Max Revive", category: "healing", price: 1500, revive: 1, desc: "Revives a fainted Mythling with full HP." },
+    skill_tonic: { id: "skill_tonic", name: "Skill Tonic", category: "healing", price: 320, restoreUses: 8, desc: "Restores 8 uses to every limited skill." },
+    skill_elixir: { id: "skill_elixir", name: "Skill Elixir", category: "healing", price: 950, restoreAllUses: true, desc: "Resets every limited skill back to full uses." },
+    full_restore: { id: "full_restore", name: "Full Restore", category: "healing", price: 3200, healFull: true, restoreAllUses: true, desc: "Fully restores HP AND every skill's uses. Cannot revive." },
+    // ---- TONICS: re-roll a Mythling's personality traits (used from its profile) ----
+    mood_tonic: { id: "mood_tonic", name: "Mood Tonic", category: "tonics", price: 2500, rerollMood: true, desc: "Re-rolls a Mythling's Mood into a different one. Use it from the Mythling's profile." },
+    temper_tonic: { id: "temper_tonic", name: "Temper Tonic", category: "tonics", price: 2500, rerollRational: true, desc: "Re-rolls a Mythling's Rational (+10 / -10 trait) into a different one. Use it from the Mythling's profile." },
+    // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
+    sweet_berry: { id: "sweet_berry", name: "Sweet Berry", category: "food", price: 90, exp: 40, desc: "A sugary forest berry. Feeding it grants 40 EXP." },
+    honey_nut: { id: "honey_nut", name: "Honey Nut", category: "food", price: 240, exp: 130, desc: "A sticky, energy-packed nut. Grants 130 EXP." },
+    river_jerky: { id: "river_jerky", name: "River Jerky", category: "food", price: 620, exp: 400, desc: "Salt-cured coast fish. Grants 400 EXP." },
+    ember_roast: { id: "ember_roast", name: "Ember Roast", category: "food", price: 1400, exp: 1e3, desc: "Slow-roasted over volcanic vents. Grants 1000 EXP." },
+    mythic_feast: { id: "mythic_feast", name: "Mythic Feast", category: "food", price: 3200, exp: 2600, desc: "A legendary banquet for one. Grants 2600 EXP." },
+    // High-level training food: a level past Lv.30 costs thousands of EXP and a
+    // level near the cap over 16,000, so the ladder keeps climbing. Feeding a
+    // stack at once never wastes food — the game caps it at the level cap.
+    crunchy_root: { id: "crunchy_root", name: "Crunchy Root", category: "food", price: 160, exp: 80, desc: "A crisp forest root. Grants 80 EXP." },
+    moon_melon: { id: "moon_melon", name: "Moon Melon", category: "food", price: 430, exp: 250, desc: "Ripens only under moonlight. Grants 250 EXP." },
+    glow_nectar: { id: "glow_nectar", name: "Glow Nectar", category: "food", price: 980, exp: 650, desc: "Luminous nectar from coast blossoms. Grants 650 EXP." },
+    coral_cake: { id: "coral_cake", name: "Coral Cake", category: "food", price: 2400, exp: 1800, desc: "A dense, sweet cake baked by port cooks. Grants 1,800 EXP." },
+    tide_pudding: { id: "tide_pudding", name: "Tide Pudding", category: "food", price: 4800, exp: 4e3, desc: "Wobbles like the sea it came from. Grants 4,000 EXP." },
+    storm_eel_stew: { id: "storm_eel_stew", name: "Storm Eel Stew", category: "food", price: 8600, exp: 8e3, desc: "Crackles with leftover lightning. Grants 8,000 EXP." },
+    dragonfruit_flambe: { id: "dragonfruit_flambe", name: "Dragonfruit Flamb\xE9", category: "food", price: 14800, exp: 15e3, desc: "Set alight over a volcanic vent. Grants 15,000 EXP." },
+    phoenix_pepper: { id: "phoenix_pepper", name: "Phoenix Pepper", category: "food", price: 27e3, exp: 3e4, desc: "So hot it is said to bring the eater back to life. Grants 30,000 EXP." },
+    titan_broth: { id: "titan_broth", name: "Titan Broth", category: "food", price: 5e4, exp: 6e4, desc: "Simmered for a hundred days in a caldera. Grants 60,000 EXP." },
+    wildbound_ambrosia: { id: "wildbound_ambrosia", name: "Wildbound Ambrosia", category: "food", price: 92e3, exp: 12e4, desc: "The food of legends. Grants 120,000 EXP \u2014 several levels even near the cap." },
+    vale_charm: { id: "vale_charm", name: "Vale Charm", category: "key", desc: "Proof that the Verdant Guardian was bested. Opens the Verdant Gate." },
+    coast_pass: { id: "coast_pass", name: "Coast Pass", category: "key", desc: "Granted at Tidecrest Port. Opens the Emberwild Gate." },
+    ember_sigil: { id: "ember_sigil", name: "Ember Sigil", category: "key", desc: "Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags." },
+    crag_seal: { id: "crag_seal", name: "Crag Seal", category: "key", desc: "Proof that the Stone Warden of Stonehollow Crags was bested." }
+  };
+  var LEGACY_ITEMS = { king_ball: "god_ball" };
+  var ITEM_CATEGORIES = [
+    { id: "balls", name: "Balls" },
+    { id: "healing", name: "Healing" },
+    { id: "tonics", name: "Tonics" },
+    { id: "food", name: "Food" },
+    { id: "key", name: "Key Items" }
+  ];
+  var FOOD_IDS = Object.values(ITEMS).filter((i) => i.category === "food").map((i) => i.id);
+  var BALL_IDS = Object.values(ITEMS).filter((i) => i.category === "balls").map((i) => i.id);
+  function getItem(id) {
+    return ITEMS[id] || null;
+  }
+  var STARTING_INVENTORY = {
+    basic_ball: 8,
+    normal_ball: 2,
+    potion: 4,
+    sweet_berry: 3
+  };
+  var STARTING_WILDCOINS = 900;
+
   // src/data/maps.js
+  var FULL_STOCK = Object.values(ITEMS).filter((i) => i.price > 0 && i.category !== "key").map((i) => i.id);
   var MAPS = {
     verdant_vale: {
       id: "verdant_vale",
@@ -1469,11 +1555,10 @@ input[type="text"].wiki-search {
           w: 190,
           h: 150,
           name: "Emberwatch Quartermaster",
+          // Region-3 stock only: the top-tier balls, restores and foods moved to the LAST map's shop.
           stock: [
-            "normal_ball",
             "advanced_ball",
             "absolute_ball",
-            "god_ball",
             "greater_potion",
             "hyper_potion",
             "max_potion",
@@ -1481,7 +1566,6 @@ input[type="text"].wiki-search {
             "max_revive",
             "skill_tonic",
             "skill_elixir",
-            "full_restore",
             "mood_tonic",
             "temper_tonic",
             "river_jerky",
@@ -1489,10 +1573,7 @@ input[type="text"].wiki-search {
             "mythic_feast",
             "tide_pudding",
             "storm_eel_stew",
-            "dragonfruit_flambe",
-            "phoenix_pepper",
-            "titan_broth",
-            "wildbound_ambrosia"
+            "dragonfruit_flambe"
           ]
         },
         { id: "ember_tower", type: "tower", x: 140, y: 1020, w: 160, h: 200, name: "Watchtower" }
@@ -1667,27 +1748,9 @@ input[type="text"].wiki-search {
           w: 190,
           h: 150,
           name: "Crags Outfitter",
-          stock: [
-            "advanced_ball",
-            "absolute_ball",
-            "god_ball",
-            "shiny_ball",
-            "dark_ball",
-            "hyper_potion",
-            "max_potion",
-            "max_revive",
-            "skill_elixir",
-            "full_restore",
-            "mood_tonic",
-            "temper_tonic",
-            "coral_cake",
-            "tide_pudding",
-            "storm_eel_stew",
-            "dragonfruit_flambe",
-            "phoenix_pepper",
-            "titan_broth",
-            "wildbound_ambrosia"
-          ]
+          // The LAST map's shop carries the COMPLETE catalogue (every ball, restore, tonic and food).
+          // When a new region is added, the top of this list moves there and this one is trimmed.
+          stock: FULL_STOCK
         },
         { id: "crag_lodge", type: "house", x: 300, y: 1e3, w: 180, h: 140, name: "Quarry Lodge" },
         { id: "summit_watch", type: "tower", x: 3900, y: 280, w: 130, h: 210, name: "Summit Watch" }
@@ -2659,74 +2722,6 @@ input[type="text"].wiki-search {
     return null;
   }
 
-  // src/data/items.js
-  var ITEMS = {
-    basic_ball: { id: "basic_ball", name: "Basic Ball", category: "balls", price: 120, catchMult: 1, desc: "A simple binding sphere. Works best on weakened Mythlings." },
-    normal_ball: { id: "normal_ball", name: "Normal Ball", category: "balls", price: 260, catchMult: 1.25, desc: "A refined ball with a stronger binding field." },
-    advanced_ball: { id: "advanced_ball", name: "Advanced Ball", category: "balls", price: 550, catchMult: 1.5, desc: "Crafted with coast crystal. Notably more reliable." },
-    absolute_ball: { id: "absolute_ball", name: "Absolute Ball", category: "balls", price: 1100, catchMult: 1.8, desc: "An ember-forged ball for stubborn Mythlings." },
-    // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
-    god_ball: { id: "god_ball", name: "God Ball", category: "balls", price: 12e3, catchMult: 99, guaranteed: true, desc: "The supreme binding sphere. Never fails \u2014 a guaranteed capture." },
-    // `forceMutation` turns the caught Mythling into that mutation, every time.
-    shiny_ball: { id: "shiny_ball", name: "Shiny Ball", category: "balls", price: 6e4, catchMult: 99, guaranteed: true, forceMutation: "shiny", desc: "Forged from starlight. Guaranteed capture, and the Mythling always emerges SHINY." },
-    dark_ball: { id: "dark_ball", name: "Dark Ball", category: "balls", price: 9e4, catchMult: 99, guaranteed: true, forceMutation: "darkness", desc: "Cut from an eclipse. Guaranteed capture, and the Mythling always emerges as a DARKNESS mutation." },
-    potion: { id: "potion", name: "Potion", category: "healing", price: 150, heal: 60, desc: "Restores 60 HP to one Mythling." },
-    greater_potion: { id: "greater_potion", name: "Greater Potion", category: "healing", price: 380, heal: 160, desc: "Restores 160 HP to one Mythling." },
-    hyper_potion: { id: "hyper_potion", name: "Hyper Potion", category: "healing", price: 800, heal: 400, desc: "Restores 400 HP to one Mythling." },
-    max_potion: { id: "max_potion", name: "Max Potion", category: "healing", price: 1800, healFull: true, desc: "Fully restores the HP of one Mythling." },
-    revive_herb: { id: "revive_herb", name: "Revive Herb", category: "healing", price: 600, revive: 0.5, desc: "Revives a fainted Mythling with half HP." },
-    max_revive: { id: "max_revive", name: "Max Revive", category: "healing", price: 1500, revive: 1, desc: "Revives a fainted Mythling with full HP." },
-    skill_tonic: { id: "skill_tonic", name: "Skill Tonic", category: "healing", price: 320, restoreUses: 8, desc: "Restores 8 uses to every limited skill." },
-    skill_elixir: { id: "skill_elixir", name: "Skill Elixir", category: "healing", price: 950, restoreAllUses: true, desc: "Resets every limited skill back to full uses." },
-    full_restore: { id: "full_restore", name: "Full Restore", category: "healing", price: 3200, healFull: true, restoreAllUses: true, desc: "Fully restores HP AND every skill's uses. Cannot revive." },
-    // ---- TONICS: re-roll a Mythling's personality traits (used from its profile) ----
-    mood_tonic: { id: "mood_tonic", name: "Mood Tonic", category: "tonics", price: 2500, rerollMood: true, desc: "Re-rolls a Mythling's Mood into a different one. Use it from the Mythling's profile." },
-    temper_tonic: { id: "temper_tonic", name: "Temper Tonic", category: "tonics", price: 2500, rerollRational: true, desc: "Re-rolls a Mythling's Rational (+10 / -10 trait) into a different one. Use it from the Mythling's profile." },
-    // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
-    sweet_berry: { id: "sweet_berry", name: "Sweet Berry", category: "food", price: 90, exp: 40, desc: "A sugary forest berry. Feeding it grants 40 EXP." },
-    honey_nut: { id: "honey_nut", name: "Honey Nut", category: "food", price: 240, exp: 130, desc: "A sticky, energy-packed nut. Grants 130 EXP." },
-    river_jerky: { id: "river_jerky", name: "River Jerky", category: "food", price: 620, exp: 400, desc: "Salt-cured coast fish. Grants 400 EXP." },
-    ember_roast: { id: "ember_roast", name: "Ember Roast", category: "food", price: 1400, exp: 1e3, desc: "Slow-roasted over volcanic vents. Grants 1000 EXP." },
-    mythic_feast: { id: "mythic_feast", name: "Mythic Feast", category: "food", price: 3200, exp: 2600, desc: "A legendary banquet for one. Grants 2600 EXP." },
-    // High-level training food: a level past Lv.30 costs thousands of EXP and a
-    // level near the cap over 16,000, so the ladder keeps climbing. Feeding a
-    // stack at once never wastes food — the game caps it at the level cap.
-    crunchy_root: { id: "crunchy_root", name: "Crunchy Root", category: "food", price: 160, exp: 80, desc: "A crisp forest root. Grants 80 EXP." },
-    moon_melon: { id: "moon_melon", name: "Moon Melon", category: "food", price: 430, exp: 250, desc: "Ripens only under moonlight. Grants 250 EXP." },
-    glow_nectar: { id: "glow_nectar", name: "Glow Nectar", category: "food", price: 980, exp: 650, desc: "Luminous nectar from coast blossoms. Grants 650 EXP." },
-    coral_cake: { id: "coral_cake", name: "Coral Cake", category: "food", price: 2400, exp: 1800, desc: "A dense, sweet cake baked by port cooks. Grants 1,800 EXP." },
-    tide_pudding: { id: "tide_pudding", name: "Tide Pudding", category: "food", price: 4800, exp: 4e3, desc: "Wobbles like the sea it came from. Grants 4,000 EXP." },
-    storm_eel_stew: { id: "storm_eel_stew", name: "Storm Eel Stew", category: "food", price: 8600, exp: 8e3, desc: "Crackles with leftover lightning. Grants 8,000 EXP." },
-    dragonfruit_flambe: { id: "dragonfruit_flambe", name: "Dragonfruit Flamb\xE9", category: "food", price: 14800, exp: 15e3, desc: "Set alight over a volcanic vent. Grants 15,000 EXP." },
-    phoenix_pepper: { id: "phoenix_pepper", name: "Phoenix Pepper", category: "food", price: 27e3, exp: 3e4, desc: "So hot it is said to bring the eater back to life. Grants 30,000 EXP." },
-    titan_broth: { id: "titan_broth", name: "Titan Broth", category: "food", price: 5e4, exp: 6e4, desc: "Simmered for a hundred days in a caldera. Grants 60,000 EXP." },
-    wildbound_ambrosia: { id: "wildbound_ambrosia", name: "Wildbound Ambrosia", category: "food", price: 92e3, exp: 12e4, desc: "The food of legends. Grants 120,000 EXP \u2014 several levels even near the cap." },
-    vale_charm: { id: "vale_charm", name: "Vale Charm", category: "key", desc: "Proof that the Verdant Guardian was bested. Opens the Verdant Gate." },
-    coast_pass: { id: "coast_pass", name: "Coast Pass", category: "key", desc: "Granted at Tidecrest Port. Opens the Emberwild Gate." },
-    ember_sigil: { id: "ember_sigil", name: "Ember Sigil", category: "key", desc: "Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags." },
-    crag_seal: { id: "crag_seal", name: "Crag Seal", category: "key", desc: "Proof that the Stone Warden of Stonehollow Crags was bested." }
-  };
-  var LEGACY_ITEMS = { king_ball: "god_ball" };
-  var ITEM_CATEGORIES = [
-    { id: "balls", name: "Balls" },
-    { id: "healing", name: "Healing" },
-    { id: "tonics", name: "Tonics" },
-    { id: "food", name: "Food" },
-    { id: "key", name: "Key Items" }
-  ];
-  var FOOD_IDS = Object.values(ITEMS).filter((i) => i.category === "food").map((i) => i.id);
-  var BALL_IDS = Object.values(ITEMS).filter((i) => i.category === "balls").map((i) => i.id);
-  function getItem(id) {
-    return ITEMS[id] || null;
-  }
-  var STARTING_INVENTORY = {
-    basic_ball: 8,
-    normal_ball: 2,
-    potion: 4,
-    sweet_berry: 3
-  };
-  var STARTING_WILDCOINS = 900;
-
   // src/data/moods.js
   var STAT_KEYS = ["hp", "patk", "satk", "pdef", "sdef", "spd", "counter", "crit", "critMult"];
   var STAT_LABELS = {
@@ -2774,33 +2769,36 @@ input[type="text"].wiki-search {
     critMult: 200
   };
   var MOODS = {
-    sturdy: { id: "sturdy", name: "Sturdy", up: ["hp"], desc: "Thick-skinned and hard to put down. Boosts HP." },
-    brave: { id: "brave", name: "Brave", up: ["patk"], desc: "Charges in first. Boosts Physical Attack." },
-    clever: { id: "clever", name: "Clever", up: ["satk"], desc: "Thinks three moves ahead. Boosts Special Attack." },
-    guarded: { id: "guarded", name: "Guarded", up: ["pdef"], desc: "Never drops its guard. Boosts Physical Defense." },
-    calm: { id: "calm", name: "Calm", up: ["sdef"], desc: "Unshaken by tricks and magic. Boosts Special Defense." },
-    swift: { id: "swift", name: "Swift", up: ["spd"], desc: "Always a step ahead. Boosts Speed." },
-    agile: { id: "agile", name: "Agile", up: ["counter"], desc: "Slips out of harm's way. Boosts Counter (evasion)." },
-    keen: { id: "keen", name: "Keen", up: ["crit"], desc: "Finds every weak spot. Boosts Crit Chance." },
-    brutal: { id: "brutal", name: "Brutal", up: ["critMult"], desc: "Makes every opening count. Boosts Crit Damage." }
+    sturdy: { id: "sturdy", name: "Sturdy", up: ["hp", "pdef", "patk"], desc: "Thick-skinned and hard to put down." },
+    brave: { id: "brave", name: "Brave", up: ["hp", "patk", "counter"], desc: "Charges in first and shrugs off the reply." },
+    clever: { id: "clever", name: "Clever", up: ["satk", "sdef", "counter"], desc: "Thinks three moves ahead." },
+    guarded: { id: "guarded", name: "Guarded", up: ["pdef", "sdef", "counter"], desc: "Never drops its guard." },
+    calm: { id: "calm", name: "Calm", up: ["hp", "sdef", "counter"], desc: "Unshaken by tricks and magic." },
+    swift: { id: "swift", name: "Swift", up: ["spd", "counter", "sdef"], desc: "Always a step ahead." },
+    agile: { id: "agile", name: "Agile", up: ["counter", "spd", "hp"], desc: "Slips out of harm's way and keeps going." },
+    lazy: { id: "lazy", name: "Lazy", up: ["hp", "pdef", "sdef"], desc: "Would rather nap than dodge \u2014 and can afford to." },
+    energetic: { id: "energetic", name: "Energetic", up: ["patk", "satk", "spd"], desc: "Never stops moving." },
+    aggressive: { id: "aggressive", name: "Aggressive", up: ["patk", "spd", "counter"], desc: "Attacks first and asks later." },
+    focused: { id: "focused", name: "Focused", up: ["satk", "spd", "crit"], desc: "Eyes on the weak spot." },
+    reckless: { id: "reckless", name: "Reckless", up: ["patk", "spd", "critMult"], desc: "Hits as hard as it possibly can." },
+    playful: { id: "playful", name: "Playful", up: ["spd", "counter", "satk"], desc: "Turns every fight into a game." },
+    stubborn: { id: "stubborn", name: "Stubborn", up: ["hp", "pdef", "spd"], desc: "Will not be moved." },
+    ambitious: { id: "ambitious", name: "Ambitious", up: ["patk", "satk", "counter"], desc: "Wants to win every exchange." },
+    cautious: { id: "cautious", name: "Cautious", up: ["pdef", "sdef", "spd"], desc: "Reads the fight before committing." },
+    fierce: { id: "fierce", name: "Fierce", up: ["hp", "patk", "spd"], desc: "A storm on four legs." },
+    hardy: { id: "hardy", name: "Hardy", up: ["hp", "satk", "sdef"], desc: "Weathers anything and answers with magic." },
+    vigilant: { id: "vigilant", name: "Vigilant", up: ["hp", "counter", "crit"], desc: "Misses nothing \u2014 not a threat, not an opening." },
+    // ---- Crit moods (Crit Chance / Crit Damage) ----
+    feral: { id: "feral", name: "Feral", up: ["crit", "critMult", "patk"], desc: "Wild, sharp and merciless." },
+    savage: { id: "savage", name: "Savage", up: ["crit", "patk", "spd"], desc: "Fast, brutal openings." },
+    precise: { id: "precise", name: "Precise", up: ["crit", "critMult", "satk"], desc: "Every strike placed exactly." },
+    brutal: { id: "brutal", name: "Brutal", up: ["critMult", "patk", "satk"], desc: "Makes every opening count." },
+    keen: { id: "keen", name: "Keen", up: ["crit", "spd", "counter"], desc: "Finds every weak spot." },
+    mystic: { id: "mystic", name: "Mystic", up: ["satk", "sdef", "critMult"], desc: "Strange power, sharper still on a crit." }
   };
   var MOOD_IDS = Object.keys(MOODS);
   var CRIT_MOOD_IDS = MOOD_IDS.filter((id) => MOODS[id].up.includes("crit") || MOODS[id].up.includes("critMult"));
-  var LEGACY_MOODS = {
-    lazy: "sturdy",
-    energetic: "brave",
-    aggressive: "brave",
-    focused: "brave",
-    reckless: "brave",
-    stubborn: "sturdy",
-    fierce: "sturdy",
-    ambitious: "brave",
-    cautious: "guarded",
-    playful: "swift",
-    feral: "keen",
-    savage: "keen",
-    precise: "keen"
-  };
+  var LEGACY_MOODS = {};
   function normalizeMoodId(id) {
     if (MOODS[id]) return id;
     return LEGACY_MOODS[id] || "brave";
@@ -2808,13 +2806,12 @@ input[type="text"].wiki-search {
   function getMood(id) {
     return MOODS[normalizeMoodId(id)];
   }
-  var MOOD_SCALE = { hp: 6, critMult: 4 };
-  var MOOD_BASE = 2;
+  var MOOD_SCALE = { hp: 3, critMult: 2 };
   function moodModifiers(moodId, magnitude) {
     const mood = getMood(moodId);
     const out = {};
     for (const k of STAT_KEYS) out[k] = 0;
-    for (const k of mood.up) out[k] += magnitude * MOOD_BASE * (MOOD_SCALE[k] || 1);
+    for (const k of mood.up) out[k] += magnitude * (MOOD_SCALE[k] || 1);
     return out;
   }
   var RATIONAL_STATS = ["hp", "patk", "satk", "pdef", "sdef", "spd"];
@@ -2890,19 +2887,19 @@ input[type="text"].wiki-search {
     scratch: { id: "scratch", name: "Scratch", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A swift claw swipe. Unlimited uses." },
     peck: { id: "peck", name: "Peck", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A sharp beak jab. Unlimited uses." },
     // ---------- Evolved normal skills ----------
-    // Evolutions used to grant only Specials and Buffs, so a Mythling's unlimited
-    // attack stayed at the Lv.1 power forever. Every stage now also teaches a
-    // stronger unlimited Normal move (weaker than the stage's Special, because it
-    // never runs out).
-    thorn_jab: { id: "thorn_jab", name: "Thorn Jab", category: "normal", damageType: "physical", element: "nature", power: 17, uses: Infinity, desc: "A jab of hardened thorns. Unlimited uses." },
-    briar_smash: { id: "briar_smash", name: "Briar Smash", category: "normal", damageType: "physical", element: "nature", power: 29, uses: Infinity, desc: "A crushing blow wrapped in briars. Unlimited uses." },
-    worldroot_slam: { id: "worldroot_slam", name: "Worldroot Slam", category: "normal", damageType: "physical", element: "nature", power: 40, uses: Infinity, desc: "Roots older than the forest come down. Unlimited uses." },
-    stream_jab: { id: "stream_jab", name: "Stream Jab", category: "normal", damageType: "physical", element: "water", power: 17, uses: Infinity, desc: "A lance of running water. Unlimited uses." },
-    tide_smash: { id: "tide_smash", name: "Tide Smash", category: "normal", damageType: "physical", element: "water", power: 30, uses: Infinity, desc: "The weight of the turning tide. Unlimited uses." },
-    abyss_slam: { id: "abyss_slam", name: "Abyss Slam", category: "normal", damageType: "physical", element: "water", power: 41, uses: Infinity, desc: "Pressure from the lightless deep. Unlimited uses." },
-    ember_jab: { id: "ember_jab", name: "Ember Jab", category: "normal", damageType: "physical", element: "fire", power: 18, uses: Infinity, desc: "A searing strike. Unlimited uses." },
-    cinder_smash: { id: "cinder_smash", name: "Cinder Smash", category: "normal", damageType: "physical", element: "fire", power: 31, uses: Infinity, desc: "A heavy blow wreathed in cinders. Unlimited uses." },
-    magma_slam: { id: "magma_slam", name: "Magma Slam", category: "normal", damageType: "physical", element: "fire", power: 42, uses: Infinity, desc: "A fist of cooled magma. Unlimited uses." },
+    // Every evolution stage teaches a stronger ELEMENTAL Normal move. Unlike the
+    // element-less Lv.1 normals (Bite / Scratch / Peck / Pebble Toss), these carry an
+    // element and therefore have LIMITED uses (30 / 25 / 20 by tier) — only the plain
+    // starter attack is truly unlimited, and it is what a Mythling falls back on.
+    thorn_jab: { id: "thorn_jab", name: "Thorn Jab", category: "normal", damageType: "physical", element: "nature", power: 17, uses: 30, desc: "A jab of hardened thorns. 30 uses." },
+    briar_smash: { id: "briar_smash", name: "Briar Smash", category: "normal", damageType: "physical", element: "nature", power: 29, uses: 25, desc: "A crushing blow wrapped in briars. 25 uses." },
+    worldroot_slam: { id: "worldroot_slam", name: "Worldroot Slam", category: "normal", damageType: "physical", element: "nature", power: 40, uses: 20, desc: "Roots older than the forest come down. 20 uses." },
+    stream_jab: { id: "stream_jab", name: "Stream Jab", category: "normal", damageType: "physical", element: "water", power: 17, uses: 30, desc: "A lance of running water. 30 uses." },
+    tide_smash: { id: "tide_smash", name: "Tide Smash", category: "normal", damageType: "physical", element: "water", power: 30, uses: 25, desc: "The weight of the turning tide. 25 uses." },
+    abyss_slam: { id: "abyss_slam", name: "Abyss Slam", category: "normal", damageType: "physical", element: "water", power: 41, uses: 20, desc: "Pressure from the lightless deep. 20 uses." },
+    ember_jab: { id: "ember_jab", name: "Ember Jab", category: "normal", damageType: "physical", element: "fire", power: 18, uses: 30, desc: "A searing strike. 30 uses." },
+    cinder_smash: { id: "cinder_smash", name: "Cinder Smash", category: "normal", damageType: "physical", element: "fire", power: 31, uses: 25, desc: "A heavy blow wreathed in cinders. 25 uses." },
+    magma_slam: { id: "magma_slam", name: "Magma Slam", category: "normal", damageType: "physical", element: "fire", power: 42, uses: 20, desc: "A fist of cooled magma. 20 uses." },
     struggle: { id: "struggle", name: "Struggle", category: "normal", damageType: "physical", element: null, power: 8, uses: Infinity, desc: "A desperate shove when nothing else is left. Unlimited uses." },
     // ---------- SPRIGGO line ----------
     vine_lash: { id: "vine_lash", name: "Vine Lash", category: "special", damageType: "special", element: "nature", power: 16, uses: 20, desc: "Whips the foe with a living vine." },
@@ -2979,9 +2976,9 @@ input[type="text"].wiki-search {
     cinder_curse: { id: "cinder_curse", name: "Cinder Curse", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "Smouldering cinders cling to the foe. Lowers its Special Defense sharply." },
     // ---------- ROCK pool (Stonehollow Crags) ----------
     pebble_toss: { id: "pebble_toss", name: "Pebble Toss", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A flick of loose gravel. Unlimited uses." },
-    rock_jab: { id: "rock_jab", name: "Rock Jab", category: "normal", damageType: "physical", element: "rock", power: 18, uses: Infinity, desc: "A stone-hard headbutt. Unlimited uses." },
-    boulder_smash: { id: "boulder_smash", name: "Boulder Smash", category: "normal", damageType: "physical", element: "rock", power: 31, uses: Infinity, desc: "Brings a boulder down on the foe. Unlimited uses." },
-    tectonic_slam: { id: "tectonic_slam", name: "Tectonic Slam", category: "normal", damageType: "physical", element: "rock", power: 42, uses: Infinity, desc: "The ground itself lurches. Unlimited uses." },
+    rock_jab: { id: "rock_jab", name: "Rock Jab", category: "normal", damageType: "physical", element: "rock", power: 18, uses: 30, desc: "A stone-hard headbutt. 30 uses." },
+    boulder_smash: { id: "boulder_smash", name: "Boulder Smash", category: "normal", damageType: "physical", element: "rock", power: 31, uses: 25, desc: "Brings a boulder down on the foe. 25 uses." },
+    tectonic_slam: { id: "tectonic_slam", name: "Tectonic Slam", category: "normal", damageType: "physical", element: "rock", power: 42, uses: 20, desc: "The ground itself lurches. 20 uses." },
     stone_shard: { id: "stone_shard", name: "Stone Shard", category: "special", damageType: "physical", element: "rock", power: 17, uses: 20, desc: "Hurls a jagged shard of flint." },
     crag_lance: { id: "crag_lance", name: "Crag Lance", category: "special", damageType: "physical", element: "rock", power: 28, uses: 18, desc: "A spear of stone erupts from the ground." },
     crystal_ray: { id: "crystal_ray", name: "Crystal Ray", category: "special", damageType: "special", element: "rock", power: 27, uses: 18, desc: "Light focused through a living crystal." },
@@ -3228,6 +3225,83 @@ input[type="text"].wiki-search {
   }
   function isSupportUltimate(u) {
     return !!u && u.kind === "support";
+  }
+
+  // src/data/chests.js
+  var CHEST_TIERS = {
+    bronze: {
+      id: "bronze",
+      name: "Bronze Chest",
+      max: 2,
+      chance: 0.55,
+      coins: [40, 120],
+      itemChance: 0.22,
+      balls: ["basic_ball", "normal_ball"],
+      foods: ["sweet_berry", "crunchy_root", "honey_nut"],
+      colors: { body: "#a8683a", dark: "#5e381c", trim: "#e0a866", glow: null }
+    },
+    silver: {
+      id: "silver",
+      name: "Silver Chest",
+      max: 1,
+      chance: 0.22,
+      coins: [180, 420],
+      itemChance: 0.45,
+      balls: ["normal_ball", "advanced_ball"],
+      foods: ["moon_melon", "river_jerky", "glow_nectar"],
+      colors: { body: "#a9b2c0", dark: "#55606f", trim: "#eef2f7", glow: null }
+    },
+    emerald: {
+      id: "emerald",
+      name: "Emerald Chest",
+      max: 1,
+      chance: 0.07,
+      coins: [600, 1400],
+      itemChance: 0.75,
+      balls: ["advanced_ball", "absolute_ball"],
+      foods: ["ember_roast", "coral_cake", "tide_pudding", "mythic_feast"],
+      colors: { body: "#2f9a6a", dark: "#155238", trim: "#9ff5c8", glow: "rgba(80,240,160,0.55)" }
+    },
+    ultra_gold: {
+      id: "ultra_gold",
+      name: "Ultra Gold Chest",
+      max: 1,
+      chance: 4e-3,
+      coins: [4e3, 9e3],
+      itemChance: 1,
+      balls: ["god_ball", "shiny_ball", "dark_ball"],
+      foods: ["phoenix_pepper", "titan_broth", "wildbound_ambrosia"],
+      colors: { body: "#e6b74a", dark: "#8a5f12", trim: "#fff3c0", glow: "rgba(255,215,90,0.7)" }
+    }
+  };
+  var CHEST_TIER_IDS = Object.keys(CHEST_TIERS);
+  var CHEST_REGION_MULT = [1, 1.6, 2.4, 3.4];
+  var CHEST_REROLL_MS = 12 * 60 * 1e3;
+  var CHEST_MIN_SPACING = 260;
+  function getChestTier(id) {
+    return CHEST_TIERS[id] || null;
+  }
+  function rollChestTiers(rng = Math.random) {
+    const out = [];
+    for (const tier of Object.values(CHEST_TIERS)) {
+      for (let i = 0; i < tier.max; i++) if (rng() < tier.chance) out.push(tier.id);
+    }
+    return out;
+  }
+  function rollChestLoot(tierId, regionIndex = 0, rng = Math.random) {
+    const tier = getChestTier(tierId);
+    if (!tier) return { coins: 0, item: null };
+    const mult = CHEST_REGION_MULT[Math.max(0, Math.min(CHEST_REGION_MULT.length - 1, regionIndex))] || 1;
+    const [lo, hi] = tier.coins;
+    const coins2 = Math.round((lo + rng() * (hi - lo)) * mult / 5) * 5;
+    let item = null;
+    if (rng() < tier.itemChance) {
+      const pool = rng() < 0.5 ? tier.balls : tier.foods;
+      const id = pool[Math.floor(rng() * pool.length)];
+      const qty = tier.id === "bronze" ? 1 + Math.floor(rng() * 3) : tier.id === "silver" ? 1 + Math.floor(rng() * 2) : 1;
+      item = { id, qty };
+    }
+    return { coins: coins2, item };
   }
 
   // src/data/rarity.js
@@ -4170,7 +4244,9 @@ input[type="text"].wiki-search {
       unlockedMaps: { verdant_vale: true },
       visitedMaps: { verdant_vale: true },
       flags: {},
-      npcProgress: {}
+      npcProgress: {},
+      chests: {},
+      chestStats: {}
     };
     GameState.meta = { playTime: 0, startedAt: Date.now(), gameVersion: GAME_VERSION, levelCap: LEVEL_CAP };
     GameState._sessionStart = Date.now();
@@ -4232,12 +4308,25 @@ input[type="text"].wiki-search {
     const maxStage = stageForLevel(m.speciesId, m.level);
     if (m.stage > maxStage) m.stage = maxStage;
     refreshLibrary(m);
+    for (const id of m.library) {
+      const sk = getSkill(id);
+      if (sk && Number.isFinite(sk.uses) && m.uses[id] == null) m.uses[id] = sk.uses;
+    }
     m.skills = m.skills.filter((id) => m.library.includes(id));
     if (!raw.skills) autoEquip(m);
     const mx = maxHp(m);
     if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
     if (m.currentHp < 0) m.currentHp = 0;
     return m;
+  }
+  function sanitizeChests(raw) {
+    const out = {};
+    for (const [mapId, entry] of Object.entries(raw || {})) {
+      if (!getMap(mapId) || !entry || typeof entry !== "object") continue;
+      const list = (Array.isArray(entry.list) ? entry.list : []).filter((c) => c && typeof c.id === "string" && CHEST_TIERS[c.tier] && Number.isFinite(c.x) && Number.isFinite(c.y)).map((c) => ({ id: c.id, tier: c.tier, x: c.x, y: c.y }));
+      out[mapId] = { at: Math.max(0, Number(entry.at) || 0), list };
+    }
+    return out;
   }
   function deserialize(data) {
     var _a, _b, _c, _d;
@@ -4295,7 +4384,9 @@ input[type="text"].wiki-search {
       unlockedMaps: { verdant_vale: true, ...w.unlockedMaps || {} },
       visitedMaps: { verdant_vale: true, ...w.visitedMaps || {} },
       flags: { ...w.flags || {} },
-      npcProgress: { ...w.npcProgress || {} }
+      npcProgress: { ...w.npcProgress || {} },
+      chests: sanitizeChests(w.chests),
+      chestStats: { ...w.chestStats || {} }
     };
     GameState.meta = {
       playTime: Math.max(0, ((_c = data.meta) == null ? void 0 : _c.playTime) ?? 0),
@@ -4774,6 +4865,99 @@ input[type="text"].wiki-search {
       if (!next) return null;
       const locked = m.stage + 1 > MAX_UNLOCKED_EVOLUTION_STAGE || !FUTURE_CONTENT_LIVE && !!next.future;
       return { name: next.name, level: next.level, locked, reached: m.level >= next.level };
+    }
+  };
+
+  // src/systems/ChestManager.js
+  var seq = 0;
+  var ChestManager = {
+    /** The chest records of a map (empty array when none were rolled yet). */
+    list(mapId) {
+      var _a;
+      return GameState.world.chests && ((_a = GameState.world.chests[mapId]) == null ? void 0 : _a.list) || [];
+    },
+    /**
+     * Make sure `mapId` has a current chest set. Rolls a fresh set the first time
+     * the map is entered and again once CHEST_REROLL_MS of play time has passed
+     * since the last roll (opened chests stay gone until then).
+     * `isFree(x, y)` is supplied by the world so chests never sit in water,
+     * inside buildings or on top of props.
+     */
+    ensure(mapId, isFree, rng = Math.random) {
+      const map = getMap(mapId);
+      if (!map) return [];
+      GameState.world.chests = GameState.world.chests || {};
+      const now = PlayerManager.playTime();
+      const cur = GameState.world.chests[mapId];
+      if (cur && now - (cur.at || 0) < CHEST_REROLL_MS) return cur.list;
+      const tiers = rollChestTiers(rng);
+      const placed = [];
+      for (const tier of tiers) {
+        const pos = this.findSpot(map, isFree, placed, rng);
+        if (!pos) continue;
+        placed.push({ id: `chest_${Date.now().toString(36)}_${seq++}`, tier, x: pos.x, y: pos.y });
+      }
+      GameState.world.chests[mapId] = { at: now, list: placed };
+      return placed;
+    },
+    /** A walkable point inside one of the map's encounter zones, away from the spawn and other chests. */
+    findSpot(map, isFree, placed, rng = Math.random) {
+      const zones = map.encounterZones.length ? map.encounterZones : [{ rect: [80, 120, map.width - 160, map.height - 240] }];
+      for (let attempt = 0; attempt < 60; attempt++) {
+        const z = zones[Math.floor(rng() * zones.length)];
+        const [zx, zy, zw, zh] = z.rect;
+        const x = Math.round(zx + 30 + rng() * Math.max(1, zw - 60));
+        const y = Math.round(zy + 30 + rng() * Math.max(1, zh - 60));
+        if (dist(x, y, map.spawn.x, map.spawn.y) < CHEST_MIN_SPACING) continue;
+        if (placed.some((c) => dist(x, y, c.x, c.y) < CHEST_MIN_SPACING)) continue;
+        if (isFree && !isFree(x, y)) continue;
+        return { x, y };
+      }
+      return null;
+    },
+    /**
+     * Open a chest: pays the coins, hands over the item, removes the chest.
+     * @returns {{ ok:boolean, tier:object, coins:number, item:null|{id,qty,name} }}
+     */
+    open(mapId, chestId, rng = Math.random) {
+      const list = this.list(mapId);
+      const idx = list.findIndex((c) => c.id === chestId);
+      if (idx < 0) return { ok: false };
+      const chest = list[idx];
+      const tier = getChestTier(chest.tier);
+      const regionIndex = Math.max(0, MAP_ORDER.indexOf(mapId));
+      const loot = rollChestLoot(chest.tier, regionIndex, rng);
+      list.splice(idx, 1);
+      if (loot.coins > 0) PlayerManager.addCoins(loot.coins);
+      let item = null;
+      if (loot.item && getItem(loot.item.id)) {
+        InventoryManager.add(loot.item.id, loot.item.qty);
+        item = { ...loot.item, name: getItem(loot.item.id).name };
+      }
+      const stats = GameState.world.chestStats = GameState.world.chestStats || {};
+      stats[chest.tier] = (stats[chest.tier] || 0) + 1;
+      bus.emit("chest:opened", { mapId, tier: chest.tier, coins: loot.coins, item });
+      return { ok: true, tier, coins: loot.coins, item };
+    },
+    /** How many chests of each tier the player has opened, for the Trainer Record. */
+    stats() {
+      const s = GameState.world.chestStats || {};
+      const out = { total: 0 };
+      for (const id of Object.keys(CHEST_TIERS)) {
+        out[id] = s[id] || 0;
+        out.total += out[id];
+      }
+      return out;
+    },
+    /** Free-spot test built from the world renderer's colliders + the map's water. */
+    makeFreeTest(map, colliders) {
+      return (x, y) => {
+        const box = { x: x - 22, y: y - 26, w: 44, h: 32 };
+        for (const c of colliders) if (rectsOverlap(box, c)) return false;
+        for (const w of map.water) if (rectsOverlap(box, w)) return false;
+        for (const b of map.buildings) if (rectsOverlap(box, { x: b.x - 30, y: b.y - 30, w: b.w + 60, h: b.h + 60 })) return false;
+        return true;
+      };
     }
   };
 
@@ -9193,6 +9377,69 @@ input[type="text"].wiki-search {
     crag: { grass: "#7d7a72", grass2: "#6b685f", path: "#a39e90", props: ["rock", "rock", "stalag", "crystal"] },
     summit: { grass: "#8f949c", grass2: "#7c8188", path: "#b8bcc2", props: ["pillar", "rock", "stalag", "crystal"] }
   };
+  function drawChest(ctx, chest, time, near = false) {
+    const tier = CHEST_TIERS[chest.tier] || CHEST_TIERS.bronze;
+    const c = tier.colors;
+    ctx.save();
+    ctx.translate(chest.x, chest.y);
+    if (c.glow) {
+      const pulse = 0.55 + Math.sin(time * 2.2 + chest.x * 0.01) * 0.25;
+      const g = ctx.createRadialGradient(0, -10, 4, 0, -10, 46);
+      g.addColorStop(0, c.glow);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, -10, 46, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 20, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c.body;
+    roundRect(ctx, -17, -18, 34, 20, 3);
+    ctx.fill();
+    ctx.fillStyle = c.dark;
+    ctx.fillRect(-17, -6, 34, 3);
+    ctx.strokeStyle = c.dark;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-17, -18, 34, 20);
+    ctx.fillStyle = c.trim;
+    ctx.fillRect(-11, -18, 3, 20);
+    ctx.fillRect(8, -18, 3, 20);
+    ctx.save();
+    ctx.translate(0, -18);
+    ctx.rotate(near ? -0.18 - Math.sin(time * 6) * 0.03 : 0);
+    ctx.fillStyle = shadeColor(c.body, 0.12);
+    roundRect(ctx, -18, -11, 36, 12, 5);
+    ctx.fill();
+    ctx.strokeStyle = c.dark;
+    ctx.strokeRect(-18, -11, 36, 12);
+    ctx.fillStyle = c.trim;
+    ctx.fillRect(-11, -11, 3, 12);
+    ctx.fillRect(8, -11, 3, 12);
+    ctx.restore();
+    ctx.fillStyle = c.trim;
+    roundRect(ctx, -4, -14, 8, 8, 2);
+    ctx.fill();
+    ctx.fillStyle = c.dark;
+    ctx.fillRect(-1, -12, 2, 4);
+    const sp = (Math.sin(time * 3.1 + chest.y * 0.02) + 1) / 2;
+    if (sp > 0.7) {
+      const k = (sp - 0.7) / 0.3;
+      ctx.strokeStyle = `rgba(255,255,255,${k})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(14, -30);
+      ctx.lineTo(14, -22);
+      ctx.moveTo(10, -26);
+      ctx.lineTo(18, -26);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   function terrainColor(terrainId) {
     return (TERRAIN[terrainId] || TERRAIN.forest).grass;
   }
@@ -9860,6 +10107,115 @@ input[type="text"].wiki-search {
     ctx.restore();
   }
 
+  // src/ui/icons.js
+  var P = {
+    // ---- elements -------------------------------------------------------
+    nature: '<path d="M20.4 3.2c-7.6-.6-12.2 1.5-14.4 4.6-2.2 3.2-1.5 7 .3 9l1.9-2.9c.4-2.6 1.7-4.9 4-6.6-1.6 2-2.6 4.3-3 6.9l-2.9 4.4a1.1 1.1 0 0 0 1.8 1.2l1.7-2.6c2.6 1 6.1.5 8.4-2.3 2.6-3.1 3.1-7.6 2.2-11.7Z"/>',
+    water: '<path d="M12 2.2c-.4 0-.8.2-1 .5C8.3 6.3 5 10.4 5 14a7 7 0 0 0 14 0c0-3.6-3.3-7.7-6-11.3a1.3 1.3 0 0 0-1-.5Zm3.6 12.6a.8.8 0 0 1 .8.9 4.6 4.6 0 0 1-4 3.9.8.8 0 1 1-.2-1.6 3 3 0 0 0 2.6-2.5.8.8 0 0 1 .8-.7Z"/>',
+    fire: '<path d="M13.4 1.6c.5 3.2-.7 4.8-2.2 6.4-1.7 1.8-3.7 3.8-3.7 7.2a6.5 6.5 0 0 0 13 .3c0-2.5-1-4.3-2-5.8-.2 1-.8 1.9-1.7 2.3.3-3.4-1-6.6-3.4-10.4ZM12 13.2c1.2 1.4 1.8 2.5 1.8 3.6a2.4 2.4 0 0 1-4.8.1c0-1.3.9-2.1 1.6-3 .5-.6.9-1.2 1.4-.7Z"/>',
+    rock: '<path d="M8.2 3.4h6.4l4.6 4.2 1.6 6.4-3.4 6.6H7.4l-4.2-5.2.8-6.6Zm1 2.2L5.9 9.3l-.6 4.9 3.1 3.9h7.2l2.5-4.8-1.2-4.8-3.4-3.1Zm.6 3.2 3.6 1.2 1.1 3.6-2.8 2.3-3-1.3-.5-3.4Z"/>',
+    spark: '<path d="M12 1.8 14 9l7.2 2-7.2 2-2 7.2L10 13 2.8 11 10 9Z"/>',
+    // ---- battle ---------------------------------------------------------
+    strike: '<path d="M3.6 3.1 9 8.5 7 10.5 2 5.6V3.1ZM20.4 3.1v2.5l-11 11-1.7-1 1-1.7ZM14.9 14l1.9 1.9 4.6 4.6v.4h-2.4L14.5 16ZM7.6 14.6 9.4 16.4 6 19.9 4.1 18Z"/>',
+    ultimate: '<path d="M12 1.6 14.6 8l6.9.4-5.3 4.4 1.7 6.7L12 15.9 6.1 19.5l1.7-6.7L2.5 8.4 9.4 8Z"/>',
+    orb: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.2a7.8 7.8 0 0 1 7.7 6.7h-3.4a4.4 4.4 0 0 0-8.6 0H4.3A7.8 7.8 0 0 1 12 4.2Zm0 5.5a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6Zm-7.7 3.4h3.4a4.4 4.4 0 0 0 8.6 0h3.4A7.8 7.8 0 0 1 12 19.8a7.8 7.8 0 0 1-7.7-6.7Z"/>',
+    bag: '<path d="M9 2.8h6a3 3 0 0 1 3 3v1h1.6a1.6 1.6 0 0 1 1.6 1.8l-1.3 10a2.6 2.6 0 0 1-2.6 2.3H6.7a2.6 2.6 0 0 1-2.6-2.3l-1.3-10A1.6 1.6 0 0 1 4.4 6.8H6v-1a3 3 0 0 1 3-3Zm0 2.2a.9.9 0 0 0-.8.8v1h7.6v-1a.9.9 0 0 0-.8-.8Z"/>',
+    swap: '<path d="M7.6 3.4 11 6.8l-1.6 1.6-1-1v6.2H6.2V7.4l-1 1L3.6 6.8ZM16.4 20.6 13 17.2l1.6-1.6 1 1V10.4h2.2v6.2l1-1 1.6 1.6Z"/>',
+    run: '<path d="M14.6 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM12.4 7.6l3-.8 3.4 2.6-1.2 1.7-2.3-1.6-1 3.3 2.7 2.6 1.1 5.4-2.1.4-1-4.4-3.4-3-1.4 4.3-4.5 2.4-1-1.9 3.6-2 2.2-6.6-1.9.8-.8 2.6-2-.6 1.1-3.6Z"/>',
+    block: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.2c1.7 0 3.3.6 4.6 1.6L5.8 16.6A7.8 7.8 0 0 1 12 4.2Zm0 15.6a7.7 7.7 0 0 1-4.6-1.6L18.2 7.4A7.8 7.8 0 0 1 12 19.8Z"/>',
+    shield: '<path d="M12 2.2 20 5v6.3c0 4.5-3.2 8.6-8 10.5-4.8-1.9-8-6-8-10.5V5Zm0 2.5L6.2 6.7v4.6c0 3.2 2.2 6.2 5.8 7.8 3.6-1.6 5.8-4.6 5.8-7.8V6.7Z"/>',
+    // ---- ui chrome ------------------------------------------------------
+    play: '<path d="M7.4 4.3 19.6 12 7.4 19.7Z"/>',
+    power: '<path d="M10.9 2.4h2.2v9.2h-2.2Zm-3.6 2.5 1.3 1.8a6.6 6.6 0 1 0 6.8 0l1.3-1.8a8.8 8.8 0 1 1-9.4 0Z"/>',
+    "chevron-right": '<path d="M8.6 4.2 16.4 12l-7.8 7.8-1.6-1.6L13.2 12 7 5.8Z"/>',
+    close: '<path d="M5.3 3.8 12 10.5l6.7-6.7 1.5 1.5L13.5 12l6.7 6.7-1.5 1.5L12 13.5l-6.7 6.7-1.5-1.5L10.5 12 3.8 5.3Z"/>',
+    menu: '<path d="M3.4 5.4h17.2v2.3H3.4Zm0 5.5h17.2v2.2H3.4Zm0 5.4h17.2v2.3H3.4Z"/>',
+    chevronDown: '<path d="M12 15.8 4.8 8.6l1.6-1.6L12 12.6l5.6-5.6 1.6 1.6Z"/>',
+    chevronRight: '<path d="M8.6 19.2 7 17.6l5.6-5.6L7 6.4l1.6-1.6 7.2 7.2Z"/>',
+    arrowRight: '<path d="M13.2 4.6 20.6 12l-7.4 7.4-1.6-1.6 4.7-4.7H3.4v-2.2h12.9L11.6 6.2Z"/>',
+    up: '<path d="M12 5.4 19 14h-4v5h-6v-5H5Z"/>',
+    down: '<path d="M12 18.6 5 10h4V5h6v5h4Z"/>',
+    plus: '<path d="M10.9 4.4h2.2v6.5h6.5v2.2h-6.5v6.5h-2.2v-6.5H4.4v-2.2h6.5Z"/>',
+    minus: '<path d="M4.4 10.9h15.2v2.2H4.4Z"/>',
+    check: '<path d="M9.6 17.5 4 11.9l1.7-1.7 3.9 3.9L18.3 5.4 20 7.1Z"/>',
+    lock: '<path d="M12 2.4a4.6 4.6 0 0 1 4.6 4.6v2.2h1a1.6 1.6 0 0 1 1.6 1.6v8a1.6 1.6 0 0 1-1.6 1.6H6.4a1.6 1.6 0 0 1-1.6-1.6v-8a1.6 1.6 0 0 1 1.6-1.6h1V7A4.6 4.6 0 0 1 12 2.4Zm0 2.2A2.4 2.4 0 0 0 9.6 7v2.2h4.8V7A2.4 2.4 0 0 0 12 4.6Zm0 8a1.8 1.8 0 0 0-.9 3.4v1.8h1.8V16a1.8 1.8 0 0 0-.9-3.4Z"/>',
+    coin: '<path d="M12 2.4c5.3 0 9.6 2.2 9.6 4.8v9.6c0 2.6-4.3 4.8-9.6 4.8s-9.6-2.2-9.6-4.8V7.2c0-2.6 4.3-4.8 9.6-4.8Zm0 2.2C7.9 4.6 4.6 6 4.6 7.2S7.9 9.8 12 9.8s7.4-1.4 7.4-2.6S16.1 4.6 12 4.6Zm-1.1 3.2h2.2v1c1 .2 1.7.8 1.7 1.7h-1.8c0-.3-.4-.5-1-.5s-1 .2-1 .5.3.4 1.2.6c1.6.3 2.7.8 2.7 2.1 0 1-.8 1.7-1.8 1.9v1h-2.2v-1c-1.1-.2-1.9-.9-1.9-1.9h1.8c0 .4.5.6 1.2.6s1.1-.2 1.1-.5-.4-.5-1.4-.7c-1.4-.3-2.5-.8-2.5-2 0-.9.7-1.6 1.7-1.8Z"/>',
+    heal: '<path d="M9.4 2.6h5.2v6.8h6.8v5.2h-6.8v6.8H9.4v-6.8H2.6V9.4h6.8Z"/>',
+    dna: '<path d="M6.4 2.4h11.2v2.2c0 2.3-1.6 4-3.3 5.2l-.6.4.6.4c1.7 1.2 3.3 2.9 3.3 5.2v2.2H6.4v-2.2c0-2.3 1.6-4 3.3-5.2l.6-.4-.6-.4C8 8.6 6.4 6.9 6.4 4.6Zm2.2 2.2c0 1.3 1 2.4 2.5 3.4l1 .7 1-.7c1.4-1 2.4-2.1 2.4-3.4Zm3.4 7.7-1 .7c-1.5 1-2.4 2.1-2.4 3.4h6.8c0-1.3-1-2.4-2.4-3.4Z"/>',
+    box: '<path d="M3 6.2 12 2.4l9 3.8v11.6L12 21.6l-9-3.8Zm9 2 5.6-2.3L12 4.7 6.4 6Zm-1.1 2-5.7-2.4v8.4l5.7 2.4Zm2.2 8.4 5.7-2.4V7.8l-5.7 2.4Z"/>',
+    save: '<path d="M4.6 2.8h12.1l4.5 4.5v13.9H4.6a1.8 1.8 0 0 1-1.8-1.8V4.6a1.8 1.8 0 0 1 1.8-1.8Zm2.2 2.2v4.6h8.4V5Zm-.8 8.2v6h12v-6Z"/>',
+    folder: '<path d="M2.6 4.8h6.6l2 2.4h10.2v12H2.6Zm2.2 2.2v9.6h14.4V9.4H10.2l-2-2.4Z"/>',
+    home: '<path d="M12 2.4 22 11l-1.5 1.7-1.3-1.1v9.2h-5v-6h-4.4v6h-5v-9.2L3.5 12.7 2 11Z"/>',
+    pencil: '<path d="M16.6 2.6 21.4 7.4 8.8 20H4v-4.8ZM6.2 16.1v1.7h1.7l9-9-1.7-1.7Z"/>',
+    book: '<path d="M4 3.2h6.2A3 3 0 0 1 12 4a3 3 0 0 1 1.8-.7H20v16h-6.2a1.7 1.7 0 0 0-1.3.6H11.5a1.7 1.7 0 0 0-1.3-.6H4Zm2.2 2.2v11.6h4c.6 0 1.2.1 1.7.4V6.4a1.7 1.7 0 0 0-1.4-.7Zm7.9 0a1.7 1.7 0 0 0-1.4.7v11a4 4 0 0 1 1.7-.4h4V5.4Z"/>',
+    map: '<path d="M8.9 2.6 15.1 5l5.5-2.4 1.4.9v16l-6.9 2.9-6.2-2.4L3.4 22 2 21.1v-16Zm-.9 2.7-3.8 1.6v11.4l3.8-1.6Zm2.2 11.5 3.6 1.4V7.2l-3.6-1.4Zm5.8 1.4 3.8-1.6V5.2l-3.8 1.6Z"/>',
+    food: '<path d="M12.6 5.3c1.5-1.1 3.4-1.4 5.1-.7 2.7 1.1 3.9 4.5 2.6 8-1 2.9-3.1 6.1-5.2 7.6-1 .7-2.1.6-3.1 0-1-.6-2.1-.7-3.1 0-1 .6-2.1.7-3.1 0C3.7 18.7 1.6 15.5.6 12.6c-1.3-3.5-.1-6.9 2.6-8 1.8-.7 3.9-.3 5.4 1a5.8 5.8 0 0 1 1.8 2.4 5.6 5.6 0 0 1 2.2-2.7Z" transform="translate(1.6 0)"/><path d="M12.4 5.2c-.3-1.6.3-3.2 1.7-4.2l1.3 1.8c-.8.6-1 1.4-.8 2.2Z"/>',
+    shop: '<path d="M3.4 3.4h3l.6 2.4h13.6l-2 8.1H8.5l.3 1.4h10.6v2.2H7L4.8 5.6H3.4Zm5.2 14.9a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8Zm9 0a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8Z"/>',
+    settings: '<path d="m10.3 2.4h3.4l.4 2.4c.6.2 1.2.5 1.7.9l2.3-.9 1.7 3-1.8 1.6a6.9 6.9 0 0 1 0 2l1.8 1.6-1.7 3-2.3-.9c-.5.4-1.1.7-1.7.9l-.4 2.4h-3.4l-.4-2.4a6.6 6.6 0 0 1-1.7-.9l-2.3.9-1.7-3 1.8-1.6a6.9 6.9 0 0 1 0-2L3.9 7.8l1.7-3 2.3.9c.5-.4 1.1-.7 1.7-.9ZM12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Z"/>',
+    infinity: '<path d="M6.6 7.6c2 0 3.3 1.4 4.2 2.6l.7 1 .8 1c.8 1 1.5 1.6 2.6 1.6a2.2 2.2 0 1 0 0-4.4c-.7 0-1.3.3-1.9.8l-1.4-1.7a5 5 0 0 1 3.3-1.3 4.4 4.4 0 1 1 0 8.8c-2 0-3.3-1.4-4.2-2.6l-.7-1-.8-1c-.8-1-1.5-1.6-2.6-1.6a2.2 2.2 0 1 0 0 4.4c.7 0 1.3-.3 1.9-.8l1.4 1.7a5 5 0 0 1-3.3 1.3 4.4 4.4 0 1 1 0-8.8Z"/>',
+    shiny: '<path d="M12 1.4 13.7 7 19.3 8.7 13.7 10.4 12 16l-1.7-5.6L4.7 8.7 10.3 7Zm6.4 11.2.9 2.8 2.9.9-2.9.9-.9 2.8-.9-2.8-2.8-.9 2.8-.9ZM5.6 14.4l.7 2.2 2.2.7-2.2.7-.7 2.2-.7-2.2-2.2-.7 2.2-.7Z"/>',
+    darkness: '<path d="M20.4 14.9A8.6 8.6 0 0 1 9.1 3.6 8.6 8.6 0 1 0 20.4 15ZM14.9 2.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z"/>',
+    diamond: '<path d="M12 2.2 21.8 12 12 21.8 2.2 12Zm0 3.6L5.8 12 12 18.2 18.2 12Z"/>',
+    flag: '<path d="M4.6 2.4h2.2v1.3l3.6-.9 4 1 5-1.2v10.6l-5 1.2-4-1-3.6.9v7.3H4.6Z"/>',
+    user: '<path d="M12 2.6a4.7 4.7 0 1 1 0 9.4 4.7 4.7 0 0 1 0-9.4ZM3.6 21.4c0-4.3 3.8-7.3 8.4-7.3s8.4 3 8.4 7.3Z"/>',
+    levelup: '<path d="M12 2.4 20.6 11h-4.4v4.2H7.8V11H3.4Zm-4.2 16h8.4v2.8H7.8Z"/>',
+    timer: '<path d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Zm0 2.2A6.8 6.8 0 1 0 12 18.8 6.8 6.8 0 0 0 12 5.2Zm1.1 1.9v5.4l3.6 2.1-1.1 1.9-4.7-2.7V7.1Z"/>',
+    key: '<path d="M15.4 2.6a6 6 0 0 1 2.3 11.6l-1.5 3.3-2.1.9-.9 2.1-2.1.9-.9 2.1H3.4v-4.3l7.2-7.2A6 6 0 0 1 15.4 2.6Zm1.4 3.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6Z"/>'
+  };
+  var ALIASES = {
+    catch: "orb",
+    ball: "orb",
+    item: "bag",
+    party: "swap",
+    physical: "strike",
+    special: "spark",
+    buff: "shield",
+    storage: "box",
+    collection: "book",
+    exit: "home",
+    slots: "folder",
+    nickname: "pencil",
+    objective: "diamond"
+  };
+  function iconPath(name) {
+    return P[ALIASES[name] || name] || P.spark;
+  }
+  function iconPathData(name) {
+    const src = P[ALIASES[name] || name] || "";
+    const out = [];
+    const re = /\sd="([^"]+)"/g;
+    let m;
+    while (m = re.exec(src)) out.push(m[1]);
+    return out;
+  }
+  function drawIconGlyph(ctx, name, x, y, size, color) {
+    if (typeof Path2D === "undefined") return false;
+    const paths = iconPathData(name);
+    if (!paths.length) return false;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size / 24, size / 24);
+    ctx.fillStyle = color;
+    for (const d of paths) ctx.fill(new Path2D(d));
+    ctx.restore();
+    return true;
+  }
+  function iconSvg(name, cls = "") {
+    return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${iconPath(name)}</svg>`;
+  }
+  function icon(name, cls = "") {
+    const span = document.createElement("span");
+    span.className = `ico-wrap ${cls}`;
+    span.innerHTML = iconSvg(name);
+    return span.firstElementChild;
+  }
+  function iconLabel(name, text, cls = "") {
+    const span = document.createElement("span");
+    span.className = "ico-label";
+    span.innerHTML = `${iconSvg(name, cls)}<span>${text}</span>`;
+    return span;
+  }
+
   // src/scenes/OverworldScene.js
   var PLAYER_SPEED = 230;
   var INTERACT_RANGE = 74;
@@ -9893,10 +10249,15 @@ input[type="text"].wiki-search {
       WorldManager.visit(this.mapId);
       PlayerManager.setPosition(this.mapId, this.player.x, this.player.y);
       this.populate(true);
+      ChestManager.ensure(this.mapId, ChestManager.makeFreeTest(map, this.renderer.colliders(map)));
       bus.emit("overworld:map", map);
     }
     get map() {
       return getMap(this.mapId);
+    }
+    /** The chests currently standing on this map. */
+    get chests() {
+      return ChestManager.list(this.mapId);
     }
     // ------------- wild population -------------
     populate(initial = false) {
@@ -10037,6 +10398,7 @@ input[type="text"].wiki-search {
       if (test(this.player.x, ny)) this.player.y = ny;
     }
     findInteractable() {
+      var _a;
       const map = this.map;
       const px = this.player.x, py = this.player.y;
       let best = null, bestD = INTERACT_RANGE;
@@ -10083,6 +10445,13 @@ input[type="text"].wiki-search {
           best = { kind: "sign", ref: lm, label: "Read sign" };
         }
       }
+      for (const c of this.chests) {
+        const d = dist(px, py, c.x, c.y);
+        if (d < bestD) {
+          bestD = d;
+          best = { kind: "chest", ref: c, label: `Open ${((_a = getChestTier(c.tier)) == null ? void 0 : _a.name) || "chest"}` };
+        }
+      }
       if (!best) {
         for (const t of map.trainers) {
           if (!WorldManager.isTrainerDefeated(t.flag)) continue;
@@ -10112,6 +10481,8 @@ input[type="text"].wiki-search {
         bus.emit("overworld:shop", n.ref);
       } else if (n.kind === "sign") {
         bus.emit("overworld:sign", n.ref);
+      } else if (n.kind === "chest") {
+        bus.emit("overworld:chest", n.ref);
       }
     }
     showToast(text) {
@@ -10125,7 +10496,8 @@ input[type="text"].wiki-search {
       const W = this.canvas.width, H = this.canvas.height;
       const dpr = this.dpr || 1;
       const vw = W / dpr, vh = H / dpr;
-      const zoom = clamp(Math.min(vw / 1180, vh / 720) * 1.35, 0.72, 1.6);
+      const wanted = clamp(Number(SettingsManager.get("cameraZoom")) || 1.35, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+      const zoom = clamp(Math.min(vw / 1180, vh / 720) * wanted, 0.72, 2.2);
       const camW = vw / zoom, camH = vh / zoom;
       this.cam.x = clamp(this.player.x - camW / 2, 0, Math.max(0, map.width - camW));
       this.cam.y = clamp(this.player.y - camH / 2, 0, Math.max(0, map.height - camH));
@@ -10167,6 +10539,14 @@ input[type="text"].wiki-search {
       for (const lm of (map.landmarks || []).filter((l) => l.type === "sign")) {
         drawables.push({ y: lm.y, fn: () => this.renderer.drawLandmark(ctx, lm, this.time) });
       }
+      for (const c of this.chests) {
+        if (c.x < this.cam.x - 80 || c.x > this.cam.x + camW + 80) continue;
+        drawables.push({ y: c.y, fn: () => {
+          var _a, _b, _c;
+          drawChest(ctx, c, this.time, ((_a = this.nearest) == null ? void 0 : _a.ref) === c);
+          if (dist(c.x, c.y, this.player.x, this.player.y) < 220) this.nameTag(ctx, c.x, c.y - 44, ((_b = getChestTier(c.tier)) == null ? void 0 : _b.name) || "Chest", ((_c = getChestTier(c.tier)) == null ? void 0 : _c.colors.trim) || "#fff");
+        } });
+      }
       for (const n of map.npcs) {
         drawables.push({ y: n.y, fn: () => {
           drawTrainerAvatar(ctx, n.x, n.y, n.color, this.time, { phase: n.x });
@@ -10203,7 +10583,7 @@ input[type="text"].wiki-search {
             animTag: "wild",
             pose: { anim: w.moving ? "walk" : "idle" }
           });
-          this.nameTag(ctx, w.x, w.y - 62, `${displayName(w.m)} Lv.${w.m.level}`, "#ffffff", w.m.mutation);
+          this.nameTag(ctx, w.x, w.y - 62, `${displayName(w.m)} Lv.${w.m.level}`, "#ffffff", w.m.mutation, { element: getSpecies(w.m.speciesId).element });
         } });
       }
       drawables.push({ y: this.player.y, fn: () => this.drawPlayer(ctx) });
@@ -10253,7 +10633,8 @@ input[type="text"].wiki-search {
       ctx.save();
       ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
       ctx.textAlign = "center";
-      const tw = ctx.measureText(text).width + 16 + (opts.mark ? 14 : 0);
+      const lead = opts.mark ? 14 : opts.element ? 16 : 0;
+      const tw = ctx.measureText(text).width + 16 + lead;
       ctx.fillStyle = "rgba(10,18,28,0.6)";
       roundRect(ctx, x - tw / 2, y - 12, tw, 18, 8);
       ctx.fill();
@@ -10263,8 +10644,12 @@ input[type="text"].wiki-search {
         ctx.stroke();
       }
       ctx.fillStyle = color;
-      ctx.fillText(text, x + (opts.mark ? 7 : 0), y + 1);
+      ctx.fillText(text, x + lead / 2, y + 1);
       if (opts.mark) drawTagMark(ctx, opts.mark, x - tw / 2 + 10, y - 3, color);
+      else if (opts.element) {
+        const e = ELEMENTS[opts.element];
+        drawIconGlyph(ctx, (e == null ? void 0 : e.icon) || "spark", x - tw / 2 + 5, y - 9, 12, (e == null ? void 0 : e.glow) || color);
+      }
       ctx.restore();
     }
     drawPlayer(ctx) {
@@ -10317,6 +10702,13 @@ input[type="text"].wiki-search {
       const map = this.map;
       const r = regionAt(map, this.player.x, this.player.y);
       return `${map.displayName} \u2014 ${r.name}`;
+    }
+    /** Zoom the camera in (+) or out (-) by one step, within the allowed range. Persists as a setting. */
+    zoomBy(steps) {
+      const cur = clamp(Number(SettingsManager.get("cameraZoom")) || 1.35, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+      const next = clamp(Math.round((cur + steps * CAMERA_ZOOM_STEP) * 100) / 100, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+      if (next !== cur) SettingsManager.set("cameraZoom", next);
+      return next;
     }
     minimapData() {
       const map = this.map;
@@ -12891,95 +13283,6 @@ input[type="text"].wiki-search {
     return ((_a = BALL_ART[ballId]) == null ? void 0 : _a.look) || "Sphere";
   }
 
-  // src/ui/icons.js
-  var P = {
-    // ---- elements -------------------------------------------------------
-    nature: '<path d="M20.4 3.2c-7.6-.6-12.2 1.5-14.4 4.6-2.2 3.2-1.5 7 .3 9l1.9-2.9c.4-2.6 1.7-4.9 4-6.6-1.6 2-2.6 4.3-3 6.9l-2.9 4.4a1.1 1.1 0 0 0 1.8 1.2l1.7-2.6c2.6 1 6.1.5 8.4-2.3 2.6-3.1 3.1-7.6 2.2-11.7Z"/>',
-    water: '<path d="M12 2.2c-.4 0-.8.2-1 .5C8.3 6.3 5 10.4 5 14a7 7 0 0 0 14 0c0-3.6-3.3-7.7-6-11.3a1.3 1.3 0 0 0-1-.5Zm3.6 12.6a.8.8 0 0 1 .8.9 4.6 4.6 0 0 1-4 3.9.8.8 0 1 1-.2-1.6 3 3 0 0 0 2.6-2.5.8.8 0 0 1 .8-.7Z"/>',
-    fire: '<path d="M13.4 1.6c.5 3.2-.7 4.8-2.2 6.4-1.7 1.8-3.7 3.8-3.7 7.2a6.5 6.5 0 0 0 13 .3c0-2.5-1-4.3-2-5.8-.2 1-.8 1.9-1.7 2.3.3-3.4-1-6.6-3.4-10.4ZM12 13.2c1.2 1.4 1.8 2.5 1.8 3.6a2.4 2.4 0 0 1-4.8.1c0-1.3.9-2.1 1.6-3 .5-.6.9-1.2 1.4-.7Z"/>',
-    rock: '<path d="M8.2 3.4h6.4l4.6 4.2 1.6 6.4-3.4 6.6H7.4l-4.2-5.2.8-6.6Zm1 2.2L5.9 9.3l-.6 4.9 3.1 3.9h7.2l2.5-4.8-1.2-4.8-3.4-3.1Zm.6 3.2 3.6 1.2 1.1 3.6-2.8 2.3-3-1.3-.5-3.4Z"/>',
-    spark: '<path d="M12 1.8 14 9l7.2 2-7.2 2-2 7.2L10 13 2.8 11 10 9Z"/>',
-    // ---- battle ---------------------------------------------------------
-    strike: '<path d="M3.6 3.1 9 8.5 7 10.5 2 5.6V3.1ZM20.4 3.1v2.5l-11 11-1.7-1 1-1.7ZM14.9 14l1.9 1.9 4.6 4.6v.4h-2.4L14.5 16ZM7.6 14.6 9.4 16.4 6 19.9 4.1 18Z"/>',
-    ultimate: '<path d="M12 1.6 14.6 8l6.9.4-5.3 4.4 1.7 6.7L12 15.9 6.1 19.5l1.7-6.7L2.5 8.4 9.4 8Z"/>',
-    orb: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.2a7.8 7.8 0 0 1 7.7 6.7h-3.4a4.4 4.4 0 0 0-8.6 0H4.3A7.8 7.8 0 0 1 12 4.2Zm0 5.5a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6Zm-7.7 3.4h3.4a4.4 4.4 0 0 0 8.6 0h3.4A7.8 7.8 0 0 1 12 19.8a7.8 7.8 0 0 1-7.7-6.7Z"/>',
-    bag: '<path d="M9 2.8h6a3 3 0 0 1 3 3v1h1.6a1.6 1.6 0 0 1 1.6 1.8l-1.3 10a2.6 2.6 0 0 1-2.6 2.3H6.7a2.6 2.6 0 0 1-2.6-2.3l-1.3-10A1.6 1.6 0 0 1 4.4 6.8H6v-1a3 3 0 0 1 3-3Zm0 2.2a.9.9 0 0 0-.8.8v1h7.6v-1a.9.9 0 0 0-.8-.8Z"/>',
-    swap: '<path d="M7.6 3.4 11 6.8l-1.6 1.6-1-1v6.2H6.2V7.4l-1 1L3.6 6.8ZM16.4 20.6 13 17.2l1.6-1.6 1 1V10.4h2.2v6.2l1-1 1.6 1.6Z"/>',
-    run: '<path d="M14.6 2.6a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM12.4 7.6l3-.8 3.4 2.6-1.2 1.7-2.3-1.6-1 3.3 2.7 2.6 1.1 5.4-2.1.4-1-4.4-3.4-3-1.4 4.3-4.5 2.4-1-1.9 3.6-2 2.2-6.6-1.9.8-.8 2.6-2-.6 1.1-3.6Z"/>',
-    block: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.2c1.7 0 3.3.6 4.6 1.6L5.8 16.6A7.8 7.8 0 0 1 12 4.2Zm0 15.6a7.7 7.7 0 0 1-4.6-1.6L18.2 7.4A7.8 7.8 0 0 1 12 19.8Z"/>',
-    shield: '<path d="M12 2.2 20 5v6.3c0 4.5-3.2 8.6-8 10.5-4.8-1.9-8-6-8-10.5V5Zm0 2.5L6.2 6.7v4.6c0 3.2 2.2 6.2 5.8 7.8 3.6-1.6 5.8-4.6 5.8-7.8V6.7Z"/>',
-    // ---- ui chrome ------------------------------------------------------
-    play: '<path d="M7.4 4.3 19.6 12 7.4 19.7Z"/>',
-    power: '<path d="M10.9 2.4h2.2v9.2h-2.2Zm-3.6 2.5 1.3 1.8a6.6 6.6 0 1 0 6.8 0l1.3-1.8a8.8 8.8 0 1 1-9.4 0Z"/>',
-    "chevron-right": '<path d="M8.6 4.2 16.4 12l-7.8 7.8-1.6-1.6L13.2 12 7 5.8Z"/>',
-    close: '<path d="M5.3 3.8 12 10.5l6.7-6.7 1.5 1.5L13.5 12l6.7 6.7-1.5 1.5L12 13.5l-6.7 6.7-1.5-1.5L10.5 12 3.8 5.3Z"/>',
-    menu: '<path d="M3.4 5.4h17.2v2.3H3.4Zm0 5.5h17.2v2.2H3.4Zm0 5.4h17.2v2.3H3.4Z"/>',
-    chevronDown: '<path d="M12 15.8 4.8 8.6l1.6-1.6L12 12.6l5.6-5.6 1.6 1.6Z"/>',
-    chevronRight: '<path d="M8.6 19.2 7 17.6l5.6-5.6L7 6.4l1.6-1.6 7.2 7.2Z"/>',
-    arrowRight: '<path d="M13.2 4.6 20.6 12l-7.4 7.4-1.6-1.6 4.7-4.7H3.4v-2.2h12.9L11.6 6.2Z"/>',
-    up: '<path d="M12 5.4 19 14h-4v5h-6v-5H5Z"/>',
-    down: '<path d="M12 18.6 5 10h4V5h6v5h4Z"/>',
-    plus: '<path d="M10.9 4.4h2.2v6.5h6.5v2.2h-6.5v6.5h-2.2v-6.5H4.4v-2.2h6.5Z"/>',
-    minus: '<path d="M4.4 10.9h15.2v2.2H4.4Z"/>',
-    check: '<path d="M9.6 17.5 4 11.9l1.7-1.7 3.9 3.9L18.3 5.4 20 7.1Z"/>',
-    lock: '<path d="M12 2.4a4.6 4.6 0 0 1 4.6 4.6v2.2h1a1.6 1.6 0 0 1 1.6 1.6v8a1.6 1.6 0 0 1-1.6 1.6H6.4a1.6 1.6 0 0 1-1.6-1.6v-8a1.6 1.6 0 0 1 1.6-1.6h1V7A4.6 4.6 0 0 1 12 2.4Zm0 2.2A2.4 2.4 0 0 0 9.6 7v2.2h4.8V7A2.4 2.4 0 0 0 12 4.6Zm0 8a1.8 1.8 0 0 0-.9 3.4v1.8h1.8V16a1.8 1.8 0 0 0-.9-3.4Z"/>',
-    coin: '<path d="M12 2.4c5.3 0 9.6 2.2 9.6 4.8v9.6c0 2.6-4.3 4.8-9.6 4.8s-9.6-2.2-9.6-4.8V7.2c0-2.6 4.3-4.8 9.6-4.8Zm0 2.2C7.9 4.6 4.6 6 4.6 7.2S7.9 9.8 12 9.8s7.4-1.4 7.4-2.6S16.1 4.6 12 4.6Zm-1.1 3.2h2.2v1c1 .2 1.7.8 1.7 1.7h-1.8c0-.3-.4-.5-1-.5s-1 .2-1 .5.3.4 1.2.6c1.6.3 2.7.8 2.7 2.1 0 1-.8 1.7-1.8 1.9v1h-2.2v-1c-1.1-.2-1.9-.9-1.9-1.9h1.8c0 .4.5.6 1.2.6s1.1-.2 1.1-.5-.4-.5-1.4-.7c-1.4-.3-2.5-.8-2.5-2 0-.9.7-1.6 1.7-1.8Z"/>',
-    heal: '<path d="M9.4 2.6h5.2v6.8h6.8v5.2h-6.8v6.8H9.4v-6.8H2.6V9.4h6.8Z"/>',
-    dna: '<path d="M6.4 2.4h11.2v2.2c0 2.3-1.6 4-3.3 5.2l-.6.4.6.4c1.7 1.2 3.3 2.9 3.3 5.2v2.2H6.4v-2.2c0-2.3 1.6-4 3.3-5.2l.6-.4-.6-.4C8 8.6 6.4 6.9 6.4 4.6Zm2.2 2.2c0 1.3 1 2.4 2.5 3.4l1 .7 1-.7c1.4-1 2.4-2.1 2.4-3.4Zm3.4 7.7-1 .7c-1.5 1-2.4 2.1-2.4 3.4h6.8c0-1.3-1-2.4-2.4-3.4Z"/>',
-    box: '<path d="M3 6.2 12 2.4l9 3.8v11.6L12 21.6l-9-3.8Zm9 2 5.6-2.3L12 4.7 6.4 6Zm-1.1 2-5.7-2.4v8.4l5.7 2.4Zm2.2 8.4 5.7-2.4V7.8l-5.7 2.4Z"/>',
-    save: '<path d="M4.6 2.8h12.1l4.5 4.5v13.9H4.6a1.8 1.8 0 0 1-1.8-1.8V4.6a1.8 1.8 0 0 1 1.8-1.8Zm2.2 2.2v4.6h8.4V5Zm-.8 8.2v6h12v-6Z"/>',
-    folder: '<path d="M2.6 4.8h6.6l2 2.4h10.2v12H2.6Zm2.2 2.2v9.6h14.4V9.4H10.2l-2-2.4Z"/>',
-    home: '<path d="M12 2.4 22 11l-1.5 1.7-1.3-1.1v9.2h-5v-6h-4.4v6h-5v-9.2L3.5 12.7 2 11Z"/>',
-    pencil: '<path d="M16.6 2.6 21.4 7.4 8.8 20H4v-4.8ZM6.2 16.1v1.7h1.7l9-9-1.7-1.7Z"/>',
-    book: '<path d="M4 3.2h6.2A3 3 0 0 1 12 4a3 3 0 0 1 1.8-.7H20v16h-6.2a1.7 1.7 0 0 0-1.3.6H11.5a1.7 1.7 0 0 0-1.3-.6H4Zm2.2 2.2v11.6h4c.6 0 1.2.1 1.7.4V6.4a1.7 1.7 0 0 0-1.4-.7Zm7.9 0a1.7 1.7 0 0 0-1.4.7v11a4 4 0 0 1 1.7-.4h4V5.4Z"/>',
-    map: '<path d="M8.9 2.6 15.1 5l5.5-2.4 1.4.9v16l-6.9 2.9-6.2-2.4L3.4 22 2 21.1v-16Zm-.9 2.7-3.8 1.6v11.4l3.8-1.6Zm2.2 11.5 3.6 1.4V7.2l-3.6-1.4Zm5.8 1.4 3.8-1.6V5.2l-3.8 1.6Z"/>',
-    food: '<path d="M12.6 5.3c1.5-1.1 3.4-1.4 5.1-.7 2.7 1.1 3.9 4.5 2.6 8-1 2.9-3.1 6.1-5.2 7.6-1 .7-2.1.6-3.1 0-1-.6-2.1-.7-3.1 0-1 .6-2.1.7-3.1 0C3.7 18.7 1.6 15.5.6 12.6c-1.3-3.5-.1-6.9 2.6-8 1.8-.7 3.9-.3 5.4 1a5.8 5.8 0 0 1 1.8 2.4 5.6 5.6 0 0 1 2.2-2.7Z" transform="translate(1.6 0)"/><path d="M12.4 5.2c-.3-1.6.3-3.2 1.7-4.2l1.3 1.8c-.8.6-1 1.4-.8 2.2Z"/>',
-    shop: '<path d="M3.4 3.4h3l.6 2.4h13.6l-2 8.1H8.5l.3 1.4h10.6v2.2H7L4.8 5.6H3.4Zm5.2 14.9a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8Zm9 0a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8Z"/>',
-    settings: '<path d="m10.3 2.4h3.4l.4 2.4c.6.2 1.2.5 1.7.9l2.3-.9 1.7 3-1.8 1.6a6.9 6.9 0 0 1 0 2l1.8 1.6-1.7 3-2.3-.9c-.5.4-1.1.7-1.7.9l-.4 2.4h-3.4l-.4-2.4a6.6 6.6 0 0 1-1.7-.9l-2.3.9-1.7-3 1.8-1.6a6.9 6.9 0 0 1 0-2L3.9 7.8l1.7-3 2.3.9c.5-.4 1.1-.7 1.7-.9ZM12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Z"/>',
-    infinity: '<path d="M6.6 7.6c2 0 3.3 1.4 4.2 2.6l.7 1 .8 1c.8 1 1.5 1.6 2.6 1.6a2.2 2.2 0 1 0 0-4.4c-.7 0-1.3.3-1.9.8l-1.4-1.7a5 5 0 0 1 3.3-1.3 4.4 4.4 0 1 1 0 8.8c-2 0-3.3-1.4-4.2-2.6l-.7-1-.8-1c-.8-1-1.5-1.6-2.6-1.6a2.2 2.2 0 1 0 0 4.4c.7 0 1.3-.3 1.9-.8l1.4 1.7a5 5 0 0 1-3.3 1.3 4.4 4.4 0 1 1 0-8.8Z"/>',
-    shiny: '<path d="M12 1.4 13.7 7 19.3 8.7 13.7 10.4 12 16l-1.7-5.6L4.7 8.7 10.3 7Zm6.4 11.2.9 2.8 2.9.9-2.9.9-.9 2.8-.9-2.8-2.8-.9 2.8-.9ZM5.6 14.4l.7 2.2 2.2.7-2.2.7-.7 2.2-.7-2.2-2.2-.7 2.2-.7Z"/>',
-    darkness: '<path d="M20.4 14.9A8.6 8.6 0 0 1 9.1 3.6 8.6 8.6 0 1 0 20.4 15ZM14.9 2.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z"/>',
-    diamond: '<path d="M12 2.2 21.8 12 12 21.8 2.2 12Zm0 3.6L5.8 12 12 18.2 18.2 12Z"/>',
-    flag: '<path d="M4.6 2.4h2.2v1.3l3.6-.9 4 1 5-1.2v10.6l-5 1.2-4-1-3.6.9v7.3H4.6Z"/>',
-    user: '<path d="M12 2.6a4.7 4.7 0 1 1 0 9.4 4.7 4.7 0 0 1 0-9.4ZM3.6 21.4c0-4.3 3.8-7.3 8.4-7.3s8.4 3 8.4 7.3Z"/>',
-    levelup: '<path d="M12 2.4 20.6 11h-4.4v4.2H7.8V11H3.4Zm-4.2 16h8.4v2.8H7.8Z"/>',
-    timer: '<path d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Zm0 2.2A6.8 6.8 0 1 0 12 18.8 6.8 6.8 0 0 0 12 5.2Zm1.1 1.9v5.4l3.6 2.1-1.1 1.9-4.7-2.7V7.1Z"/>',
-    key: '<path d="M15.4 2.6a6 6 0 0 1 2.3 11.6l-1.5 3.3-2.1.9-.9 2.1-2.1.9-.9 2.1H3.4v-4.3l7.2-7.2A6 6 0 0 1 15.4 2.6Zm1.4 3.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6Z"/>'
-  };
-  var ALIASES = {
-    catch: "orb",
-    ball: "orb",
-    item: "bag",
-    party: "swap",
-    physical: "strike",
-    special: "spark",
-    buff: "shield",
-    storage: "box",
-    collection: "book",
-    exit: "home",
-    slots: "folder",
-    nickname: "pencil",
-    objective: "diamond"
-  };
-  function iconPath(name) {
-    return P[ALIASES[name] || name] || P.spark;
-  }
-  function iconSvg(name, cls = "") {
-    return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${iconPath(name)}</svg>`;
-  }
-  function icon(name, cls = "") {
-    const span = document.createElement("span");
-    span.className = `ico-wrap ${cls}`;
-    span.innerHTML = iconSvg(name);
-    return span.firstElementChild;
-  }
-  function iconLabel(name, text, cls = "") {
-    const span = document.createElement("span");
-    span.className = "ico-label";
-    span.innerHTML = `${iconSvg(name, cls)}<span>${text}</span>`;
-    return span;
-  }
-
   // src/ui/ui.js
   function el(tag, props = {}, children = []) {
     const node = document.createElement(tag);
@@ -13382,13 +13685,14 @@ input[type="text"].wiki-search {
       }
     }
     combatantCard(m, side) {
+      var _a;
       const sp = speciesOf(m);
       const v = this.view[side] && this.view[side].uid === m.uid ? this.view[side] : this.viewOf(m, side);
       const hp = clamp(v.hp, 0, v.maxHp);
       const pct = v.maxHp > 0 ? hp / v.maxHp : 0;
       const rows = [
         el("div", { class: "cc-top" }, [
-          el("span", { class: "cc-name", text: displayName(m) }),
+          el("span", { class: "cc-name" }, [icon(((_a = ELEMENTS[sp.element]) == null ? void 0 : _a.icon) || "spark", sp.element), el("span", { text: displayName(m) })]),
           mutationChip(m.mutation),
           el("span", { class: "cc-lv", text: `Lv.${m.level}` })
         ])
@@ -13398,7 +13702,7 @@ input[type="text"].wiki-search {
         el("div", { class: "row", style: { gap: "6px", margin: "4px 0" } }, [
           elementChip(sp.element),
           rarityChip(m.rarity),
-          el("span", { class: "chip", text: m.mood })
+          el("span", { class: "chip", text: getMood(m.mood).name })
         ]),
         bar("hp", pct, hpClass(pct)),
         el("div", { class: "cc-hp-text", text: `${hp} / ${v.maxHp} HP` }),
@@ -14622,22 +14926,23 @@ input[type="text"].wiki-search {
     ]);
     return [
       h3("What a Mood is", "mood personality"),
-      para(`Every Mythling has a <b>Mood</b>: a fixed, purely <b>positive</b> trait that boosts exactly <b>one</b> stat.
-      There are <b>${MOOD_IDS.length}</b> Moods \u2014 one for every stat \u2014 so nothing is missing from the table below.
-      Moods are rolled when a wild Mythling appears and are kept through capture, evolution and every level up.
+      para(`Every Mythling has a <b>Mood</b>: a fixed, purely <b>positive</b> trait that raises <b>three</b> stats and lowers
+      nothing. There are <b>${MOOD_IDS.length}</b> Moods and no two share the same trio, so every stat is covered several times
+      over. Moods are rolled when a wild Mythling appears and are kept through capture, evolution and every level up.
       A <b>Mood Tonic</b> (sold from Azure Coast onward) re-rolls it into a different Mood.`),
       h3("Rarity amplifies the Mood", "rarity magnitude scale"),
       para(`Rarity does not change base stats by itself \u2014 it sets the <b>magnitude</b> of the Mood bonus:
-      <b>+2 \xD7 magnitude</b> to the Mood's stat (HP counts six times, Crit Damage four times). Rarity <b>D</b> adds
+      <b>+magnitude</b> to each of the three stats (HP counts triple, Crit Damage double). Rarity <b>D</b> adds
       nothing at all; <b>SSS+</b> adds a huge boost.`),
       table(RARITY_ORDER.map((id) => [
         `<b style="color:${RARITIES[id].color}">Rarity ${id}</b>`,
-        `Mood magnitude <b>${RARITIES[id].magnitude}</b> \u2192 <b>+${RARITIES[id].magnitude * 2}</b> to the Mood's stat (HP <b>+${RARITIES[id].magnitude * 12}</b>, Crit Damage <b>+${RARITIES[id].magnitude * 8}%</b>)`
+        `Mood magnitude <b>${RARITIES[id].magnitude}</b> \u2192 <b>+${RARITIES[id].magnitude}</b> to each Mood stat (HP <b>+${RARITIES[id].magnitude * 3}</b>, Crit Damage <b>+${RARITIES[id].magnitude * 2}%</b>)`
       ])),
       h3("All moods", "list table of moods"),
       table(rows),
-      note(`Example \u2014 a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+10 Physical Attack</b>.
-      A <b>Sturdy</b> one at the same rarity: <b>+60 HP</b>. The same Mood at Rarity D changes nothing.`),
+      note(`Example \u2014 a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+15 HP, +5 Physical Attack, +5 Counter</b>.
+      The same Mood at Rarity D changes nothing. When a Mood plus and a Rational minus land on the <b>same</b> stat the
+      profile shows the <b>net</b> change \u2014 green when the plus wins (+15 \u221210 = <b>+5</b>), red when the penalty wins.`),
       h3("Rational \u2014 the +10 / \u221210 trait", "rational temper nature plus minus trade-off"),
       para(`Where the Mood only ever helps, the <b>Rational</b> is a trade-off: a fixed <b>+${RATIONAL_AMOUNT}</b> to one of the six
       main stats and a fixed <b>\u2212${RATIONAL_AMOUNT}</b> to another. It is flat (not scaled by rarity or level) and it stacks with the
@@ -14845,7 +15150,7 @@ input[type="text"].wiki-search {
       in its <b>Skill Library</b> forever, and leaving a button empty is allowed (nothing refills it, and the choice
       is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
       bullets([
-        "<b>Normal</b> skills have unlimited uses but low power \u2014 every evolution teaches a stronger one.",
+        "<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. The stronger <b>elemental</b> Normals every evolution teaches carry an element and therefore have <b>limited uses</b> (30 / 25 / 20).",
         "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.",
         "<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe's stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.",
         "Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.",
@@ -14949,6 +15254,21 @@ input[type="text"].wiki-search {
       "<b>Gates</b> \u2014 sealed until you defeat that region\u2019s Guardian and earn its key item."
     ]));
     out.push(note("Healing at a Center restores HP and skill uses and resets Ultimate Charge to 0 \u2014 it never touches your EXP."));
+    out.push(h3("Treasure chests", "chest treasure bronze silver emerald ultra gold loot"));
+    out.push(para(`Chests are scattered through the wild areas of every map. A map holds at most <b>two Bronze</b> chests and
+    <b>one</b> of each other tier at a time; an opened chest is gone, and the map rolls a fresh set of chests
+    after about <b>${Math.round(CHEST_REROLL_MS / 6e4)} minutes</b> of play. Every chest holds Wildcoins (more in later regions);
+    the rarer the chest, the likelier it also holds a ball or a food \u2014 and the best balls and foods only ever come out of the best chests.`));
+    out.push(table(CHEST_TIER_IDS.map((id) => {
+      const t = CHEST_TIERS[id];
+      return [
+        `<b style="color:${t.colors.trim}">${t.name}</b>`,
+        `${(t.chance * 100).toFixed(t.chance < 0.01 ? 1 : 0)}% per slot \xB7 up to <b>${t.max}</b> on a map \xB7 ${t.coins[0]}\u2013${t.coins[1]} Wildcoins (\xD7 region) \xB7 ${Math.round(t.itemChance * 100)}% item: ${[...t.balls, ...t.foods].map((i) => {
+          var _a;
+          return ((_a = ITEMS[i]) == null ? void 0 : _a.name) || i;
+        }).join(", ")}`
+      ];
+    }), "chest tiers loot table"));
     return out;
   }
   function progressSection() {
@@ -15209,6 +15529,12 @@ input[type="text"].wiki-search {
     const rider = !sk.reflect ? riderSummary(sk) : "";
     return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} \xB7 ${what}${rider ? ` \xB7 ${rider}` : ""} \xB7 ${uses}`;
   }
+  function nameWithElement(m, cls = "") {
+    var _a, _b;
+    const sp = getSpecies(m.speciesId);
+    const elId = (sp == null ? void 0 : sp.element) || "nature";
+    return el("span", { class: `name-el ${cls}`, title: `${((_a = ELEMENTS[elId]) == null ? void 0 : _a.name) || elId} type` }, [icon(((_b = ELEMENTS[elId]) == null ? void 0 : _b.icon) || "spark", elId), el("span", { text: displayName(m) })]);
+  }
   function portrait(m, size = 66, animated = false) {
     var _a, _b;
     const sp = getSpecies(m.speciesId);
@@ -15425,7 +15751,7 @@ input[type="text"].wiki-search {
         portrait(m, 66),
         el("div", { class: "mc-main" }, [
           el("div", { class: "mc-name" }, [
-            displayName(m),
+            nameWithElement(m),
             m.level >= LEVEL_CAP ? el("span", { class: "chip max", text: "MAX" }) : null,
             evoReady ? el("span", { class: "chip evolve icon-only", title: "Ready to evolve! Open the card and press EVOLVE NOW.", "aria-label": "Ready to evolve" }, [icon("levelup")]) : null,
             mutationChip(m.mutation)
@@ -15456,17 +15782,24 @@ input[type="text"].wiki-search {
       const locked = EvolutionManager.lockedStages(m);
       const ult = ultimateMove(m);
       const rational = getRational(m.rational);
+      const mag = getRarity(m.rarity).magnitude;
+      const moodMods = moodModifiers(m.mood, mag);
+      const ratMods = rationalModifiers(m.rational);
       const statRows = STAT_KEYS.map((k) => {
         const moodUp = getMood(m.mood).up.includes(k);
         const ratUp = (rational == null ? void 0 : rational.up) === k;
         const isDown = (rational == null ? void 0 : rational.down) === k;
-        const isUp = moodUp || ratUp;
+        const net = (moodMods[k] || 0) + (ratMods[k] || 0);
+        const tone = net > 0 ? "up" : net < 0 ? "down" : "";
         const maxRef = STAT_BAR_MAX[k] || 90;
-        const why = [moodUp ? `Mood ${getMood(m.mood).name}` : "", ratUp ? `Rational ${rational.name} +10` : "", isDown ? `Rational ${rational.name} -10` : ""].filter(Boolean).join(" \xB7 ");
-        return el("div", { class: `stat-row ${isUp ? "up" : ""} ${isDown ? "down" : ""}`, title: `${STAT_INFO[k]}${why ? ` (${why})` : ""}` }, [
-          el("span", { class: "stat-name" }, [el("span", { text: STAT_LABELS[k] }), moodUp ? icon("up", "tiny") : null, ratUp ? icon("up", "tiny") : null, isDown ? icon("down", "tiny") : null]),
+        const why = [moodUp ? `Mood ${getMood(m.mood).name} +${moodMods[k]}` : "", ratUp ? `Rational ${rational.name} +10` : "", isDown ? `Rational ${rational.name} -10` : ""].filter(Boolean).join(" \xB7 ");
+        return el("div", { class: `stat-row ${tone}`, title: `${STAT_INFO[k]}${why ? ` (${why}${moodUp && isDown ? ` = ${net > 0 ? "+" : ""}${net}` : ""})` : ""}` }, [
+          el("span", { class: "stat-name" }, [el("span", { text: STAT_LABELS[k] }), moodUp || ratUp ? icon("up", "tiny") : null, isDown ? icon("down", "tiny") : null]),
           el("div", { class: "sbar" }, [el("i", { style: { width: `${Math.min(100, stats[k] / maxRef * 100)}%` } })]),
-          el("b", { text: formatStat(k, stats[k]) })
+          el("b", {}, [
+            el("span", { text: formatStat(k, stats[k]) }),
+            net !== 0 ? el("span", { class: `stat-net ${tone}`, text: `(${net > 0 ? "+" : ""}${net})` }) : moodUp || ratUp || isDown ? el("span", { class: "stat-net", text: "(\xB10)" }) : null
+          ])
         ]);
       });
       const body = el("div", { class: "detail-wrap" }, [
@@ -15497,7 +15830,7 @@ input[type="text"].wiki-search {
           ])
         ]),
         el("div", {}, [
-          el("h3", { text: `${displayName(m)}  \xB7  Lv.${m.level}${m.level >= LEVEL_CAP ? "  (MAX LEVEL)" : ""}` }),
+          el("h3", {}, [nameWithElement(m), el("span", { text: `  \xB7  Lv.${m.level}${m.level >= LEVEL_CAP ? "  (MAX LEVEL)" : ""}` })]),
           el("div", { class: "mc-sub", text: `Species: ${sp.displayName} \xB7 Breed: ${sp.breed} \xB7 Role: ${sp.role} \xB7 Form: ${stageData(m).name} (stage ${m.stage + 1})` }),
           el("div", { style: { margin: "8px 0" } }, [
             labeledBar(
@@ -15511,8 +15844,7 @@ input[type="text"].wiki-search {
           ]),
           el("h3", { text: "Stats" }),
           el("div", { class: "stat-rows" }, statRows),
-          el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) \xB7 <b>${stats.crit}%</b> crit chance \xB7 crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
-          el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `Mood <b>${getMood(m.mood).name}</b>: ${iconSvg("up", "tiny")} ${mood.up.join(", ")} \u2014 magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity}) \xB7 Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg("up", "tiny")} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg("down", "tiny")} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` \xB7 ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ""}` }),
+          el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `Mood <b>${getMood(m.mood).name}</b>: ${getMood(m.mood).up.map((k) => `${iconSvg("up", "tiny")} ${STAT_SHORT[k]} +${moodMods[k]}`).join(" &nbsp;")} (magnitude ${mag}, rarity ${m.rarity}) \xB7 Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg("up", "tiny")} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg("down", "tiny")} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` \xB7 ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ""}` }),
           el("div", { class: "row", style: { gap: "6px", marginTop: "6px" } }, [
             iconTextBtn("swap", `Re-roll Mood (Mood Tonic \xD7${InventoryManager.count("mood_tonic")})`, { class: "small ghost", disabled: !InventoryManager.has("mood_tonic", 1), title: InventoryManager.has("mood_tonic", 1) ? "Uses one Mood Tonic: the Mood becomes a different one at random." : "Buy a Mood Tonic at a shop (Azure Coast onward).", onclick: async () => {
               const ok = await confirmDialog("RE-ROLL MOOD", `Use a Mood Tonic on ${displayName(m)}? Its Mood (${getMood(m.mood).name}) becomes a different one at random. This cannot be undone.`);
@@ -15648,8 +15980,8 @@ input[type="text"].wiki-search {
                 } else toast("Party is full!", "bad");
               }
             }),
-            iconTextBtn("close", "Release", {
-              class: "small ghost",
+            button("Release", {
+              class: "small ghost release",
               onclick: (e) => {
                 e.stopPropagation();
                 this.releaseFromStorage(m);
@@ -16115,6 +16447,10 @@ input[type="text"].wiki-search {
         ["Collection", `${s.caught}/${s.total} caught`],
         ["Trainers defeated", String(Object.keys(GameState.world.defeatedTrainers).length)],
         ["Regions visited", String(Object.keys(GameState.world.visitedMaps).length)],
+        ["Treasure chests opened", (() => {
+          const c = ChestManager.stats();
+          return `${c.total} \u2014 Bronze ${c.bronze} \xB7 Silver ${c.silver} \xB7 Emerald ${c.emerald} \xB7 Ultra Gold ${c.ultra_gold}`;
+        })()],
         ["Level cap (this version)", `Lv.${LEVEL_CAP}`],
         ["Game version", GameState.meta.gameVersion]
       ];
@@ -16228,13 +16564,14 @@ input[type="text"].wiki-search {
       dropdown("Text Speed", "textSpeed", ["slow", "normal", "fast", "instant"]),
       dropdown("Graphics Quality", "graphicsQuality", ["low", "medium", "high"]),
       (() => {
-        const val = el("b", { text: S.get("cameraSensitivity").toFixed(1) });
+        const cur = () => Math.min(CAMERA_ZOOM_MAX, Math.max(CAMERA_ZOOM_MIN, Number(S.get("cameraZoom")) || 1.35));
+        const val = el("b", { text: `\xD7${cur().toFixed(2)}` });
         return el("div", { class: "item-row" }, [
-          el("div", { class: "ir-main" }, [el("div", { class: "ir-name", text: "Camera Sensitivity" })]),
-          el("input", { type: "range", min: 0.4, max: 2, step: 0.1, value: S.get("cameraSensitivity"), oninput: (e) => {
+          el("div", { class: "ir-main" }, [el("div", { class: "ir-name", text: "Camera Zoom" }), el("div", { class: "ir-desc", text: `How close the world camera sits (\xD7${CAMERA_ZOOM_MIN} far \u2013 \xD7${CAMERA_ZOOM_MAX} close). The mouse wheel or + / \u2212 in the world also zooms.` })]),
+          el("input", { type: "range", min: CAMERA_ZOOM_MIN, max: CAMERA_ZOOM_MAX, step: CAMERA_ZOOM_STEP, value: cur(), oninput: (e) => {
             const v = parseFloat(e.target.value);
-            S.set("cameraSensitivity", v);
-            val.textContent = v.toFixed(1);
+            S.set("cameraZoom", v);
+            val.textContent = `\xD7${v.toFixed(2)}`;
           } }),
           val
         ]);
@@ -16960,6 +17297,11 @@ input[type="text"].wiki-search {
       window.addEventListener("keydown", (e) => this.onKeyDown(e));
       window.addEventListener("keyup", (e) => this.onKeyUp(e));
       window.addEventListener("pointerdown", () => AudioManager.resume(), { once: false });
+      this.canvas.addEventListener("wheel", (e) => {
+        if (this.mode !== "overworld" || Dialogue.open) return;
+        e.preventDefault();
+        this.showZoomHint(this.overworld.zoomBy(e.deltaY < 0 ? 1 : -1));
+      }, { passive: false });
       document.getElementById("btn-menu").addEventListener("click", () => this.openMenu());
       document.getElementById("btn-interact").addEventListener("click", () => this.overworld.interact());
       this.bindTouchControls();
@@ -17001,8 +17343,25 @@ input[type="text"].wiki-search {
       }
       requestAnimationFrame(this.loop);
     }
+    /** Small transient "Camera zoom ×1.35" note in the objective slot of the HUD. */
+    showZoomHint(z) {
+      const obj = document.getElementById("objective");
+      if (!obj) return;
+      clearTimeout(this._zoomHintTimer);
+      obj.innerHTML = `${iconSvg("objective", "gold")} <span>Camera zoom \xD7${z.toFixed(2)}</span>`;
+      obj.classList.add("show");
+      this._zoomHintTimer = setTimeout(() => this.updateHud(), 900);
+    }
     onKeyDown(e) {
       const k = e.key.toLowerCase();
+      if (this.mode === "overworld" && !Dialogue.open && (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_")) {
+        const ae = document.activeElement;
+        if (!(ae && /input|textarea|select/i.test(ae.tagName || ""))) {
+          e.preventDefault();
+          this.showZoomHint(this.overworld.zoomBy(e.key === "-" || e.key === "_" ? -1 : 1));
+          return;
+        }
+      }
       if (k === "escape") {
         e.preventDefault();
         if (handleGlobalEscape()) return;
@@ -17260,6 +17619,16 @@ input[type="text"].wiki-search {
       bus.on("overworld:wild", (m) => this.startWildBattle(m));
       bus.on("overworld:trainer", (t) => this.startTrainerBattle(t));
       bus.on("overworld:sign", (s) => Dialogue.show([s.text], "SIGN"));
+      bus.on("overworld:chest", async (chest) => {
+        const res = ChestManager.open(this.overworld.mapId, chest.id);
+        if (!res.ok) return;
+        AudioManager.sfx(res.tier.id === "bronze" ? "coin" : "heal");
+        const lines = [`You found a ${res.tier.name}! Inside: ${coins(res.coins)} Wildcoins${res.item ? ` and ${res.item.qty}\xD7 ${res.item.name}` : ""}.`];
+        if (res.tier.id === "ultra_gold") lines.push("An ULTRA GOLD chest \u2014 almost nobody ever finds one of these.");
+        await Dialogue.show(lines, "TREASURE");
+        this.updateHud();
+        await this.autosave();
+      });
       bus.on("overworld:npc", async (n) => {
         await Dialogue.show(n.dialogue, n.name);
       });

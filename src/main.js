@@ -11,6 +11,7 @@ import { SaveManager } from './systems/SaveManager.js';
 import { SettingsManager } from './systems/SettingsManager.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { EvolutionManager } from './systems/EvolutionManager.js';
+import { ChestManager } from './systems/ChestManager.js';
 import { Battle, BattleType } from './systems/BattleManager.js';
 import { createMythling, displayName, maxHp, hpPercent, restoreAll, speciesOf, isFainted } from './core/mythling.js';
 import { MenuScene } from './scenes/MenuScene.js';
@@ -52,6 +53,12 @@ class Game {
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
     window.addEventListener('keyup', (e) => this.onKeyUp(e));
     window.addEventListener('pointerdown', () => AudioManager.resume(), { once: false });
+    // Mouse wheel over the world zooms the camera (within the allowed range).
+    this.canvas.addEventListener('wheel', (e) => {
+      if (this.mode !== 'overworld' || Dialogue.open) return;
+      e.preventDefault();
+      this.showZoomHint(this.overworld.zoomBy(e.deltaY < 0 ? 1 : -1));
+    }, { passive: false });
 
     document.getElementById('btn-menu').addEventListener('click', () => this.openMenu());
     document.getElementById('btn-interact').addEventListener('click', () => this.overworld.interact());
@@ -94,8 +101,27 @@ class Game {
     requestAnimationFrame(this.loop);
   }
 
+  /** Small transient "Camera zoom ×1.35" note in the objective slot of the HUD. */
+  showZoomHint(z) {
+    const obj = document.getElementById('objective');
+    if (!obj) return;
+    clearTimeout(this._zoomHintTimer);
+    obj.innerHTML = `${iconSvg('objective', 'gold')} <span>Camera zoom ×${z.toFixed(2)}</span>`;
+    obj.classList.add('show');
+    this._zoomHintTimer = setTimeout(() => this.updateHud(), 900);
+  }
+
   onKeyDown(e) {
     const k = e.key.toLowerCase();
+    // + / - zoom the world camera
+    if (this.mode === 'overworld' && !Dialogue.open && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_')) {
+      const ae = document.activeElement;
+      if (!(ae && /input|textarea|select/i.test(ae.tagName || ''))) {
+        e.preventDefault();
+        this.showZoomHint(this.overworld.zoomBy(e.key === '-' || e.key === '_' ? -1 : 1));
+        return;
+      }
+    }
     // ESC closes whatever is on top — modal first, then any panel — in every mode.
     if (k === 'escape') {
       e.preventDefault();
@@ -319,6 +345,16 @@ class Game {
     bus.on('overworld:wild', (m) => this.startWildBattle(m));
     bus.on('overworld:trainer', (t) => this.startTrainerBattle(t));
     bus.on('overworld:sign', (s) => Dialogue.show([s.text], 'SIGN'));
+    bus.on('overworld:chest', async (chest) => {
+      const res = ChestManager.open(this.overworld.mapId, chest.id);
+      if (!res.ok) return;
+      AudioManager.sfx(res.tier.id === 'bronze' ? 'coin' : 'heal');
+      const lines = [`You found a ${res.tier.name}! Inside: ${coins(res.coins)} Wildcoins${res.item ? ` and ${res.item.qty}× ${res.item.name}` : ''}.`];
+      if (res.tier.id === 'ultra_gold') lines.push('An ULTRA GOLD chest — almost nobody ever finds one of these.');
+      await Dialogue.show(lines, 'TREASURE');
+      this.updateHud();
+      await this.autosave();
+    });
     bus.on('overworld:npc', async (n) => {
       await Dialogue.show(n.dialogue, n.name);
     });

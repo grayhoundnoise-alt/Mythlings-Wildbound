@@ -5,6 +5,8 @@ import { STARTING_INVENTORY, STARTING_WILDCOINS, getItem, LEGACY_ITEMS } from '.
 import { normalizeMoodId, getRational, rollRational } from '../data/moods.js';
 import { SPECIES_IDS, getSpecies } from '../data/species.js';
 import { MAPS, getMap } from '../data/maps.js';
+import { getSkill } from '../data/skills.js';
+import { CHEST_TIERS } from '../data/chests.js';
 import {
   createMythling, restoreAll, refreshLibrary, autoEquip, normalizeEquipped, displayName,
   maxHp, computeStats, stageForLevel,
@@ -272,6 +274,8 @@ export function createNewGameState({ slot, playerName, starterId, settings }) {
     visitedMaps: { verdant_vale: true },
     flags: {},
     npcProgress: {},
+    chests: {},
+    chestStats: {},
   };
   GameState.meta = { playTime: 0, startedAt: Date.now(), gameVersion: GAME_VERSION, levelCap: LEVEL_CAP };
   GameState._sessionStart = Date.now();
@@ -334,6 +338,11 @@ function migrateMythling(raw) {
   const maxStage = stageForLevel(m.speciesId, m.level);
   if (m.stage > maxStage) m.stage = maxStage;
   refreshLibrary(m);  // adds any skills introduced by a newer game version
+  // skills whose use count changed in a newer version (e.g. elemental normals, once unlimited) start full
+  for (const id of m.library) {
+    const sk = getSkill(id);
+    if (sk && Number.isFinite(sk.uses) && m.uses[id] == null) m.uses[id] = sk.uses;
+  }
   // drop equipped ids this Mythling cannot actually know (edited / corrupt saves)
   m.skills = m.skills.filter((id) => m.library.includes(id));
   // only auto-fill for saves that predate the loadout system: if the player
@@ -343,6 +352,19 @@ function migrateMythling(raw) {
   if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
   if (m.currentHp < 0) m.currentHp = 0;
   return m;
+}
+
+/** Keep only well-formed chest records from a save (tier must still exist). */
+function sanitizeChests(raw) {
+  const out = {};
+  for (const [mapId, entry] of Object.entries(raw || {})) {
+    if (!getMap(mapId) || !entry || typeof entry !== 'object') continue;
+    const list = (Array.isArray(entry.list) ? entry.list : [])
+      .filter((c) => c && typeof c.id === 'string' && CHEST_TIERS[c.tier] && Number.isFinite(c.x) && Number.isFinite(c.y))
+      .map((c) => ({ id: c.id, tier: c.tier, x: c.x, y: c.y }));
+    out[mapId] = { at: Math.max(0, Number(entry.at) || 0), list };
+  }
+  return out;
 }
 
 export function deserialize(data) {
@@ -408,6 +430,8 @@ export function deserialize(data) {
     visitedMaps: { verdant_vale: true, ...(w.visitedMaps || {}) },
     flags: { ...(w.flags || {}) },
     npcProgress: { ...(w.npcProgress || {}) },
+    chests: sanitizeChests(w.chests),
+    chestStats: { ...(w.chestStats || {}) },
   };
 
   GameState.meta = {

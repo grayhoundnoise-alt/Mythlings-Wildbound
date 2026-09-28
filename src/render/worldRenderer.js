@@ -1,5 +1,6 @@
 // Procedural world rendering: ground, water, props, buildings, weather particles.
 import { makeRng, shadeColor, clamp } from '../core/utils.js';
+import { CHEST_TIERS } from '../data/chests.js';
 
 const TERRAIN = {
   town:    { grass: '#7ec96a', grass2: '#6bb95c', path: '#e5d3a1', props: ['tree', 'flower', 'bush', 'lamp'] },
@@ -20,6 +21,53 @@ const TERRAIN = {
   crag:    { grass: '#7d7a72', grass2: '#6b685f', path: '#a39e90', props: ['rock', 'rock', 'stalag', 'crystal'] },
   summit:  { grass: '#8f949c', grass2: '#7c8188', path: '#b8bcc2', props: ['pillar', 'rock', 'stalag', 'crystal'] },
 };
+
+/**
+ * A treasure chest on the ground: a wooden box in the tier's colours with a lid,
+ * a lock plate, a coloured glow for the rare tiers and a slow sparkle. `near`
+ * lifts the lid a touch so the player can see it is interactable.
+ */
+export function drawChest(ctx, chest, time, near = false) {
+  const tier = CHEST_TIERS[chest.tier] || CHEST_TIERS.bronze;
+  const c = tier.colors;
+  ctx.save();
+  ctx.translate(chest.x, chest.y);
+  if (c.glow) {
+    const pulse = 0.55 + Math.sin(time * 2.2 + chest.x * 0.01) * 0.25;
+    const g = ctx.createRadialGradient(0, -10, 4, 0, -10, 46);
+    g.addColorStop(0, c.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = pulse; ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, -10, 46, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(0, 2, 20, 6, 0, 0, Math.PI * 2); ctx.fill();
+  // body
+  ctx.fillStyle = c.body; roundRect(ctx, -17, -18, 34, 20, 3); ctx.fill();
+  ctx.fillStyle = c.dark; ctx.fillRect(-17, -6, 34, 3);
+  ctx.strokeStyle = c.dark; ctx.lineWidth = 1.5; ctx.strokeRect(-17, -18, 34, 20);
+  // bands
+  ctx.fillStyle = c.trim; ctx.fillRect(-11, -18, 3, 20); ctx.fillRect(8, -18, 3, 20);
+  // lid (lifts when the player is close)
+  ctx.save();
+  ctx.translate(0, -18);
+  ctx.rotate(near ? -0.18 - Math.sin(time * 6) * 0.03 : 0);
+  ctx.fillStyle = shadeColor(c.body, 0.12); roundRect(ctx, -18, -11, 36, 12, 5); ctx.fill();
+  ctx.strokeStyle = c.dark; ctx.strokeRect(-18, -11, 36, 12);
+  ctx.fillStyle = c.trim; ctx.fillRect(-11, -11, 3, 12); ctx.fillRect(8, -11, 3, 12);
+  ctx.restore();
+  // lock plate
+  ctx.fillStyle = c.trim; roundRect(ctx, -4, -14, 8, 8, 2); ctx.fill();
+  ctx.fillStyle = c.dark; ctx.fillRect(-1, -12, 2, 4);
+  // sparkle
+  const sp = (Math.sin(time * 3.1 + chest.y * 0.02) + 1) / 2;
+  if (sp > 0.7) {
+    const k = (sp - 0.7) / 0.3;
+    ctx.strokeStyle = `rgba(255,255,255,${k})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(14, -30); ctx.lineTo(14, -22); ctx.moveTo(10, -26); ctx.lineTo(18, -26); ctx.stroke();
+  }
+  ctx.restore();
+}
 
 /** Ground colour of a terrain id (used by the minimap so it matches the world). */
 export function terrainColor(terrainId) {

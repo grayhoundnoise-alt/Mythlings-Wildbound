@@ -403,7 +403,8 @@ select {
 }
 .combatant-card.player { bottom: 210px; right: 18px; }
 .cc-top { display: flex; align-items: center; gap: 8px; }
-.cc-name { font-weight: 900; letter-spacing: .04em; font-size: 1.02rem; }
+.cc-name { font-weight: 900; letter-spacing: .04em; font-size: 1.02rem; display: inline-flex; align-items: center; gap: 6px; }
+.cc-name .ico { width: 1em; height: 1em; }
 .cc-lv { color: var(--gold); font-weight: 800; margin-left: auto; font-size: .95rem; }
 .cc-hp-text { font-size: .78rem; color: var(--muted); text-align: right; }
 .ult-track { display: flex; gap: 3px; margin-top: 6px; align-items: center; }
@@ -488,12 +489,16 @@ select {
 .detail-art { border-radius: 16px; background: radial-gradient(circle at 50% 60%, rgba(90,140,190,.35), rgba(8,14,24,.7)); padding: 10px; }
 .detail-art canvas { width: 100%; height: 230px; display: block; }
 .stat-rows { display: flex; flex-direction: column; gap: 6px; }
-.stat-row { display: grid; grid-template-columns: 150px 1fr 54px; align-items: center; gap: 10px; font-size: .9rem; }
+.stat-row { display: grid; grid-template-columns: 150px 1fr 64px; align-items: center; gap: 10px; font-size: .9rem; }
 .stat-row .sbar { height: 9px; border-radius: 5px; background: rgba(0,0,0,.45); overflow: hidden; }
 .stat-row .sbar > i { display: block; height: 100%; background: linear-gradient(90deg, #7fd8ff, #3fa9f5); }
-.stat-row b { text-align: right; }
+.stat-row b { text-align: right; display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
 .stat-row.up b { color: var(--ok); }
 .stat-row.down b { color: var(--danger); }
+/* the net Mood + Rational change, e.g. (+15) / (+5) / (-7) */
+.stat-row .stat-net { font-size: .68rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.stat-row .stat-net.up { color: var(--ok); }
+.stat-row .stat-net.down { color: var(--danger); }
 
 .skill-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
@@ -942,6 +947,14 @@ input[type="text"].wiki-search {
 .portrait .el-badge.fire   { background: var(--fire);   color: #3a1204; }
 .portrait .el-badge.rock   { background: var(--rock);   color: #2c2114; }
 .myth-card .portrait { width: 66px; height: 66px; }
+
+/* ---- element icon in front of every Mythling name ---- */
+.name-el { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.name-el .ico { width: 1em; height: 1em; flex: none; }
+h3 .name-el { vertical-align: middle; }
+/* the Release button: plain text, light red */
+.btn.release, button.release { color: #ff9a9a; border-color: rgba(255,120,120,.45); background: rgba(255,90,90,.08); }
+.btn.release:hover, button.release:hover { background: rgba(255,90,90,.18); color: #ffb3b3; }
 
 /* ---- storage card actions: always side by side ---- */
 .myth-card .mc-actions { display: flex; gap: 6px; flex-wrap: nowrap; margin-top: 6px; }

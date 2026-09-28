@@ -90,8 +90,10 @@ Optional headless regression test for the editor (drives the built file in jsdom
 | **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades a tier per evolution. New **support Ultimates** buff the caster and/or debuff the foe with two effects per tier |
 | **Mutations** | Shiny ✧ (+1 to every stat) and Darkness ☾ (+2), with their own colours and aura |
 | **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion, 0.15 % dodge per point, capped at 6 %), **CRIT** (capped at 25 %), **C.DMG** |
-| **Moods & Rationals** | Moods are purely positive (one per stat, scaled by Rarity). Every Mythling also has a **Rational**: a fixed +10 / −10 on two stats. Mood Tonic / Temper Tonic re-roll them |
-| **Balls** | Basic · Normal · Advanced · Absolute · **God** (guaranteed) · **Shiny** / **Dark** (guaranteed catch **and** guaranteed mutation) |
+| **Moods & Rationals** | Moods are purely positive: each raises **three** stats (25 unique trios, scaled by Rarity). Every Mythling also has a **Rational**: a fixed +10 / −10 on two stats. Mood Tonic / Temper Tonic re-roll them |
+| **Balls** | Basic · Normal · Advanced · Absolute · **God** (guaranteed) · **Shiny** / **Dark** (guaranteed catch **and** guaranteed mutation). Each region's shop sells its own tier; the **last region's shop carries the complete catalogue** |
+| **Treasure chests** | Bronze (max 2 per map) · Silver · Emerald · **Ultra Gold** (nearly impossible) scattered through the wild areas; coins always, balls / food from the rarer tiers, the best loot only from the best chests; a map re-rolls its chests after ~12 min of play |
+| **Camera** | Settings → **Camera Zoom** (×1.1 – ×1.8), or the mouse wheel / `+` `−` in the world |
 | **Systems** | Rarity, Skill Library, life-steal / Retaliate skills, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Index & Collection grouped by type, Save/Load/Autosave, Settings, **Game Wiki** |
 
 ### Battle & training rules (latest)
@@ -106,6 +108,8 @@ Optional headless regression test for the editor (drives the built file in jsdom
   Normal / Special / Buff / Debuff. **The order you equip them is the order of the battle buttons**
   (first equipped = button 1 / key `1`). Old `{normal, special, buff}` saves migrate automatically.
 * **Starter = S rarity** — whichever partner you pick starts as an S-tier Mythling.
+* **Elemental Normal skills have limited uses** (30 / 25 / 20 by tier); only the element-less
+  starter attack (Bite / Scratch / Peck / Pebble Toss) is unlimited and is the fallback move.
 * **God Ball** — 12,000 Wildcoins, **100 % catch**. **Shiny Ball** (60,000) and **Dark Ball**
   (90,000) also force the Shiny / Darkness mutation; both are sold only in the Stonehollow Crags.
   (The King Ball is gone — old saves convert it to God Balls.)

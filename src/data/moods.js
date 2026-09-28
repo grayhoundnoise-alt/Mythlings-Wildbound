@@ -1,4 +1,4 @@
-// Personality traits: MOOD (one stat up, magnitude from the RARITY table) and
+// Personality traits: MOOD (three stats up, magnitude from the RARITY table) and
 // RATIONAL (+10 / -10 on two stats). Both are deterministic & persistent, and both
 // can be re-rolled with shop tonics.
 export const STAT_KEYS = ['hp', 'patk', 'satk', 'pdef', 'sdef', 'spd', 'counter', 'crit', 'critMult'];
@@ -38,20 +38,37 @@ export const STAT_BAR_MAX = {
   hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 25, critMult: 200,
 };
 
-// Mood: a purely POSITIVE trait. Every Mood boosts exactly ONE stat, so the nine
-// Moods cover every stat there is — nothing is hidden behind a lucky combination.
-// The old "three up, one down" Moods are gone: the DOWNSIDE now lives in the
-// separate Rational trait (see RATIONALS below), which stacks on top of the Mood.
+// Mood: a purely POSITIVE trait. Every Mood raises THREE stats and lowers nothing —
+// the downside lives in the separate Rational trait (see RATIONALS below), which
+// stacks on top of the Mood. No two Moods share the same trio, and the 24 trios cover
+// every stat several times over.
 export const MOODS = {
-  sturdy: { id: 'sturdy', name: 'Sturdy', up: ['hp'],       desc: 'Thick-skinned and hard to put down. Boosts HP.' },
-  brave:  { id: 'brave',  name: 'Brave',  up: ['patk'],     desc: 'Charges in first. Boosts Physical Attack.' },
-  clever: { id: 'clever', name: 'Clever', up: ['satk'],     desc: 'Thinks three moves ahead. Boosts Special Attack.' },
-  guarded:{ id: 'guarded',name: 'Guarded',up: ['pdef'],     desc: 'Never drops its guard. Boosts Physical Defense.' },
-  calm:   { id: 'calm',   name: 'Calm',   up: ['sdef'],     desc: 'Unshaken by tricks and magic. Boosts Special Defense.' },
-  swift:  { id: 'swift',  name: 'Swift',  up: ['spd'],      desc: 'Always a step ahead. Boosts Speed.' },
-  agile:  { id: 'agile',  name: 'Agile',  up: ['counter'],  desc: 'Slips out of harm\'s way. Boosts Counter (evasion).' },
-  keen:   { id: 'keen',   name: 'Keen',   up: ['crit'],     desc: 'Finds every weak spot. Boosts Crit Chance.' },
-  brutal: { id: 'brutal', name: 'Brutal', up: ['critMult'], desc: 'Makes every opening count. Boosts Crit Damage.' },
+  sturdy:    { id: 'sturdy',    name: 'Sturdy',    up: ['hp', 'pdef', 'patk'],      desc: 'Thick-skinned and hard to put down.' },
+  brave:     { id: 'brave',     name: 'Brave',     up: ['hp', 'patk', 'counter'],   desc: 'Charges in first and shrugs off the reply.' },
+  clever:    { id: 'clever',    name: 'Clever',    up: ['satk', 'sdef', 'counter'], desc: 'Thinks three moves ahead.' },
+  guarded:   { id: 'guarded',   name: 'Guarded',   up: ['pdef', 'sdef', 'counter'], desc: 'Never drops its guard.' },
+  calm:      { id: 'calm',      name: 'Calm',      up: ['hp', 'sdef', 'counter'],   desc: 'Unshaken by tricks and magic.' },
+  swift:     { id: 'swift',     name: 'Swift',     up: ['spd', 'counter', 'sdef'],  desc: 'Always a step ahead.' },
+  agile:     { id: 'agile',     name: 'Agile',     up: ['counter', 'spd', 'hp'],    desc: 'Slips out of harm\'s way and keeps going.' },
+  lazy:      { id: 'lazy',      name: 'Lazy',      up: ['hp', 'pdef', 'sdef'],      desc: 'Would rather nap than dodge — and can afford to.' },
+  energetic: { id: 'energetic', name: 'Energetic', up: ['patk', 'satk', 'spd'],     desc: 'Never stops moving.' },
+  aggressive:{ id: 'aggressive',name: 'Aggressive',up: ['patk', 'spd', 'counter'],  desc: 'Attacks first and asks later.' },
+  focused:   { id: 'focused',   name: 'Focused',   up: ['satk', 'spd', 'crit'],     desc: 'Eyes on the weak spot.' },
+  reckless:  { id: 'reckless',  name: 'Reckless',  up: ['patk', 'spd', 'critMult'], desc: 'Hits as hard as it possibly can.' },
+  playful:   { id: 'playful',   name: 'Playful',   up: ['spd', 'counter', 'satk'],  desc: 'Turns every fight into a game.' },
+  stubborn:  { id: 'stubborn',  name: 'Stubborn',  up: ['hp', 'pdef', 'spd'],       desc: 'Will not be moved.' },
+  ambitious: { id: 'ambitious', name: 'Ambitious', up: ['patk', 'satk', 'counter'], desc: 'Wants to win every exchange.' },
+  cautious:  { id: 'cautious',  name: 'Cautious',  up: ['pdef', 'sdef', 'spd'],     desc: 'Reads the fight before committing.' },
+  fierce:    { id: 'fierce',    name: 'Fierce',    up: ['hp', 'patk', 'spd'],       desc: 'A storm on four legs.' },
+  hardy:     { id: 'hardy',     name: 'Hardy',     up: ['hp', 'satk', 'sdef'],      desc: 'Weathers anything and answers with magic.' },
+  vigilant:  { id: 'vigilant',  name: 'Vigilant',  up: ['hp', 'counter', 'crit'],   desc: 'Misses nothing — not a threat, not an opening.' },
+  // ---- Crit moods (Crit Chance / Crit Damage) ----
+  feral:     { id: 'feral',     name: 'Feral',     up: ['crit', 'critMult', 'patk'], desc: 'Wild, sharp and merciless.' },
+  savage:    { id: 'savage',    name: 'Savage',    up: ['crit', 'patk', 'spd'],      desc: 'Fast, brutal openings.' },
+  precise:   { id: 'precise',   name: 'Precise',   up: ['crit', 'critMult', 'satk'], desc: 'Every strike placed exactly.' },
+  brutal:    { id: 'brutal',    name: 'Brutal',    up: ['critMult', 'patk', 'satk'], desc: 'Makes every opening count.' },
+  keen:      { id: 'keen',      name: 'Keen',      up: ['crit', 'spd', 'counter'],   desc: 'Finds every weak spot.' },
+  mystic:    { id: 'mystic',    name: 'Mystic',    up: ['satk', 'sdef', 'critMult'], desc: 'Strange power, sharper still on a crit.' },
 };
 
 export const MOOD_IDS = Object.keys(MOODS);
@@ -60,16 +77,8 @@ export const MOOD_IDS = Object.keys(MOODS);
 export const CRIT_MOOD_IDS = MOOD_IDS.filter((id) =>
   MOODS[id].up.includes('crit') || MOODS[id].up.includes('critMult'));
 
-/**
- * Moods from earlier versions (three up stats, one down) map onto the new
- * single-stat Mood that boosts their FIRST up stat, so old saves keep a
- * sensible personality instead of resetting to Brave.
- */
-const LEGACY_MOODS = {
-  lazy: 'sturdy', energetic: 'brave', aggressive: 'brave', focused: 'brave', reckless: 'brave', stubborn: 'sturdy',
-  fierce: 'sturdy', ambitious: 'brave', cautious: 'guarded', playful: 'swift', feral: 'keen', savage: 'keen',
-  precise: 'keen',
-};
+/** Mood ids from earlier versions that no longer exist map onto the closest current Mood. */
+const LEGACY_MOODS = {};
 
 export function normalizeMoodId(id) {
   if (MOODS[id]) return id;
@@ -80,17 +89,30 @@ export function getMood(id) {
   return MOODS[normalizeMoodId(id)];
 }
 
-// A single-stat Mood swings harder than one point per magnitude: the whole bonus
-// that used to be spread over three stats now lands on one.
-const MOOD_SCALE = { hp: 6, critMult: 4 };
-const MOOD_BASE = 2;
+// Some stats need a bigger swing than one point per magnitude to matter: HP counts
+// triple and Crit Damage double. Example — a Brave Mythling at rarity S (magnitude 5):
+// +15 HP, +5 P.ATK, +5 CNT.
+const MOOD_SCALE = { hp: 3, critMult: 2 };
 
 /** Returns {hp:+n, patk:+n, ...} deltas for a mood at a given magnitude (never negative). */
 export function moodModifiers(moodId, magnitude) {
   const mood = getMood(moodId);
   const out = {};
   for (const k of STAT_KEYS) out[k] = 0;
-  for (const k of mood.up) out[k] += magnitude * MOOD_BASE * (MOOD_SCALE[k] || 1);
+  for (const k of mood.up) out[k] += magnitude * (MOOD_SCALE[k] || 1);
+  return out;
+}
+
+/**
+ * The combined Mood + Rational change of every stat, i.e. what the personality
+ * traits add on top of the species line. Positive when the Mood bonus outweighs a
+ * Rational penalty on the same stat, negative when the penalty wins.
+ */
+export function traitModifiers(moodId, magnitude, rationalId) {
+  const mood = moodModifiers(moodId, magnitude);
+  const rat = rationalModifiers(rationalId);
+  const out = {};
+  for (const k of STAT_KEYS) out[k] = (mood[k] || 0) + (rat[k] || 0);
   return out;
 }
 

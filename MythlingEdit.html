@@ -647,7 +647,7 @@ textarea.bad, input.bad { outline: 1px solid #ef4444; }
 
 <script>
 /* MYTHLING EDIT v1.0.0 — standalone offline editor for Mythlings: Wildbound.
-   Built 2026-09-27T23:57:04.583Z from tools/mythling-edit (18 modules + game data snapshot of 14 game modules). No network access, no build step, no dependencies. */
+   Built 2026-09-28T01:22:50.642Z from tools/mythling-edit (18 modules + game data snapshot of 15 game modules). No network access, no build step, no dependencies. */
 'use strict';
 // ---- GameSnapshot (generated from the game's data + art modules; read-only copy) ----
 const GameSnapshot = (function () {
@@ -915,12 +915,17 @@ function coinReward({ enemyLevel, enemyYield, winnerLevel }) {
   return Math.max(1, Math.floor((2.2 * enemyLevel + enemyYield * 0.55) * scale));
 }
 
+/** Overworld camera zoom limits: you can zoom in a fair bit, but never far enough out to see half the map. */
+const CAMERA_ZOOM_MIN = 1.1;
+const CAMERA_ZOOM_MAX = 1.8;
+const CAMERA_ZOOM_STEP = 0.05;
+
 const DEFAULT_SETTINGS = {
   masterVolume: 0.7,
   musicVolume: 0.5,
   sfxVolume: 0.75,
   textSpeed: 'normal',      // slow | normal | fast | instant
-  cameraSensitivity: 1.0,
+  cameraZoom: 1.35,         // overworld camera zoom, CAMERA_ZOOM_MIN..CAMERA_ZOOM_MAX (this is a 2D game: no "sensitivity")
   fullscreen: false,
   graphicsQuality: 'high',  // low | medium | high
   screenShake: true,
@@ -929,7 +934,7 @@ const DEFAULT_SETTINGS = {
   confirmImportantActions: true,
 };
 
-return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, DEFAULT_SETTINGS };
+return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP, DEFAULT_SETTINGS };
 })();
 __m["src/data/elements.js"] = (function () {
 // Element definitions & effectiveness chart (data-driven, extensible).
@@ -1023,7 +1028,7 @@ function rollRarity(rng, luck = 0) {
 return { RARITIES, RARITY_ORDER, getRarity, rarityMagnitude, rollRarity };
 })();
 __m["src/data/moods.js"] = (function () {
-// Personality traits: MOOD (one stat up, magnitude from the RARITY table) and
+// Personality traits: MOOD (three stats up, magnitude from the RARITY table) and
 // RATIONAL (+10 / -10 on two stats). Both are deterministic & persistent, and both
 // can be re-rolled with shop tonics.
 const STAT_KEYS = ['hp', 'patk', 'satk', 'pdef', 'sdef', 'spd', 'counter', 'crit', 'critMult'];
@@ -1063,20 +1068,37 @@ const STAT_BAR_MAX = {
   hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 25, critMult: 200,
 };
 
-// Mood: a purely POSITIVE trait. Every Mood boosts exactly ONE stat, so the nine
-// Moods cover every stat there is — nothing is hidden behind a lucky combination.
-// The old "three up, one down" Moods are gone: the DOWNSIDE now lives in the
-// separate Rational trait (see RATIONALS below), which stacks on top of the Mood.
+// Mood: a purely POSITIVE trait. Every Mood raises THREE stats and lowers nothing —
+// the downside lives in the separate Rational trait (see RATIONALS below), which
+// stacks on top of the Mood. No two Moods share the same trio, and the 24 trios cover
+// every stat several times over.
 const MOODS = {
-  sturdy: { id: 'sturdy', name: 'Sturdy', up: ['hp'],       desc: 'Thick-skinned and hard to put down. Boosts HP.' },
-  brave:  { id: 'brave',  name: 'Brave',  up: ['patk'],     desc: 'Charges in first. Boosts Physical Attack.' },
-  clever: { id: 'clever', name: 'Clever', up: ['satk'],     desc: 'Thinks three moves ahead. Boosts Special Attack.' },
-  guarded:{ id: 'guarded',name: 'Guarded',up: ['pdef'],     desc: 'Never drops its guard. Boosts Physical Defense.' },
-  calm:   { id: 'calm',   name: 'Calm',   up: ['sdef'],     desc: 'Unshaken by tricks and magic. Boosts Special Defense.' },
-  swift:  { id: 'swift',  name: 'Swift',  up: ['spd'],      desc: 'Always a step ahead. Boosts Speed.' },
-  agile:  { id: 'agile',  name: 'Agile',  up: ['counter'],  desc: 'Slips out of harm\'s way. Boosts Counter (evasion).' },
-  keen:   { id: 'keen',   name: 'Keen',   up: ['crit'],     desc: 'Finds every weak spot. Boosts Crit Chance.' },
-  brutal: { id: 'brutal', name: 'Brutal', up: ['critMult'], desc: 'Makes every opening count. Boosts Crit Damage.' },
+  sturdy:    { id: 'sturdy',    name: 'Sturdy',    up: ['hp', 'pdef', 'patk'],      desc: 'Thick-skinned and hard to put down.' },
+  brave:     { id: 'brave',     name: 'Brave',     up: ['hp', 'patk', 'counter'],   desc: 'Charges in first and shrugs off the reply.' },
+  clever:    { id: 'clever',    name: 'Clever',    up: ['satk', 'sdef', 'counter'], desc: 'Thinks three moves ahead.' },
+  guarded:   { id: 'guarded',   name: 'Guarded',   up: ['pdef', 'sdef', 'counter'], desc: 'Never drops its guard.' },
+  calm:      { id: 'calm',      name: 'Calm',      up: ['hp', 'sdef', 'counter'],   desc: 'Unshaken by tricks and magic.' },
+  swift:     { id: 'swift',     name: 'Swift',     up: ['spd', 'counter', 'sdef'],  desc: 'Always a step ahead.' },
+  agile:     { id: 'agile',     name: 'Agile',     up: ['counter', 'spd', 'hp'],    desc: 'Slips out of harm\'s way and keeps going.' },
+  lazy:      { id: 'lazy',      name: 'Lazy',      up: ['hp', 'pdef', 'sdef'],      desc: 'Would rather nap than dodge — and can afford to.' },
+  energetic: { id: 'energetic', name: 'Energetic', up: ['patk', 'satk', 'spd'],     desc: 'Never stops moving.' },
+  aggressive:{ id: 'aggressive',name: 'Aggressive',up: ['patk', 'spd', 'counter'],  desc: 'Attacks first and asks later.' },
+  focused:   { id: 'focused',   name: 'Focused',   up: ['satk', 'spd', 'crit'],     desc: 'Eyes on the weak spot.' },
+  reckless:  { id: 'reckless',  name: 'Reckless',  up: ['patk', 'spd', 'critMult'], desc: 'Hits as hard as it possibly can.' },
+  playful:   { id: 'playful',   name: 'Playful',   up: ['spd', 'counter', 'satk'],  desc: 'Turns every fight into a game.' },
+  stubborn:  { id: 'stubborn',  name: 'Stubborn',  up: ['hp', 'pdef', 'spd'],       desc: 'Will not be moved.' },
+  ambitious: { id: 'ambitious', name: 'Ambitious', up: ['patk', 'satk', 'counter'], desc: 'Wants to win every exchange.' },
+  cautious:  { id: 'cautious',  name: 'Cautious',  up: ['pdef', 'sdef', 'spd'],     desc: 'Reads the fight before committing.' },
+  fierce:    { id: 'fierce',    name: 'Fierce',    up: ['hp', 'patk', 'spd'],       desc: 'A storm on four legs.' },
+  hardy:     { id: 'hardy',     name: 'Hardy',     up: ['hp', 'satk', 'sdef'],      desc: 'Weathers anything and answers with magic.' },
+  vigilant:  { id: 'vigilant',  name: 'Vigilant',  up: ['hp', 'counter', 'crit'],   desc: 'Misses nothing — not a threat, not an opening.' },
+  // ---- Crit moods (Crit Chance / Crit Damage) ----
+  feral:     { id: 'feral',     name: 'Feral',     up: ['crit', 'critMult', 'patk'], desc: 'Wild, sharp and merciless.' },
+  savage:    { id: 'savage',    name: 'Savage',    up: ['crit', 'patk', 'spd'],      desc: 'Fast, brutal openings.' },
+  precise:   { id: 'precise',   name: 'Precise',   up: ['crit', 'critMult', 'satk'], desc: 'Every strike placed exactly.' },
+  brutal:    { id: 'brutal',    name: 'Brutal',    up: ['critMult', 'patk', 'satk'], desc: 'Makes every opening count.' },
+  keen:      { id: 'keen',      name: 'Keen',      up: ['crit', 'spd', 'counter'],   desc: 'Finds every weak spot.' },
+  mystic:    { id: 'mystic',    name: 'Mystic',    up: ['satk', 'sdef', 'critMult'], desc: 'Strange power, sharper still on a crit.' },
 };
 
 const MOOD_IDS = Object.keys(MOODS);
@@ -1085,16 +1107,8 @@ const MOOD_IDS = Object.keys(MOODS);
 const CRIT_MOOD_IDS = MOOD_IDS.filter((id) =>
   MOODS[id].up.includes('crit') || MOODS[id].up.includes('critMult'));
 
-/**
- * Moods from earlier versions (three up stats, one down) map onto the new
- * single-stat Mood that boosts their FIRST up stat, so old saves keep a
- * sensible personality instead of resetting to Brave.
- */
-const LEGACY_MOODS = {
-  lazy: 'sturdy', energetic: 'brave', aggressive: 'brave', focused: 'brave', reckless: 'brave', stubborn: 'sturdy',
-  fierce: 'sturdy', ambitious: 'brave', cautious: 'guarded', playful: 'swift', feral: 'keen', savage: 'keen',
-  precise: 'keen',
-};
+/** Mood ids from earlier versions that no longer exist map onto the closest current Mood. */
+const LEGACY_MOODS = {};
 
 function normalizeMoodId(id) {
   if (MOODS[id]) return id;
@@ -1105,17 +1119,30 @@ function getMood(id) {
   return MOODS[normalizeMoodId(id)];
 }
 
-// A single-stat Mood swings harder than one point per magnitude: the whole bonus
-// that used to be spread over three stats now lands on one.
-const MOOD_SCALE = { hp: 6, critMult: 4 };
-const MOOD_BASE = 2;
+// Some stats need a bigger swing than one point per magnitude to matter: HP counts
+// triple and Crit Damage double. Example — a Brave Mythling at rarity S (magnitude 5):
+// +15 HP, +5 P.ATK, +5 CNT.
+const MOOD_SCALE = { hp: 3, critMult: 2 };
 
 /** Returns {hp:+n, patk:+n, ...} deltas for a mood at a given magnitude (never negative). */
 function moodModifiers(moodId, magnitude) {
   const mood = getMood(moodId);
   const out = {};
   for (const k of STAT_KEYS) out[k] = 0;
-  for (const k of mood.up) out[k] += magnitude * MOOD_BASE * (MOOD_SCALE[k] || 1);
+  for (const k of mood.up) out[k] += magnitude * (MOOD_SCALE[k] || 1);
+  return out;
+}
+
+/**
+ * The combined Mood + Rational change of every stat, i.e. what the personality
+ * traits add on top of the species line. Positive when the Mood bonus outweighs a
+ * Rational penalty on the same stat, negative when the penalty wins.
+ */
+function traitModifiers(moodId, magnitude, rationalId) {
+  const mood = moodModifiers(moodId, magnitude);
+  const rat = rationalModifiers(rationalId);
+  const out = {};
+  for (const k of STAT_KEYS) out[k] = (mood[k] || 0) + (rat[k] || 0);
   return out;
 }
 
@@ -1205,7 +1232,7 @@ function formatStat(key, value) {
   return String(value);
 }
 
-return { STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, MOODS, MOOD_IDS, CRIT_MOOD_IDS, normalizeMoodId, getMood, moodModifiers, RATIONAL_STATS, RATIONALS, RATIONAL_IDS, getRational, rationalModifiers, rationalSummary, rollRational, rerollRational, rerollMood, moodSummary, formatStat };
+return { STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, MOODS, MOOD_IDS, CRIT_MOOD_IDS, normalizeMoodId, getMood, moodModifiers, traitModifiers, RATIONAL_STATS, RATIONALS, RATIONAL_IDS, getRational, rationalModifiers, rationalSummary, rollRational, rerollRational, rerollMood, moodSummary, formatStat };
 })();
 __m["src/data/mutations.js"] = (function () {
 /**
@@ -1362,19 +1389,19 @@ const SKILLS = {
   peck:    { id: 'peck',    name: 'Peck',    category: 'normal', damageType: 'physical', element: null, power: 10, uses: Infinity, desc: 'A sharp beak jab. Unlimited uses.' },
 
   // ---------- Evolved normal skills ----------
-  // Evolutions used to grant only Specials and Buffs, so a Mythling's unlimited
-  // attack stayed at the Lv.1 power forever. Every stage now also teaches a
-  // stronger unlimited Normal move (weaker than the stage's Special, because it
-  // never runs out).
-  thorn_jab:      { id: 'thorn_jab',      name: 'Thorn Jab',      category: 'normal', damageType: 'physical', element: 'nature', power: 17, uses: Infinity, desc: 'A jab of hardened thorns. Unlimited uses.' },
-  briar_smash:    { id: 'briar_smash',    name: 'Briar Smash',    category: 'normal', damageType: 'physical', element: 'nature', power: 29, uses: Infinity, desc: 'A crushing blow wrapped in briars. Unlimited uses.' },
-  worldroot_slam: { id: 'worldroot_slam', name: 'Worldroot Slam', category: 'normal', damageType: 'physical', element: 'nature', power: 40, uses: Infinity, desc: 'Roots older than the forest come down. Unlimited uses.' },
-  stream_jab:     { id: 'stream_jab',     name: 'Stream Jab',     category: 'normal', damageType: 'physical', element: 'water',  power: 17, uses: Infinity, desc: 'A lance of running water. Unlimited uses.' },
-  tide_smash:     { id: 'tide_smash',     name: 'Tide Smash',     category: 'normal', damageType: 'physical', element: 'water',  power: 30, uses: Infinity, desc: 'The weight of the turning tide. Unlimited uses.' },
-  abyss_slam:     { id: 'abyss_slam',     name: 'Abyss Slam',     category: 'normal', damageType: 'physical', element: 'water',  power: 41, uses: Infinity, desc: 'Pressure from the lightless deep. Unlimited uses.' },
-  ember_jab:      { id: 'ember_jab',      name: 'Ember Jab',      category: 'normal', damageType: 'physical', element: 'fire',   power: 18, uses: Infinity, desc: 'A searing strike. Unlimited uses.' },
-  cinder_smash:   { id: 'cinder_smash',   name: 'Cinder Smash',   category: 'normal', damageType: 'physical', element: 'fire',   power: 31, uses: Infinity, desc: 'A heavy blow wreathed in cinders. Unlimited uses.' },
-  magma_slam:     { id: 'magma_slam',     name: 'Magma Slam',     category: 'normal', damageType: 'physical', element: 'fire',   power: 42, uses: Infinity, desc: 'A fist of cooled magma. Unlimited uses.' },
+  // Every evolution stage teaches a stronger ELEMENTAL Normal move. Unlike the
+  // element-less Lv.1 normals (Bite / Scratch / Peck / Pebble Toss), these carry an
+  // element and therefore have LIMITED uses (30 / 25 / 20 by tier) — only the plain
+  // starter attack is truly unlimited, and it is what a Mythling falls back on.
+  thorn_jab:      { id: 'thorn_jab',      name: 'Thorn Jab',      category: 'normal', damageType: 'physical', element: 'nature', power: 17, uses: 30, desc: 'A jab of hardened thorns. 30 uses.' },
+  briar_smash:    { id: 'briar_smash',    name: 'Briar Smash',    category: 'normal', damageType: 'physical', element: 'nature', power: 29, uses: 25, desc: 'A crushing blow wrapped in briars. 25 uses.' },
+  worldroot_slam: { id: 'worldroot_slam', name: 'Worldroot Slam', category: 'normal', damageType: 'physical', element: 'nature', power: 40, uses: 20, desc: 'Roots older than the forest come down. 20 uses.' },
+  stream_jab:     { id: 'stream_jab',     name: 'Stream Jab',     category: 'normal', damageType: 'physical', element: 'water',  power: 17, uses: 30, desc: 'A lance of running water. 30 uses.' },
+  tide_smash:     { id: 'tide_smash',     name: 'Tide Smash',     category: 'normal', damageType: 'physical', element: 'water',  power: 30, uses: 25, desc: 'The weight of the turning tide. 25 uses.' },
+  abyss_slam:     { id: 'abyss_slam',     name: 'Abyss Slam',     category: 'normal', damageType: 'physical', element: 'water',  power: 41, uses: 20, desc: 'Pressure from the lightless deep. 20 uses.' },
+  ember_jab:      { id: 'ember_jab',      name: 'Ember Jab',      category: 'normal', damageType: 'physical', element: 'fire',   power: 18, uses: 30, desc: 'A searing strike. 30 uses.' },
+  cinder_smash:   { id: 'cinder_smash',   name: 'Cinder Smash',   category: 'normal', damageType: 'physical', element: 'fire',   power: 31, uses: 25, desc: 'A heavy blow wreathed in cinders. 25 uses.' },
+  magma_slam:     { id: 'magma_slam',     name: 'Magma Slam',     category: 'normal', damageType: 'physical', element: 'fire',   power: 42, uses: 20, desc: 'A fist of cooled magma. 20 uses.' },
   struggle:       { id: 'struggle',       name: 'Struggle',       category: 'normal', damageType: 'physical', element: null,     power: 8,  uses: Infinity, desc: 'A desperate shove when nothing else is left. Unlimited uses.' },
 
   // ---------- SPRIGGO line ----------
@@ -1458,9 +1485,9 @@ const SKILLS = {
 
   // ---------- ROCK pool (Stonehollow Crags) ----------
   pebble_toss:     { id: 'pebble_toss',     name: 'Pebble Toss',     category: 'normal', damageType: 'physical', element: null,   power: 10, uses: Infinity, desc: 'A flick of loose gravel. Unlimited uses.' },
-  rock_jab:        { id: 'rock_jab',        name: 'Rock Jab',        category: 'normal', damageType: 'physical', element: 'rock', power: 18, uses: Infinity, desc: 'A stone-hard headbutt. Unlimited uses.' },
-  boulder_smash:   { id: 'boulder_smash',   name: 'Boulder Smash',   category: 'normal', damageType: 'physical', element: 'rock', power: 31, uses: Infinity, desc: 'Brings a boulder down on the foe. Unlimited uses.' },
-  tectonic_slam:   { id: 'tectonic_slam',   name: 'Tectonic Slam',   category: 'normal', damageType: 'physical', element: 'rock', power: 42, uses: Infinity, desc: 'The ground itself lurches. Unlimited uses.' },
+  rock_jab:        { id: 'rock_jab',        name: 'Rock Jab',        category: 'normal', damageType: 'physical', element: 'rock', power: 18, uses: 30, desc: 'A stone-hard headbutt. 30 uses.' },
+  boulder_smash:   { id: 'boulder_smash',   name: 'Boulder Smash',   category: 'normal', damageType: 'physical', element: 'rock', power: 31, uses: 25, desc: 'Brings a boulder down on the foe. 25 uses.' },
+  tectonic_slam:   { id: 'tectonic_slam',   name: 'Tectonic Slam',   category: 'normal', damageType: 'physical', element: 'rock', power: 42, uses: 20, desc: 'The ground itself lurches. 20 uses.' },
   stone_shard:     { id: 'stone_shard',     name: 'Stone Shard',     category: 'special', damageType: 'physical', element: 'rock', power: 17, uses: 20, desc: 'Hurls a jagged shard of flint.' },
   crag_lance:      { id: 'crag_lance',      name: 'Crag Lance',      category: 'special', damageType: 'physical', element: 'rock', power: 28, uses: 18, desc: 'A spear of stone erupts from the ground.' },
   crystal_ray:     { id: 'crystal_ray',     name: 'Crystal Ray',     category: 'special', damageType: 'special',  element: 'rock', power: 27, uses: 18, desc: 'Light focused through a living crystal.' },
@@ -2695,6 +2722,11 @@ __m["src/data/maps.js"] = (function () {
 //
 // terrain ids drive procedural prop generation + ground painting in the renderer.
 
+const { ITEMS } = __m["src/data/items.js"];
+
+/** Every purchasable item, in catalogue order — the last region's shop always sells all of it. */
+const FULL_STOCK = Object.values(ITEMS).filter((i) => i.price > 0 && i.category !== 'key').map((i) => i.id);
+
 const MAPS = {
   verdant_vale: {
     id: 'verdant_vale',
@@ -2902,9 +2934,10 @@ const MAPS = {
     buildings: [
       { id: 'ember_center', type: 'center', x: 280, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'ember_shop',   type: 'shop',   x: 640, y: 550, w: 190, h: 150, name: 'Emberwatch Quartermaster',
-        stock: ['normal_ball', 'advanced_ball', 'absolute_ball', 'god_ball',
-          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
-          'river_jerky', 'ember_roast', 'mythic_feast', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
+        // Region-3 stock only: the top-tier balls, restores and foods moved to the LAST map's shop.
+        stock: ['advanced_ball', 'absolute_ball',
+          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+          'river_jerky', 'ember_roast', 'mythic_feast', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'ember_tower',  type: 'tower',  x: 140, y: 1020, w: 160, h: 200, name: 'Watchtower' },
     ],
     landmarks: [
@@ -3003,9 +3036,9 @@ const MAPS = {
     buildings: [
       { id: 'crag_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'crag_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Crags Outfitter',
-        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'shiny_ball', 'dark_ball',
-          'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
-          'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
+        // The LAST map's shop carries the COMPLETE catalogue (every ball, restore, tonic and food).
+        // When a new region is added, the top of this list moves there and this one is trimmed.
+        stock: FULL_STOCK },
       { id: 'crag_lodge',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Quarry Lodge' },
       { id: 'summit_watch',type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Summit Watch' },
     ],
@@ -3079,7 +3112,100 @@ function regionAt(map, x, y) {
   return map.regions[0];
 }
 
-return { MAPS, MAP_ORDER, getMap, regionAt };
+return { FULL_STOCK, MAPS, MAP_ORDER, getMap, regionAt };
+})();
+__m["src/data/chests.js"] = (function () {
+// Treasure chests scattered through the wild areas of every map.
+//
+// Four tiers. A map can hold at most TWO Bronze chests and ONE of every other tier
+// at a time; the Ultra Gold chest is nearly impossible to find. Every chest holds
+// Wildcoins (more for higher tiers and later regions); rarer chests also hold a ball
+// or a food — and the good balls / foods only ever come out of the good chests.
+//
+// Chests re-roll a while after they were last rolled for that map (see
+// CHEST_REROLL_MS), so a cleared map fills up again later — never instantly.
+const CHEST_TIERS = {
+  bronze: {
+    id: 'bronze', name: 'Bronze Chest', max: 2, chance: 0.55,
+    coins: [40, 120], itemChance: 0.22,
+    balls: ['basic_ball', 'normal_ball'],
+    foods: ['sweet_berry', 'crunchy_root', 'honey_nut'],
+    colors: { body: '#a8683a', dark: '#5e381c', trim: '#e0a866', glow: null },
+  },
+  silver: {
+    id: 'silver', name: 'Silver Chest', max: 1, chance: 0.22,
+    coins: [180, 420], itemChance: 0.45,
+    balls: ['normal_ball', 'advanced_ball'],
+    foods: ['moon_melon', 'river_jerky', 'glow_nectar'],
+    colors: { body: '#a9b2c0', dark: '#55606f', trim: '#eef2f7', glow: null },
+  },
+  emerald: {
+    id: 'emerald', name: 'Emerald Chest', max: 1, chance: 0.07,
+    coins: [600, 1400], itemChance: 0.75,
+    balls: ['advanced_ball', 'absolute_ball'],
+    foods: ['ember_roast', 'coral_cake', 'tide_pudding', 'mythic_feast'],
+    colors: { body: '#2f9a6a', dark: '#155238', trim: '#9ff5c8', glow: 'rgba(80,240,160,0.55)' },
+  },
+  ultra_gold: {
+    id: 'ultra_gold', name: 'Ultra Gold Chest', max: 1, chance: 0.004,
+    coins: [4000, 9000], itemChance: 1,
+    balls: ['god_ball', 'shiny_ball', 'dark_ball'],
+    foods: ['phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'],
+    colors: { body: '#e6b74a', dark: '#8a5f12', trim: '#fff3c0', glow: 'rgba(255,215,90,0.7)' },
+  },
+};
+const CHEST_TIER_IDS = Object.keys(CHEST_TIERS);
+
+/** Coins scale with the region: a Bronze chest in the Crags pays more than one in the Vale. */
+const CHEST_REGION_MULT = [1, 1.6, 2.4, 3.4];
+
+/** How long (play time, ms) a map keeps its rolled chest set before it is rolled again. */
+const CHEST_REROLL_MS = 12 * 60 * 1000;
+
+/** Chests are never placed closer than this to the player's spawn or to each other. */
+const CHEST_MIN_SPACING = 260;
+
+function getChestTier(id) {
+  return CHEST_TIERS[id] || null;
+}
+
+/**
+ * Roll which chests a map holds right now: up to `max` of each tier, each slot
+ * passing its own `chance`. Returns the list of tier ids (positions are chosen by
+ * the world, which knows what is walkable).
+ */
+function rollChestTiers(rng = Math.random) {
+  const out = [];
+  for (const tier of Object.values(CHEST_TIERS)) {
+    for (let i = 0; i < tier.max; i++) if (rng() < tier.chance) out.push(tier.id);
+  }
+  return out;
+}
+
+/**
+ * What a chest of `tierId` holds when opened on the map with `regionIndex`
+ * (0 = first region). Always coins; a ball or a food with the tier's item chance —
+ * top balls / foods only ever come out of the top chests.
+ * @returns {{ coins:number, item:null|{id:string, qty:number} }}
+ */
+function rollChestLoot(tierId, regionIndex = 0, rng = Math.random) {
+  const tier = getChestTier(tierId);
+  if (!tier) return { coins: 0, item: null };
+  const mult = CHEST_REGION_MULT[Math.max(0, Math.min(CHEST_REGION_MULT.length - 1, regionIndex))] || 1;
+  const [lo, hi] = tier.coins;
+  const coins = Math.round((lo + rng() * (hi - lo)) * mult / 5) * 5;
+  let item = null;
+  if (rng() < tier.itemChance) {
+    const pool = rng() < 0.5 ? tier.balls : tier.foods;
+    const id = pool[Math.floor(rng() * pool.length)];
+    // small stacks from the small chests, single copies of the precious things
+    const qty = tier.id === 'bronze' ? 1 + Math.floor(rng() * 3) : tier.id === 'silver' ? 1 + Math.floor(rng() * 2) : 1;
+    item = { id, qty };
+  }
+  return { coins, item };
+}
+
+return { CHEST_TIERS, CHEST_TIER_IDS, CHEST_REGION_MULT, CHEST_REROLL_MS, CHEST_MIN_SPACING, getChestTier, rollChestTiers, rollChestLoot };
 })();
 __m["src/render/creatureArt.js"] = (function () {
 // =============================================================================
@@ -5338,6 +5464,7 @@ return { CreatureAssetLoader, creatureAssets, ANIMATIONS, ANIM_IDS, CreatureAnim
 __m["src/render/worldRenderer.js"] = (function () {
 // Procedural world rendering: ground, water, props, buildings, weather particles.
 const { makeRng, shadeColor, clamp } = __m["src/core/utils.js"];
+const { CHEST_TIERS } = __m["src/data/chests.js"];
 
 const TERRAIN = {
   town:    { grass: '#7ec96a', grass2: '#6bb95c', path: '#e5d3a1', props: ['tree', 'flower', 'bush', 'lamp'] },
@@ -5358,6 +5485,53 @@ const TERRAIN = {
   crag:    { grass: '#7d7a72', grass2: '#6b685f', path: '#a39e90', props: ['rock', 'rock', 'stalag', 'crystal'] },
   summit:  { grass: '#8f949c', grass2: '#7c8188', path: '#b8bcc2', props: ['pillar', 'rock', 'stalag', 'crystal'] },
 };
+
+/**
+ * A treasure chest on the ground: a wooden box in the tier's colours with a lid,
+ * a lock plate, a coloured glow for the rare tiers and a slow sparkle. `near`
+ * lifts the lid a touch so the player can see it is interactable.
+ */
+function drawChest(ctx, chest, time, near = false) {
+  const tier = CHEST_TIERS[chest.tier] || CHEST_TIERS.bronze;
+  const c = tier.colors;
+  ctx.save();
+  ctx.translate(chest.x, chest.y);
+  if (c.glow) {
+    const pulse = 0.55 + Math.sin(time * 2.2 + chest.x * 0.01) * 0.25;
+    const g = ctx.createRadialGradient(0, -10, 4, 0, -10, 46);
+    g.addColorStop(0, c.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = pulse; ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, -10, 46, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(0, 2, 20, 6, 0, 0, Math.PI * 2); ctx.fill();
+  // body
+  ctx.fillStyle = c.body; roundRect(ctx, -17, -18, 34, 20, 3); ctx.fill();
+  ctx.fillStyle = c.dark; ctx.fillRect(-17, -6, 34, 3);
+  ctx.strokeStyle = c.dark; ctx.lineWidth = 1.5; ctx.strokeRect(-17, -18, 34, 20);
+  // bands
+  ctx.fillStyle = c.trim; ctx.fillRect(-11, -18, 3, 20); ctx.fillRect(8, -18, 3, 20);
+  // lid (lifts when the player is close)
+  ctx.save();
+  ctx.translate(0, -18);
+  ctx.rotate(near ? -0.18 - Math.sin(time * 6) * 0.03 : 0);
+  ctx.fillStyle = shadeColor(c.body, 0.12); roundRect(ctx, -18, -11, 36, 12, 5); ctx.fill();
+  ctx.strokeStyle = c.dark; ctx.strokeRect(-18, -11, 36, 12);
+  ctx.fillStyle = c.trim; ctx.fillRect(-11, -11, 3, 12); ctx.fillRect(8, -11, 3, 12);
+  ctx.restore();
+  // lock plate
+  ctx.fillStyle = c.trim; roundRect(ctx, -4, -14, 8, 8, 2); ctx.fill();
+  ctx.fillStyle = c.dark; ctx.fillRect(-1, -12, 2, 4);
+  // sparkle
+  const sp = (Math.sin(time * 3.1 + chest.y * 0.02) + 1) / 2;
+  if (sp > 0.7) {
+    const k = (sp - 0.7) / 0.3;
+    ctx.strokeStyle = `rgba(255,255,255,${k})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(14, -30); ctx.lineTo(14, -22); ctx.moveTo(10, -26); ctx.lineTo(18, -26); ctx.stroke();
+  }
+  ctx.restore();
+}
 
 /** Ground colour of a terrain id (used by the minimap so it matches the world). */
 function terrainColor(terrainId) {
@@ -5886,11 +6060,11 @@ function drawSignMark(ctx, kind, cx, cy, r) {
   ctx.restore();
 }
 
-return { terrainColor, WorldRenderer, roundRect, circle, drawTrainerAvatar, drawSignMark, TERRAIN, WATER_COLORS, hashStr, insideAny, insideBuildings };
+return { drawChest, terrainColor, WorldRenderer, roundRect, circle, drawTrainerAvatar, drawSignMark, TERRAIN, WATER_COLORS, hashStr, insideAny, insideBuildings };
 })();
   } catch (e) { console.error('GameSnapshot failed to load:', e); return null; }
   return {
-    meta: {"builtAt":"2026-09-27T23:57:04.580Z","commit":"aefc9c9","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.3.0"},
+    meta: {"builtAt":"2026-09-28T01:22:50.638Z","commit":"f18cfc9","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/data/chests.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.3.0"},
     modules: __m,
     utils: __m['src/core/utils.js'], config: __m['src/data/config.js'], elements: __m['src/data/elements.js'], rarity: __m['src/data/rarity.js'],
     moods: __m['src/data/moods.js'], mutations: __m['src/data/mutations.js'], items: __m['src/data/items.js'], skills: __m['src/data/skills.js'],

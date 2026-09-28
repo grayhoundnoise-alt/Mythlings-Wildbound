@@ -23,19 +23,19 @@ export const SKILLS = {
   peck:    { id: 'peck',    name: 'Peck',    category: 'normal', damageType: 'physical', element: null, power: 10, uses: Infinity, desc: 'A sharp beak jab. Unlimited uses.' },
 
   // ---------- Evolved normal skills ----------
-  // Evolutions used to grant only Specials and Buffs, so a Mythling's unlimited
-  // attack stayed at the Lv.1 power forever. Every stage now also teaches a
-  // stronger unlimited Normal move (weaker than the stage's Special, because it
-  // never runs out).
-  thorn_jab:      { id: 'thorn_jab',      name: 'Thorn Jab',      category: 'normal', damageType: 'physical', element: 'nature', power: 17, uses: Infinity, desc: 'A jab of hardened thorns. Unlimited uses.' },
-  briar_smash:    { id: 'briar_smash',    name: 'Briar Smash',    category: 'normal', damageType: 'physical', element: 'nature', power: 29, uses: Infinity, desc: 'A crushing blow wrapped in briars. Unlimited uses.' },
-  worldroot_slam: { id: 'worldroot_slam', name: 'Worldroot Slam', category: 'normal', damageType: 'physical', element: 'nature', power: 40, uses: Infinity, desc: 'Roots older than the forest come down. Unlimited uses.' },
-  stream_jab:     { id: 'stream_jab',     name: 'Stream Jab',     category: 'normal', damageType: 'physical', element: 'water',  power: 17, uses: Infinity, desc: 'A lance of running water. Unlimited uses.' },
-  tide_smash:     { id: 'tide_smash',     name: 'Tide Smash',     category: 'normal', damageType: 'physical', element: 'water',  power: 30, uses: Infinity, desc: 'The weight of the turning tide. Unlimited uses.' },
-  abyss_slam:     { id: 'abyss_slam',     name: 'Abyss Slam',     category: 'normal', damageType: 'physical', element: 'water',  power: 41, uses: Infinity, desc: 'Pressure from the lightless deep. Unlimited uses.' },
-  ember_jab:      { id: 'ember_jab',      name: 'Ember Jab',      category: 'normal', damageType: 'physical', element: 'fire',   power: 18, uses: Infinity, desc: 'A searing strike. Unlimited uses.' },
-  cinder_smash:   { id: 'cinder_smash',   name: 'Cinder Smash',   category: 'normal', damageType: 'physical', element: 'fire',   power: 31, uses: Infinity, desc: 'A heavy blow wreathed in cinders. Unlimited uses.' },
-  magma_slam:     { id: 'magma_slam',     name: 'Magma Slam',     category: 'normal', damageType: 'physical', element: 'fire',   power: 42, uses: Infinity, desc: 'A fist of cooled magma. Unlimited uses.' },
+  // Every evolution stage teaches a stronger ELEMENTAL Normal move. Unlike the
+  // element-less Lv.1 normals (Bite / Scratch / Peck / Pebble Toss), these carry an
+  // element and therefore have LIMITED uses (30 / 25 / 20 by tier) — only the plain
+  // starter attack is truly unlimited, and it is what a Mythling falls back on.
+  thorn_jab:      { id: 'thorn_jab',      name: 'Thorn Jab',      category: 'normal', damageType: 'physical', element: 'nature', power: 17, uses: 30, desc: 'A jab of hardened thorns. 30 uses.' },
+  briar_smash:    { id: 'briar_smash',    name: 'Briar Smash',    category: 'normal', damageType: 'physical', element: 'nature', power: 29, uses: 25, desc: 'A crushing blow wrapped in briars. 25 uses.' },
+  worldroot_slam: { id: 'worldroot_slam', name: 'Worldroot Slam', category: 'normal', damageType: 'physical', element: 'nature', power: 40, uses: 20, desc: 'Roots older than the forest come down. 20 uses.' },
+  stream_jab:     { id: 'stream_jab',     name: 'Stream Jab',     category: 'normal', damageType: 'physical', element: 'water',  power: 17, uses: 30, desc: 'A lance of running water. 30 uses.' },
+  tide_smash:     { id: 'tide_smash',     name: 'Tide Smash',     category: 'normal', damageType: 'physical', element: 'water',  power: 30, uses: 25, desc: 'The weight of the turning tide. 25 uses.' },
+  abyss_slam:     { id: 'abyss_slam',     name: 'Abyss Slam',     category: 'normal', damageType: 'physical', element: 'water',  power: 41, uses: 20, desc: 'Pressure from the lightless deep. 20 uses.' },
+  ember_jab:      { id: 'ember_jab',      name: 'Ember Jab',      category: 'normal', damageType: 'physical', element: 'fire',   power: 18, uses: 30, desc: 'A searing strike. 30 uses.' },
+  cinder_smash:   { id: 'cinder_smash',   name: 'Cinder Smash',   category: 'normal', damageType: 'physical', element: 'fire',   power: 31, uses: 25, desc: 'A heavy blow wreathed in cinders. 25 uses.' },
+  magma_slam:     { id: 'magma_slam',     name: 'Magma Slam',     category: 'normal', damageType: 'physical', element: 'fire',   power: 42, uses: 20, desc: 'A fist of cooled magma. 20 uses.' },
   struggle:       { id: 'struggle',       name: 'Struggle',       category: 'normal', damageType: 'physical', element: null,     power: 8,  uses: Infinity, desc: 'A desperate shove when nothing else is left. Unlimited uses.' },
 
   // ---------- SPRIGGO line ----------
@@ -119,9 +119,9 @@ export const SKILLS = {
 
   // ---------- ROCK pool (Stonehollow Crags) ----------
   pebble_toss:     { id: 'pebble_toss',     name: 'Pebble Toss',     category: 'normal', damageType: 'physical', element: null,   power: 10, uses: Infinity, desc: 'A flick of loose gravel. Unlimited uses.' },
-  rock_jab:        { id: 'rock_jab',        name: 'Rock Jab',        category: 'normal', damageType: 'physical', element: 'rock', power: 18, uses: Infinity, desc: 'A stone-hard headbutt. Unlimited uses.' },
-  boulder_smash:   { id: 'boulder_smash',   name: 'Boulder Smash',   category: 'normal', damageType: 'physical', element: 'rock', power: 31, uses: Infinity, desc: 'Brings a boulder down on the foe. Unlimited uses.' },
-  tectonic_slam:   { id: 'tectonic_slam',   name: 'Tectonic Slam',   category: 'normal', damageType: 'physical', element: 'rock', power: 42, uses: Infinity, desc: 'The ground itself lurches. Unlimited uses.' },
+  rock_jab:        { id: 'rock_jab',        name: 'Rock Jab',        category: 'normal', damageType: 'physical', element: 'rock', power: 18, uses: 30, desc: 'A stone-hard headbutt. 30 uses.' },
+  boulder_smash:   { id: 'boulder_smash',   name: 'Boulder Smash',   category: 'normal', damageType: 'physical', element: 'rock', power: 31, uses: 25, desc: 'Brings a boulder down on the foe. 25 uses.' },
+  tectonic_slam:   { id: 'tectonic_slam',   name: 'Tectonic Slam',   category: 'normal', damageType: 'physical', element: 'rock', power: 42, uses: 20, desc: 'The ground itself lurches. 20 uses.' },
   stone_shard:     { id: 'stone_shard',     name: 'Stone Shard',     category: 'special', damageType: 'physical', element: 'rock', power: 17, uses: 20, desc: 'Hurls a jagged shard of flint.' },
   crag_lance:      { id: 'crag_lance',      name: 'Crag Lance',      category: 'special', damageType: 'physical', element: 'rock', power: 28, uses: 18, desc: 'A spear of stone erupts from the ground.' },
   crystal_ray:     { id: 'crystal_ray',     name: 'Crystal Ray',     category: 'special', damageType: 'special',  element: 'rock', power: 27, uses: 18, desc: 'Light focused through a living crystal.' },

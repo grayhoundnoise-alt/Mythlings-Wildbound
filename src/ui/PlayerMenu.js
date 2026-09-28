@@ -12,14 +12,15 @@ import {
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
-import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat, getMood, getRational, rationalSummary, RATIONALS } from '../data/moods.js';
-import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE } from '../data/config.js';
+import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat, getMood, getRational, rationalSummary, RATIONALS, moodModifiers, rationalModifiers } from '../data/moods.js';
+import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP } from '../data/config.js';
 import { openWiki } from './wiki.js';
 import { RARITY_ORDER, getRarity } from '../data/rarity.js';
 import { MUTATIONS, getMutation } from '../data/mutations.js';
 import { ITEM_CATEGORIES, getItem } from '../data/items.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
 import { ELEMENTS, ELEMENT_ORDER } from '../data/elements.js';
+import { ChestManager } from '../systems/ChestManager.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
 import { drawMythling } from '../render/creatures.js';
 import {
@@ -66,6 +67,13 @@ export function skillMetaText(sk, m = null) {
     : `${buffSummary(sk, ' ')}${(sk.effects || []).some((e) => e.target) ? '' : (sk.category === 'debuff' ? ' on the foe' : ' on self')}`;
   const rider = !sk.reflect ? riderSummary(sk) : '';
   return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} · ${what}${rider ? ` · ${rider}` : ''} · ${uses}`;
+}
+
+/** "<element icon> <name>" — the way a Mythling's name is written everywhere in the menus. */
+export function nameWithElement(m, cls = '') {
+  const sp = getSpecies(m.speciesId);
+  const elId = sp?.element || 'nature';
+  return el('span', { class: `name-el ${cls}`, title: `${ELEMENTS[elId]?.name || elId} type` }, [icon(ELEMENTS[elId]?.icon || 'spark', elId), el('span', { text: displayName(m) })]);
 }
 
 /**
@@ -246,7 +254,7 @@ export class PlayerMenu {
       portrait(m, 66),
       el('div', { class: 'mc-main' }, [
         el('div', { class: 'mc-name' }, [
-          displayName(m),
+          nameWithElement(m),
           m.level >= LEVEL_CAP ? el('span', { class: 'chip max', text: 'MAX' }) : null,
           evoReady ? el('span', { class: 'chip evolve icon-only', title: 'Ready to evolve! Open the card and press EVOLVE NOW.', 'aria-label': 'Ready to evolve' }, [icon('levelup')]) : null,
           mutationChip(m.mutation),
@@ -274,17 +282,27 @@ export class PlayerMenu {
     const ult = ultimateMove(m);
 
     const rational = getRational(m.rational);
+    // Mood (+) and Rational (+10 / -10) can land on the same stat: the row shows the
+    // NET change — green when the pluses win, red when the penalty wins — and the
+    // exact leftover, e.g. "+15" or "+5" (+15 mood, -10 rational) or "-7".
+    const mag = getRarity(m.rarity).magnitude;
+    const moodMods = moodModifiers(m.mood, mag);
+    const ratMods = rationalModifiers(m.rational);
     const statRows = STAT_KEYS.map((k) => {
       const moodUp = getMood(m.mood).up.includes(k);
       const ratUp = rational?.up === k;
       const isDown = rational?.down === k;
-      const isUp = moodUp || ratUp;
+      const net = (moodMods[k] || 0) + (ratMods[k] || 0);
+      const tone = net > 0 ? 'up' : net < 0 ? 'down' : '';
       const maxRef = STAT_BAR_MAX[k] || 90;
-      const why = [moodUp ? `Mood ${getMood(m.mood).name}` : '', ratUp ? `Rational ${rational.name} +10` : '', isDown ? `Rational ${rational.name} -10` : ''].filter(Boolean).join(' · ');
-      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}`, title: `${STAT_INFO[k]}${why ? ` (${why})` : ''}` }, [
-        el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), moodUp ? icon('up', 'tiny') : null, ratUp ? icon('up', 'tiny') : null, isDown ? icon('down', 'tiny') : null]),
+      const why = [moodUp ? `Mood ${getMood(m.mood).name} +${moodMods[k]}` : '', ratUp ? `Rational ${rational.name} +10` : '', isDown ? `Rational ${rational.name} -10` : ''].filter(Boolean).join(' · ');
+      return el('div', { class: `stat-row ${tone}`, title: `${STAT_INFO[k]}${why ? ` (${why}${moodUp && isDown ? ` = ${net > 0 ? '+' : ''}${net}` : ''})` : ''}` }, [
+        el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), (moodUp || ratUp) ? icon('up', 'tiny') : null, isDown ? icon('down', 'tiny') : null]),
         el('div', { class: 'sbar' }, [el('i', { style: { width: `${Math.min(100, (stats[k] / maxRef) * 100)}%` } })]),
-        el('b', { text: formatStat(k, stats[k]) }),
+        el('b', {}, [
+          el('span', { text: formatStat(k, stats[k]) }),
+          net !== 0 ? el('span', { class: `stat-net ${tone}`, text: `(${net > 0 ? '+' : ''}${net})` }) : (moodUp || ratUp || isDown) ? el('span', { class: 'stat-net', text: '(±0)' }) : null,
+        ]),
       ]);
     });
 
@@ -308,7 +326,7 @@ export class PlayerMenu {
         ]),
       ]),
       el('div', {}, [
-        el('h3', { text: `${displayName(m)}  ·  Lv.${m.level}${m.level >= LEVEL_CAP ? '  (MAX LEVEL)' : ''}` }),
+        el('h3', {}, [nameWithElement(m), el('span', { text: `  ·  Lv.${m.level}${m.level >= LEVEL_CAP ? '  (MAX LEVEL)' : ''}` })]),
         el('div', { class: 'mc-sub', text: `Species: ${sp.displayName} · Breed: ${sp.breed} · Role: ${sp.role} · Form: ${stageData(m).name} (stage ${m.stage + 1})` }),
         el('div', { style: { margin: '8px 0' } }, [
           labeledBar('exp', 'EXP',
@@ -318,10 +336,7 @@ export class PlayerMenu {
         ]),
         el('h3', { text: 'Stats' }),
         el('div', { class: 'stat-rows' }, statRows),
-        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html:
-          `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) · `
-          + `<b>${stats.crit}%</b> crit chance · crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
-        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood <b>${getMood(m.mood).name}</b>: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity}) · Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg('up', 'tiny')} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg('down', 'tiny')} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` · ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ''}` }),
+        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood <b>${getMood(m.mood).name}</b>: ${getMood(m.mood).up.map((k) => `${iconSvg('up', 'tiny')} ${STAT_SHORT[k]} +${moodMods[k]}`).join(' &nbsp;')} (magnitude ${mag}, rarity ${m.rarity}) · Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg('up', 'tiny')} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg('down', 'tiny')} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` · ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ''}` }),
         el('div', { class: 'row', style: { gap: '6px', marginTop: '6px' } }, [
           iconTextBtn('swap', `Re-roll Mood (Mood Tonic ×${InventoryManager.count('mood_tonic')})`, { class: 'small ghost', disabled: !InventoryManager.has('mood_tonic', 1), title: InventoryManager.has('mood_tonic', 1) ? 'Uses one Mood Tonic: the Mood becomes a different one at random.' : 'Buy a Mood Tonic at a shop (Azure Coast onward).', onclick: async () => {
             const ok = await confirmDialog('RE-ROLL MOOD', `Use a Mood Tonic on ${displayName(m)}? Its Mood (${getMood(m.mood).name}) becomes a different one at random. This cannot be undone.`);
@@ -429,8 +444,8 @@ export class PlayerMenu {
             class: 'small primary', disabled: PartyManager.isFull(),
             onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
           }),
-          iconTextBtn('close', 'Release', {
-            class: 'small ghost',
+          button('Release', {
+            class: 'small ghost release',
             onclick: (e) => { e.stopPropagation(); this.releaseFromStorage(m); },
           }),
         ]),
@@ -860,6 +875,7 @@ export class PlayerMenu {
       ['Collection', `${s.caught}/${s.total} caught`],
       ['Trainers defeated', String(Object.keys(GameState.world.defeatedTrainers).length)],
       ['Regions visited', String(Object.keys(GameState.world.visitedMaps).length)],
+      ['Treasure chests opened', (() => { const c = ChestManager.stats(); return `${c.total} — Bronze ${c.bronze} · Silver ${c.silver} · Emerald ${c.emerald} · Ultra Gold ${c.ultra_gold}`; })()],
       ['Level cap (this version)', `Lv.${LEVEL_CAP}`],
       ['Game version', GameState.meta.gameVersion],
     ];
@@ -968,10 +984,11 @@ export function settingsPanel() {
     dropdown('Text Speed', 'textSpeed', ['slow', 'normal', 'fast', 'instant']),
     dropdown('Graphics Quality', 'graphicsQuality', ['low', 'medium', 'high']),
     (() => {
-      const val = el('b', { text: S.get('cameraSensitivity').toFixed(1) });
+      const cur = () => Math.min(CAMERA_ZOOM_MAX, Math.max(CAMERA_ZOOM_MIN, Number(S.get('cameraZoom')) || 1.35));
+      const val = el('b', { text: `×${cur().toFixed(2)}` });
       return el('div', { class: 'item-row' }, [
-        el('div', { class: 'ir-main' }, [el('div', { class: 'ir-name', text: 'Camera Sensitivity' })]),
-        el('input', { type: 'range', min: 0.4, max: 2, step: 0.1, value: S.get('cameraSensitivity'), oninput: (e) => { const v = parseFloat(e.target.value); S.set('cameraSensitivity', v); val.textContent = v.toFixed(1); } }),
+        el('div', { class: 'ir-main' }, [el('div', { class: 'ir-name', text: 'Camera Zoom' }), el('div', { class: 'ir-desc', text: `How close the world camera sits (×${CAMERA_ZOOM_MIN} far – ×${CAMERA_ZOOM_MAX} close). The mouse wheel or + / − in the world also zooms.` })]),
+        el('input', { type: 'range', min: CAMERA_ZOOM_MIN, max: CAMERA_ZOOM_MAX, step: CAMERA_ZOOM_STEP, value: cur(), oninput: (e) => { const v = parseFloat(e.target.value); S.set('cameraZoom', v); val.textContent = `×${v.toFixed(2)}`; } }),
         val,
       ]);
     })(),

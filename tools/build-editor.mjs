@@ -36,6 +36,7 @@ const GAME_MODULES = [
   'src/data/skillVfx.js',
   'src/data/species.js',
   'src/data/maps.js',
+  'src/data/chests.js',
   'src/render/creatureArt.js',
   'src/render/creatureRig.js',
   'src/render/worldRenderer.js',

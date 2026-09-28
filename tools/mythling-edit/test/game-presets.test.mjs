@@ -1,10 +1,12 @@
 // Scenario: GAME PRESETS — the game data snapshot embedded in MythlingEdit.html becomes an editable project
 // and round-trips back to the game's own data schema. Runs headless (see harness.mjs). Exit code 1 on failure.
 import os from 'node:os';
+import fs from 'node:fs';
 import path from 'node:path';
 import { window, document, wait, $, $$, btn, snapshot, errors, report, key } from './harness.mjs';
 
 const OUT = process.env.EDITOR_TEST_OUT || os.tmpdir();
+fs.mkdirSync(OUT, { recursive: true });
 setTimeout(() => { console.log('WATCHDOG exit'); report('watchdog'); process.exit(2); }, 170000).unref();
 await wait(2500);
 console.log('overlay dialogs open:', document.querySelectorAll('.overlay').length, [...document.querySelectorAll('.overlay h3')].map((h) => h.textContent).join(','));

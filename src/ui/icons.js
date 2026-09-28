@@ -71,6 +71,32 @@ export function iconPath(name) {
 }
 
 /** SVG markup string — use inside innerHTML/templates. */
+/**
+ * The raw `d` path data of an icon, for drawing the glyph on a <canvas> with
+ * Path2D (authored on a 24x24 grid). Returns [] when the icon has no path data.
+ */
+export function iconPathData(name) {
+  const src = P[ALIASES[name] || name] || '';
+  const out = [];
+  const re = /\sd="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(src))) out.push(m[1]);
+  return out;
+}
+/** Draw an icon glyph on a canvas at (x, y) top-left, `size` px square, filled with `color`. */
+export function drawIconGlyph(ctx, name, x, y, size, color) {
+  if (typeof Path2D === 'undefined') return false;
+  const paths = iconPathData(name);
+  if (!paths.length) return false;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(size / 24, size / 24);
+  ctx.fillStyle = color;
+  for (const d of paths) ctx.fill(new Path2D(d));
+  ctx.restore();
+  return true;
+}
+
 export function iconSvg(name, cls = '') {
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${iconPath(name)}</svg>`;
 }

@@ -21,6 +21,7 @@ import { MUTATIONS, MUTATION_IDS } from '../data/mutations.js';
 import { ITEMS, ITEM_CATEGORIES, BALL_IDS } from '../data/items.js';
 import { ballCanvas, ballLook } from '../render/balls.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
+import { CHEST_TIERS, CHEST_TIER_IDS, CHEST_REROLL_MS } from '../data/chests.js';
 import { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier } from '../data/elements.js';
 import {
   LEVEL_CAP, ABSOLUTE_MAX_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL,
@@ -185,22 +186,23 @@ function moodsSection() {
   ]);
   return [
     h3('What a Mood is', 'mood personality'),
-    para(`Every Mythling has a <b>Mood</b>: a fixed, purely <b>positive</b> trait that boosts exactly <b>one</b> stat.
-      There are <b>${MOOD_IDS.length}</b> Moods — one for every stat — so nothing is missing from the table below.
-      Moods are rolled when a wild Mythling appears and are kept through capture, evolution and every level up.
+    para(`Every Mythling has a <b>Mood</b>: a fixed, purely <b>positive</b> trait that raises <b>three</b> stats and lowers
+      nothing. There are <b>${MOOD_IDS.length}</b> Moods and no two share the same trio, so every stat is covered several times
+      over. Moods are rolled when a wild Mythling appears and are kept through capture, evolution and every level up.
       A <b>Mood Tonic</b> (sold from Azure Coast onward) re-rolls it into a different Mood.`),
     h3('Rarity amplifies the Mood', 'rarity magnitude scale'),
     para(`Rarity does not change base stats by itself — it sets the <b>magnitude</b> of the Mood bonus:
-      <b>+2 × magnitude</b> to the Mood's stat (HP counts six times, Crit Damage four times). Rarity <b>D</b> adds
+      <b>+magnitude</b> to each of the three stats (HP counts triple, Crit Damage double). Rarity <b>D</b> adds
       nothing at all; <b>SSS+</b> adds a huge boost.`),
     table(RARITY_ORDER.map((id) => [
       `<b style="color:${RARITIES[id].color}">Rarity ${id}</b>`,
-      `Mood magnitude <b>${RARITIES[id].magnitude}</b> → <b>+${RARITIES[id].magnitude * 2}</b> to the Mood's stat (HP <b>+${RARITIES[id].magnitude * 12}</b>, Crit Damage <b>+${RARITIES[id].magnitude * 8}%</b>)`,
+      `Mood magnitude <b>${RARITIES[id].magnitude}</b> → <b>+${RARITIES[id].magnitude}</b> to each Mood stat (HP <b>+${RARITIES[id].magnitude * 3}</b>, Crit Damage <b>+${RARITIES[id].magnitude * 2}%</b>)`,
     ])),
     h3('All moods', 'list table of moods'),
     table(rows),
-    note(`Example — a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+10 Physical Attack</b>.
-      A <b>Sturdy</b> one at the same rarity: <b>+60 HP</b>. The same Mood at Rarity D changes nothing.`),
+    note(`Example — a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+15 HP, +5 Physical Attack, +5 Counter</b>.
+      The same Mood at Rarity D changes nothing. When a Mood plus and a Rational minus land on the <b>same</b> stat the
+      profile shows the <b>net</b> change — green when the plus wins (+15 −10 = <b>+5</b>), red when the penalty wins.`),
     h3('Rational — the +10 / −10 trait', 'rational temper nature plus minus trade-off'),
     para(`Where the Mood only ever helps, the <b>Rational</b> is a trade-off: a fixed <b>+${RATIONAL_AMOUNT}</b> to one of the six
       main stats and a fixed <b>−${RATIONAL_AMOUNT}</b> to another. It is flat (not scaled by rarity or level) and it stacks with the
@@ -425,7 +427,7 @@ function skillsSection() {
       in its <b>Skill Library</b> forever, and leaving a button empty is allowed (nothing refills it, and the choice
       is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
     bullets([
-      '<b>Normal</b> skills have unlimited uses but low power — every evolution teaches a stronger one.',
+      '<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. The stronger <b>elemental</b> Normals every evolution teaches carry an element and therefore have <b>limited uses</b> (30 / 25 / 20).',
       '<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.',
       '<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe\'s stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.',
       'Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.',
@@ -529,6 +531,19 @@ function worldSection() {
     '<b>Gates</b> — sealed until you defeat that region’s Guardian and earn its key item.',
   ]));
   out.push(note('Healing at a Center restores HP and skill uses and resets Ultimate Charge to 0 — it never touches your EXP.'));
+  out.push(h3('Treasure chests', 'chest treasure bronze silver emerald ultra gold loot'));
+  out.push(para(`Chests are scattered through the wild areas of every map. A map holds at most <b>two Bronze</b> chests and
+    <b>one</b> of each other tier at a time; an opened chest is gone, and the map rolls a fresh set of chests
+    after about <b>${Math.round(CHEST_REROLL_MS / 60000)} minutes</b> of play. Every chest holds Wildcoins (more in later regions);
+    the rarer the chest, the likelier it also holds a ball or a food — and the best balls and foods only ever come out of the best chests.`));
+  out.push(table(CHEST_TIER_IDS.map((id) => {
+    const t = CHEST_TIERS[id];
+    return [
+      `<b style="color:${t.colors.trim}">${t.name}</b>`,
+      `${(t.chance * 100).toFixed(t.chance < 0.01 ? 1 : 0)}% per slot · up to <b>${t.max}</b> on a map · ${t.coins[0]}–${t.coins[1]} Wildcoins (× region) · `
+        + `${Math.round(t.itemChance * 100)}% item: ${[...t.balls, ...t.foods].map((i) => ITEMS[i]?.name || i).join(', ')}`,
+    ];
+  }), 'chest tiers loot table'));
   return out;
 }
 

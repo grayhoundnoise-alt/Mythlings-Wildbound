@@ -3,6 +3,11 @@
 //
 // terrain ids drive procedural prop generation + ground painting in the renderer.
 
+import { ITEMS } from './items.js';
+
+/** Every purchasable item, in catalogue order — the last region's shop always sells all of it. */
+export const FULL_STOCK = Object.values(ITEMS).filter((i) => i.price > 0 && i.category !== 'key').map((i) => i.id);
+
 export const MAPS = {
   verdant_vale: {
     id: 'verdant_vale',
@@ -210,9 +215,10 @@ export const MAPS = {
     buildings: [
       { id: 'ember_center', type: 'center', x: 280, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'ember_shop',   type: 'shop',   x: 640, y: 550, w: 190, h: 150, name: 'Emberwatch Quartermaster',
-        stock: ['normal_ball', 'advanced_ball', 'absolute_ball', 'god_ball',
-          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
-          'river_jerky', 'ember_roast', 'mythic_feast', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
+        // Region-3 stock only: the top-tier balls, restores and foods moved to the LAST map's shop.
+        stock: ['advanced_ball', 'absolute_ball',
+          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+          'river_jerky', 'ember_roast', 'mythic_feast', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'ember_tower',  type: 'tower',  x: 140, y: 1020, w: 160, h: 200, name: 'Watchtower' },
     ],
     landmarks: [
@@ -311,9 +317,9 @@ export const MAPS = {
     buildings: [
       { id: 'crag_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'crag_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Crags Outfitter',
-        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'shiny_ball', 'dark_ball',
-          'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
-          'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
+        // The LAST map's shop carries the COMPLETE catalogue (every ball, restore, tonic and food).
+        // When a new region is added, the top of this list moves there and this one is trimmed.
+        stock: FULL_STOCK },
       { id: 'crag_lodge',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Quarry Lodge' },
       { id: 'summit_watch',type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Summit Watch' },
     ],

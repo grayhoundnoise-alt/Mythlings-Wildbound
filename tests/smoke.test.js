@@ -74,7 +74,7 @@ const { CaptureManager } = await import('../src/systems/CaptureManager.js');
 const ITEMS_MOD = await import('../src/data/items.js');
 const { FeedManager } = await import('../src/systems/FeedManager.js');
 const { elementMultiplier } = await import('../src/data/elements.js');
-const { moodModifiers, MOODS, STAT_KEYS, RATIONALS, RATIONAL_IDS, rationalModifiers, normalizeMoodId } = await import('../src/data/moods.js');
+const { moodModifiers, MOODS, STAT_KEYS, RATIONALS, RATIONAL_IDS, rationalModifiers, normalizeMoodId, traitModifiers } = await import('../src/data/moods.js');
 const { counterDodgePercent, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, RATIONAL_AMOUNT } = await import('../src/data/config.js');
 const { MAPS } = await import('../src/data/maps.js');
 const { SPECIES, SPECIES_IDS } = await import('../src/data/species.js');
@@ -114,15 +114,16 @@ test('every species exists with base stats and a filled-in roster', () => {
 });
 
 test('rarity D applies no mood modifier, higher rarity does — and moods never lower a stat', () => {
-  const neutral = 'placid';   // rational: +HP / -P.ATK; pin it so only the mood varies
+  // rational Docile = +HP / -S.ATK, pinned so only the mood varies; Brave = +HP +P.ATK +CNT
   const d = createMythling({ speciesId: 'spriggo', level: 1, rarity: 'D', mood: 'brave', rational: 'docile' });
   const s = createMythling({ speciesId: 'spriggo', level: 1, rarity: 'S', mood: 'brave', rational: 'docile' });
   assert.equal(computeStats(d).patk, SPECIES.spriggo.baseStats.patk, 'rarity D: no mood bonus');
-  assert.equal(computeStats(s).patk, SPECIES.spriggo.baseStats.patk + 10, 'S = magnitude 5 -> +10 to the one boosted stat');
+  assert.equal(computeStats(s).patk, SPECIES.spriggo.baseStats.patk + 5, 'S = magnitude 5 -> +5 to each of the three boosted stats');
+  assert.equal(computeStats(s).hp - computeStats(d).hp, 15, 'HP counts triple: +15 at magnitude 5');
   assert.equal(computeStats(s).sdef, SPECIES.spriggo.baseStats.sdef, 'a mood lowers nothing any more');
   const mods = moodModifiers('brave', 5);
   assert.ok(Object.values(mods).every((v) => v >= 0), 'mood modifiers are never negative');
-  void neutral;
+  assert.equal(Object.values(mods).filter((v) => v > 0).length, 3, 'exactly three stats are raised');
 });
 
 test('the Rational trait is a fixed +10 / -10 pair that stacks with mood, rarity and mutation', () => {
@@ -136,14 +137,21 @@ test('the Rational trait is a fixed +10 / -10 pair that stacks with mood, rarity
   const hasty = createMythling({ speciesId: 'spriggo', level: 1, rarity: 'D', mood: 'brave', rational: 'hasty' });   // +SPD -HP
   assert.equal(computeStats(hasty).spd, computeStats(base).spd + 10);
   assert.equal(computeStats(hasty).hp, computeStats(base).hp - 20, 'HP swings from +10 to -10');
-  // stacks with mood (S = +10 P.ATK) and mutation (+1 everything)
+  // stacks with mood (Brave at S = +5 P.ATK) and mutation (+1 everything)
   const stacked = createMythling({ speciesId: 'spriggo', level: 1, rarity: 'S', mood: 'brave', rational: 'mighty', mutation: 'shiny' });
-  assert.equal(computeStats(stacked).patk, SPECIES.spriggo.baseStats.patk + 10 + 10 + 1);
+  assert.equal(computeStats(stacked).patk, SPECIES.spriggo.baseStats.patk + 5 + 10 + 1);
   assert.equal(computeStats(stacked).spd, Math.max(1, SPECIES.spriggo.baseStats.spd - 10) + 1);
+  // a Mood plus and a Rational minus on the SAME stat: the net is what the profile shows
+  const net = traitModifiers('brave', 5, 'hasty');   // Brave +15 HP, Hasty -10 HP => +5 HP; +10 SPD
+  assert.equal(net.hp, 5, '+15 mood and -10 rational leave +5');
+  assert.equal(net.spd, 10);
+  assert.equal(traitModifiers('brave', 1, 'hasty').hp, -7, 'at a low magnitude the penalty wins (+3 -10 = -7)');
   // every Mythling gets one, and old saves without one are repaired
   const wild = createMythling({ speciesId: 'aquini', level: 5 });
   assert.ok(RATIONALS[wild.rational], 'a rational is always rolled');
-  assert.equal(normalizeMoodId('feral'), 'keen', 'legacy 3-up moods map onto the new single-stat moods');
+  assert.equal(normalizeMoodId('feral'), 'feral', 'every legacy mood id still exists');
+  assert.equal(normalizeMoodId('agile'), 'agile', 'the single-stat era moods still exist too');
+  assert.equal(normalizeMoodId('no_such_mood'), 'brave', 'unknown ids fall back to Brave');
 });
 
 test('counter is capped so nothing becomes untouchable', () => {
@@ -168,15 +176,18 @@ test('crit chance is nerfed: slow growth, capped at 30% — a crit stays rare ev
   }
 });
 
-test('every mood boosts exactly one stat and lowers none — nine moods cover every stat', () => {
-  const covered = new Set();
+test('every mood boosts exactly THREE stats and lowers none — no two moods share a trio, every stat is covered', () => {
+  const covered = new Set(); const trios = new Set();
   for (const [id, mood] of Object.entries(MOODS)) {
-    assert.equal(mood.up.length, 1, `${id} boosts one stat`);
+    assert.equal(mood.up.length, 3, `${id} boosts three stats`);
     assert.equal(mood.down, undefined, `${id} lowers nothing`);
-    assert.ok(STAT_KEYS.includes(mood.up[0]), `${id} up stat is known`);
-    covered.add(mood.up[0]);
+    for (const k of mood.up) { assert.ok(STAT_KEYS.includes(k), `${id} up stat ${k} is known`); covered.add(k); }
+    const key = [...mood.up].sort().join(',');
+    assert.ok(!trios.has(key), `${id} repeats another mood's trio`);
+    trios.add(key);
   }
   assert.deepEqual([...covered].sort(), [...STAT_KEYS].sort(), 'every stat has a mood');
+  assert.ok(Object.keys(MOODS).length >= 24, 'at least 24 moods');
 });
 
 test('the crit moods are wired to the crit stats', () => {
@@ -384,7 +395,26 @@ test('an exhausted move falls back to the unlimited attack instead of wasting th
   const basic = basicAttack(m);
   assert.equal(Number.isFinite(basic.uses), false, `${basic.name} has unlimited uses`);
   assert.equal(basic.category, 'normal');
-  assert.equal(basic.id, 'thorn_jab', 'the evolved unlimited move beats Lv.1 Bite');
+  assert.equal(basic.id, 'bite', 'the element-less starter attack is the only unlimited move');
+});
+
+test('elemental Normal skills have limited uses; only the plain starter attacks are unlimited', () => {
+  const normals = Object.values(SKILLS_MOD.SKILLS).filter((s) => s.category === 'normal');
+  for (const s of normals) {
+    if (s.element) assert.ok(Number.isFinite(s.uses) && s.uses > 0, `${s.id} carries an element -> limited uses`);
+    else assert.equal(s.uses, Infinity, `${s.id} has no element -> unlimited`);
+  }
+  for (const sp of Object.values(SPECIES)) {
+    const lv1 = (sp.skillUnlocks[1] || []).map((id) => SKILLS_MOD.SKILLS[id]);
+    assert.ok(lv1.some((s) => s && s.category === 'normal' && !s.element), `${sp.id} learns an unlimited element-less normal at Lv.1`);
+  }
+  // a save from before the change starts the newly-limited normals full instead of empty
+  const m = createMythling({ speciesId: 'spriggo', level: 25, stage: 1 });
+  delete m.uses.thorn_jab;
+  const raw = JSON.parse(JSON.stringify(serialize()));
+  raw.party = [JSON.parse(JSON.stringify(m))];
+  deserialize(raw);
+  assert.equal(PartyManager.list()[0].uses.thorn_jab, SKILLS_MOD.SKILLS.thorn_jab.uses, 'migrated uses start full');
 });
 
 // ------------------------------------------------------------------
@@ -930,6 +960,77 @@ test('Lv.100 is reachable and the exp curve stays sane past the story cap', () =
 
 // ------------------------------------------------------------------
 section('World data');
+test('shops: the volcano shop is trimmed, the LAST map sells the complete catalogue', () => {
+  const MAP_ORDER = Object.values(MAPS).sort((a, b) => a.order - b.order).map((m) => m.id);
+  const stock = (id) => MAPS[id].buildings.find((b) => b.type === 'shop').stock;
+  const ember = stock('emberwild');
+  for (const id of ['god_ball', 'shiny_ball', 'dark_ball', 'full_restore', 'wildbound_ambrosia', 'titan_broth', 'phoenix_pepper']) assert.ok(!ember.includes(id), `Emberwild no longer sells ${id}`);
+  assert.ok(ember.includes('absolute_ball') && ember.includes('max_revive'), 'Emberwild keeps its region-3 essentials');
+  const last = stock(MAP_ORDER[MAP_ORDER.length - 1]);
+  const purchasable = Object.values(ITEMS_MOD.ITEMS).filter((i) => i.price > 0 && i.category !== 'key').map((i) => i.id);
+  assert.deepEqual([...last].sort(), [...purchasable].sort(), 'the last region sells every purchasable item');
+  for (const id of MAP_ORDER.slice(0, -1)) assert.ok(stock(id).length < last.length, `${id} sells less than the last map`);
+});
+
+test('treasure chests: capped per tier, placed on walkable ground, and their loot follows the tier', async () => {
+  const { CHEST_TIERS, rollChestTiers, rollChestLoot, CHEST_TIER_IDS } = await import('../src/data/chests.js');
+  const { ChestManager } = await import('../src/systems/ChestManager.js');
+  const { WorldRenderer } = await import('../src/render/worldRenderer.js');
+  assert.deepEqual(CHEST_TIER_IDS, ['bronze', 'silver', 'emerald', 'ultra_gold']);
+  assert.equal(CHEST_TIERS.bronze.max, 2); for (const id of ['silver', 'emerald', 'ultra_gold']) assert.equal(CHEST_TIERS[id].max, 1, `${id}: only one at a time`);
+  assert.ok(CHEST_TIERS.ultra_gold.chance <= 0.005, 'Ultra Gold is nearly impossible');
+  // a roll that always succeeds still respects the caps
+  const all = rollChestTiers(() => 0);
+  assert.deepEqual(all.sort(), ['bronze', 'bronze', 'emerald', 'silver', 'ultra_gold']);
+  assert.deepEqual(rollChestTiers(() => 0.999), [], 'a bad roll spawns nothing');
+  // loot: always coins, better tiers pay more, top items only from the top chests
+  const seq = (vals) => { let i = 0; return () => vals[i++ % vals.length]; };
+  const bronze = rollChestLoot('bronze', 0, seq([0.5, 0.99]));
+  assert.ok(bronze.coins >= 40 && bronze.coins <= 120 && bronze.item === null, 'a common bronze chest is just coins');
+  const gold = rollChestLoot('ultra_gold', 3, seq([0.5, 0, 0, 0]));
+  assert.ok(gold.coins >= 4000 * 3.4, 'ultra gold pays a fortune, more in later regions');
+  assert.ok(['god_ball', 'shiny_ball', 'dark_ball'].includes(gold.item.id), 'the best balls only come from the best chest');
+  for (const t of ['bronze', 'silver', 'emerald']) for (const b of CHEST_TIERS[t].balls) assert.ok(!['god_ball', 'shiny_ball', 'dark_ball'].includes(b), `${t} never drops a guaranteed ball`);
+  for (const t of ['bronze', 'silver']) for (const f of CHEST_TIERS[t].foods) assert.ok(ITEMS_MOD.ITEMS[f].exp <= 400, `${t} only drops cheap food (${f})`);
+  // placement + opening through the manager
+  createNewGameState({ slot: 1, playerName: 'CHEST', starterId: 'spriggo' });
+  const map = MAPS.verdant_vale; const wr = new WorldRenderer();
+  const free = ChestManager.makeFreeTest(map, wr.colliders(map));
+  const list = ChestManager.ensure('verdant_vale', free, () => 0);
+  assert.equal(list.length, 5, 'every slot spawned with a perfect roll');
+  for (const c of list) assert.ok(free(c.x, c.y) && c.x > 0 && c.y > 0 && c.x < map.width && c.y < map.height, `${c.tier} stands on free ground`);
+  assert.equal(ChestManager.ensure('verdant_vale', free, () => 0.999).length, 5, 'entering again keeps the current set (no instant re-roll)');
+  const before = GameState.player.wildcoins;
+  const gold2 = list.find((c) => c.tier === 'ultra_gold');
+  const res = ChestManager.open('verdant_vale', gold2.id, seq([0.5, 0, 0, 0]));
+  assert.ok(res.ok && res.coins > 0 && GameState.player.wildcoins === before + res.coins, 'opening pays out');
+  assert.ok(res.item && InventoryManager.has(res.item.id, 1), 'the item landed in the bag');
+  assert.equal(ChestManager.list('verdant_vale').length, 4, 'an opened chest is gone');
+  assert.equal(ChestManager.open('verdant_vale', gold2.id).ok, false, 'cannot be opened twice');
+  assert.equal(ChestManager.stats().ultra_gold, 1);
+  // survives a save / load
+  const raw = JSON.parse(JSON.stringify(serialize()));
+  deserialize(raw);
+  assert.equal(ChestManager.list('verdant_vale').length, 4, 'chests are saved with the world');
+  assert.equal(ChestManager.stats().ultra_gold, 1, 'chest records are saved too');
+});
+
+test('camera zoom replaces camera sensitivity and stays within its limits', async () => {
+  const cfg = await import('../src/data/config.js');
+  assert.equal(cfg.DEFAULT_SETTINGS.cameraSensitivity, undefined, 'no more "sensitivity" in a 2D game');
+  assert.ok(cfg.DEFAULT_SETTINGS.cameraZoom >= cfg.CAMERA_ZOOM_MIN && cfg.DEFAULT_SETTINGS.cameraZoom <= cfg.CAMERA_ZOOM_MAX);
+  assert.ok(cfg.CAMERA_ZOOM_MIN >= 1.0, 'you can never zoom out far enough to see half the map');
+  const { SettingsManager } = await import('../src/systems/SettingsManager.js');
+  const { OverworldScene } = await import('../src/scenes/OverworldScene.js');
+  const ow = new OverworldScene(document.createElement('canvas'));
+  SettingsManager.set('cameraZoom', cfg.CAMERA_ZOOM_MAX);
+  assert.equal(ow.zoomBy(1), cfg.CAMERA_ZOOM_MAX, 'cannot zoom past the maximum');
+  let z = cfg.CAMERA_ZOOM_MAX; for (let i = 0; i < 40; i++) z = ow.zoomBy(-1);
+  assert.equal(z, cfg.CAMERA_ZOOM_MIN, 'cannot zoom out past the minimum');
+  assert.equal(SettingsManager.get('cameraZoom'), cfg.CAMERA_ZOOM_MIN, 'the zoom is persisted as a setting');
+  SettingsManager.set('cameraZoom', cfg.DEFAULT_SETTINGS.cameraZoom);
+});
+
 test('map level ranges match the design: fixed bands that overlap slightly', () => {
   assert.deepEqual(MAPS.verdant_vale.levelRange, [1, 20]);
   assert.deepEqual(MAPS.azure_coast.levelRange, [15, 30]);

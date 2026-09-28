@@ -9,7 +9,8 @@ import {
   MAX_EQUIPPED_SKILLS,
 } from '../core/mythling.js';
 import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
-import { STAT_SHORT } from '../data/moods.js';
+import { STAT_SHORT, getMood } from '../data/moods.js';
+import { ELEMENTS } from '../data/elements.js';
 import { BALL_IDS, getItem } from '../data/items.js';
 import { drawMythling, prewarm } from '../render/creatures.js';
 import { SkillVFX } from '../render/vfx/SkillVFX.js';
@@ -168,7 +169,7 @@ export class BattleScene {
     const pct = v.maxHp > 0 ? hp / v.maxHp : 0;   // 0..1, matching hpPercent()
     const rows = [
       el('div', { class: 'cc-top' }, [
-        el('span', { class: 'cc-name', text: displayName(m) }),
+        el('span', { class: 'cc-name' }, [icon(ELEMENTS[sp.element]?.icon || 'spark', sp.element), el('span', { text: displayName(m) })]),
         mutationChip(m.mutation),
         el('span', { class: 'cc-lv', text: `Lv.${m.level}` }),
       ]),
@@ -179,7 +180,7 @@ export class BattleScene {
       el('div', { class: 'row', style: { gap: '6px', margin: '4px 0' } }, [
         elementChip(sp.element),
         rarityChip(m.rarity),
-        el('span', { class: 'chip', text: m.mood }),
+        el('span', { class: 'chip', text: getMood(m.mood).name }),
       ]),
       bar('hp', pct, hpClass(pct)),
       el('div', { class: 'cc-hp-text', text: `${hp} / ${v.maxHp} HP` }),

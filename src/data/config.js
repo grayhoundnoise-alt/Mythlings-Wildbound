@@ -107,12 +107,17 @@ export function coinReward({ enemyLevel, enemyYield, winnerLevel }) {
   return Math.max(1, Math.floor((2.2 * enemyLevel + enemyYield * 0.55) * scale));
 }
 
+/** Overworld camera zoom limits: you can zoom in a fair bit, but never far enough out to see half the map. */
+export const CAMERA_ZOOM_MIN = 1.1;
+export const CAMERA_ZOOM_MAX = 1.8;
+export const CAMERA_ZOOM_STEP = 0.05;
+
 export const DEFAULT_SETTINGS = {
   masterVolume: 0.7,
   musicVolume: 0.5,
   sfxVolume: 0.75,
   textSpeed: 'normal',      // slow | normal | fast | instant
-  cameraSensitivity: 1.0,
+  cameraZoom: 1.35,         // overworld camera zoom, CAMERA_ZOOM_MIN..CAMERA_ZOOM_MAX (this is a 2D game: no "sensitivity")
   fullscreen: false,
   graphicsQuality: 'high',  // low | medium | high
   screenShake: true,
