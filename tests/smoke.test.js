@@ -2152,6 +2152,30 @@ test('the rarest shelves are usually empty', async () => {
   assert.ok(seen < 60, `but never reliably (${seen}/60 restocks)`);
 });
 
+test('a save/load keeps shop shelves bought-down (regression)', async () => {
+  const { ShopManager } = await import('../src/systems/ShopManager.js');
+  const { serialize, deserialize } = await import('../src/systems/GameState.js');
+  createNewGameState({ slot: 1, playerName: 'RELOAD', starterId: 'spriggo' });
+  GameState.player.wildcoins = 1000000;
+  const shop = MAPS.verdant_vale.buildings.find((b2) => b2.type === 'shop');
+
+  // Buy one staple down, then round-trip the whole save through disk.
+  const before = ShopManager.qty(shop, 'basic_ball');
+  assert.ok(ShopManager.buy(shop, 'basic_ball', 4).ok, 'the purchase goes through');
+  const bought = ShopManager.qty(shop, 'basic_ball');
+  assert.equal(bought, before - 4);
+
+  deserialize(JSON.parse(JSON.stringify(serialize())));
+  assert.equal(ShopManager.qty(shop, 'basic_ball'), bought,
+    'the shelf is still bought down after a save/load — a load never restocks a shop for free');
+
+  // And a save written before shelves existed (no world.shops) still loads cleanly.
+  const legacy = JSON.parse(JSON.stringify(serialize()));
+  delete legacy.world.shops;
+  assert.equal(deserialize(legacy), true, 'a save with no shop data still loads');
+  assert.ok(ShopManager.qty(shop, 'basic_ball') > 0, 'and the shop is stocked normally');
+});
+
 test('God / Shiny / Dark Balls guarantee the top rarity tier, at a price', async () => {
   const { ITEMS: allItems } = ITEMS_MOD;
   for (const id of ['god_ball', 'shiny_ball', 'dark_ball']) {
@@ -2497,6 +2521,55 @@ test('Release All empties storage and never touches the party', async () => {
   for (const m of [...StorageManager.list()]) StorageManager.remove(m.uid);
   assert.equal(StorageManager.list().length, 0, 'storage is empty');
   assert.deepEqual(PartyManager.list().map((m) => m.uid), party, 'and the party is untouched');
+});
+
+test('a legendary Mythling gets its own panel on every card', async () => {
+  const { PlayerMenu, mythCardClassFor } = await import('../src/ui/PlayerMenu.js');
+  const { createMythling } = await import('../src/core/mythling.js');
+  const { getSpecies, LEGENDARY_IDS } = await import('../src/data/species.js');
+  assert.ok(LEGENDARY_IDS.length > 0, 'the game has legendaries');
+  for (const id of LEGENDARY_IDS) {
+    assert.equal(getSpecies(id).legendary, true, `${id} is flagged legendary`);
+    assert.equal(mythCardClassFor(createMythling({ speciesId: id, level: 40 })), 'myth-card legendary',
+      `${id} gets the legendary card class`);
+  }
+  // ...and an ordinary Mythling never does.
+  assert.equal(mythCardClassFor(createMythling({ speciesId: 'spriggo', level: 5 })), 'myth-card',
+    'a common Mythling keeps the plain card');
+  // createMythling heals to full, so knock one out after it is built
+  const fainted = createMythling({ speciesId: 'emberu', level: 5 });
+  fainted.currentHp = 0;
+  assert.equal(mythCardClassFor(fainted), 'myth-card fainted', 'a fainted Mythling still reads as fainted');
+  // a fainted legendary keeps both
+  const faintedLegend = createMythling({ speciesId: LEGENDARY_IDS[0], level: 40 });
+  faintedLegend.currentHp = 0;
+  assert.equal(mythCardClassFor(faintedLegend), 'myth-card fainted legendary', 'a fainted legendary is still legendary');
+
+  // the panel itself is styled: a gold frame, a sheen and a glow, not just a class name
+  assert.match(cssText, /\.myth-card\.legendary\s*\{/, 'the legendary card is styled');
+  assert.match(cssText, /@keyframes\s+legendFrame/, 'the legendary frame animates');
+  assert.match(cssText, /@keyframes\s+legendSheen/, 'and carries a travelling sheen');
+  assert.match(cssText, /prefers-reduced-motion[\s\S]{0,400}myth-card\.legendary/, 'and settles down for reduced motion');
+});
+
+test('cards read out clean stat numbers', async () => {
+  const { cleanStats } = await import('../src/ui/PlayerMenu.js');
+  const { createMythling, computeStats } = await import('../src/core/mythling.js');
+  const { STAT_KEYS, STAT_SHORT } = await import('../src/data/moods.js');
+  const m = createMythling({ speciesId: 'spriggo', level: 40, rarity: 'SSS+' });
+  const stats = computeStats(m);
+  const node = cleanStats(m, STAT_KEYS, 'compact');
+  assert.equal(node.children.length, STAT_KEYS.length, 'one line per stat');
+  // label on the left, the plain number on the right — no bars, no bonus maths
+  const first = node.children[0].children;
+  assert.equal(first[0].textContent, STAT_SHORT.hp, 'the label is the short stat name');
+  assert.equal(first[1].textContent, String(stats.hp), 'and the value is the real number');
+  for (const line of node.children) {
+    assert.equal(line.children.length, 2, 'each stat is exactly label + value');
+    assert.equal(line.children[0].className, 'cs-key');
+    assert.equal(line.children[1].className, 'cs-val');
+  }
+  assert.match(cssText, /\.clean-stats\s*\{/, 'the clean readout is styled');
 });
 
 for (const item of queue) {

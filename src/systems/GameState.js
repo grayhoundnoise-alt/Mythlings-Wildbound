@@ -460,6 +460,10 @@ export function deserialize(data) {
     npcProgress: { ...(w.npcProgress || {}) },
     chests: sanitizeChests(w.chests),
     chestStats: { ...(w.chestStats || {}) },
+    // Shop shelves are part of the world state and are saved with it. Leaving
+    // them out here silently re-rolled every shelf to full on each load, which
+    // quietly undid the "shelves are finite" rule across a save/load.
+    shops: { ...(w.shops || {}) },
   };
 
   GameState.meta = {

@@ -49,6 +49,20 @@ const TABS = [
 ];
 
 /**
+ * The class list for a Mythling card. Exported so the party, storage and every
+ * picker stay in step, and so the legendary rule can be verified directly.
+ */
+export function mythCardClassFor(m) {
+  const cls = ['myth-card'];
+  if (isFainted(m)) cls.push('fainted');
+  // A legendary Mythling must never read like an ordinary card: it gets its own
+  // shimmering gold/aurora frame (see .myth-card.legendary in styles.css) and a
+  // LEGENDARY badge, so one is obvious at a glance wherever a card appears.
+  if (speciesOf(m)?.legendary) cls.push('legendary');
+  return cls.join(' ');
+}
+
+/**
  * A Mythling portrait.
  *
  * `size` is the design box, but the CSS is free to give the canvas any shape
@@ -163,6 +177,20 @@ export function labeledBar(kind, label, value, pct, extraClass = '', title = '')
   return wrap;
 }
 
+/**
+ * The cleanest possible stat readout: a compact label/number grid, exactly the
+ * "HP: 1446 · P.ATK: 109" form — no bars, no bonus maths, no source breakdown.
+ * Used on the Mythling cards, where the card should answer "how strong is it"
+ * at a glance and leave the arithmetic to the detail panel.
+ */
+export function cleanStats(m, keys = STAT_KEYS, variant = '') {
+  const stats = computeStats(m);
+  return el('div', { class: `clean-stats ${variant}`.trim() }, keys.map((k) => el('div', { class: 'cs-line', title: STAT_INFO[k] || STAT_LABELS[k] }, [
+    el('span', { class: 'cs-key', text: STAT_SHORT[k] || STAT_LABELS[k] || k.toUpperCase() }),
+    el('b', { class: 'cs-val', text: formatStat(k, stats[k]) }),
+  ])));
+}
+
 export class PlayerMenu {
   constructor(game) {
     this.game = game;
@@ -254,7 +282,12 @@ export class PlayerMenu {
     const sp = speciesOf(m);
     const pct = hpPercent(m);
     const evoReady = EvolutionManager.isReady(m);
-    const card = el('div', { class: `myth-card ${isFainted(m) ? 'fainted' : ''}` }, [
+    // A legendary Mythling must never read like an ordinary card: it gets its own
+    // shimmering gold/aurora frame (see .myth-card.legendary in styles.css) and a
+    // LEGENDARY badge in the name row, so one is obvious at a glance in the party,
+    // in storage and in every picker built on this card.
+    const legendary = !!sp.legendary;
+    const card = el('div', { class: mythCardClassFor(m) }, [
       // portrait column: the art, and — in the free space under it — the EVOLVE badge when a stage is ready
       el('div', { class: 'mc-side' }, [
         portrait(m, 66),
@@ -263,6 +296,7 @@ export class PlayerMenu {
       el('div', { class: 'mc-main' }, [
         el('div', { class: 'mc-name' }, [
           nameWithElement(m),
+          legendary ? el('span', { class: 'chip legendary mc-legendary', title: 'Legendary Mythling — one form, rare spawns, and an Absolute Ball or better to catch.' }, [icon('ultimate'), el('span', { text: 'LEGENDARY' })]) : null,
           m.level >= LEVEL_CAP ? el('span', { class: 'chip max', text: 'MAX' }) : null,
           mutationChip(m.mutation),
         ]),
@@ -272,6 +306,8 @@ export class PlayerMenu {
           m.level >= LEVEL_CAP ? 'MAX LEVEL' : `${m.exp} / ${expNeeded(m)}`,
           m.level >= LEVEL_CAP ? 1 : m.exp / expNeeded(m),
           '', 'EXP is kept forever — healing only restores HP, skill uses and Ultimate Charge.'),
+        // the plain numbers: HP, P.ATK, S.ATK … nothing else on the card.
+        cleanStats(m, STAT_KEYS, 'compact'),
         extra || null,
       ]),
     ]);
@@ -342,6 +378,10 @@ export class PlayerMenu {
             '', 'EXP is never lost when healing — only HP, skill uses and Ultimate Charge are restored.'),
         ]),
         el('h3', { text: 'Stats' }),
+        // The clean numbers first — HP: 1446, P.ATK: 109, … — so the plain
+        // readout is the first thing read. The bars and the (+n) nets stay below
+        // for anyone who wants to know where a number came from.
+        cleanStats(m, STAT_KEYS, 'detail'),
         el('div', { class: 'stat-rows' }, statRows),
         el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood <b>${getMood(m.mood).name}</b>: ${getMood(m.mood).up.map((k) => `${iconSvg('up', 'tiny')} ${STAT_SHORT[k]} +${moodMods[k]}`).join(' &nbsp;')} (magnitude ${mag}, rarity ${m.rarity}) · Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg('up', 'tiny')} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg('down', 'tiny')} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` · ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ''}` }),
         el('div', { class: 'row', style: { gap: '6px', marginTop: '6px' } }, [

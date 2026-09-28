@@ -580,6 +580,110 @@ select {
 .myth-card .mc-sub { color: var(--muted); font-size: .78rem; margin: 2px 0 4px; }
 .myth-card.fainted { filter: grayscale(.85) brightness(.75); }
 
+/* ---------------------------------------------------------------------
+   LEGENDARY Mythlings — their own panel.
+   A legendary must never be mistakable for an ordinary card: a gold/aurora
+   frame, a slow drifting sheen, a breathing outer glow and a warm interior
+   tint. Static, legible and readable; the animation is decoration only.
+   --------------------------------------------------------------------- */
+@keyframes legendFrame {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,215,106,.55), 0 0 16px rgba(255,190,90,.30), 0 6px 18px rgba(0,0,0,.45); }
+  50%      { box-shadow: 0 0 0 1px rgba(255,232,168,.95), 0 0 30px rgba(255,205,120,.62), 0 6px 18px rgba(0,0,0,.45); }
+}
+@keyframes legendSheen {
+  0%        { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+  18%       { opacity: .85; }
+  55%       { transform: translateX(320%) skewX(-18deg); opacity: 0; }
+  100%      { transform: translateX(320%) skewX(-18deg); opacity: 0; }
+}
+@keyframes legendAura {
+  0%, 100% { opacity: .55; }
+  50%      { opacity: 1; }
+}
+
+.myth-card.legendary {
+  position: relative; overflow: hidden; isolation: isolate;
+  border: 1.5px solid rgba(255,215,106,.75);
+  background:
+    linear-gradient(150deg, rgba(94,64,16,.55) 0%, rgba(44,30,54,.72) 48%, rgba(20,32,54,.85) 100%),
+    linear-gradient(180deg, rgba(34,54,78,.9), rgba(17,29,45,.94));
+  animation: legendFrame 3.4s ease-in-out infinite;
+  transition: .15s;
+}
+/* a slow gold band that travels across the card */
+.myth-card.legendary::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(255,232,168,.30), transparent);
+  pointer-events: none; z-index: 2;
+  animation: legendSheen 4.6s ease-in-out infinite;
+}
+/* a warm aura behind the whole card */
+.myth-card.legendary::after {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 80% at 50% 0%, rgba(255,196,92,.22), transparent 70%);
+  animation: legendAura 3.4s ease-in-out infinite;
+}
+.myth-card.legendary > * { position: relative; z-index: 1; }
+.myth-card.legendary:hover {
+  border-color: #ffe9a8;
+  /* the frame animation owns box-shadow, so hover reads through the border,
+     a lift and a touch more light rather than fighting the keyframes */
+  transform: translateY(-3px);
+  filter: brightness(1.12);
+}
+.myth-card.legendary.fainted { filter: grayscale(.6) brightness(.72); }
+.myth-card .mc-legendary {
+  background: linear-gradient(90deg, #ffe9a8, #ffc24d, #ff9ad5);
+  border-color: rgba(255,240,190,.9); color: #3a2405;
+  font-weight: 900; letter-spacing: .08em; font-size: .58rem; padding: 2px 7px;
+  box-shadow: 0 0 10px rgba(255,205,120,.6);
+}
+.myth-card .mc-legendary .ico { width: 10px; height: 10px; }
+
+/* Respect the OS setting: a legendary still looks legendary when static. */
+@media (prefers-reduced-motion: reduce) {
+  .myth-card.legendary,
+  .myth-card.legendary::before,
+  .myth-card.legendary::after { animation: none; }
+}
+
+/* ---------------------------------------------------------------------
+   Clean stat readout: "HP: 1446 · P.ATK: 109" and nothing else.
+   --------------------------------------------------------------------- */
+.clean-stats {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 10px; margin-top: 6px;
+}
+.clean-stats .cs-line {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  min-width: 0; font-size: .74rem; line-height: 1.5;
+}
+.clean-stats .cs-key {
+  color: var(--muted); font-weight: 700; letter-spacing: .04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.clean-stats .cs-val { color: #eaf3ff; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* the party/storage card: tighter, and a faint plate so it reads as its own block */
+.clean-stats.compact {
+  margin-top: 7px; padding: 6px 8px; border-radius: 9px;
+  background: rgba(0,0,0,.26); border: 1px solid rgba(255,255,255,.07);
+}
+.clean-stats.compact .cs-line { font-size: .7rem; }
+.myth-card.legendary .clean-stats.compact {
+  background: rgba(60,40,10,.34); border-color: rgba(255,215,106,.28);
+}
+/* the detail panel: roomier, in a 3-column grid so the list stays short */
+.clean-stats.detail {
+  grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 16px;
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(0,0,0,.24); border: 1px solid rgba(255,255,255,.08);
+}
+.clean-stats.detail .cs-line { font-size: .82rem; }
+.clean-stats.detail .cs-val { font-size: .92rem; }
+@media (max-width: 720px) {
+  .clean-stats.detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .detail-wrap { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
 @media (max-width: 860px) { .detail-wrap { grid-template-columns: 1fr; } }
 .detail-art { border-radius: 16px; background: radial-gradient(circle at 50% 60%, rgba(90,140,190,.35), rgba(8,14,24,.7)); padding: 10px; }
@@ -890,7 +994,9 @@ select {
 .modal.wide { width: min(980px, 96vw); }
 .modal > .panel-head, .modal > .row.end { flex: none; }
 .modal-body { min-height: 0; }
-.modal-body.scroll-y { overflow: auto; max-height: min(62vh, 620px); padding-right: 6px; }
+/* Never scroll sideways: a chip, a long stat name or a match-up word must wrap
+   inside the panel, never widen it and hand the body a horizontal scrollbar. */
+.modal-body.scroll-y { overflow-y: auto; overflow-x: hidden; max-height: min(62vh, 620px); padding-right: 6px; }
 
 /* ---------- Labelled bars (HP / EXP / ULT) ---------- */
 .bar-wrap { margin: 4px 0 2px; }
@@ -1157,19 +1263,29 @@ h3 .name-el { vertical-align: middle; }
 .type-panel .tp-head {
   margin: 14px 0 6px; font-size: .68rem; letter-spacing: .16em;
   color: #9fb3c9; text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
-.type-panel .tp-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.type-panel .tp-list { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
 .type-panel .tp-mult { margin-left: 2px; opacity: .85; font-size: .72em; }
 .type-panel .tp-empty { color: #7f94a9; font-size: .84rem; font-style: italic; }
 .type-panel .tp-vs {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 11px; border-radius: 10px; margin-bottom: 5px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px; border-radius: 10px; margin-bottom: 5px;
   background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  font-size: .82rem;
+  font-size: .8rem; min-width: 0; max-width: 100%;
 }
-.type-panel .tp-vs-label { flex: 1; color: #dce9f8; }
-.type-panel .tp-vs-word { font-weight: 800; letter-spacing: .08em; font-size: .7rem; }
-.type-panel .tp-vs-mult { font-weight: 800; padding: 1px 7px; border-radius: 7px; background: rgba(0,0,0,.3); }
+/* The verdict and the multiplier are the point of the row: they never shrink or
+   truncate. The label gives way instead, so a long name can never widen the
+   panel and hand the modal a horizontal scrollbar. */
+.type-panel .tp-vs-label {
+  flex: 1 1 60px; min-width: 0; color: #dce9f8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.type-panel .tp-vs-word {
+  flex: 0 0 auto; white-space: nowrap;
+  font-weight: 800; letter-spacing: .05em; font-size: .66rem;
+}
+.type-panel .tp-vs-mult { flex: none; font-weight: 800; padding: 1px 7px; border-radius: 7px; background: rgba(0,0,0,.3); }
 .type-panel .tp-vs.strong { border-color: rgba(134,240,160,.5); }
 .type-panel .tp-vs.strong .tp-vs-word { color: #8ef0a8; }
 .type-panel .tp-vs.weak { border-color: rgba(255,170,140,.5); }
