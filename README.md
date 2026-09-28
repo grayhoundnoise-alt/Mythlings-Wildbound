@@ -46,9 +46,9 @@ implementation package that you can paste into a chat to have the content wired 
 
 **Game presets.** The build embeds a *read-only snapshot* of the game's data and art modules
 (`src/data/*`, `creatureArt.js`, `creatureRig.js`, `worldRenderer.js`). A new project therefore starts
-from the real content: the 3 maps (regions, water, bridges, buildings, landmarks, NPCs, trainers,
+from the real content: the 4 maps (regions, water, bridges, buildings, landmarks, NPCs, trainers,
 encounter zones, connections and the procedurally generated props, all at their game coordinates), the
-15 Mythlings (the game's art layers as live, individually editable parts with anchors; the 12 game
+20 Mythlings (the game's art layers as live, individually editable parts with anchors; the 12 game
 animations sampled into editable keyframes; stats, evolutions, skill unlocks, palette), every skill and
 skill-VFX descriptor. `PROJECT → Game Presets…` re-imports any of them, `HELP → About the Game Data
 Snapshot` lists what was embedded, and the EXPORT screen's **Game format** option writes the edited
@@ -82,16 +82,17 @@ Optional headless regression test for the editor (drives the built file in jsdom
 
 | | |
 |---|---|
-| **Mythlings** | 5 species — Spriggo, Aquini, Emberu, Rivruff, Leaflet |
-| **Regions** | 3 — Verdant Vale (Lv.1–10), Azure Coast (Lv.10–20), Emberwild (Lv.20–30) |
-| **Elements** | 🌿 Nature > 💧 Water > 🔥 Fire > 🌿 Nature (1.5× / 0.75× / 1.0×) |
-| **Level cap** | Lv.30 (EXP hard-stops; architecture supports raising it) |
-| **Evolution** | Lv.20 first evolution only. Lv.60 / Lv.80 stages exist in data but are **locked** |
-| **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades to tier " I" on evolution |
-| **Mutations** | Shiny ✧ and Darkness ☾ — cosmetic only, never a power boost |
-| **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion), **CRIT** (crit chance %), **C.DMG** (crit damage %) |
-| **Moods** | 21 — each raises 3 stats and lowers 1. Feral / Savage / Precise / Brutal / Keen push crits |
-| **Systems** | Rarity, Mood, Skill Library, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Collection index, Save/Load/Autosave, Settings, **Game Wiki** |
+| **Mythlings** | 20 species — 15 across Nature / Water / Fire plus 5 **Rock** lines (Pebbleshell, Gravelhog, Shalecrawl, Quartzling, Rubblekin) with their own tortoise / boar / lizard / beetle / golem body plans; every line has 4 visibly different evolution stages |
+| **Regions** | 4 with **fixed level bands** — Verdant Vale (Lv.1–20), Azure Coast (Lv.15–30), Emberwild (Lv.30–45), **Stonehollow Crags** (Lv.45–60). Wild levels never scale to your party: out-grow an area and move on |
+| **Elements** | 🌿 Nature > 💧 Water > 🔥 Fire > 🌿 Nature, plus 🪨 **Rock** (crushes Fire, crumbles to Water and Nature) — 1.5× / 0.75× / 1.0× |
+| **Level cap** | Lv.100 — every evolution stage is reachable |
+| **Evolution** | Lv.20 / Lv.60 / Lv.80. The **Index only reveals a form once you have owned it** |
+| **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades a tier per evolution. New **support Ultimates** buff the caster and/or debuff the foe with two effects per tier |
+| **Mutations** | Shiny ✧ (+1 to every stat) and Darkness ☾ (+2), with their own colours and aura |
+| **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion, 0.15 % dodge per point, capped at 6 %), **CRIT** (capped at 25 %), **C.DMG** |
+| **Moods & Rationals** | Moods are purely positive (one per stat, scaled by Rarity). Every Mythling also has a **Rational**: a fixed +10 / −10 on two stats. Mood Tonic / Temper Tonic re-roll them |
+| **Balls** | Basic · Normal · Advanced · Absolute · **God** (guaranteed) · **Shiny** / **Dark** (guaranteed catch **and** guaranteed mutation) |
+| **Systems** | Rarity, Skill Library, life-steal / Retaliate skills, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Index & Collection grouped by type, Save/Load/Autosave, Settings, **Game Wiki** |
 
 ### Battle & training rules (latest)
 
@@ -105,7 +106,9 @@ Optional headless regression test for the editor (drives the built file in jsdom
   Normal / Special / Buff / Debuff. **The order you equip them is the order of the battle buttons**
   (first equipped = button 1 / key `1`). Old `{normal, special, buff}` saves migrate automatically.
 * **Starter = S rarity** — whichever partner you pick starts as an S-tier Mythling.
-* **King Ball** — 50,000 Wildcoins, **100 % catch**, sold in Emberwild.
+* **God Ball** — 12,000 Wildcoins, **100 % catch**. **Shiny Ball** (60,000) and **Dark Ball**
+  (90,000) also force the Shiny / Darkness mutation; both are sold only in the Stonehollow Crags.
+  (The King Ball is gone — old saves convert it to God Balls.)
 * **Food for high levels** — 10 new foods up to *Wildbound Ambrosia* (120,000 EXP), plus Hyper /
   Max Potion, Max Revive and Full Restore. Feed a **whole stack at once** (−/+/MAX); the amount is
   capped at what it takes to reach the level cap so nothing is wasted.
@@ -182,14 +185,14 @@ sequence: **CAST → ATTACK MOTION → PROJECTILE → IMPACT → AFTERMATH → D
 
 `SETTINGS → OPEN WIKI` (also on the title screen's Settings) opens a searchable reference built
 straight from `src/data/*`: getting started, all nine stats, every mood and rarity, mutations, the
-element chart, the full battle rules and damage formula, all five species with base stats and
-evolution lines, every skill and Ultimate, all items, the three regions with their trainers, the EXP
+element chart, the full battle rules and damage formula, all twenty species with base stats and
+evolution lines, every skill and Ultimate, all items, the four regions with their trainers, the EXP
 curve, controls and the roadmap. It is generated from the same data files the game runs on, so it
 can never drift out of date.
 
 ### The rule that never bends
 
-A wild **Emberu Lv.30** can be found in Emberwild. You must **defeat it first** (the Catch button is
+A wild **Emberu Lv.45** can be found in Emberwild. You must **defeat it first** (the Catch button is
 disabled while it lives), then capture it — and it joins you as **Emberu Lv.1**. Its species, Mood,
 Rarity and Mutation are preserved; its level, EXP, evolution stage and skills all restart.
 You raise every Mythling yourself.
@@ -204,11 +207,14 @@ Leafrest Town → Petal Path → Whisperwood → Verdant Gate      (Verdant Guar
 Tidecrest Port → Coralway → Moonlit River → Azure Caverns    (Cavern Guardian → Coast Pass)
         ↓
 Emberwatch Outpost → Ashen Trail → Cinder Forest → Molten Cavern → Volcanic Ruins
-                                                              (Flame Warden → Version Complete)
+                                                              (Flame Warden → Ember Sigil)
+        ↓
+Quarry Camp → Gravel Pass → Crystal Hollow → Shale Ridge → Titan Summit
+                                                              (Stone Warden → Version Complete)
 ```
 
-Gates are item-locked, so Emberwild can never be reached at Lv.1. After the Flame Warden the world
-stays fully open for collecting, mutation hunting and training to Lv.30.
+Gates are item-locked, so a region can never be reached under-levelled. After the Stone Warden the
+world stays fully open for collecting, mutation hunting and training to Lv.100.
 
 ---
 
@@ -225,7 +231,7 @@ src/
     skillVfx.js            per-skill VFX data (element, category, cast/projectile/impact/aftermath)
     moods.js  rarity.js  mutations.js  elements.js  items.js
     config.js also owns the Counter->dodge curve and the crit caps
-    maps.js                3 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
+    maps.js                4 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
   core/
     mythling.js            the Mythling model: stats, EXP/levels, evolution, skills, resetToLevelOne()
     utils.js               RNG, colour maths, event bus, helpers

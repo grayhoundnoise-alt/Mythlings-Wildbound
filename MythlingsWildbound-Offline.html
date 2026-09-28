@@ -15,6 +15,7 @@
   --nature: #4fc76a;
   --water: #3fa9f5;
   --fire: #ff7a3d;
+  --rock: #b99a6b;
   --text: #eaf3ff;
   --muted: #9fb3c9;
   --danger: #ff6b6b;
@@ -304,6 +305,7 @@ select {
 .chip.nature { background: rgba(79,199,106,.22); border-color: var(--nature); color: #b9ffd0; }
 .chip.water  { background: rgba(63,169,245,.22); border-color: var(--water);  color: #bfe9ff; }
 .chip.fire   { background: rgba(255,122,61,.22); border-color: var(--fire);   color: #ffd8bd; }
+.chip.rock   { background: rgba(185,154,107,.24); border-color: var(--rock);   color: #f0e2c6; }
 .chip.rarity { color: #fff; }
 .chip.shiny  { background: rgba(255,230,128,.2); border-color: #ffe680; color: #fff6cf; }
 .chip.darkness { background: rgba(176,124,255,.2); border-color: #b07cff; color: #e9dcff; }
@@ -654,6 +656,7 @@ select {
 .ico.nature { color: #6fe08a; }
 .ico.water  { color: #6fc9ff; }
 .ico.fire   { color: #ff9a55; }
+.ico.rock   { color: #d9bd8c; }
 .ico-label { display: inline-flex; align-items: center; gap: 7px; justify-content: center; }
 .ico-wrap { display: inline-flex; }
 .item-ico { width: 22px; height: 22px; color: var(--gold); opacity: .85; }
@@ -933,6 +936,45 @@ input[type="text"].wiki-search {
   .wiki-portrait { width: 78px; height: 78px; }
 }
 
+/* ---- portrait with an element badge (party / storage / collection cards) ---- */
+.portrait { position: relative; flex: none; }
+.portrait canvas { width: 100%; height: 100%; display: block; }
+.portrait .el-badge {
+  position: absolute; right: -4px; bottom: -4px; width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #142033; border: 2px solid rgba(255,255,255,.75); box-shadow: 0 2px 6px rgba(0,0,0,.45);
+}
+.portrait .el-badge .ico { width: 13px; height: 13px; }
+.portrait .el-badge.nature { background: var(--nature); color: #0f2a16; }
+.portrait .el-badge.water  { background: var(--water);  color: #0b2236; }
+.portrait .el-badge.fire   { background: var(--fire);   color: #3a1204; }
+.portrait .el-badge.rock   { background: var(--rock);   color: #2c2114; }
+.myth-card .portrait { width: 66px; height: 66px; }
+
+/* ---- storage card actions: always side by side ---- */
+.myth-card .mc-actions { display: flex; gap: 6px; flex-wrap: nowrap; margin-top: 6px; }
+.myth-card .mc-actions .btn { flex: 1 1 0; min-width: 0; padding: 6px 8px; justify-content: center; white-space: nowrap; }
+.myth-card .mc-actions .btn .ico { width: 14px; height: 14px; }
+
+/* ---- Index / Collection grouped by element ---- */
+.element-group-head {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; padding: 8px 12px;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); font-size: .95rem; letter-spacing: .04em;
+}
+.element-group-head .ico { width: 18px; height: 18px; }
+.element-group-head .sub { margin: 0 0 0 auto; font-size: .8rem; }
+.element-group-head.nature { border-color: rgba(79,199,106,.45); }
+.element-group-head.water  { border-color: rgba(63,169,245,.45); }
+.element-group-head.fire   { border-color: rgba(255,122,61,.45); }
+.element-group-head.rock   { border-color: rgba(185,154,107,.5); }
+.index-stage.locked .index-blank { display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.35); }
+.index-stage.locked .index-blank .ico { width: 30px; height: 30px; }
+.index-stage.locked .is-tag { color: #ff9aa2; }
+.col-card .portrait { width: 90px; height: 90px; margin: 0 auto; }
+.col-card .portrait canvas { width: 90px; height: 90px; }
+
+.wiki-lock { display: inline-block; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: #ff9aa2; border: 1px solid rgba(255,154,162,.5); border-radius: 6px; padding: 0 5px; margin-left: 4px; vertical-align: middle; }
+
 </style>
 </head>
 <body>
@@ -995,9 +1037,9 @@ input[type="text"].wiki-search {
   var MAX_UNLOCKED_EVOLUTION_STAGE = 3;
   var FUTURE_CONTENT_LIVE = true;
   var COUNTER_MAX_PERCENT = 35;
-  var COUNTER_DODGE_SCALE = 0.5;
-  var COUNTER_MAX_DODGE = 18;
-  var CRIT_MAX_PERCENT = 60;
+  var COUNTER_DODGE_SCALE = 0.15;
+  var COUNTER_MAX_DODGE = 6;
+  var CRIT_MAX_PERCENT = 25;
   var CRIT_MAX_MULT = 200;
   var DAMAGE_RANDOM_MIN = 0.85;
   var DAMAGE_RANDOM_MAX = 1;
@@ -1009,9 +1051,10 @@ input[type="text"].wiki-search {
     sdef: 0.07,
     spd: 0.06,
     counter: 0.035,
-    crit: 0.03,
+    crit: 6e-3,
     critMult: 8e-3
   };
+  var RATIONAL_AMOUNT = 10;
   function counterDodgePercent(counter) {
     const v = (Number(counter) || 0) * COUNTER_DODGE_SCALE;
     return Math.max(0, Math.min(COUNTER_MAX_DODGE, v));
@@ -1067,7 +1110,7 @@ input[type="text"].wiki-search {
       displayName: "Verdant Vale",
       order: 0,
       element: "nature",
-      levelRange: [1, 10],
+      levelRange: [1, 20],
       music: "vale",
       visualTheme: "nature",
       width: 3600,
@@ -1095,7 +1138,7 @@ input[type="text"].wiki-search {
           w: 190,
           h: 150,
           name: "Leafrest Supplies",
-          stock: ["basic_ball", "normal_ball", "potion", "greater_potion", "skill_tonic", "sweet_berry", "crunchy_root", "honey_nut", "moon_melon"]
+          stock: ["basic_ball", "normal_ball", "potion", "greater_potion", "revive_herb", "skill_tonic", "sweet_berry", "crunchy_root", "honey_nut", "moon_melon"]
         },
         { id: "vale_house1", type: "house", x: 120, y: 900, w: 170, h: 130, name: "Cottage" },
         { id: "vale_house2", type: "house", x: 700, y: 950, w: 170, h: 130, name: "Cottage" }
@@ -1155,7 +1198,7 @@ input[type="text"].wiki-search {
           intro: "My Leaflet never sits still! Show me what you have got.",
           defeat: "So fast... and you were faster. Take this.",
           reward: { coins: 220, items: { basic_ball: 2 } },
-          team: [{ species: "leaflet", level: 4 }, { species: "spriggo", level: 5 }]
+          team: [{ species: "leaflet", level: 6 }, { species: "spriggo", level: 7 }]
         },
         {
           id: "vale_t2",
@@ -1167,7 +1210,7 @@ input[type="text"].wiki-search {
           intro: "Whisperwood tests every trainer. Ready?",
           defeat: "The woods chose well today.",
           reward: { coins: 340, items: { potion: 2 } },
-          team: [{ species: "spriggo", level: 7 }, { species: "leaflet", level: 7 }, { species: "spriggo", level: 8 }]
+          team: [{ species: "spriggo", level: 11 }, { species: "leaflet", level: 11 }, { species: "spriggo", level: 12 }]
         },
         {
           id: "vale_guardian",
@@ -1180,28 +1223,28 @@ input[type="text"].wiki-search {
           intro: "None pass the Verdant Gate untested. Show me your bond!",
           defeat: "The Vale accepts you. Take the Vale Charm \u2014 the gate is open.",
           reward: { coins: 700, items: { vale_charm: 1, normal_ball: 3 } },
-          team: [{ species: "leaflet", level: 9, rarity: "C" }, { species: "spriggo", level: 10, rarity: "C", mood: "focused" }]
+          team: [{ species: "leaflet", level: 18, rarity: "C" }, { species: "spriggo", level: 20, rarity: "B", mood: "brave" }]
         }
       ],
       encounterZones: [
         {
           id: "vz1",
           rect: [1040, 150, 820, 1e3],
-          levelRange: [1, 4],
+          levelRange: [1, 8],
           density: 5,
           species: [{ id: "spriggo", weight: 30 }, { id: "leaflet", weight: 30 }, { id: "mosscoil", weight: 20 }, { id: "thornhound", weight: 10 }, { id: "petalwisp", weight: 10 }]
         },
         {
           id: "vz2",
           rect: [1920, 150, 840, 1200],
-          levelRange: [4, 8],
+          levelRange: [6, 14],
           density: 6,
           species: [{ id: "spriggo", weight: 25 }, { id: "leaflet", weight: 30 }, { id: "mosscoil", weight: 20 }, { id: "thornhound", weight: 15 }, { id: "petalwisp", weight: 10 }]
         },
         {
           id: "vz3",
           rect: [2830, 200, 700, 1100],
-          levelRange: [7, 10],
+          levelRange: [12, 20],
           density: 5,
           species: [{ id: "spriggo", weight: 30 }, { id: "leaflet", weight: 20 }, { id: "mosscoil", weight: 15 }, { id: "thornhound", weight: 20 }, { id: "petalwisp", weight: 15 }]
         }
@@ -1223,7 +1266,7 @@ input[type="text"].wiki-search {
       displayName: "Azure Coast",
       order: 1,
       element: "water",
-      levelRange: [10, 20],
+      levelRange: [15, 30],
       music: "coast",
       visualTheme: "water",
       width: 4e3,
@@ -1264,6 +1307,8 @@ input[type="text"].wiki-search {
             "revive_herb",
             "skill_tonic",
             "skill_elixir",
+            "mood_tonic",
+            "temper_tonic",
             "honey_nut",
             "moon_melon",
             "river_jerky",
@@ -1320,7 +1365,7 @@ input[type="text"].wiki-search {
           intro: "The tide favours the patient. And the prepared!",
           defeat: "Well fought. The coast is yours to roam.",
           reward: { coins: 480, items: { normal_ball: 2 } },
-          team: [{ species: "aquini", level: 12 }, { species: "rivruff", level: 13 }]
+          team: [{ species: "aquini", level: 18 }, { species: "rivruff", level: 19 }]
         },
         {
           id: "coast_t2",
@@ -1332,7 +1377,7 @@ input[type="text"].wiki-search {
           intro: "Caught more Rivruff than fish this week.",
           defeat: "Guess I should stick to fishing.",
           reward: { coins: 560, items: { greater_potion: 2 } },
-          team: [{ species: "rivruff", level: 14 }, { species: "aquini", level: 15 }, { species: "rivruff", level: 15 }]
+          team: [{ species: "rivruff", level: 22 }, { species: "aquini", level: 23 }, { species: "rivruff", level: 23 }]
         },
         {
           id: "coast_guardian",
@@ -1346,9 +1391,9 @@ input[type="text"].wiki-search {
           defeat: "Go. The Emberwild Gate will know you now. Take the Coast Pass.",
           reward: { coins: 1100, items: { coast_pass: 1, advanced_ball: 3 } },
           team: [
-            { species: "aquini", level: 17, rarity: "C" },
-            { species: "rivruff", level: 18, rarity: "B", mood: "sturdy" },
-            { species: "aquini", level: 19, rarity: "B", mood: "clever" }
+            { species: "aquini", level: 27, rarity: "B" },
+            { species: "rivruff", level: 29, rarity: "B", mood: "sturdy" },
+            { species: "aquini", level: 30, rarity: "A", mood: "clever" }
           ]
         }
       ],
@@ -1356,21 +1401,21 @@ input[type="text"].wiki-search {
         {
           id: "az1",
           rect: [1140, 320, 820, 780],
-          levelRange: [10, 13],
+          levelRange: [15, 20],
           density: 6,
           species: [{ id: "aquini", weight: 30 }, { id: "rivruff", weight: 30 }, { id: "currentkit", weight: 20 }, { id: "shelldrake", weight: 10 }, { id: "tidewyrm", weight: 10 }]
         },
         {
           id: "az2",
           rect: [2380, 320, 480, 1050],
-          levelRange: [13, 16],
+          levelRange: [19, 25],
           density: 5,
           species: [{ id: "aquini", weight: 25 }, { id: "rivruff", weight: 25 }, { id: "currentkit", weight: 20 }, { id: "shelldrake", weight: 15 }, { id: "tidewyrm", weight: 15 }]
         },
         {
           id: "az3",
           rect: [2930, 320, 620, 520],
-          levelRange: [16, 20],
+          levelRange: [24, 30],
           density: 5,
           species: [{ id: "aquini", weight: 20 }, { id: "rivruff", weight: 25 }, { id: "currentkit", weight: 15 }, { id: "shelldrake", weight: 20 }, { id: "tidewyrm", weight: 20 }]
         }
@@ -1393,7 +1438,7 @@ input[type="text"].wiki-search {
       displayName: "Emberwild",
       order: 2,
       element: "fire",
-      levelRange: [20, 30],
+      levelRange: [30, 45],
       music: "ember",
       visualTheme: "fire",
       width: 4200,
@@ -1429,7 +1474,6 @@ input[type="text"].wiki-search {
             "advanced_ball",
             "absolute_ball",
             "god_ball",
-            "king_ball",
             "greater_potion",
             "hyper_potion",
             "max_potion",
@@ -1438,6 +1482,8 @@ input[type="text"].wiki-search {
             "skill_tonic",
             "skill_elixir",
             "full_restore",
+            "mood_tonic",
+            "temper_tonic",
             "river_jerky",
             "ember_roast",
             "mythic_feast",
@@ -1468,9 +1514,9 @@ input[type="text"].wiki-search {
           name: "Scout Cinder",
           color: "#ff9a5a",
           dialogue: [
-            "Emberwild is the end of the current road, trainer. Wild Mythlings here reach Lv.30.",
-            "Catch a Lv.30 Emberu if you like \u2014 it will still join you at Lv.1. That is the law of the bond.",
-            "The Flame Warden waits in the Volcanic Ruins. Come back when your team is near Lv.28."
+            "Emberwild is no place for a Lv.20 team, trainer. Wild Mythlings here run Lv.30 to Lv.45.",
+            "Catch a Lv.45 Emberu if you like \u2014 it will still join you at Lv.1. That is the law of the bond.",
+            "The Flame Warden waits in the Volcanic Ruins. Come back when your team is near Lv.45 \u2014 beyond her lies the Emberwild Pass to the Crags."
           ]
         },
         {
@@ -1480,7 +1526,7 @@ input[type="text"].wiki-search {
           y: 960,
           name: "Forgehand Vull",
           color: "#ffb877",
-          dialogue: ["God Balls are pricey, but at Lv.30 a wild Emberu does not go quietly."]
+          dialogue: ["A God Ball never fails \u2014 pricey, but at Lv.45 a wild Emberu does not go quietly."]
         }
       ],
       trainers: [
@@ -1494,7 +1540,7 @@ input[type="text"].wiki-search {
           intro: "You made it past the coast? The ash is less forgiving.",
           defeat: "Hot-headed of me to challenge you.",
           reward: { coins: 900, items: { advanced_ball: 2 } },
-          team: [{ species: "emberu", level: 22 }, { species: "emberu", level: 23, mood: "aggressive" }]
+          team: [{ species: "emberu", level: 33 }, { species: "emberu", level: 34, mood: "brave" }]
         },
         {
           id: "ember_t2",
@@ -1506,7 +1552,7 @@ input[type="text"].wiki-search {
           intro: "The forest burns, yet it grows. Curious, no?",
           defeat: "Embers scatter. So do I.",
           reward: { coins: 1200, items: { greater_potion: 3 } },
-          team: [{ species: "emberu", level: 24, rarity: "C" }, { species: "spriggo", level: 24 }, { species: "emberu", level: 25, rarity: "C" }]
+          team: [{ species: "emberu", level: 36, rarity: "C" }, { species: "spriggo", level: 36 }, { species: "emberu", level: 37, rarity: "C" }]
         },
         {
           id: "ember_t3",
@@ -1518,7 +1564,7 @@ input[type="text"].wiki-search {
           intro: "Molten Cavern rules: hit hard, hit first.",
           defeat: "Fast. Very fast.",
           reward: { coins: 1500, items: { absolute_ball: 1 } },
-          team: [{ species: "emberu", level: 26, rarity: "B" }, { species: "rivruff", level: 26 }, { species: "emberu", level: 27, rarity: "B", mood: "fierce" }]
+          team: [{ species: "emberu", level: 39, rarity: "B" }, { species: "rivruff", level: 39 }, { species: "emberu", level: 40, rarity: "B", mood: "sturdy" }]
         },
         {
           id: "flame_warden",
@@ -1527,16 +1573,15 @@ input[type="text"].wiki-search {
           y: 900,
           color: "#ff4d2d",
           guardian: true,
-          finalBoss: true,
           flag: "flame_warden",
-          intro: "I am the last trial of this age, trainer. Show me everything Wildbound taught you.",
-          defeat: "Magnificent. Wildbound is yours to roam \u2014 until the world grows again.",
+          intro: "Beyond this pass the mountains themselves fight back. Prove you are ready for stone, trainer.",
+          defeat: "Magnificent. Take the Ember Sigil \u2014 the Emberwild Pass to Stonehollow Crags is open to you.",
           reward: { coins: 3e3, items: { ember_sigil: 1, god_ball: 1, absolute_ball: 2 } },
           team: [
-            { species: "emberu", level: 28, rarity: "B", mood: "fierce" },
-            { species: "rivruff", level: 29, rarity: "A", mood: "sturdy" },
-            { species: "spriggo", level: 29, rarity: "A", mood: "focused" },
-            { species: "emberu", level: 30, rarity: "S", mood: "aggressive" }
+            { species: "emberu", level: 42, rarity: "B", mood: "sturdy" },
+            { species: "rivruff", level: 43, rarity: "A", mood: "sturdy" },
+            { species: "spriggo", level: 44, rarity: "A", mood: "brave" },
+            { species: "emberu", level: 45, rarity: "S", mood: "brave" }
           ]
         }
       ],
@@ -1544,34 +1589,225 @@ input[type="text"].wiki-search {
         {
           id: "ez1",
           rect: [1040, 250, 820, 850],
-          levelRange: [20, 23],
+          levelRange: [30, 35],
           density: 6,
           species: [{ id: "emberu", weight: 45 }, { id: "emberlynx", weight: 20 }, { id: "cinderhawk", weight: 15 }, { id: "ashpup", weight: 15 }, { id: "magmataur", weight: 5 }]
         },
         {
           id: "ez2",
           rect: [1930, 300, 730, 1050],
-          levelRange: [23, 26],
+          levelRange: [34, 39],
           density: 6,
           species: [{ id: "emberu", weight: 40 }, { id: "emberlynx", weight: 20 }, { id: "cinderhawk", weight: 20 }, { id: "ashpup", weight: 15 }, { id: "magmataur", weight: 5 }]
         },
         {
           id: "ez3",
           rect: [2740, 500, 620, 520],
-          levelRange: [25, 28],
+          levelRange: [37, 42],
           density: 5,
           species: [{ id: "emberu", weight: 40 }, { id: "emberlynx", weight: 15 }, { id: "cinderhawk", weight: 15 }, { id: "ashpup", weight: 20 }, { id: "magmataur", weight: 10 }]
         },
         {
           id: "ez4",
           rect: [3440, 800, 700, 620],
-          levelRange: [27, 30],
+          levelRange: [41, 45],
           density: 5,
           species: [{ id: "emberu", weight: 40 }, { id: "emberlynx", weight: 15 }, { id: "cinderhawk", weight: 10 }, { id: "ashpup", weight: 15 }, { id: "magmataur", weight: 20 }]
         }
       ],
       connections: [
-        { id: "back_coast", rect: [0, 580, 60, 320], toMap: "azure_coast", toPoint: { x: 3840, y: 780 }, label: "To Azure Coast" }
+        { id: "back_coast", rect: [0, 580, 60, 320], toMap: "azure_coast", toPoint: { x: 3840, y: 780 }, label: "To Azure Coast" },
+        {
+          id: "to_crags",
+          rect: [4120, 620, 80, 320],
+          toMap: "stonehollow_crags",
+          toPoint: { x: 220, y: 880 },
+          requiresItem: "ember_sigil",
+          lockedText: "The Emberwild Pass is barred by fallen rock. Defeat the Flame Warden for the Ember Sigil.",
+          label: "To Stonehollow Crags"
+        }
+      ]
+    },
+    // =====================================================================
+    // STONEHOLLOW CRAGS — Rock, Lv.45-60. Quarry camp, crystal caves and the
+    // Titan Summit where the Stone Warden waits.
+    // =====================================================================
+    stonehollow_crags: {
+      id: "stonehollow_crags",
+      displayName: "Stonehollow Crags",
+      order: 3,
+      element: "rock",
+      levelRange: [45, 60],
+      music: "crags",
+      visualTheme: "rock",
+      width: 4400,
+      height: 1500,
+      spawn: { x: 220, y: 880 },
+      ambient: { sky: ["#3b3f4e", "#c9b48b"], fog: "rgba(210,196,170,0.12)" },
+      regions: [
+        { id: "quarry_camp", name: "Quarry Camp", rect: [0, 0, 1e3, 1500], terrain: "quarry" },
+        { id: "gravel_pass", name: "Gravel Pass", rect: [1e3, 0, 900, 1500], terrain: "crag" },
+        { id: "crystal_hollow", name: "Crystal Hollow", rect: [1900, 0, 800, 1500], terrain: "cavern" },
+        { id: "shale_ridge", name: "Shale Ridge", rect: [2700, 0, 800, 1500], terrain: "crag" },
+        { id: "titan_summit", name: "Titan Summit", rect: [3500, 0, 900, 1500], terrain: "summit" }
+      ],
+      water: [
+        { x: 1120, y: 1160, w: 640, h: 200, kind: "pond" },
+        { x: 2880, y: 240, w: 540, h: 170, kind: "river" },
+        { x: 3680, y: 1090, w: 560, h: 220, kind: "pond" }
+      ],
+      bridges: [{ x: 1380, y: 1120, w: 190, h: 280 }, { x: 3040, y: 200, w: 180, h: 250 }],
+      buildings: [
+        { id: "crag_center", type: "center", x: 270, y: 540, w: 210, h: 160, name: "Mythling Center" },
+        {
+          id: "crag_shop",
+          type: "shop",
+          x: 630,
+          y: 550,
+          w: 190,
+          h: 150,
+          name: "Crags Outfitter",
+          stock: [
+            "advanced_ball",
+            "absolute_ball",
+            "god_ball",
+            "shiny_ball",
+            "dark_ball",
+            "hyper_potion",
+            "max_potion",
+            "max_revive",
+            "skill_elixir",
+            "full_restore",
+            "mood_tonic",
+            "temper_tonic",
+            "coral_cake",
+            "tide_pudding",
+            "storm_eel_stew",
+            "dragonfruit_flambe",
+            "phoenix_pepper",
+            "titan_broth",
+            "wildbound_ambrosia"
+          ]
+        },
+        { id: "crag_lodge", type: "house", x: 300, y: 1e3, w: 180, h: 140, name: "Quarry Lodge" },
+        { id: "summit_watch", type: "tower", x: 3900, y: 280, w: 130, h: 210, name: "Summit Watch" }
+      ],
+      landmarks: [
+        { id: "crag_sign", type: "sign", x: 520, y: 820, text: "STONEHOLLOW CRAGS \u2014 mind the falling rock. Titan Summit lies east." },
+        { id: "hollow_crystal", type: "crystal", x: 2260, y: 700 },
+        { id: "hollow_crystal2", type: "crystal", x: 2520, y: 1120 },
+        { id: "ridge_ruin", type: "ruin", x: 3060, y: 760 },
+        { id: "summit_ruin", type: "ruin", x: 3720, y: 620 }
+      ],
+      npcs: [
+        {
+          id: "quarry_foreman",
+          type: "villager",
+          x: 720,
+          y: 860,
+          name: "Foreman Bram",
+          color: "#b98b5a",
+          dialogue: ["Welcome to the Crags, trainer. Everything up here is Rock type \u2014 fire barely scratches them.", "Water and Nature Mythlings crack stone wide open. Bring the right team, or bring a lot of potions."]
+        },
+        {
+          id: "crystal_hermit",
+          type: "guide",
+          x: 2200,
+          y: 480,
+          name: "Hermit Sela",
+          color: "#8fb8c8",
+          dialogue: ["The crystals in this hollow remember everything. The Mythlings that live here drink light from them.", "The Stone Warden guards the Titan Summit. She has never been beaten. Not once."]
+        }
+      ],
+      trainers: [
+        {
+          id: "crag_t1",
+          name: "Quarry Hand Doric",
+          x: 1320,
+          y: 720,
+          color: "#a08a6a",
+          flag: "crag_t1",
+          intro: "Heavy hitters only past this point. Let us see what you have got.",
+          defeat: "Ha! Solid. Keep climbing.",
+          reward: { coins: 2200, items: { absolute_ball: 2 } },
+          team: [{ species: "pebbleshell", level: 48 }, { species: "gravelhog", level: 49 }]
+        },
+        {
+          id: "crag_t2",
+          name: "Prospector Wren",
+          x: 2320,
+          y: 940,
+          color: "#7fa0c0",
+          flag: "crag_t2",
+          intro: "I dig for crystals. My Mythlings dig for weaknesses.",
+          defeat: "Fine, fine \u2014 the hollow is yours to prospect.",
+          reward: { coins: 2800, items: { max_potion: 2, mood_tonic: 1 } },
+          team: [{ species: "quartzling", level: 51 }, { species: "shalecrawl", level: 52 }, { species: "rubblekin", level: 52, rarity: "C" }]
+        },
+        {
+          id: "crag_t3",
+          name: "Ridge Runner Tamsin",
+          x: 3220,
+          y: 720,
+          color: "#c08a6a",
+          flag: "crag_t3",
+          intro: "Nobody outruns me on the shale. Nobody out-hits my boars either.",
+          defeat: "Not bad, not bad. The summit is just ahead \u2014 good luck with HER.",
+          reward: { coins: 3400, items: { god_ball: 1, temper_tonic: 1 } },
+          team: [{ species: "gravelhog", level: 54, rarity: "B" }, { species: "quartzling", level: 55, rarity: "B" }, { species: "pebbleshell", level: 55, rarity: "B", mood: "guarded" }]
+        },
+        {
+          id: "stone_warden",
+          name: "Stone Warden Halda",
+          x: 4030,
+          y: 820,
+          color: "#8a7f6a",
+          guardian: true,
+          finalBoss: true,
+          flag: "stone_warden",
+          intro: "I am the mountain's answer to every trainer who climbed too high. Show me you belong up here.",
+          defeat: "The mountain yields. Wildbound is yours to roam \u2014 until the world grows again.",
+          reward: { coins: 8e3, items: { crag_seal: 1, god_ball: 2, shiny_ball: 1 } },
+          team: [
+            { species: "rubblekin", level: 57, rarity: "A", mood: "sturdy" },
+            { species: "shalecrawl", level: 58, rarity: "A", mood: "swift" },
+            { species: "quartzling", level: 59, rarity: "S", mood: "clever" },
+            { species: "gravelhog", level: 60, rarity: "S", mood: "brave" }
+          ]
+        }
+      ],
+      encounterZones: [
+        {
+          id: "cz1",
+          rect: [1040, 120, 820, 960],
+          levelRange: [45, 50],
+          density: 6,
+          species: [{ id: "pebbleshell", weight: 30 }, { id: "gravelhog", weight: 30 }, { id: "shalecrawl", weight: 20 }, { id: "quartzling", weight: 10 }, { id: "rubblekin", weight: 10 }]
+        },
+        {
+          id: "cz2",
+          rect: [1940, 200, 720, 1100],
+          levelRange: [49, 54],
+          density: 6,
+          species: [{ id: "quartzling", weight: 30 }, { id: "shalecrawl", weight: 25 }, { id: "rubblekin", weight: 20 }, { id: "pebbleshell", weight: 15 }, { id: "gravelhog", weight: 10 }]
+        },
+        {
+          id: "cz3",
+          rect: [2740, 480, 720, 900],
+          levelRange: [53, 58],
+          density: 5,
+          species: [{ id: "gravelhog", weight: 25 }, { id: "rubblekin", weight: 25 }, { id: "pebbleshell", weight: 20 }, { id: "quartzling", weight: 15 }, { id: "shalecrawl", weight: 15 }]
+        },
+        {
+          id: "cz4",
+          rect: [3540, 560, 760, 480],
+          levelRange: [56, 60],
+          density: 5,
+          species: [{ id: "rubblekin", weight: 30 }, { id: "quartzling", weight: 20 }, { id: "gravelhog", weight: 20 }, { id: "shalecrawl", weight: 15 }, { id: "pebbleshell", weight: 15 }]
+        }
+      ],
+      connections: [
+        { id: "back_ember", rect: [0, 600, 60, 320], toMap: "emberwild", toPoint: { x: 4040, y: 780 }, label: "To Emberwild" }
       ]
     }
   };
@@ -1615,7 +1851,7 @@ input[type="text"].wiki-search {
         12: ["pollen_veil"],
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
         40: ["blight_bloom"],
-        60: ["nature_burst", "wild_instinct", "briar_smash"],
+        60: ["nature_burst", "wild_instinct", "briar_smash", "sap_bite"],
         80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
       },
       art: {
@@ -1654,7 +1890,7 @@ input[type="text"].wiki-search {
         12: ["pressure_drop"],
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
         40: ["riptide_pull"],
-        60: ["whirlpool", "deep_current", "tide_smash"],
+        60: ["whirlpool", "deep_current", "tide_smash", "siphon_tide"],
         80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
       },
       art: {
@@ -1673,7 +1909,7 @@ input[type="text"].wiki-search {
       breed: "Dragon",
       element: "fire",
       defaultRarity: "D",
-      defaultMood: "fierce",
+      defaultMood: "sturdy",
       role: "Offensive",
       starter: true,
       catchRate: 0.45,
@@ -1693,7 +1929,7 @@ input[type="text"].wiki-search {
         12: ["ash_cloud"],
         20: ["burning_fang", "burning_scales", "ember_jab"],
         40: ["cinder_curse"],
-        60: ["inferno_roar", "dragon_heat", "cinder_smash"],
+        60: ["inferno_roar", "dragon_heat", "cinder_smash", "ember_leech"],
         80: ["dragon_inferno", "ancient_flame", "magma_slam"]
       },
       art: {
@@ -1712,7 +1948,7 @@ input[type="text"].wiki-search {
       breed: "Wolf",
       element: "water",
       defaultRarity: "D",
-      defaultMood: "lazy",
+      defaultMood: "sturdy",
       role: "Tank",
       starter: false,
       catchRate: 0.5,
@@ -1733,7 +1969,7 @@ input[type="text"].wiki-search {
         20: ["heavy_wave", "thick_fur", "stream_jab"],
         40: ["abyssal_chill"],
         60: ["crushing_current", "deep_guard", "tide_smash"],
-        80: ["abyssal_wave", "fortress_hide", "abyss_slam"]
+        80: ["abyssal_wave", "fortress_hide", "abyss_slam", "retaliate"]
       },
       art: {
         body: "wolf",
@@ -1751,7 +1987,7 @@ input[type="text"].wiki-search {
       breed: "Avian",
       element: "nature",
       defaultRarity: "D",
-      defaultMood: "playful",
+      defaultMood: "swift",
       role: "Speed / Evasion",
       starter: false,
       catchRate: 0.62,
@@ -1772,7 +2008,7 @@ input[type="text"].wiki-search {
         20: ["razor_wing", "wind_step", "thorn_jab"],
         40: ["withering_curse"],
         60: ["sky_cutter", "feather_flow", "briar_smash"],
-        80: ["sky_cyclone", "gale_mastery", "worldroot_slam"]
+        80: ["sky_cyclone", "gale_mastery", "worldroot_slam", "mending_strike"]
       },
       art: {
         body: "avian",
@@ -1810,7 +2046,7 @@ input[type="text"].wiki-search {
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
         40: ["withering_curse"],
         60: ["nature_burst", "wild_instinct", "briar_smash"],
-        80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
+        80: ["ancient_bloom", "forest_blessing", "worldroot_slam", "war_cry"]
       },
       art: {
         body: "wolf",
@@ -1848,7 +2084,7 @@ input[type="text"].wiki-search {
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
         40: ["blight_bloom"],
         60: ["nature_burst", "wild_instinct", "briar_smash"],
-        80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
+        80: ["ancient_bloom", "forest_blessing", "worldroot_slam", "mind_break"]
       },
       art: {
         body: "fox",
@@ -1886,7 +2122,7 @@ input[type="text"].wiki-search {
         20: ["thorn_spear", "thorn_armor", "thorn_jab"],
         40: ["blight_bloom"],
         60: ["nature_burst", "wild_instinct", "briar_smash"],
-        80: ["ancient_bloom", "forest_blessing", "worldroot_slam"]
+        80: ["ancient_bloom", "forest_blessing", "worldroot_slam", "restoring_pulse"]
       },
       art: {
         body: "avian",
@@ -1904,7 +2140,7 @@ input[type="text"].wiki-search {
       breed: "Serpent",
       element: "water",
       defaultRarity: "C",
-      defaultMood: "focused",
+      defaultMood: "brave",
       role: "Special Wall",
       catchRate: 0.46,
       expYield: 70,
@@ -1924,7 +2160,7 @@ input[type="text"].wiki-search {
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
         40: ["riptide_pull"],
         60: ["whirlpool", "deep_current", "tide_smash"],
-        80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
+        80: ["ocean_pressure", "ocean_mind", "abyss_slam", "arcane_surge"]
       },
       art: {
         body: "dragon",
@@ -1961,8 +2197,8 @@ input[type="text"].wiki-search {
         12: ["brine_rust"],
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
         40: ["abyssal_chill"],
-        60: ["whirlpool", "deep_current", "tide_smash"],
-        80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
+        60: ["whirlpool", "deep_current", "tide_smash", "retaliate"],
+        80: ["ocean_pressure", "ocean_mind", "abyss_slam", "bulwark"]
       },
       art: {
         body: "wolf",
@@ -1980,7 +2216,7 @@ input[type="text"].wiki-search {
       breed: "Feline",
       element: "water",
       defaultRarity: "C",
-      defaultMood: "aggressive",
+      defaultMood: "brave",
       role: "Fast Physical",
       catchRate: 0.5,
       expYield: 66,
@@ -1999,7 +2235,7 @@ input[type="text"].wiki-search {
         12: ["brine_rust"],
         20: ["aqua_spear", "tidal_focus", "stream_jab"],
         40: ["abyssal_chill"],
-        60: ["whirlpool", "deep_current", "tide_smash"],
+        60: ["whirlpool", "deep_current", "tide_smash", "mending_strike"],
         80: ["ocean_pressure", "ocean_mind", "abyss_slam"]
       },
       art: {
@@ -2018,7 +2254,7 @@ input[type="text"].wiki-search {
       breed: "Feline",
       element: "fire",
       defaultRarity: "C",
-      defaultMood: "aggressive",
+      defaultMood: "brave",
       role: "Physical Sweeper",
       catchRate: 0.44,
       expYield: 72,
@@ -2038,7 +2274,7 @@ input[type="text"].wiki-search {
         20: ["burning_fang", "burning_scales", "ember_jab"],
         40: ["magma_brand"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
-        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+        80: ["dragon_inferno", "ancient_flame", "magma_slam", "predator_focus"]
       },
       art: {
         body: "feline",
@@ -2056,7 +2292,7 @@ input[type="text"].wiki-search {
       breed: "Avian",
       element: "fire",
       defaultRarity: "C",
-      defaultMood: "fierce",
+      defaultMood: "sturdy",
       role: "Glass Cannon",
       catchRate: 0.42,
       expYield: 74,
@@ -2076,7 +2312,7 @@ input[type="text"].wiki-search {
         20: ["burning_fang", "burning_scales", "ember_jab"],
         40: ["cinder_curse"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
-        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+        80: ["dragon_inferno", "ancient_flame", "magma_slam", "vampiric_maw"]
       },
       art: {
         body: "avian",
@@ -2094,7 +2330,7 @@ input[type="text"].wiki-search {
       breed: "Dragon",
       element: "fire",
       defaultRarity: "B",
-      defaultMood: "fierce",
+      defaultMood: "sturdy",
       role: "Heavy Hitter",
       catchRate: 0.38,
       expYield: 78,
@@ -2114,7 +2350,7 @@ input[type="text"].wiki-search {
         20: ["burning_fang", "burning_scales", "ember_jab"],
         40: ["magma_brand"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
-        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+        80: ["dragon_inferno", "ancient_flame", "magma_slam", "intimidate"]
       },
       art: {
         body: "dragon",
@@ -2152,7 +2388,7 @@ input[type="text"].wiki-search {
         20: ["burning_fang", "burning_scales", "ember_jab"],
         40: ["magma_brand"],
         60: ["inferno_roar", "dragon_heat", "cinder_smash"],
-        80: ["dragon_inferno", "ancient_flame", "magma_slam"]
+        80: ["dragon_inferno", "ancient_flame", "magma_slam", "shatter"]
       },
       art: {
         body: "wolf",
@@ -2162,6 +2398,200 @@ input[type="text"].wiki-search {
         accent: "#d88a6a",
         eye: "#ffb090",
         dark: "#3a1a14"
+      }
+    },
+    // =====================================================================
+    // ROCK — Stonehollow Crags (Lv.45-60). Five new body plans: tortoise,
+    // boar, beetle, golem and lizard.
+    // =====================================================================
+    pebbleshell: {
+      id: "pebbleshell",
+      displayName: "Pebbleshell",
+      breed: "Tortoise",
+      element: "rock",
+      defaultRarity: "C",
+      defaultMood: "guarded",
+      role: "Wall",
+      catchRate: 0.5,
+      expYield: 72,
+      description: "A patient tortoise whose shell grows crystal spikes as it ages. Nothing hurries it, and very little hurts it.",
+      baseStats: { hp: 132, patk: 14, satk: 10, pdef: 21, sdef: 16, spd: 7, counter: 4, crit: 4, critMult: 40 },
+      ultimate: "granite_bastion",
+      spawnMaps: ["stonehollow_crags"],
+      evolutions: [
+        { stage: 0, name: "Pebbleshell", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Cragshell", level: 20, statMult: 1.36, art: { scale: 1.22 } },
+        { stage: 2, name: "Terradome", level: 60, statMult: 1.8, art: { scale: 1.44, horns: true } },
+        { stage: 3, name: "Titanshell", level: 80, statMult: 2.3, art: { scale: 1.68, horns: true } }
+      ],
+      skillUnlocks: {
+        1: ["pebble_toss", "stone_shard", "stone_skin", "petrify"],
+        12: ["crush_armor"],
+        20: ["crag_lance", "mountain_heart", "rock_jab"],
+        40: ["fault_line"],
+        60: ["meteor_fist", "bulwark", "boulder_smash"],
+        80: ["titan_quake", "restoring_pulse", "tectonic_slam"]
+      },
+      art: {
+        body: "tortoise",
+        primary: "#7f9a6a",
+        secondary: "#5e6f57",
+        belly: "#e6dcb8",
+        accent: "#c9b27a",
+        eye: "#f2e6a0",
+        dark: "#2f3a2c"
+      }
+    },
+    gravelhog: {
+      id: "gravelhog",
+      displayName: "Gravelhog",
+      breed: "Boar",
+      element: "rock",
+      defaultRarity: "C",
+      defaultMood: "brave",
+      role: "Physical Bruiser",
+      catchRate: 0.48,
+      expYield: 74,
+      description: "A boar with a back of fused gravel and tusks of raw flint. It charges first and thinks never.",
+      baseStats: { hp: 118, patk: 21, satk: 9, pdef: 16, sdef: 11, spd: 12, counter: 6, crit: 8, critMult: 45 },
+      ultimate: "stone_avalanche",
+      spawnMaps: ["stonehollow_crags"],
+      evolutions: [
+        { stage: 0, name: "Gravelhog", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Bouldertusk", level: 20, statMult: 1.34, art: { scale: 1.22, horns: true } },
+        { stage: 2, name: "Ridgeback", level: 60, statMult: 1.76, art: { scale: 1.43, horns: true } },
+        { stage: 3, name: "Terratusk", level: 80, statMult: 2.22, art: { scale: 1.66, horns: true } }
+      ],
+      skillUnlocks: {
+        1: ["pebble_toss", "stone_shard", "granite_might", "sandstorm"],
+        12: ["crush_armor"],
+        20: ["crag_lance", "stone_skin", "rock_jab"],
+        40: ["fault_line"],
+        60: ["meteor_fist", "war_cry", "boulder_smash"],
+        80: ["titan_quake", "obsidian_edge", "tectonic_slam"]
+      },
+      art: {
+        body: "boar",
+        primary: "#8b6f5a",
+        secondary: "#5a4538",
+        belly: "#d9c6a8",
+        accent: "#c4a57a",
+        eye: "#ffcf7a",
+        dark: "#2e211a"
+      }
+    },
+    quartzling: {
+      id: "quartzling",
+      displayName: "Quartzling",
+      breed: "Beetle",
+      element: "rock",
+      defaultRarity: "C",
+      defaultMood: "clever",
+      role: "Special Attacker",
+      catchRate: 0.46,
+      expYield: 70,
+      description: "A beetle grown around a seed crystal. Light gathers in its carapace and leaves as a searing ray.",
+      baseStats: { hp: 96, patk: 11, satk: 20, pdef: 13, sdef: 15, spd: 14, counter: 8, crit: 9, critMult: 44 },
+      ultimate: "crystal_cannon",
+      spawnMaps: ["stonehollow_crags"],
+      evolutions: [
+        { stage: 0, name: "Quartzling", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Geodrone", level: 20, statMult: 1.32, art: { scale: 1.2, horns: true } },
+        { stage: 2, name: "Prismatid", level: 60, statMult: 1.72, art: { scale: 1.4, horns: true, wings: true } },
+        { stage: 3, name: "Crystalisk", level: 80, statMult: 2.15, art: { scale: 1.62, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["pebble_toss", "crystal_ray", "quartz_focus", "grit_blind"],
+        12: ["quake_shock"],
+        20: ["crystal_leech", "bedrock_will", "rock_jab"],
+        40: ["stone_curse"],
+        60: ["quartz_storm", "arcane_surge", "boulder_smash"],
+        80: ["core_beam", "geode_mind", "tectonic_slam"]
+      },
+      art: {
+        body: "beetle",
+        primary: "#6d6a8c",
+        secondary: "#3f3c5c",
+        belly: "#cfc6e6",
+        accent: "#9ee6ff",
+        eye: "#d8fbff",
+        dark: "#221f36"
+      }
+    },
+    rubblekin: {
+      id: "rubblekin",
+      displayName: "Rubblekin",
+      breed: "Golem",
+      element: "rock",
+      defaultRarity: "C",
+      defaultMood: "sturdy",
+      role: "Debuffer",
+      catchRate: 0.44,
+      expYield: 76,
+      description: "A heap of quarry stones that woke up one morning and decided to walk. It fights by taking the ground from under you.",
+      baseStats: { hp: 126, patk: 16, satk: 13, pdef: 18, sdef: 14, spd: 6, counter: 3, crit: 5, critMult: 40 },
+      ultimate: "quake_curse",
+      spawnMaps: ["stonehollow_crags"],
+      evolutions: [
+        { stage: 0, name: "Rubblekin", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Cairnling", level: 20, statMult: 1.36, art: { scale: 1.23 } },
+        { stage: 2, name: "Monolith", level: 60, statMult: 1.8, art: { scale: 1.45, horns: true } },
+        { stage: 3, name: "Colossus", level: 80, statMult: 2.3, art: { scale: 1.7, horns: true } }
+      ],
+      skillUnlocks: {
+        1: ["pebble_toss", "stone_shard", "stone_skin", "sandstorm"],
+        12: ["quake_shock"],
+        20: ["crag_lance", "mountain_heart", "rock_jab"],
+        40: ["stone_curse"],
+        60: ["meteor_fist", "shatter", "boulder_smash"],
+        80: ["titan_quake", "intimidate", "tectonic_slam"]
+      },
+      art: {
+        body: "golem",
+        primary: "#8a8478",
+        secondary: "#5a554c",
+        belly: "#bfb7a6",
+        accent: "#ffb75a",
+        eye: "#ffd98a",
+        dark: "#2a2723"
+      }
+    },
+    shalecrawl: {
+      id: "shalecrawl",
+      displayName: "Shalecrawl",
+      breed: "Lizard",
+      element: "rock",
+      defaultRarity: "C",
+      defaultMood: "swift",
+      role: "Striker",
+      catchRate: 0.47,
+      expYield: 68,
+      description: "A flat, quick lizard that skims across loose shale. Its crystal fins drink what its claws tear.",
+      baseStats: { hp: 90, patk: 17, satk: 15, pdef: 11, sdef: 11, spd: 19, counter: 12, crit: 12, critMult: 50 },
+      ultimate: "crystal_resonance",
+      spawnMaps: ["stonehollow_crags"],
+      evolutions: [
+        { stage: 0, name: "Shalecrawl", level: 1, statMult: 1, art: { scale: 1 } },
+        { stage: 1, name: "Slatestrider", level: 20, statMult: 1.32, art: { scale: 1.2 } },
+        { stage: 2, name: "Flintclaw", level: 60, statMult: 1.72, art: { scale: 1.4, horns: true } },
+        { stage: 3, name: "Obsidrake", level: 80, statMult: 2.15, art: { scale: 1.62, horns: true, wings: true } }
+      ],
+      skillUnlocks: {
+        1: ["scratch", "stone_shard", "granite_might", "petrify"],
+        12: ["grit_blind"],
+        20: ["crystal_leech", "stone_skin", "rock_jab"],
+        40: ["fault_line"],
+        60: ["retaliate", "predator_focus", "boulder_smash"],
+        80: ["vampiric_maw", "mind_break", "tectonic_slam"]
+      },
+      art: {
+        body: "lizard",
+        primary: "#5f6b7a",
+        secondary: "#3c4552",
+        belly: "#d2d8c8",
+        accent: "#7fe0c8",
+        eye: "#c8fff0",
+        dark: "#1e242c"
       }
     }
   };
@@ -2200,18 +2630,21 @@ input[type="text"].wiki-search {
   var ELEMENTS = {
     nature: { id: "nature", name: "Nature", icon: "nature", color: "#4fc76a", glow: "#9cff9c" },
     water: { id: "water", name: "Water", icon: "water", color: "#3fa9f5", glow: "#a5e6ff" },
-    fire: { id: "fire", name: "Fire", icon: "fire", color: "#ff7a3d", glow: "#ffd08a" }
+    fire: { id: "fire", name: "Fire", icon: "fire", color: "#ff7a3d", glow: "#ffd08a" },
+    rock: { id: "rock", name: "Rock", icon: "rock", color: "#b99a6b", glow: "#f0dcb0" }
     // Future elements can simply be appended here.
   };
+  var ELEMENT_ORDER = ["nature", "water", "fire", "rock"];
   var EFFECTIVENESS = {
     STRONG: 1.5,
     WEAK: 0.75,
     NEUTRAL: 1
   };
   var STRONG_AGAINST = {
-    nature: ["water"],
-    water: ["fire"],
-    fire: ["nature"]
+    nature: ["water", "rock"],
+    water: ["fire", "rock"],
+    fire: ["nature"],
+    rock: ["fire"]
   };
   function elementMultiplier(attackElement, defenderElement) {
     if (!attackElement || !defenderElement) return EFFECTIVENESS.NEUTRAL;
@@ -2232,9 +2665,11 @@ input[type="text"].wiki-search {
     normal_ball: { id: "normal_ball", name: "Normal Ball", category: "balls", price: 260, catchMult: 1.25, desc: "A refined ball with a stronger binding field." },
     advanced_ball: { id: "advanced_ball", name: "Advanced Ball", category: "balls", price: 550, catchMult: 1.5, desc: "Crafted with coast crystal. Notably more reliable." },
     absolute_ball: { id: "absolute_ball", name: "Absolute Ball", category: "balls", price: 1100, catchMult: 1.8, desc: "An ember-forged ball for stubborn Mythlings." },
-    god_ball: { id: "god_ball", name: "God Ball", category: "balls", price: 3e3, catchMult: 2.5, desc: "A legendary sphere. Almost never fails." },
     // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
-    king_ball: { id: "king_ball", name: "King Ball", category: "balls", price: 5e4, catchMult: 99, guaranteed: true, desc: "A crown-forged sphere that never fails. Guaranteed capture \u2014 for a royal price." },
+    god_ball: { id: "god_ball", name: "God Ball", category: "balls", price: 12e3, catchMult: 99, guaranteed: true, desc: "The supreme binding sphere. Never fails \u2014 a guaranteed capture." },
+    // `forceMutation` turns the caught Mythling into that mutation, every time.
+    shiny_ball: { id: "shiny_ball", name: "Shiny Ball", category: "balls", price: 6e4, catchMult: 99, guaranteed: true, forceMutation: "shiny", desc: "Forged from starlight. Guaranteed capture, and the Mythling always emerges SHINY." },
+    dark_ball: { id: "dark_ball", name: "Dark Ball", category: "balls", price: 9e4, catchMult: 99, guaranteed: true, forceMutation: "darkness", desc: "Cut from an eclipse. Guaranteed capture, and the Mythling always emerges as a DARKNESS mutation." },
     potion: { id: "potion", name: "Potion", category: "healing", price: 150, heal: 60, desc: "Restores 60 HP to one Mythling." },
     greater_potion: { id: "greater_potion", name: "Greater Potion", category: "healing", price: 380, heal: 160, desc: "Restores 160 HP to one Mythling." },
     hyper_potion: { id: "hyper_potion", name: "Hyper Potion", category: "healing", price: 800, heal: 400, desc: "Restores 400 HP to one Mythling." },
@@ -2244,6 +2679,9 @@ input[type="text"].wiki-search {
     skill_tonic: { id: "skill_tonic", name: "Skill Tonic", category: "healing", price: 320, restoreUses: 8, desc: "Restores 8 uses to every limited skill." },
     skill_elixir: { id: "skill_elixir", name: "Skill Elixir", category: "healing", price: 950, restoreAllUses: true, desc: "Resets every limited skill back to full uses." },
     full_restore: { id: "full_restore", name: "Full Restore", category: "healing", price: 3200, healFull: true, restoreAllUses: true, desc: "Fully restores HP AND every skill's uses. Cannot revive." },
+    // ---- TONICS: re-roll a Mythling's personality traits (used from its profile) ----
+    mood_tonic: { id: "mood_tonic", name: "Mood Tonic", category: "tonics", price: 2500, rerollMood: true, desc: "Re-rolls a Mythling's Mood into a different one. Use it from the Mythling's profile." },
+    temper_tonic: { id: "temper_tonic", name: "Temper Tonic", category: "tonics", price: 2500, rerollRational: true, desc: "Re-rolls a Mythling's Rational (+10 / -10 trait) into a different one. Use it from the Mythling's profile." },
     // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
     sweet_berry: { id: "sweet_berry", name: "Sweet Berry", category: "food", price: 90, exp: 40, desc: "A sugary forest berry. Feeding it grants 40 EXP." },
     honey_nut: { id: "honey_nut", name: "Honey Nut", category: "food", price: 240, exp: 130, desc: "A sticky, energy-packed nut. Grants 130 EXP." },
@@ -2265,11 +2703,14 @@ input[type="text"].wiki-search {
     wildbound_ambrosia: { id: "wildbound_ambrosia", name: "Wildbound Ambrosia", category: "food", price: 92e3, exp: 12e4, desc: "The food of legends. Grants 120,000 EXP \u2014 several levels even near the cap." },
     vale_charm: { id: "vale_charm", name: "Vale Charm", category: "key", desc: "Proof that the Verdant Guardian was bested. Opens the Verdant Gate." },
     coast_pass: { id: "coast_pass", name: "Coast Pass", category: "key", desc: "Granted at Tidecrest Port. Opens the Emberwild Gate." },
-    ember_sigil: { id: "ember_sigil", name: "Ember Sigil", category: "key", desc: "Awarded for completing the current Emberwild challenge." }
+    ember_sigil: { id: "ember_sigil", name: "Ember Sigil", category: "key", desc: "Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags." },
+    crag_seal: { id: "crag_seal", name: "Crag Seal", category: "key", desc: "Proof that the Stone Warden of Stonehollow Crags was bested." }
   };
+  var LEGACY_ITEMS = { king_ball: "god_ball" };
   var ITEM_CATEGORIES = [
     { id: "balls", name: "Balls" },
     { id: "healing", name: "Healing" },
+    { id: "tonics", name: "Tonics" },
     { id: "food", name: "Food" },
     { id: "key", name: "Key Items" }
   ];
@@ -2285,6 +2726,162 @@ input[type="text"].wiki-search {
     sweet_berry: 3
   };
   var STARTING_WILDCOINS = 900;
+
+  // src/data/moods.js
+  var STAT_KEYS = ["hp", "patk", "satk", "pdef", "sdef", "spd", "counter", "crit", "critMult"];
+  var STAT_LABELS = {
+    hp: "HP",
+    patk: "Physical Attack",
+    satk: "Special Attack",
+    pdef: "Physical Defense",
+    sdef: "Special Defense",
+    spd: "Speed",
+    counter: "Counter",
+    crit: "Crit Chance",
+    critMult: "Crit Damage"
+  };
+  var STAT_SHORT = {
+    hp: "HP",
+    patk: "P.ATK",
+    satk: "S.ATK",
+    pdef: "P.DEF",
+    sdef: "S.DEF",
+    spd: "SPD",
+    counter: "CNT",
+    crit: "CRIT",
+    critMult: "C.DMG"
+  };
+  var STAT_INFO = {
+    hp: "Hit Points. Reach 0 and the Mythling faints.",
+    patk: "Drives the damage of Physical skills (and how hard Physical hits land).",
+    satk: "Drives the damage of Special skills and every Ultimate.",
+    pdef: "Reduces incoming Physical damage.",
+    sdef: "Reduces incoming Special damage.",
+    spd: "Higher Speed acts first each turn \u2014 and helps you flee.",
+    counter: "Evasion. Each point is 0.15% dodge, capped at 6% \u2014 a miss is rare (Counter caps at 35).",
+    crit: "Chance to land a critical hit, in percent (caps at 25% \u2014 a crit stays special even at Lv.100).",
+    critMult: "Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +200%)."
+  };
+  var STAT_BAR_MAX = {
+    hp: 600,
+    patk: 90,
+    satk: 90,
+    pdef: 90,
+    sdef: 90,
+    spd: 90,
+    counter: 35,
+    crit: 25,
+    critMult: 200
+  };
+  var MOODS = {
+    sturdy: { id: "sturdy", name: "Sturdy", up: ["hp"], desc: "Thick-skinned and hard to put down. Boosts HP." },
+    brave: { id: "brave", name: "Brave", up: ["patk"], desc: "Charges in first. Boosts Physical Attack." },
+    clever: { id: "clever", name: "Clever", up: ["satk"], desc: "Thinks three moves ahead. Boosts Special Attack." },
+    guarded: { id: "guarded", name: "Guarded", up: ["pdef"], desc: "Never drops its guard. Boosts Physical Defense." },
+    calm: { id: "calm", name: "Calm", up: ["sdef"], desc: "Unshaken by tricks and magic. Boosts Special Defense." },
+    swift: { id: "swift", name: "Swift", up: ["spd"], desc: "Always a step ahead. Boosts Speed." },
+    agile: { id: "agile", name: "Agile", up: ["counter"], desc: "Slips out of harm's way. Boosts Counter (evasion)." },
+    keen: { id: "keen", name: "Keen", up: ["crit"], desc: "Finds every weak spot. Boosts Crit Chance." },
+    brutal: { id: "brutal", name: "Brutal", up: ["critMult"], desc: "Makes every opening count. Boosts Crit Damage." }
+  };
+  var MOOD_IDS = Object.keys(MOODS);
+  var CRIT_MOOD_IDS = MOOD_IDS.filter((id) => MOODS[id].up.includes("crit") || MOODS[id].up.includes("critMult"));
+  var LEGACY_MOODS = {
+    lazy: "sturdy",
+    energetic: "brave",
+    aggressive: "brave",
+    focused: "brave",
+    reckless: "brave",
+    stubborn: "sturdy",
+    fierce: "sturdy",
+    ambitious: "brave",
+    cautious: "guarded",
+    playful: "swift",
+    feral: "keen",
+    savage: "keen",
+    precise: "keen"
+  };
+  function normalizeMoodId(id) {
+    if (MOODS[id]) return id;
+    return LEGACY_MOODS[id] || "brave";
+  }
+  function getMood(id) {
+    return MOODS[normalizeMoodId(id)];
+  }
+  var MOOD_SCALE = { hp: 6, critMult: 4 };
+  var MOOD_BASE = 2;
+  function moodModifiers(moodId, magnitude) {
+    const mood = getMood(moodId);
+    const out = {};
+    for (const k of STAT_KEYS) out[k] = 0;
+    for (const k of mood.up) out[k] += magnitude * MOOD_BASE * (MOOD_SCALE[k] || 1);
+    return out;
+  }
+  var RATIONAL_STATS = ["hp", "patk", "satk", "pdef", "sdef", "spd"];
+  var RATIONAL_NAMES = {
+    hp: { patk: "Placid", satk: "Docile", pdef: "Hearty", sdef: "Rugged", spd: "Stoic" },
+    patk: { hp: "Reckless", satk: "Brash", pdef: "Bold", sdef: "Fierce", spd: "Mighty" },
+    satk: { hp: "Frail", patk: "Mystic", pdef: "Arcane", sdef: "Cunning", spd: "Pensive" },
+    pdef: { hp: "Stony", patk: "Steady", satk: "Stubborn", sdef: "Ironclad", spd: "Lax" },
+    sdef: { hp: "Wary", patk: "Serene", satk: "Careful", pdef: "Gentle", spd: "Patient" },
+    spd: { hp: "Hasty", patk: "Nimble", satk: "Jolly", pdef: "Flighty", sdef: "Naive" }
+  };
+  var RATIONALS = {};
+  for (const up of RATIONAL_STATS) {
+    for (const down of RATIONAL_STATS) {
+      if (up === down) continue;
+      const name = RATIONAL_NAMES[up][down];
+      const id = name.toLowerCase();
+      RATIONALS[id] = { id, name, up, down };
+    }
+  }
+  var RATIONAL_IDS = Object.keys(RATIONALS);
+  function getRational(id) {
+    return RATIONALS[id] || null;
+  }
+  function rationalModifiers(rationalId, amount = 10) {
+    const out = {};
+    for (const k of STAT_KEYS) out[k] = 0;
+    const r = getRational(rationalId);
+    if (!r) return out;
+    out[r.up] += amount;
+    out[r.down] -= amount;
+    return out;
+  }
+  function rationalSummary(rationalId) {
+    const r = getRational(rationalId);
+    if (!r) return { name: "None", up: "\u2014", down: "\u2014" };
+    return { name: r.name, up: STAT_SHORT[r.up], down: STAT_SHORT[r.down] };
+  }
+  function rollRational(rng = Math.random) {
+    return RATIONAL_IDS[Math.floor(rng() * RATIONAL_IDS.length)] || RATIONAL_IDS[0];
+  }
+  function rerollRational(current, rng = Math.random) {
+    if (RATIONAL_IDS.length < 2) return RATIONAL_IDS[0];
+    let next = current;
+    while (next === current) next = rollRational(rng);
+    return next;
+  }
+  function rerollMood(current, rng = Math.random) {
+    let next = current;
+    while (next === current) next = MOOD_IDS[Math.floor(rng() * MOOD_IDS.length)];
+    return next;
+  }
+  function moodSummary(moodId) {
+    const m = getMood(moodId);
+    return {
+      up: m.up.map((k) => STAT_SHORT[k]),
+      down: null
+      // Moods no longer lower anything — the downside is the Rational trait
+    };
+  }
+  function formatStat(key, value) {
+    if (value == null || !Number.isFinite(value)) return "\u2014";
+    if (key === "crit") return `${value}%`;
+    if (key === "critMult") return `+${value}%`;
+    if (key === "counter") return String(value);
+    return String(value);
+  }
 
   // src/data/skills.js
   var SKILLS = {
@@ -2379,7 +2976,57 @@ input[type="text"].wiki-search {
     melt_armor: { id: "melt_armor", name: "Melt Armor", category: "debuff", effects: [{ stat: "pdef", amount: 5 }], uses: 10, desc: "Softens the foe's hide. Lowers its Physical Defense." },
     ash_cloud: { id: "ash_cloud", name: "Ash Cloud", category: "debuff", effects: [{ stat: "sdef", amount: 5 }], uses: 10, desc: "Choking ash. Lowers the foe's Special Defense." },
     magma_brand: { id: "magma_brand", name: "Magma Brand", category: "debuff", effects: [{ stat: "pdef", amount: 7 }], uses: 8, desc: "A searing brand. Lowers the foe's Physical Defense sharply." },
-    cinder_curse: { id: "cinder_curse", name: "Cinder Curse", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "Smouldering cinders cling to the foe. Lowers its Special Defense sharply." }
+    cinder_curse: { id: "cinder_curse", name: "Cinder Curse", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "Smouldering cinders cling to the foe. Lowers its Special Defense sharply." },
+    // ---------- ROCK pool (Stonehollow Crags) ----------
+    pebble_toss: { id: "pebble_toss", name: "Pebble Toss", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A flick of loose gravel. Unlimited uses." },
+    rock_jab: { id: "rock_jab", name: "Rock Jab", category: "normal", damageType: "physical", element: "rock", power: 18, uses: Infinity, desc: "A stone-hard headbutt. Unlimited uses." },
+    boulder_smash: { id: "boulder_smash", name: "Boulder Smash", category: "normal", damageType: "physical", element: "rock", power: 31, uses: Infinity, desc: "Brings a boulder down on the foe. Unlimited uses." },
+    tectonic_slam: { id: "tectonic_slam", name: "Tectonic Slam", category: "normal", damageType: "physical", element: "rock", power: 42, uses: Infinity, desc: "The ground itself lurches. Unlimited uses." },
+    stone_shard: { id: "stone_shard", name: "Stone Shard", category: "special", damageType: "physical", element: "rock", power: 17, uses: 20, desc: "Hurls a jagged shard of flint." },
+    crag_lance: { id: "crag_lance", name: "Crag Lance", category: "special", damageType: "physical", element: "rock", power: 28, uses: 18, desc: "A spear of stone erupts from the ground." },
+    crystal_ray: { id: "crystal_ray", name: "Crystal Ray", category: "special", damageType: "special", element: "rock", power: 27, uses: 18, desc: "Light focused through a living crystal." },
+    meteor_fist: { id: "meteor_fist", name: "Meteor Fist", category: "special", damageType: "physical", element: "rock", power: 42, uses: 15, desc: "A punch that lands like a falling star.", future: true },
+    quartz_storm: { id: "quartz_storm", name: "Quartz Storm", category: "special", damageType: "special", element: "rock", power: 40, uses: 15, desc: "A blizzard of razor crystal.", future: true },
+    titan_quake: { id: "titan_quake", name: "Titan Quake", category: "special", damageType: "physical", element: "rock", power: 56, uses: 12, desc: "The mountain answers. Everything shakes.", future: true },
+    core_beam: { id: "core_beam", name: "Core Beam", category: "special", damageType: "special", element: "rock", power: 54, uses: 12, desc: "A beam of pressure from the planet's heart.", future: true },
+    stone_skin: { id: "stone_skin", name: "Stone Skin", category: "buff", effects: [{ stat: "pdef", amount: 4 }], uses: 10, desc: "Raises Physical Defense." },
+    granite_might: { id: "granite_might", name: "Granite Might", category: "buff", effects: [{ stat: "patk", amount: 4 }], uses: 10, desc: "Raises Physical Attack." },
+    quartz_focus: { id: "quartz_focus", name: "Quartz Focus", category: "buff", effects: [{ stat: "satk", amount: 4 }], uses: 10, desc: "Raises Special Attack." },
+    bedrock_will: { id: "bedrock_will", name: "Bedrock Will", category: "buff", effects: [{ stat: "sdef", amount: 4 }], uses: 10, desc: "Raises Special Defense." },
+    landslide_pace: { id: "landslide_pace", name: "Landslide Pace", category: "buff", effects: [{ stat: "spd", amount: 5 }], uses: 8, desc: "Raises Speed.", future: true },
+    mountain_heart: { id: "mountain_heart", name: "Mountain Heart", category: "buff", effects: [{ stat: "hp", amount: 9 }], uses: 10, desc: "Raises max HP." },
+    obsidian_edge: { id: "obsidian_edge", name: "Obsidian Edge", category: "buff", effects: [{ stat: "patk", amount: 6 }], uses: 8, desc: "Raises Physical Attack sharply.", future: true },
+    geode_mind: { id: "geode_mind", name: "Geode Mind", category: "buff", effects: [{ stat: "satk", amount: 6 }], uses: 8, desc: "Raises Special Attack sharply.", future: true },
+    // -- rock debuffs (same ladder as the other elements) --
+    grit_blind: { id: "grit_blind", name: "Grit Blind", category: "debuff", effects: [{ stat: "satk", amount: 4 }], uses: 12, desc: "Grit in the eyes. Lowers the foe's Special Attack." },
+    petrify: { id: "petrify", name: "Petrify", category: "debuff", effects: [{ stat: "patk", amount: 4 }], uses: 12, desc: "Stiffens the foe's limbs. Lowers its Physical Attack." },
+    sandstorm: { id: "sandstorm", name: "Sandstorm", category: "debuff", effects: [{ stat: "spd", amount: 4 }], uses: 12, desc: "A wall of blowing sand. Lowers the foe's Speed." },
+    crush_armor: { id: "crush_armor", name: "Crush Armor", category: "debuff", effects: [{ stat: "pdef", amount: 5 }], uses: 10, desc: "Cracks the foe's plating. Lowers its Physical Defense." },
+    quake_shock: { id: "quake_shock", name: "Quake Shock", category: "debuff", effects: [{ stat: "sdef", amount: 5 }], uses: 10, desc: "A tremor that rattles focus. Lowers the foe's Special Defense." },
+    fault_line: { id: "fault_line", name: "Fault Line", category: "debuff", effects: [{ stat: "pdef", amount: 7 }], uses: 8, desc: "Splits the ground under the foe. Lowers its Physical Defense sharply." },
+    stone_curse: { id: "stone_curse", name: "Stone Curse", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "An ancient curse of the crags. Lowers the foe's Special Defense sharply." },
+    // ---------- LIFE STEAL: attack and heal in the same move ----------
+    // "drain" heals a share of the damage dealt (a crit heals more), "healPct" is a
+    // fixed heal that lands after any successful hit.
+    sap_bite: { id: "sap_bite", name: "Sap Bite", category: "special", damageType: "physical", element: "nature", power: 22, uses: 12, drain: 0.5, desc: "Bites deep and drinks the sap. Heals 50% of the damage dealt." },
+    siphon_tide: { id: "siphon_tide", name: "Siphon Tide", category: "special", damageType: "special", element: "water", power: 22, uses: 12, drain: 0.5, desc: "Pulls the foe's strength out with the tide. Heals 50% of the damage dealt." },
+    ember_leech: { id: "ember_leech", name: "Ember Leech", category: "special", damageType: "special", element: "fire", power: 22, uses: 12, drain: 0.5, desc: "Steals the foe's warmth. Heals 50% of the damage dealt." },
+    crystal_leech: { id: "crystal_leech", name: "Crystal Leech", category: "special", damageType: "special", element: "rock", power: 22, uses: 12, drain: 0.5, desc: "Crystals drink the foe's vigour. Heals 50% of the damage dealt." },
+    vampiric_maw: { id: "vampiric_maw", name: "Vampiric Maw", category: "special", damageType: "physical", element: null, power: 34, uses: 8, drain: 0.75, desc: "A ravenous bite. Heals 75% of the damage dealt \u2014 a crit heals a fortune.", future: true },
+    mending_strike: { id: "mending_strike", name: "Mending Strike", category: "special", damageType: "physical", element: null, power: 18, uses: 10, healPct: 0.2, desc: "A measured strike that steadies the body. Heals 20% of max HP after it lands." },
+    restoring_pulse: { id: "restoring_pulse", name: "Restoring Pulse", category: "special", damageType: "special", element: null, power: 26, uses: 8, healPct: 0.3, desc: "A pulse that hurts the foe and knits your wounds. Heals 30% of max HP after it lands.", future: true },
+    // ---------- REFLECT: pay the last hit back double ----------
+    retaliate: { id: "retaliate", name: "Retaliate", category: "special", damageType: "physical", element: null, power: 0, uses: 6, reflect: 2, desc: "Returns the LAST hit you took at double strength. You still take the hit first \u2014 and if the foe only buffed, there is nothing to return." },
+    vengeance: { id: "vengeance", name: "Vengeance", category: "special", damageType: "physical", element: null, power: 0, uses: 4, reflect: 3, desc: "Returns the LAST hit you took at triple strength. Risky: a buffing foe leaves you nothing to return.", future: true },
+    // ---------- ELITE support skills: two effects, few uses ----------
+    // Foe-side entries are always debuffs, self-side entries always buffs.
+    war_cry: { id: "war_cry", name: "War Cry", category: "buff", effects: [{ stat: "patk", amount: 8 }, { stat: "spd", amount: 6 }], uses: 4, desc: "A roar that quickens the blood. Raises Physical Attack AND Speed.", future: true },
+    arcane_surge: { id: "arcane_surge", name: "Arcane Surge", category: "buff", effects: [{ stat: "satk", amount: 8 }, { stat: "sdef", amount: 6 }], uses: 4, desc: "Power floods every sense. Raises Special Attack AND Special Defense.", future: true },
+    bulwark: { id: "bulwark", name: "Bulwark", category: "buff", effects: [{ stat: "pdef", amount: 8 }, { stat: "sdef", amount: 8 }], uses: 4, desc: "Becomes a living wall. Raises both Defenses.", future: true },
+    intimidate: { id: "intimidate", name: "Intimidate", category: "debuff", effects: [{ stat: "patk", amount: 7 }, { stat: "satk", amount: 7 }], uses: 4, desc: "A stare that drains the will to fight. Lowers the foe's Physical AND Special Attack.", future: true },
+    shatter: { id: "shatter", name: "Shatter", category: "debuff", effects: [{ stat: "pdef", amount: 8 }, { stat: "sdef", amount: 8 }], uses: 4, desc: "Breaks every guard at once. Lowers both of the foe's Defenses.", future: true },
+    predator_focus: { id: "predator_focus", name: "Predator Focus", category: "buff", effects: [{ stat: "patk", amount: 7 }, { stat: "pdef", amount: 6, target: "foe" }], uses: 4, desc: "Locks onto the prey. Raises your Physical Attack and lowers the foe's Physical Defense.", future: true },
+    mind_break: { id: "mind_break", name: "Mind Break", category: "debuff", effects: [{ stat: "sdef", amount: 7 }, { stat: "satk", amount: 6, target: "self" }], uses: 4, desc: "Cracks the foe's focus and feeds on it. Lowers the foe's Special Defense and raises your Special Attack.", future: true }
   };
   var ULTIMATES = {
     verdant_crush: {
@@ -2446,24 +3093,111 @@ input[type="text"].wiki-search {
         { suffix: " III", power: 100, unlockLevel: 80, future: true }
       ],
       desc: "A cyclone of razor leaves engulfs the field."
+    },
+    // ---------- ROCK ----------
+    stone_avalanche: {
+      id: "stone_avalanche",
+      baseName: "Stone Avalanche",
+      element: "rock",
+      damageType: "physical",
+      tiers: [
+        { suffix: "", power: 35, unlockLevel: 10 },
+        { suffix: " I", power: 51, unlockLevel: 20 },
+        { suffix: " II", power: 75, unlockLevel: 60, future: true },
+        { suffix: " III", power: 105, unlockLevel: 80, future: true }
+      ],
+      desc: "Half a mountainside comes down on the foe."
+    },
+    crystal_cannon: {
+      id: "crystal_cannon",
+      baseName: "Crystal Cannon",
+      element: "rock",
+      damageType: "special",
+      tiers: [
+        { suffix: "", power: 34, unlockLevel: 10 },
+        { suffix: " I", power: 50, unlockLevel: 20 },
+        { suffix: " II", power: 74, unlockLevel: 60, future: true },
+        { suffix: " III", power: 104, unlockLevel: 80, future: true }
+      ],
+      desc: "Every crystal on its body fires at once."
+    },
+    // ---------- SUPPORT ULTIMATES (kind: 'support') ----------
+    // No damage: two effects that grow with the tier. Foe-side effects are ALWAYS
+    // debuffs, self-side effects ALWAYS buffs — an Ultimate-grade buff or debuff.
+    granite_bastion: {
+      id: "granite_bastion",
+      baseName: "Granite Bastion",
+      element: "rock",
+      damageType: null,
+      kind: "support",
+      tiers: [
+        { suffix: "", unlockLevel: 10, effects: [{ stat: "pdef", amount: 8, target: "self" }, { stat: "sdef", amount: 8, target: "self" }] },
+        { suffix: " I", unlockLevel: 20, effects: [{ stat: "pdef", amount: 11, target: "self" }, { stat: "sdef", amount: 11, target: "self" }] },
+        { suffix: " II", unlockLevel: 60, effects: [{ stat: "pdef", amount: 15, target: "self" }, { stat: "sdef", amount: 15, target: "self" }], future: true },
+        { suffix: " III", unlockLevel: 80, effects: [{ stat: "pdef", amount: 20, target: "self" }, { stat: "sdef", amount: 20, target: "self" }], future: true }
+      ],
+      desc: "Buff Ultimate: the Mythling turns to living granite. Raises BOTH of its Defenses by far more than any buff skill."
+    },
+    quake_curse: {
+      id: "quake_curse",
+      baseName: "Quake Curse",
+      element: "rock",
+      damageType: null,
+      kind: "support",
+      tiers: [
+        { suffix: "", unlockLevel: 10, effects: [{ stat: "pdef", amount: 8, target: "foe" }, { stat: "spd", amount: 6, target: "foe" }] },
+        { suffix: " I", unlockLevel: 20, effects: [{ stat: "pdef", amount: 11, target: "foe" }, { stat: "spd", amount: 8, target: "foe" }] },
+        { suffix: " II", unlockLevel: 60, effects: [{ stat: "pdef", amount: 15, target: "foe" }, { stat: "spd", amount: 11, target: "foe" }], future: true },
+        { suffix: " III", unlockLevel: 80, effects: [{ stat: "pdef", amount: 20, target: "foe" }, { stat: "spd", amount: 14, target: "foe" }], future: true }
+      ],
+      desc: "Debuff Ultimate: the ground swallows the foe's footing. Lowers the foe's Physical Defense AND Speed."
+    },
+    crystal_resonance: {
+      id: "crystal_resonance",
+      baseName: "Crystal Resonance",
+      element: "rock",
+      damageType: null,
+      kind: "support",
+      tiers: [
+        { suffix: "", unlockLevel: 10, effects: [{ stat: "satk", amount: 8, target: "self" }, { stat: "sdef", amount: 6, target: "foe" }] },
+        { suffix: " I", unlockLevel: 20, effects: [{ stat: "satk", amount: 11, target: "self" }, { stat: "sdef", amount: 8, target: "foe" }] },
+        { suffix: " II", unlockLevel: 60, effects: [{ stat: "satk", amount: 15, target: "self" }, { stat: "sdef", amount: 11, target: "foe" }], future: true },
+        { suffix: " III", unlockLevel: 80, effects: [{ stat: "satk", amount: 20, target: "self" }, { stat: "sdef", amount: 14, target: "foe" }], future: true }
+      ],
+      desc: "Buff + Debuff Ultimate: a resonance that empowers the caster and shatters the foe. Raises your Special Attack and lowers the foe's Special Defense."
     }
   };
   var ULTIMATE_MAX_CHARGE = 8;
   var MAX_BUFF_STACKS = 30;
   var SKILL_CATEGORY_LABEL = { normal: "Normal", special: "Special", buff: "Buff", debuff: "Debuff", ultimate: "Ultimate" };
   function isDamageSkill(sk) {
-    return !!sk && sk.category !== "buff" && sk.category !== "debuff";
+    return !!sk && sk.category !== "buff" && sk.category !== "debuff" && sk.kind !== "support";
+  }
+  function effectTarget(sk, eff) {
+    if (eff.target) return eff.target;
+    return sk.category === "debuff" ? "foe" : "self";
   }
   function buffSummary(sk, joiner = " ") {
     if (!sk || !sk.effects) return "";
     const short = { hp: "HP", patk: "P.ATK", satk: "S.ATK", pdef: "P.DEF", sdef: "S.DEF", spd: "SPD", counter: "CNT" };
-    const sign = sk.category === "debuff" ? "-" : "+";
-    return sk.effects.map((e) => `${short[e.stat] || e.stat.toUpperCase()}${joiner}${sign}${e.amount}`).join(", ");
+    return sk.effects.map((e) => {
+      const foe = effectTarget(sk, e) === "foe";
+      return `${foe ? "foe " : ""}${short[e.stat] || e.stat.toUpperCase()}${joiner}${foe ? "-" : "+"}${e.amount}`;
+    }).join(", ");
+  }
+  function riderSummary(sk) {
+    if (!sk) return "";
+    const out = [];
+    if (sk.drain) out.push(`heals ${Math.round(sk.drain * 100)}% of damage dealt`);
+    if (sk.healPct) out.push(`heals ${Math.round(sk.healPct * 100)}% max HP on hit`);
+    if (sk.reflect) out.push(`returns the last hit taken x${sk.reflect}`);
+    return out.join(" \xB7 ");
   }
   function skillStrength(sk) {
     if (!sk) return 0;
-    if (sk.category === "buff" || sk.category === "debuff") return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
-    return sk.power || 0;
+    if (sk.category === "buff" || sk.category === "debuff" || sk.kind === "support") return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+    if (sk.reflect) return 30 * sk.reflect;
+    return (sk.power || 0) + (sk.drain ? 6 : 0) + (sk.healPct ? 6 : 0);
   }
   function getSkill(id) {
     return SKILLS[id] || null;
@@ -2482,112 +3216,18 @@ input[type="text"].wiki-search {
       tierIndex: idx,
       name: ult.baseName + tier.suffix,
       category: "ultimate",
+      kind: ult.kind || "damage",
       damageType: ult.damageType,
       element: ult.element,
-      power: tier.power,
+      power: tier.power || 0,
+      effects: tier.effects || null,
       selfBuff: tier.selfBuff || null,
       desc: ult.desc,
       future: !!tier.future
     };
   }
-
-  // src/data/moods.js
-  var STAT_KEYS = ["hp", "patk", "satk", "pdef", "sdef", "spd", "counter", "crit", "critMult"];
-  var STAT_LABELS = {
-    hp: "HP",
-    patk: "Physical Attack",
-    satk: "Special Attack",
-    pdef: "Physical Defense",
-    sdef: "Special Defense",
-    spd: "Speed",
-    counter: "Counter",
-    crit: "Crit Chance",
-    critMult: "Crit Damage"
-  };
-  var STAT_SHORT = {
-    hp: "HP",
-    patk: "P.ATK",
-    satk: "S.ATK",
-    pdef: "P.DEF",
-    sdef: "S.DEF",
-    spd: "SPD",
-    counter: "CNT",
-    crit: "CRIT",
-    critMult: "C.DMG"
-  };
-  var STAT_INFO = {
-    hp: "Hit Points. Reach 0 and the Mythling faints.",
-    patk: "Drives the damage of Physical skills (and how hard Physical hits land).",
-    satk: "Drives the damage of Special skills and every Ultimate.",
-    pdef: "Reduces incoming Physical damage.",
-    sdef: "Reduces incoming Special damage.",
-    spd: "Higher Speed acts first each turn \u2014 and helps you flee.",
-    counter: "Evasion. Each point is 0.5% dodge, capped at 18% (Counter caps at 35).",
-    crit: "Chance to land a critical hit, in percent (caps at 60%).",
-    critMult: "Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +200%)."
-  };
-  var STAT_BAR_MAX = {
-    hp: 600,
-    patk: 90,
-    satk: 90,
-    pdef: 90,
-    sdef: 90,
-    spd: 90,
-    counter: 35,
-    crit: 60,
-    critMult: 200
-  };
-  var MOODS = {
-    lazy: { id: "lazy", name: "Lazy", up: ["hp", "pdef", "sdef"], down: "spd" },
-    energetic: { id: "energetic", name: "Energetic", up: ["patk", "satk", "spd"], down: "sdef" },
-    aggressive: { id: "aggressive", name: "Aggressive", up: ["patk", "spd", "counter"], down: "sdef" },
-    clever: { id: "clever", name: "Clever", up: ["satk", "sdef", "counter"], down: "patk" },
-    sturdy: { id: "sturdy", name: "Sturdy", up: ["hp", "pdef", "sdef"], down: "satk" },
-    swift: { id: "swift", name: "Swift", up: ["spd", "counter", "sdef"], down: "hp" },
-    brave: { id: "brave", name: "Brave", up: ["hp", "patk", "counter"], down: "sdef" },
-    focused: { id: "focused", name: "Focused", up: ["patk", "satk", "spd"], down: "hp" },
-    guarded: { id: "guarded", name: "Guarded", up: ["hp", "pdef", "sdef"], down: "counter" },
-    reckless: { id: "reckless", name: "Reckless", up: ["patk", "satk", "spd"], down: "pdef" },
-    playful: { id: "playful", name: "Playful", up: ["spd", "counter", "satk"], down: "pdef" },
-    calm: { id: "calm", name: "Calm", up: ["hp", "sdef", "counter"], down: "patk" },
-    stubborn: { id: "stubborn", name: "Stubborn", up: ["hp", "patk", "pdef"], down: "spd" },
-    ambitious: { id: "ambitious", name: "Ambitious", up: ["patk", "satk", "counter"], down: "hp" },
-    cautious: { id: "cautious", name: "Cautious", up: ["pdef", "sdef", "counter"], down: "patk" },
-    fierce: { id: "fierce", name: "Fierce", up: ["hp", "patk", "spd"], down: "counter" },
-    // ---- Crit moods (Crit Chance / Crit Damage) ----
-    feral: { id: "feral", name: "Feral", up: ["crit", "critMult", "patk"], down: "sdef" },
-    savage: { id: "savage", name: "Savage", up: ["crit", "patk", "spd"], down: "pdef" },
-    precise: { id: "precise", name: "Precise", up: ["crit", "critMult", "satk"], down: "hp" },
-    brutal: { id: "brutal", name: "Brutal", up: ["critMult", "patk", "satk"], down: "sdef" },
-    keen: { id: "keen", name: "Keen", up: ["crit", "spd", "counter"], down: "pdef" }
-  };
-  var MOOD_IDS = Object.keys(MOODS);
-  var CRIT_MOOD_IDS = MOOD_IDS.filter((id) => MOODS[id].up.includes("crit") || MOODS[id].up.includes("critMult"));
-  function getMood(id) {
-    return MOODS[id] || MOODS.brave;
-  }
-  var MOOD_SCALE = { hp: 3, critMult: 2 };
-  function moodModifiers(moodId, magnitude) {
-    const mood = getMood(moodId);
-    const out = {};
-    for (const k of STAT_KEYS) out[k] = 0;
-    for (const k of mood.up) out[k] += magnitude * (MOOD_SCALE[k] || 1);
-    out[mood.down] -= magnitude * (MOOD_SCALE[mood.down] || 1);
-    return out;
-  }
-  function moodSummary(moodId) {
-    const m = getMood(moodId);
-    return {
-      up: m.up.map((k) => STAT_SHORT[k]),
-      down: STAT_SHORT[m.down]
-    };
-  }
-  function formatStat(key, value) {
-    if (value == null || !Number.isFinite(value)) return "\u2014";
-    if (key === "crit") return `${value}%`;
-    if (key === "critMult") return `+${value}%`;
-    if (key === "counter") return String(value);
-    return String(value);
+  function isSupportUltimate(u) {
+    return !!u && u.kind === "support";
   }
 
   // src/data/rarity.js
@@ -2833,8 +3473,9 @@ input[type="text"].wiki-search {
     const rand2 = opts.rng || Math.random;
     const level = clamp(opts.level ?? 1, 1, LEVEL_CAP);
     const rarity = opts.rarity || (opts.rollRarity ? rollRarity(rand2, opts.luck || 0) : sp.defaultRarity);
-    const mood = opts.mood || (opts.randomMood ? choice(rand2, MOOD_IDS) : sp.defaultMood);
+    const mood = normalizeMoodId(opts.mood || (opts.randomMood ? choice(rand2, MOOD_IDS) : sp.defaultMood));
     const mutation = opts.mutation || (opts.rollMutation ? rollMutation(rand2, opts.mutationLuck || 1) : "none");
+    const rational = getRational(opts.rational) ? opts.rational : rollRational(rand2);
     const stage = opts.stage != null ? opts.stage : stageForLevel(speciesId, level);
     const m = {
       uid: opts.uid || uid("myth"),
@@ -2845,6 +3486,7 @@ input[type="text"].wiki-search {
       stage,
       rarity,
       mood,
+      rational,
       mutation,
       currentHp: 0,
       ultCharge: 0,
@@ -2932,12 +3574,13 @@ input[type="text"].wiki-search {
     const st = stageData(m);
     const mag = rarityMagnitude(m.rarity);
     const mods = moodModifiers(m.mood, mag);
+    const rat = rationalModifiers(m.rational, RATIONAL_AMOUNT);
     const out = {};
     const mutBonus = getMutation(m.mutation).statBonus || 0;
     for (const k of STAT_KEYS) {
       const base = sp.baseStats[k];
       const grown = base * (1 + STAT_GROWTH[k] * (m.level - 1));
-      let v = Math.floor(grown * st.statMult) + (mods[k] || 0);
+      let v = Math.floor(grown * st.statMult) + (mods[k] || 0) + (rat[k] || 0);
       if (k === "counter") v = clamp(v, 0, COUNTER_MAX_PERCENT);
       if (k === "crit") v = clamp(v, 0, CRIT_MAX_PERCENT);
       if (k === "critMult") v = clamp(v, 0, CRIT_MAX_MULT);
@@ -2948,6 +3591,20 @@ input[type="text"].wiki-search {
   }
   function maxHp(m) {
     return computeStats(m).hp;
+  }
+  function rerollMood2(m, rng = Math.random) {
+    const before = m.mood;
+    const ratio = maxHp(m) > 0 ? m.currentHp / maxHp(m) : 1;
+    m.mood = rerollMood(normalizeMoodId(m.mood), rng);
+    m.currentHp = Math.max(m.currentHp > 0 ? 1 : 0, Math.round(maxHp(m) * ratio));
+    return { before, after: m.mood };
+  }
+  function rerollRational2(m, rng = Math.random) {
+    const before = m.rational;
+    const ratio = maxHp(m) > 0 ? m.currentHp / maxHp(m) : 1;
+    m.rational = rerollRational(m.rational, rng);
+    m.currentHp = Math.max(m.currentHp > 0 ? 1 : 0, Math.round(maxHp(m) * ratio));
+    return { before, after: m.rational };
   }
   function restoreAll(m) {
     m.currentHp = maxHp(m);
@@ -3223,7 +3880,7 @@ input[type="text"].wiki-search {
   var bus = new EventBus();
   function blankCollection() {
     const c = {};
-    for (const id of SPECIES_IDS) c[id] = { seen: false, caught: false, mutations: { shiny: false, darkness: false } };
+    for (const id of SPECIES_IDS) c[id] = { seen: false, caught: false, mutations: { shiny: false, darkness: false }, forms: {} };
     return c;
   }
   var GameState = {
@@ -3420,13 +4077,27 @@ input[type="text"].wiki-search {
       if (mutation !== "none") e.mutations[mutation] = true;
       bus.emit("collection:changed");
     },
-    markCaught(speciesId, mutation = "none") {
+    markCaught(speciesId, mutation = "none", stage = 0) {
       const e = GameState.collection[speciesId];
       if (!e) return;
       e.seen = true;
       e.caught = true;
       if (mutation !== "none") e.mutations[mutation] = true;
+      this.markForm(speciesId, stage);
       bus.emit("collection:changed");
+    },
+    /** Record that a form (evolution stage) of a species is owned — and every stage below it. */
+    markForm(speciesId, stage = 0) {
+      const e = GameState.collection[speciesId];
+      if (!e) return;
+      e.forms = e.forms || {};
+      for (let st = 0; st <= (stage || 0); st++) e.forms[st] = true;
+      bus.emit("collection:changed");
+    },
+    /** True when the player has owned this evolution stage of the species. */
+    hasForm(speciesId, stage) {
+      const e = GameState.collection[speciesId];
+      return !!(e && e.forms && e.forms[stage]);
     },
     entry(id) {
       return GameState.collection[id];
@@ -3542,7 +4213,10 @@ input[type="text"].wiki-search {
       exp: Math.max(0, raw.exp ?? 0),
       stage: raw.stage ?? 0,
       rarity: raw.rarity ?? getSpecies(raw.speciesId).defaultRarity,
-      mood: raw.mood ?? getSpecies(raw.speciesId).defaultMood,
+      mood: normalizeMoodId(raw.mood ?? getSpecies(raw.speciesId).defaultMood),
+      // old 3-up moods map onto the new single-stat ones
+      rational: getRational(raw.rational) ? raw.rational : rollRational(),
+      // migration: old saves had no Rational
       mutation: raw.mutation ?? "none",
       // migration: old saves had no mutation
       currentHp: raw.currentHp ?? null,
@@ -3554,6 +4228,7 @@ input[type="text"].wiki-search {
       uses: { ...raw.uses || {} },
       meta: { caughtAt: null, caughtWith: null, caughtLevel: null, originMap: null, isStarter: false, ...raw.meta || {} }
     };
+    if (m.meta.caughtWith && LEGACY_ITEMS[m.meta.caughtWith]) m.meta.caughtWith = LEGACY_ITEMS[m.meta.caughtWith];
     const maxStage = stageForLevel(m.speciesId, m.level);
     if (m.stage > maxStage) m.stage = maxStage;
     refreshLibrary(m);
@@ -3591,8 +4266,9 @@ input[type="text"].wiki-search {
       GameState.party.push(createMythling({ speciesId: p.starter || "spriggo", level: 1, isStarter: true, rarity: STARTER_RARITY }));
     }
     const inv = {};
-    for (const [id, qty] of Object.entries(data.inventory || {})) {
-      if (getItem(id) && Number.isFinite(qty) && qty > 0) inv[id] = Math.floor(qty);
+    for (const [rawId, qty] of Object.entries(data.inventory || {})) {
+      const id = LEGACY_ITEMS[rawId] || rawId;
+      if (getItem(id) && Number.isFinite(qty) && qty > 0) inv[id] = (inv[id] || 0) + Math.floor(qty);
     }
     GameState.inventory = Object.keys(inv).length ? inv : { ...STARTING_INVENTORY };
     const col = blankCollection();
@@ -3601,10 +4277,18 @@ input[type="text"].wiki-search {
       col[id] = {
         seen: !!e.seen,
         caught: !!e.caught,
-        mutations: { shiny: !!((_a = e == null ? void 0 : e.mutations) == null ? void 0 : _a.shiny), darkness: !!((_b = e == null ? void 0 : e.mutations) == null ? void 0 : _b.darkness) }
+        mutations: { shiny: !!((_a = e == null ? void 0 : e.mutations) == null ? void 0 : _a.shiny), darkness: !!((_b = e == null ? void 0 : e.mutations) == null ? void 0 : _b.darkness) },
+        forms: { ...e.forms || {} }
       };
     }
     GameState.collection = col;
+    for (const m of [...GameState.party, ...GameState.storage]) {
+      const e = col[m.speciesId];
+      if (!e) continue;
+      e.caught = true;
+      e.seen = true;
+      for (let st = 0; st <= (m.stage || 0); st++) e.forms[st] = true;
+    }
     const w = data.world || {};
     GameState.world = {
       defeatedTrainers: { ...w.defeatedTrainers || {} },
@@ -3801,6 +4485,7 @@ input[type="text"].wiki-search {
     vale: { scale: [0, 2, 4, 7, 9, 12], root: 329.63, tempo: 0.4, wave: "triangle", pad: true, bassEvery: 4, gain: 0.18 },
     coast: { scale: [0, 2, 5, 7, 9, 12], root: 261.63, tempo: 0.44, wave: "sine", pad: true, bassEvery: 4, gain: 0.19 },
     ember: { scale: [0, 3, 5, 7, 10, 12], root: 220, tempo: 0.34, wave: "sawtooth", pad: true, bassEvery: 2, gain: 0.15 },
+    crags: { scale: [0, 2, 3, 7, 8, 12], root: 246.94, tempo: 0.5, wave: "triangle", pad: true, bassEvery: 2, gain: 0.17 },
     town: { scale: [0, 2, 4, 5, 7, 9], root: 349.23, tempo: 0.42, wave: "triangle", pad: false, bassEvery: 4, gain: 0.17 },
     battle: { scale: [0, 2, 3, 5, 7, 10], root: 196, tempo: 0.22, wave: "square", pad: false, bassEvery: 2, gain: 0.13 },
     boss: { scale: [0, 1, 3, 5, 7, 8], root: 174.61, tempo: 0.2, wave: "sawtooth", pad: false, bassEvery: 2, gain: 0.13 },
@@ -4076,7 +4761,9 @@ input[type="text"].wiki-search {
     /** Perform the evolution. Returns the transformation record (or null). */
     perform(m) {
       if (!canEvolve(m)) return null;
-      return evolve(m);
+      const rec = evolve(m);
+      CollectionManager.markForm(m.speciesId, m.stage);
+      return rec;
     },
     /** Locked future stages, for the detail screen (never shown as usable buttons). */
     lockedStages(m) {
@@ -4106,6 +4793,7 @@ input[type="text"].wiki-search {
       this.m = mythling;
       this.side = side;
       this.buffs = {};
+      this.lastHit = 0;
     }
     base() {
       return computeStats(this.m);
@@ -4298,6 +4986,22 @@ input[type="text"].wiki-search {
         attacker.ultCharge = 0;
         events.push({ type: "charge", side: atkSide, value: 0 });
         events.push({ type: "log", text: `${displayName(attacker)} unleashes ${ult.name}!`, emphasis: true });
+        if (isSupportUltimate(ult)) {
+          const hitsFoe = (ult.effects || []).some((e) => effectTarget(ult, e) === "foe");
+          events.push({
+            type: "ultimate-cast",
+            side: atkSide,
+            element: ult.element,
+            name: ult.name,
+            skillId: ult.id,
+            category: "ultimate",
+            kind: "support",
+            target: hitsFoe ? defSide : atkSide
+          });
+          this._applyEffects(ult, attacker, defender, events, atkSide, defSide);
+          this.cb(defender).lastHit = 0;
+          return;
+        }
         events.push({
           type: "ultimate-cast",
           side: atkSide,
@@ -4323,34 +5027,42 @@ input[type="text"].wiki-search {
         skillId = fallback.id;
       }
       if (Number.isFinite(skill.uses)) consumeUse(attacker, skillId);
-      if (skill.category === "buff") {
+      if (skill.category === "buff" || skill.category === "debuff") {
         events.push({ type: "log", text: `${displayName(attacker)} used ${skill.name}!` });
         events.push({
           type: "cast",
           side: atkSide,
-          kind: "buff",
-          element: null,
-          name: skill.name,
-          skillId: skill.id,
-          category: "buff",
-          target: atkSide
-        });
-        for (const eff of skill.effects) this._applyBuff(attacker, eff, events, atkSide);
-        return;
-      }
-      if (skill.category === "debuff") {
-        events.push({ type: "log", text: `${displayName(attacker)} used ${skill.name}!` });
-        events.push({
-          type: "cast",
-          side: atkSide,
-          kind: "debuff",
+          kind: skill.category,
           element: skill.element || null,
           name: skill.name,
           skillId: skill.id,
-          category: "debuff",
+          category: skill.category,
+          target: skill.category === "debuff" ? defSide : atkSide
+        });
+        this._applyEffects(skill, attacker, defender, events, atkSide, defSide);
+        this.cb(defender).lastHit = 0;
+        return;
+      }
+      if (skill.reflect) {
+        const taken = this.cb(attacker).lastHit || 0;
+        events.push({
+          type: "cast",
+          side: atkSide,
+          kind: skill.damageType,
+          element: skill.element,
+          name: skill.name,
+          skillId: skill.id,
+          category: skill.category,
           target: defSide
         });
-        for (const eff of skill.effects) this._applyDebuff(defender, eff, events, defSide);
+        if (taken <= 0) {
+          events.push({ type: "log", text: `${displayName(attacker)} used ${skill.name}! \u2014 but there was nothing to return.` });
+          return;
+        }
+        this._dealDamage(attacker, defender, skill, events, {
+          logPrefix: `${displayName(attacker)} used ${skill.name}!`,
+          fixedDamage: Math.max(1, Math.floor(taken * skill.reflect))
+        });
         return;
       }
       events.push({
@@ -4366,6 +5078,13 @@ input[type="text"].wiki-search {
       this._dealDamage(attacker, defender, skill, events, {
         logPrefix: `${displayName(attacker)} used ${skill.name}!`
       });
+    }
+    /** Route each effect of a support skill / Ultimate to the side it targets. */
+    _applyEffects(skill, attacker, defender, events, atkSide, defSide) {
+      for (const eff of skill.effects || []) {
+        if (effectTarget(skill, eff) === "foe") this._applyDebuff(defender, eff, events, defSide);
+        else this._applyBuff(attacker, eff, events, atkSide);
+      }
     }
     _applyBuff(target, eff, events, side) {
       const cb = this.cb(target);
@@ -4408,7 +5127,7 @@ input[type="text"].wiki-search {
      *  logPrefix: string — opening clause of the battle message, e.g. "Emberu used Bite!"
      *    The damage (or the dodge) is appended to it so the attack line reports the result.
      */
-    _dealDamage(attacker, defender, move, events, { isUltimate, logPrefix } = {}) {
+    _dealDamage(attacker, defender, move, events, { isUltimate, logPrefix, fixedDamage = null } = {}) {
       const atkSide = this.party.includes(attacker) ? "player" : "enemy";
       const defSide = atkSide === "player" ? "enemy" : "player";
       const acb = this.cb(attacker);
@@ -4421,6 +5140,7 @@ input[type="text"].wiki-search {
           text: `${prefix}${displayName(defender)} countered and dodged it! (${Math.round(dodge)}% Counter)`
         });
         events.push({ type: "miss", side: defSide, uid: defender.uid });
+        dcb.lastHit = 0;
         return;
       }
       const offKey = move.damageType === "physical" ? "patk" : "satk";
@@ -4437,8 +5157,10 @@ input[type="text"].wiki-search {
       const stageFactor = stageData(attacker).statMult;
       let dmg = Math.floor(move.power * off / Math.max(1, def) * levelFactor * stageFactor * rand2 * mult);
       if (crit) dmg = Math.floor(dmg * (1 + critBonus / 100));
+      if (fixedDamage != null) dmg = crit ? Math.floor(fixedDamage * (1 + critBonus / 100)) : fixedDamage;
       dmg = Math.max(1, dmg);
       defender.currentHp = Math.max(0, defender.currentHp - dmg);
+      dcb.lastHit = dmg;
       events.push({
         type: "log",
         text: `${prefix}${dmg} damage!${crit ? ` CRITICAL HIT! (x${(1 + critBonus / 100).toFixed(2)})` : ""}`,
@@ -4461,7 +5183,19 @@ input[type="text"].wiki-search {
         source: atkSide
       });
       const eff = effectivenessLabel(mult);
-      if (eff) events.push({ type: "log", text: eff });
+      if (eff && fixedDamage == null) events.push({ type: "log", text: eff });
+      if ((move.drain || move.healPct) && !isFainted(attacker)) {
+        const mx = maxHp(attacker);
+        let heal = 0;
+        if (move.drain) heal += Math.floor(dmg * move.drain);
+        if (move.healPct) heal += Math.floor(mx * move.healPct);
+        heal = Math.min(heal, mx - attacker.currentHp);
+        if (heal > 0) {
+          attacker.currentHp += heal;
+          events.push({ type: "heal", side: atkSide, uid: attacker.uid, amount: heal, mythling: this.snapshot(attacker), source: move.id });
+          events.push({ type: "log", text: `${displayName(attacker)} recovered ${heal} HP${move.drain ? crit ? " \u2014 the critical hit drained even more!" : " by draining the foe!" : "!"}` });
+        }
+      }
       if (!isUltimate && (move.category === "normal" || move.category === "special")) {
         const c = addUltimateCharge(attacker, 1);
         events.push({ type: "charge", side: atkSide, value: c, uid: attacker.uid });
@@ -5856,6 +6590,783 @@ input[type="text"].wiki-search {
     ctx.lineTo(-2, len + 4);
     ctx.stroke();
   }
+  function crystalSpike(ctx, x, y, h, w, color, tilt = 0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(tilt);
+    poly(ctx, [[-w, 0], [-w * 0.35, -h], [0, -h * 1.15], [w * 0.4, -h * 0.92], [w, 0]], color);
+    poly(ctx, [[-w * 0.35, -h], [0, -h * 1.15], [0.2, 0], [-w * 0.55, 0]], shadeColor(color, 0.28));
+    poly(ctx, [[0, -h * 1.15], [w * 0.4, -h * 0.92], [w, 0], [0.2, 0]], shadeColor(color, -0.22));
+    ctx.restore();
+  }
+  function stonePlate(ctx, x, y, w, h, color, seed = 0) {
+    const j = (k) => Math.sin(seed * 3.1 + k * 1.7) * 0.18;
+    poly(ctx, [
+      [x - w * (0.9 + j(1)), y + h * 0.1],
+      [x - w * 0.5, y - h * (0.9 + j(2))],
+      [x + w * (0.35 + j(3)), y - h],
+      [x + w * (0.95 + j(4)), y - h * 0.2],
+      [x + w * 0.6, y + h * 0.85],
+      [x - w * (0.4 + j(5)), y + h]
+    ], color);
+    poly(ctx, [[x - w * 0.5, y - h * 0.9], [x + w * 0.35, y - h], [x + w * 0.15, y - h * 0.45], [x - w * 0.4, y - h * 0.4]], shadeColor(color, 0.16));
+  }
+  function pebble(ctx, x, y, r, color) {
+    ell(ctx, x, y, r, r * 0.8, color);
+    ell(ctx, x - r * 0.3, y - r * 0.3, r * 0.4, r * 0.28, shadeColor(color, 0.22));
+  }
+  var TORTOISE = {
+    skel: (ex) => skeleton(ex, { legLen: 13, legW: 6.5, bodyY: -25, headY: -37, headX: 24, hipX: -12, shoX: 9 }),
+    face: {
+      eyes: [
+        { x: 5.6, y: -2.6, r: 3.4, shape: "droop", color: "eye" },
+        { x: -4.6, y: -2.6, r: 3, shape: "droop", color: "eye" }
+      ],
+      brows: [{ x: 5.6, y: -7.4, w: 6 }, { x: -4.6, y: -7.4, w: 5.4, mirror: true }],
+      mouth: { x: 11, y: 5.6, w: 6.2, color: "#2a2f2a" }
+    },
+    parts: [
+      {
+        name: "tail",
+        z: 0,
+        space: "local",
+        pivot: (r) => [r.hipX - 14, r.bodyY + 6],
+        box: [-16, -8, 20, 16],
+        draw(ctx, c) {
+          poly(ctx, [[0, -4], [-12, -1], [-14, 3], [0, 5]], c.primary);
+          ell(ctx, -12, 1.5, 2.6, 2.2, c.shadow);
+        }
+      },
+      {
+        name: "legBL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.hipX - 2, r.bodyY + 9],
+        box: [-12, -4, 24, 28],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 0.95, c.shadow, c.secondary, -1.2, 3)
+      },
+      {
+        name: "legFL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.shoX + 3, r.bodyY + 9],
+        box: [-12, -4, 24, 28],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.92, c.shadow, c.secondary, 1.1, 3)
+      },
+      {
+        // ---- torso + SHELL (the shell grows crystals per stage)
+        name: "body",
+        z: 2,
+        space: "creature",
+        pivot: (r) => [0, r.bodyY],
+        box: [-46, -58, 90, 82],
+        draw(ctx, c, ex, r) {
+          const g = r.g, st = ex.stage || 0;
+          volume(ctx, r.hipX + 6, r.bodyY + 6, 24 + g * 4, 11 + g * 2, c.light, c.shadow);
+          ell(ctx, r.shoX + 4, r.bodyY + 9, 14 + g * 2, 6.5 + g, c.belly);
+          poly(ctx, [[r.shoX + 6, r.bodyY - 2], [r.headX - 6, r.headY + 6], [r.headX + 4, r.headY + 9], [r.shoX + 14, r.bodyY + 8]], c.primary);
+          const sx = r.hipX + 4, sy = r.bodyY - 2, sw = 30 + g * 8, sh = 22 + g * 7;
+          ctx.save();
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, sw, sh, 0, Math.PI, Math.PI * 2);
+          ctx.lineTo(sx + sw, sy + 3);
+          ctx.lineTo(sx - sw, sy + 3);
+          ctx.closePath();
+          const dg = ctx.createLinearGradient(sx, sy - sh, sx, sy + 3);
+          dg.addColorStop(0, shadeColor(c.secondary, 0.22));
+          dg.addColorStop(1, shadeColor(c.secondary, -0.3));
+          ctx.fillStyle = dg;
+          ctx.fill();
+          ctx.clip();
+          ctx.strokeStyle = shadeColor(c.secondary, -0.45);
+          ctx.lineWidth = 1.6;
+          for (let i = -2; i <= 2; i++) {
+            for (let j = 0; j < 2; j++) {
+              const px = sx + i * sw * 0.42 + (j ? sw * 0.21 : 0), py = sy - sh * 0.25 - j * sh * 0.5;
+              ctx.beginPath();
+              for (let k = 0; k < 6; k++) {
+                const a = Math.PI / 3 * k;
+                const hx = px + Math.cos(a) * sw * 0.2, hy = py + Math.sin(a) * sh * 0.24;
+                k ? ctx.lineTo(hx, hy) : ctx.moveTo(hx, hy);
+              }
+              ctx.closePath();
+              ctx.stroke();
+            }
+          }
+          if (st >= 1) {
+            ctx.globalAlpha *= 0.75;
+            ell(ctx, sx - sw * 0.45, sy - sh * 0.35, 6 + g * 2, 3.5, c.accent);
+            ell(ctx, sx + sw * 0.3, sy - sh * 0.15, 5 + g, 3, c.accent);
+          }
+          ctx.restore();
+          ctx.beginPath();
+          ctx.ellipse(sx, sy + 3, sw + 2, 4.5, 0, 0, Math.PI * 2);
+          ctx.fillStyle = shadeColor(c.secondary, -0.2);
+          ctx.fill();
+          const n = st * 2;
+          for (let i = 0; i < n; i++) {
+            const t = (i + 0.5) / n;
+            const a = Math.PI + Math.PI * t;
+            const px = sx + Math.cos(a) * sw * 0.72, py = sy + Math.sin(a) * sh * 0.78 + 2;
+            crystalSpike(ctx, px, py, 8 + st * 3 + i % 2 * 3, 3 + st * 0.6, c.accent, (t - 0.5) * 1.3);
+          }
+        }
+      },
+      {
+        name: "legBR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.hipX + 6, r.bodyY + 10],
+        box: [-12, -4, 25, 28],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.belly, -1.1, 3)
+      },
+      {
+        name: "legFR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.shoX + 12, r.bodyY + 10],
+        box: [-12, -4, 24, 28],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.96, c.primary, c.belly, 1, 3)
+      },
+      {
+        name: "head",
+        z: 4,
+        space: "local",
+        pivot: (r) => [r.headX, r.headY, r.headS],
+        box: [-16, -22, 36, 36],
+        draw(ctx, c, ex) {
+          if (ex.horns) {
+            crystalSpike(ctx, -4, -10, 9 + (ex.stage || 0) * 2, 3, c.accent, -0.35);
+            crystalSpike(ctx, 3, -11, 6 + (ex.stage || 0) * 2, 2.4, c.accent, 0.1);
+          }
+          volume(ctx, 0, -1, 13, 11, c.light, c.shadow);
+          poly(ctx, [[8, 2], [17, 1], [18, 6], [10, 8]], shadeColor(c.belly, -0.1));
+          line(ctx, 10, 5.4, 16.5, 4.4, shadeColor(c.dark, 0.1), 1.2);
+          ell(ctx, -3, 7, 7, 3.4, c.belly);
+        }
+      }
+    ]
+  };
+  var BOAR = {
+    skel: (ex) => skeleton(ex, { legLen: 18, legW: 6, bodyY: -34, headY: -44, headX: 24, hipX: -12, shoX: 8 }),
+    face: {
+      eyes: [
+        { x: 4.8, y: -6.2, r: 3.1, shape: "sharp", color: "eye" },
+        { x: -5.6, y: -6.2, r: 2.8, shape: "sharp", color: "eye" }
+      ],
+      brows: [{ x: 4.8, y: -11, w: 6 }, { x: -5.6, y: -11, w: 5.4, mirror: true }],
+      mouth: { x: 16, y: 6.4, w: 6.5, color: "#2c211b", fangs: 2 }
+    },
+    parts: [
+      {
+        name: "tail",
+        z: 0,
+        space: "local",
+        pivot: (r) => [r.hipX - 16, r.bodyY - 4],
+        box: [-14, -12, 18, 26],
+        draw(ctx, c) {
+          line(ctx, 0, 0, -8, 9, c.secondary, 2.6);
+          furTufts(ctx, -9, 10, 2.5, 1.2, 4.2, 4, 7, c.dark);
+        }
+      },
+      {
+        name: "legBL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.hipX - 4, r.bodyY + 9],
+        box: [-11, -4, 22, 36],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 0.9, c.shadow, c.dark, -1.5, 2)
+      },
+      {
+        name: "legFL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.shoX + 4, r.bodyY + 9],
+        box: [-11, -4, 22, 36],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.88, c.shadow, c.dark, 1.3, 2)
+      },
+      {
+        name: "body",
+        z: 2,
+        space: "creature",
+        pivot: (r) => [0, r.bodyY],
+        box: [-42, -34, 82, 60],
+        draw(ctx, c, ex, r) {
+          const g = r.g;
+          volume(ctx, r.hipX + 1, r.bodyY + 1, 21 + g * 5, 16 + g * 3.5, c.light, c.shadow);
+          volume(ctx, r.shoX + 2, r.bodyY - 1, 20 + g * 4.5, 16 + g * 3.5, c.light, c.shadow);
+          poly(ctx, [[r.shoX + 4, r.bodyY - 14], [r.headX - 4, r.headY - 6], [r.headX + 6, r.headY + 12], [r.shoX + 16, r.bodyY + 6]], c.primary);
+          ell(ctx, r.shoX + 3, r.bodyY + 6, 13 + g * 2, 9 + g, c.belly);
+          for (let i = 0; i < 3; i++) pebble(ctx, r.hipX - 6 + i * 9, r.bodyY - 5 + i % 2 * 5, 2.6 + i % 2, shadeColor(c.secondary, 0.1));
+        }
+      },
+      {
+        name: "legBR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.hipX + 5, r.bodyY + 10],
+        box: [-11, -4, 23, 36],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.dark, -1.3, 2)
+      },
+      {
+        name: "legFR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.shoX + 12, r.bodyY + 10],
+        box: [-11, -4, 22, 36],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.95, c.primary, c.dark, 1.1, 2)
+      },
+      {
+        // ---- GRAVEL RIDGE along the back (more plates per stage)
+        name: "mane",
+        z: 3.4,
+        space: "creature",
+        pivot: (r) => [r.hipX + 6, r.bodyY - 16],
+        box: [-34, -26, 66, 30],
+        draw(ctx, c, ex, r) {
+          const st = ex.stage || 0, g = r.g;
+          const n = 3 + st;
+          for (let i = 0; i < n; i++) {
+            const t = i / (n - 1);
+            const x = r.hipX - 12 + t * (30 + g * 8), y = r.bodyY - 13 - g * 3 - Math.sin(t * Math.PI) * (5 + st * 1.5);
+            stonePlate(ctx, x, y, 5.5 + st * 0.6, 5 + st * 1.2 + Math.sin(t * Math.PI) * 3, shadeColor(c.secondary, 0.08 + i % 2 * 0.08), i);
+          }
+          if (st >= 3) crystalSpike(ctx, r.hipX + 4, r.bodyY - 20 - g * 3, 9, 2.6, c.accent, -0.2);
+        }
+      },
+      {
+        name: "earL",
+        z: 3.5,
+        space: "local",
+        pivot: (r) => [r.headX - 6 * r.headS, r.headY - 11 * r.headS, r.headS],
+        box: [-9, -12, 14, 14],
+        draw(ctx, c) {
+          poly(ctx, [[0, 0], [-6, -10], [3, -6]], c.secondary);
+          poly(ctx, [[-1, -1.5], [-4, -7], [1.5, -5]], shadeColor(c.accent, -0.1));
+        }
+      },
+      {
+        name: "earR",
+        z: 3.5,
+        space: "local",
+        pivot: (r) => [r.headX + 6 * r.headS, r.headY - 12 * r.headS, r.headS],
+        box: [-5, -12, 14, 14],
+        draw(ctx, c) {
+          poly(ctx, [[0, 0], [7, -10], [-2, -6]], c.secondary);
+          poly(ctx, [[1, -1.5], [5, -7], [-0.5, -5]], shadeColor(c.accent, -0.1));
+        }
+      },
+      {
+        name: "head",
+        z: 4,
+        space: "local",
+        pivot: (r) => [r.headX, r.headY, r.headS],
+        box: [-18, -22, 44, 40],
+        draw(ctx, c, ex) {
+          const st = ex.stage || 0;
+          volume(ctx, 0, -3, 14.5, 12.5, c.light, c.shadow);
+          volume(ctx, 11, 3, 11, 7.5, shadeColor(c.primary, 0.04), c.shadow);
+          ell(ctx, 20.5, 3.2, 4, 3.3, shadeColor(c.dark, 0.25));
+          ell(ctx, 19.6, 2.6, 1.1, 1.3, c.dark);
+          ell(ctx, 21.6, 2.6, 1.1, 1.3, c.dark);
+          const tl = (ex.horns ? 7 : 4) + st * 2.2;
+          const tusk = shadeColor(c.belly, 0.1);
+          poly(ctx, [[12, 7], [16 + tl * 0.4, 7 - tl], [18 + tl * 0.5, 6 - tl * 0.8], [15, 8.5]], tusk);
+          poly(ctx, [[8, 8], [11 + tl * 0.3, 8 - tl * 0.8], [13 + tl * 0.4, 7.4 - tl * 0.6], [11, 9.6]], shadeColor(tusk, -0.12));
+          if (st >= 2) stonePlate(ctx, -2, -13, 6, 4, shadeColor(c.secondary, 0.1), 3);
+        }
+      }
+    ]
+  };
+  var BEETLE = {
+    skel: (ex) => skeleton(ex, { legLen: 15, legW: 3.4, bodyY: -30, headY: -34, headX: 22, hipX: -10, shoX: 6 }),
+    face: {
+      eyes: [
+        { x: 5.4, y: -3.2, r: 3.6, shape: "bead", color: "eye", dark: "#1a1730" },
+        { x: -4.8, y: -3.2, r: 3.2, shape: "bead", color: "eye", dark: "#1a1730" }
+      ],
+      brows: [{ x: 5.4, y: -8.4, w: 5.5 }, { x: -4.8, y: -8.4, w: 5, mirror: true }],
+      mouth: { x: 10, y: 5, w: 5.5, color: "#221f36" }
+    },
+    parts: [
+      {
+        name: "tail",
+        z: 0,
+        space: "local",
+        pivot: (r) => [r.hipX - 16, r.bodyY + 4],
+        box: [-8, -5, 10, 10],
+        draw(ctx, c) {
+          poly(ctx, [[0, -3], [-6, 0], [0, 3]], c.secondary);
+        }
+      },
+      {
+        name: "legBL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.hipX - 6, r.bodyY + 8],
+        box: [-10, -4, 20, 30],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.secondary, -3, 2)
+      },
+      {
+        name: "legFL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.shoX + 2, r.bodyY + 8],
+        box: [-10, -4, 20, 30],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.secondary, 2.6, 2)
+      },
+      {
+        // ---- carapace with a seed crystal that grows per stage
+        name: "body",
+        z: 2,
+        space: "creature",
+        pivot: (r) => [0, r.bodyY],
+        box: [-40, -44, 78, 64],
+        draw(ctx, c, ex, r) {
+          const g = r.g, st = ex.stage || 0;
+          volume(ctx, r.hipX, r.bodyY + 2, 22 + g * 5, 15 + g * 3, c.light, c.shadow);
+          volume(ctx, r.shoX + 4, r.bodyY, 14 + g * 3, 12 + g * 2, shadeColor(c.primary, 0.04), c.shadow);
+          ell(ctx, r.hipX + 2, r.bodyY + 9, 16 + g * 3, 6 + g, c.belly);
+          ctx.strokeStyle = shadeColor(c.dark, 0.2);
+          ctx.lineWidth = 1.4;
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.arc(r.hipX - 6 + i * 7, r.bodyY + 2, 12 + g * 3, 0.5, 2.6);
+            ctx.stroke();
+          }
+          const n = [1, 2, 3, 5][st] || 1;
+          for (let i = 0; i < n; i++) {
+            const t = n === 1 ? 0.5 : i / (n - 1);
+            const x = r.hipX - 10 + t * 24, y = r.bodyY - 10 - g * 3 - Math.sin(t * Math.PI) * 4;
+            crystalSpike(ctx, x, y, 10 + st * 3 + (i === Math.floor(n / 2) ? 5 : 0), 3.2 + st * 0.5, c.accent, (t - 0.5) * 1.1);
+          }
+        },
+        live(ctx, c, ex, r, t) {
+          const p = gemPulse(t, ex.excite);
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.globalAlpha *= 0.35 * p;
+          ell(ctx, r.hipX + 2, r.bodyY - 16 - r.g * 3, 12 + (ex.stage || 0) * 3, 8, c.accent);
+          ctx.restore();
+        }
+      },
+      {
+        name: "legBR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.hipX + 4, r.bodyY + 9],
+        box: [-10, -4, 21, 30],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.belly, -2.6, 2)
+      },
+      {
+        name: "legFR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.shoX + 11, r.bodyY + 9],
+        box: [-10, -4, 20, 30],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.belly, 2.2, 2)
+      },
+      {
+        // ---- ELYTRA (wing bones). Closed shells; open with flight wings once ex.wings.
+        name: "wingL",
+        z: 3.3,
+        space: "local",
+        pivot: (r) => [r.hipX + 2, r.bodyY - 10 - r.g * 3],
+        box: [-30, -30, 44, 36],
+        draw(ctx, c, ex) {
+          if (ex.wings) {
+            ctx.save();
+            ctx.globalAlpha *= 0.55;
+            poly(ctx, [[-2, 0], [-30, -16], [-28, 4], [-6, 10]], shadeColor(c.accent, 0.3));
+            ctx.restore();
+          }
+          poly(ctx, [[0, -2], [-22, -10 - (ex.wings ? 10 : 0)], [-24, 4 - (ex.wings ? 6 : 0)], [-4, 12]], shadeColor(c.secondary, 0.1));
+          line(ctx, -3, 0, -20, -6 - (ex.wings ? 8 : 0), shadeColor(c.dark, 0.1), 1);
+        }
+      },
+      {
+        name: "wingR",
+        z: 3.6,
+        space: "local",
+        pivot: (r) => [r.hipX + 6, r.bodyY - 9 - r.g * 3],
+        box: [-14, -30, 44, 36],
+        draw(ctx, c, ex) {
+          if (ex.wings) {
+            ctx.save();
+            ctx.globalAlpha *= 0.55;
+            poly(ctx, [[2, 0], [28, -18], [30, 2], [8, 10]], shadeColor(c.accent, 0.3));
+            ctx.restore();
+          }
+          poly(ctx, [[0, -2], [20, -12 - (ex.wings ? 10 : 0)], [24, 3 - (ex.wings ? 6 : 0)], [6, 12]], shadeColor(c.secondary, 0.22));
+          line(ctx, 3, 0, 18, -8 - (ex.wings ? 8 : 0), shadeColor(c.dark, 0.1), 1);
+        }
+      },
+      // antennae on the ear bones
+      {
+        name: "earL",
+        z: 3.8,
+        space: "local",
+        pivot: (r) => [r.headX - 4 * r.headS, r.headY - 10 * r.headS, r.headS],
+        box: [-16, -18, 20, 20],
+        draw(ctx, c) {
+          line(ctx, 0, 0, -11, -13, c.dark, 1.5);
+          ell(ctx, -11.5, -13.5, 2.2, 2.2, c.accent);
+        }
+      },
+      {
+        name: "earR",
+        z: 3.8,
+        space: "local",
+        pivot: (r) => [r.headX + 3 * r.headS, r.headY - 11 * r.headS, r.headS],
+        box: [-6, -18, 20, 20],
+        draw(ctx, c) {
+          line(ctx, 0, 0, 9, -14, c.dark, 1.5);
+          ell(ctx, 9.5, -14.5, 2.2, 2.2, c.accent);
+        }
+      },
+      {
+        name: "head",
+        z: 4,
+        space: "local",
+        pivot: (r) => [r.headX, r.headY, r.headS],
+        box: [-16, -34, 36, 46],
+        draw(ctx, c, ex) {
+          const st = ex.stage || 0;
+          volume(ctx, 0, -2, 12, 10.5, c.light, c.shadow);
+          const hl = (ex.horns ? 10 : 5) + st * 4;
+          poly(ctx, [[2, -8], [8 + hl * 0.6, -8 - hl], [12 + hl * 0.5, -6 - hl * 0.7], [9, -4]], shadeColor(c.secondary, 0.16));
+          poly(ctx, [[8 + hl * 0.6, -8 - hl], [12 + hl * 0.5, -6 - hl * 0.7], [10 + hl * 0.55, -7 - hl * 0.8]], shadeColor(c.accent, 0.1));
+          poly(ctx, [[8, 5], [16, 3], [17, 7], [9, 8]], shadeColor(c.dark, 0.3));
+          poly(ctx, [[7, 7], [14, 9], [12, 11], [6, 9.5]], shadeColor(c.dark, 0.2));
+        }
+      }
+    ]
+  };
+  var GOLEM = {
+    skel: (ex) => skeleton(ex, { legLen: 12, legW: 7, bodyY: -38, headY: -62, headX: 10, hipX: -8, shoX: 10 }),
+    face: {
+      eyes: [
+        { x: 5.4, y: -2, r: 3.4, shape: "bead", color: "accent", dark: "#2a2723" },
+        { x: -5.4, y: -2, r: 3.4, shape: "bead", color: "accent", dark: "#2a2723" }
+      ],
+      brows: [{ x: 5.4, y: -8, w: 6.5 }, { x: -5.4, y: -8, w: 6.5, mirror: true }],
+      mouth: { x: 0, y: 7, w: 8, color: "#1e1b18" }
+    },
+    parts: [
+      {
+        name: "tail",
+        z: 0,
+        space: "local",
+        pivot: (r) => [r.hipX - 18, r.bodyY + 14],
+        box: [-10, -8, 14, 14],
+        draw(ctx, c) {
+          pebble(ctx, -3, 0, 4, c.secondary);
+          pebble(ctx, -8, 3, 2.5, c.shadow);
+        }
+      },
+      {
+        name: "legBL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.hipX - 4, r.bodyY + 16],
+        box: [-12, -4, 24, 26],
+        draw(ctx, c, ex, r) {
+          stonePlate(ctx, 0, r.legLen, 8, 6, c.shadow, 1);
+          stonePlate(ctx, 0, r.legLen * 0.5, 6, 6, c.shadow, 2);
+        }
+      },
+      {
+        name: "legFL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.shoX - 2, r.bodyY - 6],
+        box: [-14, -6, 22, 46],
+        draw(ctx, c, ex, r) {
+          stonePlate(ctx, -2, 10, 6, 7, c.shadow, 3);
+          stonePlate(ctx, -4, 22, 6.5, 7, c.shadow, 4);
+          stonePlate(ctx, -5, 34 + r.g * 3, 8, 7, shadeColor(c.shadow, -0.1), 5);
+        }
+      },
+      {
+        // ---- stacked boulder torso with a chest rune
+        name: "body",
+        z: 2,
+        space: "creature",
+        pivot: (r) => [0, r.bodyY],
+        box: [-40, -36, 80, 60],
+        draw(ctx, c, ex, r) {
+          const g = r.g, st = ex.stage || 0;
+          stonePlate(ctx, r.hipX + 2, r.bodyY + 14, 24 + g * 5, 11 + g * 2, c.shadow, 7);
+          stonePlate(ctx, 2, r.bodyY - 2, 26 + g * 6, 15 + g * 3, c.primary, 8);
+          stonePlate(ctx, 6, r.bodyY - 16 - g * 2, 18 + g * 4, 9 + g * 2, c.light, 9);
+          ctx.strokeStyle = c.accent;
+          ctx.lineWidth = 2;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(6, r.bodyY - 8);
+          ctx.lineTo(10, r.bodyY + 2);
+          ctx.lineTo(2, r.bodyY + 6);
+          ctx.stroke();
+          if (st >= 1) {
+            ctx.beginPath();
+            ctx.moveTo(-6, r.bodyY - 4);
+            ctx.lineTo(-2, r.bodyY + 6);
+            ctx.stroke();
+          }
+          if (st >= 2) {
+            crystalSpike(ctx, -16, r.bodyY - 8, 9 + st * 2, 3, c.accent, -0.5);
+            crystalSpike(ctx, 22, r.bodyY - 12, 7 + st * 2, 2.6, c.accent, 0.4);
+          }
+        },
+        live(ctx, c, ex, r, t) {
+          const p = gemPulse(t, ex.excite);
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.globalAlpha *= 0.3 * p;
+          ell(ctx, 6, r.bodyY - 1, 9, 9, c.accent);
+          ctx.restore();
+        }
+      },
+      {
+        name: "legBR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.hipX + 12, r.bodyY + 17],
+        box: [-12, -4, 24, 26],
+        draw(ctx, c, ex, r) {
+          stonePlate(ctx, 0, r.legLen, 8.5, 6, c.primary, 11);
+          stonePlate(ctx, 1, r.legLen * 0.5, 6.5, 6, c.primary, 12);
+        }
+      },
+      {
+        name: "legFR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.shoX + 16, r.bodyY - 6],
+        box: [-12, -6, 24, 46],
+        draw(ctx, c, ex, r) {
+          stonePlate(ctx, 2, 10, 6, 7, c.primary, 13);
+          stonePlate(ctx, 4, 22, 6.5, 7, c.primary, 14);
+          stonePlate(ctx, 5, 34 + r.g * 3, 8, 7, shadeColor(c.primary, -0.08), 15);
+        }
+      },
+      {
+        // ---- floating stones (2 / 3 / 4 / 6 with the stage) — redrawn live so they orbit
+        name: "mane",
+        z: 3.6,
+        space: "creature",
+        pivot: (r) => [4, r.bodyY - 20],
+        liveOnly: true,
+        box: [-44, -48, 88, 70],
+        draw(ctx, c, ex, r, t) {
+          const st = ex.stage || 0, n = [2, 3, 4, 6][st] || 2;
+          for (let i = 0; i < n; i++) {
+            const a = t * 0.9 + i / n * Math.PI * 2;
+            const x = 4 + Math.cos(a) * (30 + r.g * 6), y = r.bodyY - 20 - r.g * 4 + Math.sin(a) * 9 + Math.sin(t * 2 + i) * 2;
+            ctx.save();
+            ctx.globalAlpha *= Math.sin(a) > 0 ? 1 : 0.55;
+            pebble(ctx, x, y, 3 + i % 3, i % 2 ? c.secondary : c.light);
+            ctx.restore();
+          }
+        }
+      },
+      {
+        name: "head",
+        z: 4,
+        space: "local",
+        pivot: (r) => [r.headX, r.headY, r.headS],
+        box: [-20, -26, 40, 40],
+        draw(ctx, c, ex) {
+          const st = ex.stage || 0;
+          if (ex.horns) {
+            crystalSpike(ctx, -8, -12, 9 + st * 2, 3, c.accent, -0.3);
+            crystalSpike(ctx, 0, -14, 12 + st * 2, 3.4, c.accent, 0);
+            crystalSpike(ctx, 8, -12, 9 + st * 2, 3, c.accent, 0.3);
+          }
+          stonePlate(ctx, 0, 2, 16, 13, c.light, 21);
+          stonePlate(ctx, -1, -9, 12, 5, shadeColor(c.light, 0.1), 22);
+          poly(ctx, [[-12, -6], [12, -6], [11, -3], [-11, -3]], shadeColor(c.shadow, -0.1));
+        }
+      }
+    ]
+  };
+  var LIZARD = {
+    skel: (ex) => skeleton(ex, { legLen: 12, legW: 4.4, bodyY: -22, headY: -30, headX: 26, hipX: -14, shoX: 10 }),
+    face: {
+      eyes: [
+        { x: 6.4, y: -3.4, r: 3.4, shape: "sharp", color: "eye" },
+        { x: -4.4, y: -3.4, r: 3, shape: "sharp", color: "eye" }
+      ],
+      brows: [{ x: 6.4, y: -8.4, w: 6.2 }, { x: -4.4, y: -8.4, w: 5.6, mirror: true }],
+      mouth: { x: 14, y: 4.6, w: 8, color: "#1e242c", fangs: 1 }
+    },
+    parts: [
+      {
+        // ---- long tail with a crystal fin at the tip
+        name: "tail",
+        z: 0,
+        space: "local",
+        pivot: (r) => [r.hipX - 10, r.bodyY + 3],
+        box: [-56, -30, 60, 40],
+        draw(ctx, c, ex, r) {
+          const TL = 34 + r.g * 12, st = ex.stage || 0;
+          ctx.beginPath();
+          ctx.moveTo(0, -5);
+          ctx.bezierCurveTo(-TL * 0.5, -6, -TL * 0.9, 2, -TL, -12 - r.g * 6);
+          ctx.bezierCurveTo(-TL * 0.85, 4, -TL * 0.5, 7, 0, 5);
+          ctx.closePath();
+          const tg = ctx.createLinearGradient(0, 0, -TL, 0);
+          tg.addColorStop(0, c.primary);
+          tg.addColorStop(1, c.secondary);
+          ctx.fillStyle = tg;
+          ctx.fill();
+          for (let i = 0; i < 2 + st; i++) crystalSpike(ctx, -TL * (0.25 + i * 0.16), -2 - i * 1.4, 6 + st * 1.5 + (i === 1 + st ? 4 : 0), 2, c.accent, -0.3 - i * 0.12);
+        }
+      },
+      {
+        name: "legBL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.hipX - 2, r.bodyY + 6],
+        box: [-12, -4, 24, 26],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.secondary, -3.5, 3)
+      },
+      {
+        name: "legFL",
+        z: 1,
+        space: "local",
+        pivot: (r) => [r.shoX + 2, r.bodyY + 6],
+        box: [-12, -4, 24, 26],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.secondary, 3, 3)
+      },
+      {
+        // ---- low body with dorsal crystal fins (2 / 3 / 4 / 5)
+        name: "body",
+        z: 2,
+        space: "creature",
+        pivot: (r) => [0, r.bodyY],
+        box: [-40, -40, 80, 56],
+        draw(ctx, c, ex, r) {
+          const g = r.g, st = ex.stage || 0;
+          volume(ctx, -2, r.bodyY + 2, 28 + g * 6, 11 + g * 2.5, c.light, c.shadow);
+          poly(ctx, [[r.shoX + 6, r.bodyY - 6], [r.headX - 6, r.headY], [r.headX + 2, r.headY + 8], [r.shoX + 14, r.bodyY + 8]], c.primary);
+          ell(ctx, 0, r.bodyY + 8, 22 + g * 4, 5 + g, c.belly);
+          ctx.strokeStyle = shadeColor(c.secondary, -0.2);
+          ctx.lineWidth = 1.2;
+          for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.arc(-16 + i * 10, r.bodyY + 1, 6, -2.4, -0.7);
+            ctx.stroke();
+          }
+          const n = 2 + st;
+          for (let i = 0; i < n; i++) {
+            const t = (i + 0.5) / n;
+            const x = -24 + t * (40 + g * 8), y = r.bodyY - 9 - g * 2;
+            crystalSpike(ctx, x, y, 8 + st * 2.5 + Math.sin(t * Math.PI) * 4, 2.6 + st * 0.4, c.accent, (t - 0.5) * 0.8);
+          }
+        },
+        live(ctx, c, ex, r, t) {
+          const p = gemPulse(t, ex.excite);
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.globalAlpha *= 0.25 * p;
+          ell(ctx, -4, r.bodyY - 12 - r.g * 2, 24 + r.g * 4, 7, c.accent);
+          ctx.restore();
+        }
+      },
+      {
+        name: "legBR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.hipX + 8, r.bodyY + 7],
+        box: [-12, -4, 25, 26],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 1.05, c.primary, c.belly, -3, 3)
+      },
+      {
+        name: "legFR",
+        z: 3,
+        space: "local",
+        pivot: (r) => [r.shoX + 12, r.bodyY + 7],
+        box: [-12, -4, 24, 26],
+        draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.belly, 2.6, 3)
+      },
+      {
+        // ---- wings: only drawn once ex.wings (Obsidrake)
+        name: "wingL",
+        z: 1.8,
+        space: "local",
+        pivot: (r) => [-4, r.bodyY - 6 - r.g * 2],
+        box: [-44, -40, 50, 44],
+        draw(ctx, c, ex) {
+          if (!ex.wings) return;
+          poly(ctx, [[0, 0], [-16, -28], [-40, -20], [-30, 0], [-12, 4]], shadeColor(c.secondary, -0.05));
+          ctx.save();
+          ctx.globalAlpha *= 0.7;
+          poly(ctx, [[-4, -2], [-16, -24], [-34, -18], [-26, -2]], shadeColor(c.accent, -0.2));
+          ctx.restore();
+          line(ctx, 0, 0, -16, -28, c.dark, 1.6);
+          line(ctx, -4, -2, -34, -18, c.dark, 1.2);
+        }
+      },
+      {
+        name: "wingR",
+        z: 3.7,
+        space: "local",
+        pivot: (r) => [2, r.bodyY - 5 - r.g * 2],
+        box: [-6, -40, 50, 44],
+        draw(ctx, c, ex) {
+          if (!ex.wings) return;
+          poly(ctx, [[0, 0], [14, -30], [40, -22], [30, -2], [12, 4]], c.secondary);
+          ctx.save();
+          ctx.globalAlpha *= 0.7;
+          poly(ctx, [[4, -2], [14, -26], [34, -20], [26, -4]], shadeColor(c.accent, -0.1));
+          ctx.restore();
+          line(ctx, 0, 0, 14, -30, c.dark, 1.6);
+          line(ctx, 4, -2, 34, -20, c.dark, 1.2);
+        }
+      },
+      // frills on the ear bones
+      {
+        name: "earL",
+        z: 3.5,
+        space: "local",
+        pivot: (r) => [r.headX - 8 * r.headS, r.headY - 4 * r.headS, r.headS],
+        box: [-16, -12, 20, 22],
+        draw(ctx, c, ex) {
+          const s = 1 + (ex.stage || 0) * 0.2;
+          poly(ctx, [[0, -2], [-10 * s, -10 * s], [-12 * s, 2], [-6 * s, 8 * s]], shadeColor(c.accent, -0.15));
+        }
+      },
+      {
+        name: "earR",
+        z: 3.5,
+        space: "local",
+        pivot: (r) => [r.headX + 6 * r.headS, r.headY - 6 * r.headS, r.headS],
+        box: [-6, -14, 18, 22],
+        draw(ctx, c, ex) {
+          const s = 1 + (ex.stage || 0) * 0.2;
+          poly(ctx, [[0, 0], [8 * s, -11 * s], [12 * s, 0], [6 * s, 7 * s]], shadeColor(c.accent, -0.05));
+        }
+      },
+      {
+        name: "head",
+        z: 4,
+        space: "local",
+        pivot: (r) => [r.headX, r.headY, r.headS],
+        box: [-18, -24, 40, 36],
+        draw(ctx, c, ex) {
+          const st = ex.stage || 0;
+          if (ex.horns) {
+            crystalSpike(ctx, -6, -11, 8 + st * 2, 2.6, c.accent, -0.6);
+            crystalSpike(ctx, 1, -12, 10 + st * 2, 2.8, c.accent, -0.2);
+          }
+          poly(ctx, [[-13, -9], [10, -10], [21, 0], [18, 6], [-6, 8], [-14, 2]], c.light);
+          poly(ctx, [[-13, -9], [10, -10], [8, -4], [-11, -3]], shadeColor(c.light, 0.12));
+          ell(ctx, 16, 2, 2.2, 1.6, shadeColor(c.dark, 0.2));
+        }
+      }
+    ]
+  };
   var SPECIES_ART = {
     spriggo: SPRIGGO,
     aquini: AQUINI,
@@ -5868,7 +7379,13 @@ input[type="text"].wiki-search {
     feline: AQUINI,
     dragon: EMBERU,
     wolf: RIVRUFF,
-    avian: LEAFLET
+    avian: LEAFLET,
+    // Rock plans (Stonehollow Crags)
+    tortoise: TORTOISE,
+    boar: BOAR,
+    beetle: BEETLE,
+    golem: GOLEM,
+    lizard: LIZARD
   };
   function artFor(speciesId) {
     var _a, _b;
@@ -6338,18 +7855,20 @@ input[type="text"].wiki-search {
     const key = `${speciesId}|${stage}|${mutation}|${CreatureAssetLoader.sizeBucket(size)}|${animTag || ""}`;
     return sharedRig(speciesId, stage, mutation, size, key);
   }
-  var AMBIENT_ELEMENT = {
-    spriggo: "nature",
-    leaflet: "nature",
-    aquini: "water",
-    rivruff: "water",
-    emberu: "fire"
-  };
   function drawAmbient(ctx, c, speciesId, t, r, excite) {
-    const el2 = AMBIENT_ELEMENT[speciesId] || "nature";
+    var _a;
+    const el2 = ((_a = getSpecies(speciesId)) == null ? void 0 : _a.element) || "nature";
     const n = el2 === "fire" ? 4 : 3;
     ctx.save();
-    if (el2 === "nature") {
+    if (el2 === "rock") {
+      ctx.globalAlpha *= 0.55;
+      for (let i = 0; i < 4; i++) {
+        const p = (t * 0.5 + i * 0.25) % 1;
+        ell(ctx, (r.hipX ?? -10) - 30 - p * 10 + Math.sin(t * 1.5 + i) * 4, (r.bodyY ?? -34) - 14 + p * 22, 1.6, 1.4, i % 2 ? c.accent : c.belly);
+      }
+      const a = t * 1.2;
+      ell(ctx, (r.hipX ?? -10) - 22 + Math.cos(a) * 14, (r.bodyY ?? -34) - 28 + Math.sin(a) * 4, 2.6, 2.2, c.secondary);
+    } else if (el2 === "nature") {
       ctx.globalAlpha *= 0.5;
       for (let i = 0; i < n; i++) {
         const p = (t * 0.6 + i * 0.33) % 1;
@@ -7620,17 +9139,14 @@ input[type="text"].wiki-search {
     /**
      * Roll a wild Mythling for a given zone.
      *
-     * `modifiers.partyLevel` lets the world keep pace with the party: once you
-     * out-level a zone's range the whole range shifts up by the difference, so
-     * grinding past the story content to the Lv.100 cap stays possible instead
-     * of paying nothing.
+     * Level bands are FIXED per zone (Verdant Vale 1-20, Azure Coast 15-30,
+     * Emberwild 30-45, Stonehollow Crags 45-60): the world never scales up to the
+     * party, so out-levelling an area is the signal to move on to the next one.
      */
     spawnForZone(zone, mapId, rng = Math.random, modifiers = {}) {
       const pick = weightedChoice(rng, zone.species);
       const [lo, hi] = zone.levelRange;
       let level = randInt(rng, lo, hi);
-      const top = Number(modifiers.partyLevel) || 0;
-      if (top > hi) level += top - hi;
       level = clamp(level, 1, LEVEL_CAP);
       return createMythling({
         speciesId: pick.id,
@@ -7671,8 +9187,15 @@ input[type="text"].wiki-search {
     ash: { grass: "#5b4a46", grass2: "#4c3d3a", path: "#7a655c", props: ["deadtree", "rock", "ember", "bone"] },
     cinder: { grass: "#59453f", grass2: "#4a3833", path: "#79615a", props: ["burnttree", "ember", "rock", "deadtree"] },
     molten: { grass: "#4a332f", grass2: "#3c2926", path: "#6d4b42", props: ["rock", "ember", "obsidian", "crystal"] },
-    volcanic_ruins: { grass: "#4f3a34", grass2: "#41302b", path: "#74564a", props: ["pillar", "obsidian", "ember", "rock"] }
+    volcanic_ruins: { grass: "#4f3a34", grass2: "#41302b", path: "#74564a", props: ["pillar", "obsidian", "ember", "rock"] },
+    // ---- Stonehollow Crags (rock) ----
+    quarry: { grass: "#9a8f78", grass2: "#877c67", path: "#c9bda0", props: ["rock", "crate", "barrel", "deadtree"] },
+    crag: { grass: "#7d7a72", grass2: "#6b685f", path: "#a39e90", props: ["rock", "rock", "stalag", "crystal"] },
+    summit: { grass: "#8f949c", grass2: "#7c8188", path: "#b8bcc2", props: ["pillar", "rock", "stalag", "crystal"] }
   };
+  function terrainColor(terrainId) {
+    return (TERRAIN[terrainId] || TERRAIN.forest).grass;
+  }
   var WATER_COLORS = {
     stream: ["#4fb0e8", "#2d84c4"],
     pond: ["#54b6ec", "#2f88c8"],
@@ -8200,6 +9723,13 @@ input[type="text"].wiki-search {
           ctx.fillStyle = "#e6faff";
           ctx.beginPath();
           ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (theme === "rock") {
+          ctx.globalAlpha = i % 4 === 0 ? 0.6 : 0.3;
+          ctx.fillStyle = i % 4 === 0 ? "#6e665c" : "#e8dcc4";
+          const py = i % 4 === 0 ? (y + time * 60) % (cam.h + 100) + cam.y - 50 : y;
+          ctx.beginPath();
+          ctx.arc(x, py, i % 4 === 0 ? 2.2 : 1.6, 0, Math.PI * 2);
           ctx.fill();
         } else {
           ctx.globalAlpha = 0.55;
@@ -8791,12 +10321,18 @@ input[type="text"].wiki-search {
     minimapData() {
       const map = this.map;
       return {
+        mapId: map.id,
         w: map.width,
         h: map.height,
         px: this.player.x,
         py: this.player.y,
+        regions: map.regions.map((r) => [...r.rect, terrainColor(r.terrain)]),
+        water: (map.water || []).map((w) => [w.x, w.y, w.w, w.h, w.kind]),
+        bridges: (map.bridges || []).map((b) => [b.x, b.y, b.w, b.h]),
         zones: map.encounterZones.map((z) => z.rect),
-        buildings: map.buildings.map((b) => [b.x, b.y, b.w, b.h]),
+        buildings: map.buildings.map((b) => [b.x, b.y, b.w, b.h, b.type]),
+        npcs: (map.npcs || []).map((n) => [n.x, n.y]),
+        trainers: (map.trainers || []).map((t) => [t.x, t.y, WorldManager.isTrainerDefeated(t.flag)]),
         wild: this.wild.map((w) => [w.x, w.y, getSpecies(w.m.speciesId).element]),
         conns: (map.connections || []).map((c) => c.rect)
       };
@@ -8860,7 +10396,9 @@ input[type="text"].wiki-search {
       caught.meta.caughtLevel = caught.level;
       caught.meta.originMap = caught.meta.originMap || GameState.player.map;
       resetToLevelOne(caught);
-      CollectionManager.markCaught(caught.speciesId, caught.mutation);
+      const ball = getItem(ballId);
+      if (ball == null ? void 0 : ball.forceMutation) caught.mutation = ball.forceMutation;
+      CollectionManager.markCaught(caught.speciesId, caught.mutation, caught.stage);
       return { ok: true, success: true, chance, mythling: caught, destination: "pending" };
     },
     /** Place a freshly-caught Mythling. Returns 'party' | 'storage'. */
@@ -9335,6 +10873,7 @@ input[type="text"].wiki-search {
     nature: { core: "#d8ffb0", mid: "#6fd36a", deep: "#2f7c3f", glow: "#a8f08a", dark: "#17402a", spark: "#eaffd0" },
     water: { core: "#f2fdff", mid: "#5cc0f5", deep: "#1a5c9e", glow: "#bfe9ff", dark: "#0d3557", spark: "#ffffff" },
     fire: { core: "#fff3b0", mid: "#ff9a2e", deep: "#d8391a", glow: "#ffcf7a", dark: "#5a1405", spark: "#fff6d8" },
+    rock: { core: "#fff1cf", mid: "#c9a86e", deep: "#6e5a3c", glow: "#f0dcb0", dark: "#2e2418", spark: "#fff7e0" },
     none: { core: "#ffffff", mid: "#d8e2f0", deep: "#7b8798", glow: "#ffffff", dark: "#2b3340", spark: "#ffffff" }
   };
   var CATEGORY_FALLBACK = {
@@ -9608,6 +11147,60 @@ input[type="text"].wiki-search {
       impact: { style: "leafStorm", shake: 15, ring: true },
       aftermath: { style: "pollen", dur: 0.9 },
       camera: { shake: 15, flash: 0.35, dur: 1.5 }
+    },
+    // ---- rock ultimates
+    stone_avalanche: {
+      id: "stone_avalanche",
+      element: "rock",
+      category: "ultimate",
+      cast: { style: "charge", dur: 0.3 },
+      projectile: { style: "rootErupt", dur: 0.42 },
+      impact: { style: "verdantCrush", shake: 17, ring: true, flash: 0.5 },
+      aftermath: { style: "dust", dur: 0.9 },
+      camera: { shake: 17, flash: 0.4, dur: 1.5 }
+    },
+    crystal_cannon: {
+      id: "crystal_cannon",
+      element: "rock",
+      category: "ultimate",
+      cast: { style: "charge", dur: 0.3 },
+      projectile: { style: "orb", dur: 0.36 },
+      impact: { style: "fireBlast", shake: 15, ring: true, flash: 0.45 },
+      aftermath: { style: "dust", dur: 0.8 },
+      camera: { shake: 15, flash: 0.4, dur: 1.4 }
+    },
+    // support ultimates (buff / debuff): a barrier-style burst at the caster, no projectile
+    granite_bastion: {
+      id: "granite_bastion",
+      element: "rock",
+      category: "ultimate",
+      defensive: true,
+      cast: { style: "charge", dur: 0.3 },
+      projectile: null,
+      impact: { style: "oceanGuard", shake: 6, ring: true },
+      aftermath: { style: "dust", dur: 0.9 },
+      camera: { shake: 5, flash: 0.2, dur: 1.4 }
+    },
+    quake_curse: {
+      id: "quake_curse",
+      element: "rock",
+      category: "ultimate",
+      cast: { style: "charge", dur: 0.3 },
+      projectile: { style: "rootErupt", dur: 0.4 },
+      impact: { style: "verdantCrush", shake: 12, ring: true },
+      aftermath: { style: "dust", dur: 0.9 },
+      camera: { shake: 10, flash: 0.25, dur: 1.4 }
+    },
+    crystal_resonance: {
+      id: "crystal_resonance",
+      element: "rock",
+      category: "ultimate",
+      defensive: true,
+      cast: { style: "charge", dur: 0.3 },
+      projectile: null,
+      impact: { style: "oceanGuard", shake: 6, ring: true },
+      aftermath: { style: "dust", dur: 0.9 },
+      camera: { shake: 5, flash: 0.25, dur: 1.4 }
     }
   };
   var BUFF_VFX = {
@@ -9752,7 +11345,7 @@ input[type="text"].wiki-search {
             size: rand(3, 7),
             sizeEnd: 0,
             life: rand(0.5, 0.9),
-            shape: def.element === "fire" ? "spark" : def.element === "water" ? "bubble" : "leaf",
+            shape: def.element === "fire" ? "spark" : def.element === "water" ? "bubble" : def.element === "rock" ? "shard" : "leaf",
             color: pal2.core,
             color2: pal2.deep,
             additive: def.element !== "nature",
@@ -9812,7 +11405,7 @@ input[type="text"].wiki-search {
           size: rand(2.5, 6),
           sizeEnd: 0,
           life: rand(0.26, 0.5),
-          shape: def.element === "fire" ? "spark" : def.element === "water" ? "droplet" : "leaf",
+          shape: def.element === "fire" ? "spark" : def.element === "water" ? "droplet" : def.element === "rock" ? "shard" : "leaf",
           color: i % 3 ? pal2.mid : pal2.core,
           color2: pal2.deep,
           additive: def.element === "fire",
@@ -10356,7 +11949,7 @@ input[type="text"].wiki-search {
           size: rand(3, 8),
           sizeEnd: 0,
           life: rand(0.6, 1.1),
-          shape: def.element === "fire" ? "spark" : def.element === "water" ? "bubble" : "leaf",
+          shape: def.element === "fire" ? "spark" : def.element === "water" ? "bubble" : def.element === "rock" ? "shard" : "leaf",
           color: i % 3 ? pal2.mid : pal2.core,
           color2: pal2.deep,
           additive: def.element === "fire",
@@ -10512,7 +12105,7 @@ input[type="text"].wiki-search {
           size: rand(2.5, 6),
           sizeEnd: 0,
           life: rand(0.14, 0.3),
-          shape: p.tint === "fire" ? "spark" : p.tint === "water" ? "droplet" : "leaf",
+          shape: p.tint === "fire" ? "spark" : p.tint === "water" ? "droplet" : p.tint === "rock" ? "shard" : "leaf",
           color: pal2.mid,
           color2: pal2.deep,
           additive: p.tint === "fire",
@@ -10869,7 +12462,8 @@ input[type="text"].wiki-search {
     advanced_ball: { look: "Coast Prism", base: "#5ad3c6", shade: "#166872", accent: "#eafffb", glow: "#a8fff2" },
     absolute_ball: { look: "Ember Forge", base: "#524850", shade: "#1a1216", accent: "#ff8a3c", glow: "#ffb060" },
     god_ball: { look: "Halo", base: "#fff8ea", shade: "#c5a058", accent: "#f2c761", glow: "#fff1b8" },
-    king_ball: { look: "Crown", base: "#6d43b8", shade: "#2a1454", accent: "#ffd35a", glow: "#e6b8ff" }
+    shiny_ball: { look: "Starlight", base: "#ffd766", shade: "#b8860b", accent: "#fff2a8", glow: "#fff6c8" },
+    dark_ball: { look: "Eclipse", base: "#1b1230", shade: "#07040f", accent: "#b07cff", glow: "#7a4dff" }
   };
   function hexToRgb2(hex) {
     const h = hex.replace("#", "");
@@ -11147,70 +12741,95 @@ input[type="text"].wiki-search {
     ctx.stroke();
     ctx.restore();
   }
-  function drawCrown(ctx, r, art, t) {
+  function drawStarlight(ctx, r, art, t) {
+    ctx.save();
+    ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 2.2);
+    ctx.fillStyle = art.glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
     sphere(ctx, r, art.base, art.shade);
     ctx.save();
     clipSphere(ctx, r);
-    ctx.strokeStyle = rgba("#b48cff", 0.35);
-    ctx.lineWidth = r * 0.1;
-    for (const rx of [0.34, 0.7]) {
+    for (let i = 0; i < 9; i++) {
+      const a = t * 0.35 + i * 0.7, rr = r * (0.2 + i % 4 * 0.18);
+      ctx.fillStyle = i % 3 ? "#ffffff" : art.accent;
+      star(ctx, Math.cos(a) * rr, Math.sin(a) * rr * 0.7, r * 0.09, r * 0.035, 4, a);
+      ctx.fill();
+    }
+    ctx.fillStyle = rgba("#ffffff", 0.75);
+    ctx.fillRect(-r, -r * 0.05, r * 2, r * 0.1);
+    ctx.restore();
+    star(ctx, 0, 0, r * 0.42, r * 0.17, 5, -t * 0.5);
+    ctx.fillStyle = "#fffbe6";
+    ctx.fill();
+    ctx.strokeStyle = mix(art.accent, "#000000", 0.25);
+    ctx.lineWidth = r * 0.045;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    outline(ctx, r, art.shade);
+    specular(ctx, r);
+    for (let i = 0; i < 3; i++) {
+      const a = t * 1.6 + i * Math.PI * 2 / 3;
+      const k = (Math.sin(t * 4 + i * 2) + 1) / 2;
+      ctx.fillStyle = rgba("#ffffff", 0.6 + 0.4 * k);
+      star(ctx, Math.cos(a) * r * 1.22, Math.sin(a) * r * 0.9, r * (0.07 + 0.08 * k), r * 0.03, 4);
+      ctx.fill();
+    }
+  }
+  function drawEclipse(ctx, r, art, t) {
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.15 * Math.sin(t * 1.7);
+    const g = ctx.createRadialGradient(0, 0, r * 0.7, 0, 0, r * 1.5);
+    g.addColorStop(0, rgba(art.glow, 0.7));
+    g.addColorStop(1, rgba(art.glow, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    sphere(ctx, r, art.base, art.shade);
+    ctx.save();
+    clipSphere(ctx, r);
+    ctx.strokeStyle = rgba(art.accent, 0.35);
+    ctx.lineWidth = r * 0.08;
+    for (let i = 0; i < 3; i++) {
       ctx.beginPath();
-      ctx.ellipse(0, 0, r * rx, r * 0.99, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, r * (i - 1) * 0.35, r * 0.95, r * 0.22, Math.sin(t * 0.6 + i) * 0.25, 0, Math.PI * 2);
       ctx.stroke();
     }
+    ctx.fillStyle = rgba("#ffffff", 0.85);
     ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo(0, r);
-    ctx.stroke();
+    ctx.arc(0, 0, r * 0.62, -Math.PI * 0.85, Math.PI * 0.15);
+    ctx.arc(-r * 0.12, r * 0.1, r * 0.6, Math.PI * 0.15, -Math.PI * 0.85, true);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = art.base;
+    ctx.beginPath();
+    ctx.arc(-r * 0.1, r * 0.08, r * 0.56, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = art.accent;
-    ctx.fillRect(-r, -r * 0.11, r * 2, r * 0.22);
-    ctx.fillStyle = mix(art.accent, "#000000", 0.35);
-    ctx.fillRect(-r, r * 0.07, r * 2, r * 0.04);
-    const gems = ["#ff5a6e", "#4ee27a", "#4aa8ff"];
-    [-0.46, 0, 0.46].forEach((x, i) => {
-      ctx.fillStyle = gems[i];
-      ctx.beginPath();
-      ctx.arc(x * r, 0, r * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = mix(art.accent, "#000000", 0.4);
-      ctx.lineWidth = r * 0.03;
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.beginPath();
-      ctx.arc(x * r - r * 0.03, -r * 0.035, r * 0.03, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(-r * 0.04, -r * 0.04, r * 0.05, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
     outline(ctx, r, art.shade);
     specular(ctx, r);
-    const cy = -r * 0.98, w = r * 0.72, h = r * 0.36;
-    poly2(ctx, [
-      [-w / 2, cy],
-      [-w / 2, cy - h * 0.55],
-      [-w * 0.25, cy - h * 0.15],
-      [0, cy - h],
-      [w * 0.25, cy - h * 0.15],
-      [w / 2, cy - h * 0.55],
-      [w / 2, cy]
-    ]);
-    ctx.fillStyle = art.accent;
-    ctx.fill();
-    ctx.strokeStyle = "#8a6410";
-    ctx.lineWidth = r * 0.05;
-    ctx.lineJoin = "round";
-    ctx.stroke();
-    for (const [x, y] of [[-w / 2, cy - h * 0.55], [0, cy - h], [w / 2, cy - h * 0.55]]) {
-      ctx.fillStyle = "#fff1b8";
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    for (let i = 0; i < 4; i++) {
+      const p = (t * 0.4 + i * 0.25) % 1;
+      ctx.fillStyle = art.accent;
       ctx.beginPath();
-      ctx.arc(x, y, r * 0.055, 0, Math.PI * 2);
+      ctx.arc(Math.cos(i * 1.6 + t) * r * 1.15, -r * 0.4 + (1 - p) * r * 1.2 - r * 0.6, r * 0.05 * (1 - p) + r * 0.02, 0, Math.PI * 2);
       ctx.fill();
     }
-    const sp = (Math.sin(t * 5) + 1) / 2;
-    if (sp > 0.6) {
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      star(ctx, r * 0.5, -r * 0.6, r * 0.14 * (sp - 0.6) / 0.4, r * 0.04, 4);
-      ctx.fill();
-    }
+    ctx.restore();
   }
   var DESIGNS = {
     basic_ball: drawCordbound,
@@ -11218,7 +12837,8 @@ input[type="text"].wiki-search {
     advanced_ball: drawCoastPrism,
     absolute_ball: drawEmberForge,
     god_ball: drawHalo,
-    king_ball: drawCrown
+    shiny_ball: drawStarlight,
+    dark_ball: drawEclipse
   };
   function drawBall(ctx, ballId, x, y, r, opts = {}) {
     const art = BALL_ART[ballId] || BALL_ART.basic_ball;
@@ -11277,6 +12897,7 @@ input[type="text"].wiki-search {
     nature: '<path d="M20.4 3.2c-7.6-.6-12.2 1.5-14.4 4.6-2.2 3.2-1.5 7 .3 9l1.9-2.9c.4-2.6 1.7-4.9 4-6.6-1.6 2-2.6 4.3-3 6.9l-2.9 4.4a1.1 1.1 0 0 0 1.8 1.2l1.7-2.6c2.6 1 6.1.5 8.4-2.3 2.6-3.1 3.1-7.6 2.2-11.7Z"/>',
     water: '<path d="M12 2.2c-.4 0-.8.2-1 .5C8.3 6.3 5 10.4 5 14a7 7 0 0 0 14 0c0-3.6-3.3-7.7-6-11.3a1.3 1.3 0 0 0-1-.5Zm3.6 12.6a.8.8 0 0 1 .8.9 4.6 4.6 0 0 1-4 3.9.8.8 0 1 1-.2-1.6 3 3 0 0 0 2.6-2.5.8.8 0 0 1 .8-.7Z"/>',
     fire: '<path d="M13.4 1.6c.5 3.2-.7 4.8-2.2 6.4-1.7 1.8-3.7 3.8-3.7 7.2a6.5 6.5 0 0 0 13 .3c0-2.5-1-4.3-2-5.8-.2 1-.8 1.9-1.7 2.3.3-3.4-1-6.6-3.4-10.4ZM12 13.2c1.2 1.4 1.8 2.5 1.8 3.6a2.4 2.4 0 0 1-4.8.1c0-1.3.9-2.1 1.6-3 .5-.6.9-1.2 1.4-.7Z"/>',
+    rock: '<path d="M8.2 3.4h6.4l4.6 4.2 1.6 6.4-3.4 6.6H7.4l-4.2-5.2.8-6.6Zm1 2.2L5.9 9.3l-.6 4.9 3.1 3.9h7.2l2.5-4.8-1.2-4.8-3.4-3.1Zm.6 3.2 3.6 1.2 1.1 3.6-2.8 2.3-3-1.3-.5-3.4Z"/>',
     spark: '<path d="M12 1.8 14 9l7.2 2-7.2 2-2 7.2L10 13 2.8 11 10 9Z"/>',
     // ---- battle ---------------------------------------------------------
     strike: '<path d="M3.6 3.1 9 8.5 7 10.5 2 5.6V3.1ZM20.4 3.1v2.5l-11 11-1.7-1 1-1.7ZM14.9 14l1.9 1.9 4.6 4.6v.4h-2.4L14.5 16ZM7.6 14.6 9.4 16.4 6 19.9 4.1 18Z"/>',
@@ -12493,7 +14114,7 @@ input[type="text"].wiki-search {
     }
     /**
      * Throw → open → absorb → drop → wobble → lock (or burst), drawn with the
-     * actual ball the player picked, so a King Ball throw looks like a King Ball.
+     * actual ball the player picked, so a God Ball throw looks like a God Ball.
      */
     async captureAnimation(ballId, success) {
       const from = this.screenPos("player"), to = this.screenPos("enemy");
@@ -12785,7 +14406,8 @@ input[type="text"].wiki-search {
       const palettes = {
         nature: { sky: ["#9fe8ff", "#e8ffd9"], ground: ["#7ecb6a", "#4f9b52"], accent: "#3f8f42" },
         water: { sky: ["#8fd8ff", "#d7f3ff"], ground: ["#f0e0b4", "#7fc4d8"], accent: "#3fa9f5" },
-        fire: { sky: ["#5a1f18", "#ff9a4a"], ground: ["#5b3c34", "#33211d"], accent: "#ff7a3d" }
+        fire: { sky: ["#5a1f18", "#ff9a4a"], ground: ["#5b3c34", "#33211d"], accent: "#ff7a3d" },
+        rock: { sky: ["#3b3f4e", "#d8c7a4"], ground: ["#9a8f78", "#5e574c"], accent: "#7d7a72" }
       };
       const p = palettes[theme] || palettes.nature;
       const sky = ctx.createLinearGradient(0, 0, 0, H * 0.7);
@@ -12967,8 +14589,10 @@ input[type="text"].wiki-search {
         ["Dodge cap", `<b>${COUNTER_MAX_DODGE}%</b> \u2014 no Mythling can ever become untouchable.`],
         ["Stat cap", `Counter itself caps at <b>${COUNTER_MAX_PERCENT}</b>.`]
       ]),
-      note(`Counter was nerfed: it used to give a full 1% dodge per point (up to 35%). It is now
-      half that, capped at ${COUNTER_MAX_DODGE}%, so a missed attack is a surprise instead of a routine.`),
+      note(`Counter has been nerfed twice: it used to give a full 1% dodge per point (up to 35%), then half a percent
+      (up to 18%). It is now <b>${COUNTER_DODGE_SCALE}% per point, capped at ${COUNTER_MAX_DODGE}%</b>, so a missed attack is a rare surprise
+      instead of a routine. Crit Chance was nerfed alongside it: it grows far more slowly with level and caps at
+      <b>${CRIT_MAX_PERCENT}%</b>, so a critical hit stays special even at Lv.${LEVEL_CAP}.`),
       h3("Crit Chance & Crit Damage", "crit critical chance multiplier damage"),
       table([
         ["CRIT \u2014 Crit Chance", `Percent chance that an attack lands critically. Caps at <b>${CRIT_MAX_PERCENT}%</b>.`],
@@ -12983,34 +14607,51 @@ input[type="text"].wiki-search {
   function moodsSection() {
     const rows = MOOD_IDS.map((id) => {
       const m = MOODS[id];
-      const up = m.up.map((k) => `<b class="good">+${STAT_SHORT[k]}</b>`).join(" ");
+      const up = m.up.map((k) => `<b class="good">+${STAT_LABELS[k]}</b>`).join(" ");
       return [
         `${m.name}${m.up.includes("crit") || m.up.includes("critMult") ? ' <span class="chip evolve">CRIT</span>' : ""}`,
-        `${up} &nbsp;&nbsp; <b class="bad">-${STAT_SHORT[m.down]}</b>`
+        `${up}<br><span class="wiki-dim">${m.desc || ""}</span>`
       ];
     });
+    const ratRows = RATIONAL_STATS.map((up) => [
+      `<b class="good">+${RATIONAL_AMOUNT} ${STAT_SHORT[up]}</b>`,
+      RATIONAL_STATS.filter((d) => d !== up).map((down) => {
+        const r = Object.values(RATIONALS).find((x) => x.up === up && x.down === down);
+        return `<b>${r.name}</b> <span class="wiki-dim">(\u2212${RATIONAL_AMOUNT} ${STAT_SHORT[down]})</span>`;
+      }).join(" \xB7 ")
+    ]);
     return [
-      h3("What a Mood is", "mood personality nature"),
-      para(`Every Mythling has a <b>Mood</b>: a fixed trait that raises <b>three</b> stats and lowers
-      <b>one</b>. Moods are rolled when a wild Mythling appears and are kept forever \u2014 through
-      capture, evolution and every level up. There are <b>${MOOD_IDS.length}</b> moods.`),
+      h3("What a Mood is", "mood personality"),
+      para(`Every Mythling has a <b>Mood</b>: a fixed, purely <b>positive</b> trait that boosts exactly <b>one</b> stat.
+      There are <b>${MOOD_IDS.length}</b> Moods \u2014 one for every stat \u2014 so nothing is missing from the table below.
+      Moods are rolled when a wild Mythling appears and are kept through capture, evolution and every level up.
+      A <b>Mood Tonic</b> (sold from Azure Coast onward) re-rolls it into a different Mood.`),
       h3("Rarity amplifies the Mood", "rarity magnitude scale"),
-      para(`Rarity does not change base stats by itself \u2014 it sets the <b>magnitude</b> of the Mood bonus.
-      Rarity <b>D</b> adds nothing at all; <b>SSS+</b> adds a huge swing. HP counts triple and Crit Damage counts double.`),
+      para(`Rarity does not change base stats by itself \u2014 it sets the <b>magnitude</b> of the Mood bonus:
+      <b>+2 \xD7 magnitude</b> to the Mood's stat (HP counts six times, Crit Damage four times). Rarity <b>D</b> adds
+      nothing at all; <b>SSS+</b> adds a huge boost.`),
       table(RARITY_ORDER.map((id) => [
         `<b style="color:${RARITIES[id].color}">Rarity ${id}</b>`,
-        `Mood magnitude <b>+${RARITIES[id].magnitude}</b>`
+        `Mood magnitude <b>${RARITIES[id].magnitude}</b> \u2192 <b>+${RARITIES[id].magnitude * 2}</b> to the Mood's stat (HP <b>+${RARITIES[id].magnitude * 12}</b>, Crit Damage <b>+${RARITIES[id].magnitude * 8}%</b>)`
       ])),
       h3("All moods", "list table of moods"),
       table(rows),
-      note(`Example \u2014 a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+15 HP, +5 P.ATK, +5 CNT, \u22125 S.DEF</b>.
-      The same Mood at Rarity D (magnitude 0) changes nothing.`)
+      note(`Example \u2014 a <b>Brave</b> Mythling at Rarity <b>S</b> (magnitude 5): <b>+10 Physical Attack</b>.
+      A <b>Sturdy</b> one at the same rarity: <b>+60 HP</b>. The same Mood at Rarity D changes nothing.`),
+      h3("Rational \u2014 the +10 / \u221210 trait", "rational temper nature plus minus trade-off"),
+      para(`Where the Mood only ever helps, the <b>Rational</b> is a trade-off: a fixed <b>+${RATIONAL_AMOUNT}</b> to one of the six
+      main stats and a fixed <b>\u2212${RATIONAL_AMOUNT}</b> to another. It is flat (not scaled by rarity or level) and it stacks with the
+      Mood, the Rarity magnitude and the mutation bonus. All <b>${RATIONAL_IDS.length}</b> possible pairs exist, so any stat can be
+      traded for any other. A <b>Temper Tonic</b> re-rolls it into a different Rational.`),
+      table(ratRows, "rational names table"),
+      note(`Example \u2014 a <b>Hasty</b> Mythling: <b>+${RATIONAL_AMOUNT} Speed, \u2212${RATIONAL_AMOUNT} HP</b>. A <b>Stoic</b> one: <b>+${RATIONAL_AMOUNT} HP, \u2212${RATIONAL_AMOUNT} Speed</b>.
+      The profile marks the two stats with arrows and names the trait next to the Mood.`)
     ];
   }
   function raritySection() {
     const mut = MUTATION_IDS.filter((id) => id !== "none").map((id) => [
       `<span style="color:${MUTATIONS[id].color}">${MUTATIONS[id].name}</span>`,
-      `${(MUTATIONS[id].chance * 100).toFixed(1)}% chance \xB7 cosmetic only (no stat change)`
+      `${(MUTATIONS[id].chance * 100).toFixed(1)}% chance in the wild \xB7 <b>+${MUTATIONS[id].statBonus} to every stat</b> (after caps) \xB7 unique colours and aura` + (id === "shiny" ? " \xB7 guaranteed by the <b>Shiny Ball</b>" : id === "darkness" ? " \xB7 guaranteed by the <b>Dark Ball</b>" : "")
     ]);
     return [
       h3("Rarity", "rarity tiers D C B A S SSS"),
@@ -13037,7 +14678,7 @@ input[type="text"].wiki-search {
         const img = `<img class="ball-icon" width="28" height="28" src="${ballCanvas(id, 28).toDataURL()}" alt="">`;
         return [
           `<span class="wiki-ball">${img}<span>${it.name}<br><small>${ballLook(id)}</small></span></span>`,
-          `${it.guaranteed ? "<b>Guaranteed catch</b>" : `x${it.catchMult.toFixed(2)} catch`} \xB7 ${coins(it.price)} Wildcoins<br><small>${it.desc}</small>`
+          `${it.guaranteed ? "<b>Guaranteed catch</b>" : `x${it.catchMult.toFixed(2)} catch`}${it.forceMutation ? ` \xB7 <b>always ${MUTATIONS[it.forceMutation].name}</b>` : ""} \xB7 ${coins(it.price)} Wildcoins<br><small>${it.desc}</small>`
         ];
       }), "balls")
     ];
@@ -13056,10 +14697,11 @@ input[type="text"].wiki-search {
       }
     }
     return [
-      h3("The elemental triangle", "element effectiveness chart nature water fire"),
+      h3("The element chart", "element effectiveness chart nature water fire rock"),
       para(`Attacks use the <b>element of the skill</b>. Hitting a weakness multiplies damage by
       <b>x${EFFECTIVENESS.STRONG}</b>; hitting a resistance multiplies it by <b>x${EFFECTIVENESS.WEAK}</b>.
-      Same element vs same element is neutral.`),
+      Same element vs same element is neutral. <b>Rock</b> (Stonehollow Crags) smothers Fire but is weak to
+      both Water and Nature \u2014 bring the right team up the mountain.`),
       bullets(ids.map((id) => {
         const beats = ids.filter((d) => elementMultiplier(id, d) > 1).map((d) => ELEMENTS[d].name);
         return `<b style="color:${ELEMENTS[id].color}">${ELEMENTS[id].name}</b> is strong against ${beats.join(", ")}`;
@@ -13123,9 +14765,16 @@ input[type="text"].wiki-search {
       para(`Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species
       default Mood and Rarity D. Open the <b>INDEX</b> tab in the menu to see every Mythling's four forms drawn side by side.`)
     ];
-    for (const id of SPECIES_IDS) {
+    const order = [...ELEMENT_ORDER, ...Object.keys(ELEMENTS).filter((e) => !ELEMENT_ORDER.includes(e))];
+    const grouped = order.flatMap((elId) => SPECIES_IDS.filter((id) => SPECIES[id].element === elId).map((id) => [elId, id]));
+    let lastEl = null;
+    for (const [elId, id] of grouped) {
+      if (elId !== lastEl) {
+        lastEl = elId;
+        out.push(h3(`${ELEMENTS[elId].name} type`, `${elId} type species list`));
+      }
       const sp = SPECIES[id];
-      const evoLine = sp.evolutions.map((ev) => `${ev.name} <span class="wiki-dim">(Lv.${ev.level})</span>`).join("  \u2192  ");
+      const evoLine = sp.evolutions.map((ev, st) => st === 0 || CollectionManager.hasForm(id, st) ? `${ev.name} <span class="wiki-dim">(Lv.${ev.level})</span>` : `<span class="wiki-dim">??? (Lv.${ev.level}) \u{1F512}</span>`.replace("\u{1F512}", '<span class="wiki-lock">locked</span>')).join("  \u2192  ");
       const card = el("div", { class: "wiki-card" }, [
         el("div", { class: "wiki-card-head" }, [
           creature(id, 0, 96),
@@ -13152,7 +14801,7 @@ input[type="text"].wiki-search {
           }).join(", ")}`).join(" &nbsp;|&nbsp; ")]
         ])
       ]);
-      card.dataset.wikitext = `${sp.displayName} ${sp.breed} ${sp.role} ${sp.element} ${sp.description} ${sp.evolutions.map((e) => e.name).join(" ")}`.toLowerCase();
+      card.dataset.wikitext = `${sp.displayName} ${sp.breed} ${sp.role} ${sp.element} ${sp.description} ${sp.evolutions.filter((e, st) => st === 0 || CollectionManager.hasForm(id, st)).map((e) => e.name).join(" ")}`.toLowerCase();
       out.push(card);
     }
     return out;
@@ -13172,7 +14821,8 @@ input[type="text"].wiki-search {
     const levelsText = (sid) => [...learnLevels[sid] || []].sort((a, b) => a - b).map((lv) => `Lv.${lv}`).join(" \xB7 ") || "\u2014";
     const byRank = (a, b) => firstLevel(a.id) - firstLevel(b.id) || skillStrength(a) - skillStrength(b) || a.name.localeCompare(b.name);
     const skillRow = (s) => {
-      const meta = isDamageSkill(s) ? `Power <b>${s.power}</b> \xB7 ${s.damageType === "physical" ? "Physical (P.ATK)" : "Special (S.ATK)"}${s.element ? ` \xB7 ${ELEMENTS[s.element].name}` : ""} \xB7 ${Number.isFinite(s.uses) ? `${s.uses} uses` : "unlimited"}` : `<b>${buffSummary(s, " ")}</b> ${s.category === "debuff" ? "on the foe" : "on self"} \xB7 ${s.uses} uses`;
+      const rider = riderSummary(s);
+      const meta = isDamageSkill(s) ? `${s.reflect ? `<b>Returns the last hit x${s.reflect}</b>` : `Power <b>${s.power}</b>`} \xB7 ${s.damageType === "physical" ? "Physical (P.ATK)" : "Special (S.ATK)"}${s.element ? ` \xB7 ${ELEMENTS[s.element].name}` : ""}${rider && !s.reflect ? ` \xB7 <b>${rider}</b>` : ""} \xB7 ${Number.isFinite(s.uses) ? `${s.uses} uses` : "unlimited"}` : `<b>${buffSummary(s, " ")}</b>${(s.effects || []).some((e) => e.target) ? "" : s.category === "debuff" ? " on the foe" : " on self"}${(s.effects || []).length > 1 ? ' \xB7 <span class="chip evolve">ELITE</span>' : ""} \xB7 ${s.uses} uses`;
       const lv = firstLevel(s.id);
       return [
         `<span class="wiki-learn">Lv.${Number.isFinite(lv) ? lv : "\u2014"}</span> <b>${s.name}</b> <span class="cat-tag ${s.category}">${SKILL_CATEGORY_LABEL[s.category]}</span><br><span class="wiki-learn">Learned at ${levelsText(s.id)}</span>`,
@@ -13180,12 +14830,11 @@ input[type="text"].wiki-search {
       ];
     };
     const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat && s.id !== "struggle").sort(byRank).map(skillRow);
-    const allByLevel = Object.values(SKILLS).filter((s) => s.id !== "struggle" && learnLevels[s.id]).sort(byRank);
     const ultRows = [];
     for (const u of Object.values(ULTIMATES)) {
       u.tiers.forEach((t, i) => ultRows.push({ u, t, i }));
     }
-    ultRows.sort((a, b) => a.t.unlockLevel - b.t.unlockLevel || a.t.power - b.t.power || a.u.baseName.localeCompare(b.u.baseName));
+    ultRows.sort((a, b) => a.t.unlockLevel - b.t.unlockLevel || (a.t.power || 0) - (b.t.power || 0) || a.u.baseName.localeCompare(b.u.baseName));
     const ultOwners = (uid2) => Object.values(SPECIES).filter((sp) => sp.ultimate === uid2).map((sp) => sp.displayName).join(", ") || "\u2014";
     return [
       h3("Battle buttons & the Skill Library", "equip buttons library order loadout"),
@@ -13200,11 +14849,11 @@ input[type="text"].wiki-search {
         "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.",
         "<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe's stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.",
         "Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.",
+        "<b>ELITE</b> support skills (Lv.60 / Lv.80, only 4 uses) carry <b>two</b> effects \u2014 two buffs, two debuffs, or one of each. Effects on the foe are always debuffs; effects on yourself are always buffs.",
+        "<b>Life steal</b> skills attack and heal in the same move: <i>drain</i> skills heal a share of the damage they deal (a crit heals more), <i>mending</i> skills heal a fixed share of max HP after any hit.",
+        "<b>Retaliate</b> / <b>Vengeance</b> return the <b>last hit you took</b> at x2 / x3. You still take the hit first, and if the foe only buffed or debuffed there is nothing to return \u2014 the move fizzles.",
         "If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn."
       ]),
-      h3("All skills by unlock level", "all skills level order list"),
-      para("Every learnable skill, from the earliest to the latest unlock. Within a level, weaker skills come before stronger ones."),
-      table(allByLevel.map(skillRow), "skill level learned at rank"),
       h3("Normal skills", "normal unlimited bite scratch peck"),
       table(catRows("normal"), "normal skill level learned at"),
       h3("Special skills", "special elemental power uses"),
@@ -13216,10 +14865,12 @@ input[type="text"].wiki-search {
       h3("Ultimates \u2014 by unlock level and power", "ultimate charge tier"),
       table(ultRows.map(({ u, t, i }) => [
         `<span class="wiki-learn">Lv.${t.unlockLevel}</span> <b>${u.baseName}${t.suffix}</b>${t.future ? ' <span class="wiki-dim">(late game)</span>' : ""}<br><span class="wiki-learn">${i === 0 ? "Base tier" : `Tier${t.suffix}`} \xB7 evolution stage ${i + 1}</span>`,
-        `Power <b>${t.power}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 ${u.damageType === "physical" ? "Physical" : "Special"}${t.selfBuff ? ` \xB7 also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(", ")} on self` : ""}<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`
+        (isSupportUltimate(u) ? `<b>${u.kind === "support" ? "Support Ultimate" : ""}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 <b>${(t.effects || []).map((e) => `${e.target === "foe" ? "foe " : ""}${STAT_SHORT[e.stat]} ${e.target === "foe" ? "-" : "+"}${e.amount}`).join(", ")}</b> \xB7 never misses, no damage` : `Power <b>${t.power}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 ${u.damageType === "physical" ? "Physical" : "Special"}`) + `${t.selfBuff ? ` \xB7 also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(", ")} on self` : ""}<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`
       ]), "ultimate tier power level"),
       note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge comes only from
-      successful Normal and Special attacks. The tier matches the evolution stage (Base \u2192 I \u2192 II \u2192 III).`)
+      successful Normal and Special attacks. The tier matches the evolution stage (Base \u2192 I \u2192 II \u2192 III).
+      <b>Support Ultimates</b> (Granite Bastion, Quake Curse, Crystal Resonance) deal no damage: they are Ultimate-grade
+      buffs / debuffs with two effects \u2014 buffs on yourself, debuffs on the foe, or one of each.`)
     ];
   }
   function itemsSection() {
@@ -13231,8 +14882,10 @@ input[type="text"].wiki-search {
       if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
       if (i.healFull) effect += ' <span class="wiki-dim">(restores ALL HP)</span>';
       if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp.toLocaleString()} EXP)</span>`;
-      if (i.guaranteed) effect += ' <span class="wiki-dim">(<b>100%</b> catch \u2014 guaranteed)</span>';
+      if (i.guaranteed) effect += ` <span class="wiki-dim">(<b>100%</b> catch \u2014 guaranteed${i.forceMutation ? `, always <b>${MUTATIONS[i.forceMutation].name}</b>` : ""})</span>`;
       else if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
+      if (i.rerollMood) effect += ` <span class="wiki-dim">(re-rolls the Mood \u2014 use from the Mythling's profile)</span>`;
+      if (i.rerollRational) effect += ` <span class="wiki-dim">(re-rolls the Rational \u2014 use from the Mythling's profile)</span>`;
       return [
         `<b>${i.name}</b>${i.price ? "" : ' <span class="wiki-dim">(not sold)</span>'}`,
         `${effect}${i.price ? ` \xB7 <b>${i.price.toLocaleString()}</b> Wildcoins` : ""}`
@@ -13248,12 +14901,18 @@ input[type="text"].wiki-search {
       ], c.name)),
       note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP. You can feed a whole
       <b>stack at once</b> (\u2212/+/MAX picker) and the game caps the amount at what it takes to reach Lv.${LEVEL_CAP},
-      so no food is ever wasted. The <b>King Ball</b> is the only ball with a guaranteed catch \u2014 and it is priced like it.`)
+      so no food is ever wasted. The <b>God Ball</b> is the supreme regular ball \u2014 a guaranteed catch \u2014 and the
+      <b>Shiny Ball</b> / <b>Dark Ball</b> go one step further: guaranteed catch <i>and</i> a guaranteed Shiny / Darkness
+      mutation. They are sold only at the Crags Outfitter in Stonehollow Crags, and they are priced like it.`)
     ];
   }
   function worldSection() {
     const out = [
-      h3("Regions", "region map area")
+      h3("Regions", "region map area"),
+      para(`Wild levels are <b>fixed per region</b> \u2014 they never scale up to your party. Verdant Vale spawns
+      Lv.1\u201320, Azure Coast Lv.15\u201330, Emberwild Lv.30\u201345 and Stonehollow Crags Lv.45\u201360. When the wild Mythlings
+      of an area start to feel weak, that is the signal to beat its Guardian and move on to the next one.
+      Each region is the home of one element: Nature, Water, Fire and Rock.`)
     ];
     for (const id of MAP_ORDER) {
       const map = MAPS[id];
@@ -13546,8 +15205,18 @@ input[type="text"].wiki-search {
   ];
   function skillMetaText(sk, m = null) {
     const uses = Number.isFinite(sk.uses) ? `${m ? `${m.uses[sk.id] ?? 0}/` : ""}${sk.uses} uses` : "Unlimited uses";
-    const what = isDamageSkill(sk) ? `Power ${sk.power} \xB7 ${sk.damageType === "physical" ? "Physical" : "Special"}` : `${buffSummary(sk, " ")} ${sk.category === "debuff" ? "on the foe" : "on self"}`;
-    return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} \xB7 ${what} \xB7 ${uses}`;
+    const what = isDamageSkill(sk) ? sk.reflect ? `Returns the last hit x${sk.reflect} \xB7 ${sk.damageType === "physical" ? "Physical" : "Special"}` : `Power ${sk.power} \xB7 ${sk.damageType === "physical" ? "Physical" : "Special"}` : `${buffSummary(sk, " ")}${(sk.effects || []).some((e) => e.target) ? "" : sk.category === "debuff" ? " on the foe" : " on self"}`;
+    const rider = !sk.reflect ? riderSummary(sk) : "";
+    return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} \xB7 ${what}${rider ? ` \xB7 ${rider}` : ""} \xB7 ${uses}`;
+  }
+  function portrait(m, size = 66, animated = false) {
+    var _a, _b;
+    const sp = getSpecies(m.speciesId);
+    const elId = (sp == null ? void 0 : sp.element) || "nature";
+    const wrap = el("div", { class: "portrait", style: { width: `${size}px`, height: `${size}px` } }, [mythCanvas(m, size, animated)]);
+    const badge = el("span", { class: `el-badge ${elId}`, title: `${((_a = ELEMENTS[elId]) == null ? void 0 : _a.name) || elId} type` }, [icon(((_b = ELEMENTS[elId]) == null ? void 0 : _b.icon) || "spark")]);
+    wrap.appendChild(badge);
+    return wrap;
   }
   function mythCanvas(m, size = 66, animated = false) {
     const dpr = () => Math.min(2, typeof window !== "undefined" && window.devicePixelRatio || 1);
@@ -13753,7 +15422,7 @@ input[type="text"].wiki-search {
       const pct = hpPercent(m);
       const evoReady = EvolutionManager.isReady(m);
       const card = el("div", { class: `myth-card ${isFainted(m) ? "fainted" : ""}` }, [
-        mythCanvas(m, 66),
+        portrait(m, 66),
         el("div", { class: "mc-main" }, [
           el("div", { class: "mc-name" }, [
             displayName(m),
@@ -13761,7 +15430,7 @@ input[type="text"].wiki-search {
             evoReady ? el("span", { class: "chip evolve icon-only", title: "Ready to evolve! Open the card and press EVOLVE NOW.", "aria-label": "Ready to evolve" }, [icon("levelup")]) : null,
             mutationChip(m.mutation)
           ]),
-          el("div", { class: "mc-sub", text: `Lv.${m.level} \xB7 ${sp.displayName} \xB7 ${MOODS[m.mood].name} \xB7 ${getRarity(m.rarity).name}` }),
+          el("div", { class: "mc-sub", text: `Lv.${m.level} \xB7 ${sp.displayName} \xB7 ${getMood(m.mood).name} \xB7 ${rationalSummary(m.rational).name} \xB7 ${getRarity(m.rarity).name}` }),
           labeledBar("hp", "HP", `${m.currentHp}/${maxHp(m)}`, pct, hpClass(pct)),
           labeledBar(
             "exp",
@@ -13786,12 +15455,16 @@ input[type="text"].wiki-search {
       const evoNext = EvolutionManager.nextStageInfo(m);
       const locked = EvolutionManager.lockedStages(m);
       const ult = ultimateMove(m);
+      const rational = getRational(m.rational);
       const statRows = STAT_KEYS.map((k) => {
-        const isUp = MOODS[m.mood].up.includes(k);
-        const isDown = MOODS[m.mood].down === k;
+        const moodUp = getMood(m.mood).up.includes(k);
+        const ratUp = (rational == null ? void 0 : rational.up) === k;
+        const isDown = (rational == null ? void 0 : rational.down) === k;
+        const isUp = moodUp || ratUp;
         const maxRef = STAT_BAR_MAX[k] || 90;
-        return el("div", { class: `stat-row ${isUp ? "up" : ""} ${isDown ? "down" : ""}`, title: STAT_INFO[k] }, [
-          el("span", { class: "stat-name" }, [el("span", { text: STAT_LABELS[k] }), isUp ? icon("up", "tiny") : isDown ? icon("down", "tiny") : null]),
+        const why = [moodUp ? `Mood ${getMood(m.mood).name}` : "", ratUp ? `Rational ${rational.name} +10` : "", isDown ? `Rational ${rational.name} -10` : ""].filter(Boolean).join(" \xB7 ");
+        return el("div", { class: `stat-row ${isUp ? "up" : ""} ${isDown ? "down" : ""}`, title: `${STAT_INFO[k]}${why ? ` (${why})` : ""}` }, [
+          el("span", { class: "stat-name" }, [el("span", { text: STAT_LABELS[k] }), moodUp ? icon("up", "tiny") : null, ratUp ? icon("up", "tiny") : null, isDown ? icon("down", "tiny") : null]),
           el("div", { class: "sbar" }, [el("i", { style: { width: `${Math.min(100, stats[k] / maxRef * 100)}%` } })]),
           el("b", { text: formatStat(k, stats[k]) })
         ]);
@@ -13802,7 +15475,8 @@ input[type="text"].wiki-search {
           el("div", { class: "row", style: { gap: "6px", marginTop: "10px", justifyContent: "center" } }, [
             elementChip(sp.element),
             rarityChip(m.rarity),
-            el("span", { class: "chip", text: MOODS[m.mood].name }),
+            el("span", { class: "chip", title: "Mood", text: getMood(m.mood).name }),
+            el("span", { class: "chip", title: "Rational", text: rationalSummary(m.rational).name }),
             mutationChip(m.mutation)
           ]),
           el("p", { class: "sub", style: { marginTop: "10px", fontSize: ".85rem" }, text: sp.description }),
@@ -13838,7 +15512,39 @@ input[type="text"].wiki-search {
           el("h3", { text: "Stats" }),
           el("div", { class: "stat-rows" }, statRows),
           el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) \xB7 <b>${stats.crit}%</b> crit chance \xB7 crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
-          el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg("up", "tiny")} ${mood.up.join(", ")} &nbsp; ${iconSvg("down", "tiny")} ${mood.down} \u2014 magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
+          el("div", { class: "mc-sub", style: { marginTop: "6px" }, html: `Mood <b>${getMood(m.mood).name}</b>: ${iconSvg("up", "tiny")} ${mood.up.join(", ")} \u2014 magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity}) \xB7 Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg("up", "tiny")} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg("down", "tiny")} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` \xB7 ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ""}` }),
+          el("div", { class: "row", style: { gap: "6px", marginTop: "6px" } }, [
+            iconTextBtn("swap", `Re-roll Mood (Mood Tonic \xD7${InventoryManager.count("mood_tonic")})`, { class: "small ghost", disabled: !InventoryManager.has("mood_tonic", 1), title: InventoryManager.has("mood_tonic", 1) ? "Uses one Mood Tonic: the Mood becomes a different one at random." : "Buy a Mood Tonic at a shop (Azure Coast onward).", onclick: async () => {
+              const ok = await confirmDialog("RE-ROLL MOOD", `Use a Mood Tonic on ${displayName(m)}? Its Mood (${getMood(m.mood).name}) becomes a different one at random. This cannot be undone.`);
+              if (!ok) return;
+              if (!InventoryManager.has("mood_tonic", 1)) {
+                toast("You have no Mood Tonic left.", "bad");
+                return;
+              }
+              InventoryManager.remove("mood_tonic", 1);
+              const r = rerollMood2(m);
+              AudioManager.sfx("heal");
+              toast(`${displayName(m)}'s Mood: ${getMood(r.before).name} \u2192 ${getMood(r.after).name}`, "ok");
+              closeModal(true);
+              this.renderTab();
+              this.openDetail(m);
+            } }),
+            iconTextBtn("swap", `Re-roll Rational (Temper Tonic \xD7${InventoryManager.count("temper_tonic")})`, { class: "small ghost", disabled: !InventoryManager.has("temper_tonic", 1), title: InventoryManager.has("temper_tonic", 1) ? "Uses one Temper Tonic: the Rational (+10 / -10 trait) becomes a different one at random." : "Buy a Temper Tonic at a shop (Azure Coast onward).", onclick: async () => {
+              const ok = await confirmDialog("RE-ROLL RATIONAL", `Use a Temper Tonic on ${displayName(m)}? Its Rational (${rationalSummary(m.rational).name}: ${rationalSummary(m.rational).up} +10 / ${rationalSummary(m.rational).down} -10) becomes a different one at random. This cannot be undone.`);
+              if (!ok) return;
+              if (!InventoryManager.has("temper_tonic", 1)) {
+                toast("You have no Temper Tonic left.", "bad");
+                return;
+              }
+              InventoryManager.remove("temper_tonic", 1);
+              const r = rerollRational2(m);
+              AudioManager.sfx("heal");
+              toast(`${displayName(m)}'s Rational: ${rationalSummary(r.before).name} \u2192 ${rationalSummary(r.after).name}`, "ok");
+              closeModal(true);
+              this.renderTab();
+              this.openDetail(m);
+            } })
+          ]),
           el("h3", { text: `Equipped Skills (${equippedSkills(m).length}/${MAX_EQUIPPED_SKILLS})` }),
           ...Array.from({ length: MAX_EQUIPPED_SKILLS }, (_, i) => {
             const sk = m.skills[i] ? getSkill(m.skills[i]) : null;
@@ -13930,7 +15636,7 @@ input[type="text"].wiki-search {
       }
       for (const m of list) {
         this.storageList.appendChild(this.mythCard(m, {
-          extra: el("div", { class: "row", style: { gap: "6px" } }, [
+          extra: el("div", { class: "mc-actions" }, [
             iconTextBtn("dna", "Party", {
               class: "small primary",
               disabled: PartyManager.isFull(),
@@ -13942,7 +15648,7 @@ input[type="text"].wiki-search {
                 } else toast("Party is full!", "bad");
               }
             }),
-            button("RELEASE", {
+            iconTextBtn("close", "Release", {
               class: "small ghost",
               onclick: (e) => {
                 e.stopPropagation();
@@ -14082,6 +15788,9 @@ input[type="text"].wiki-search {
       for (const cat of ITEM_CATEGORIES) {
         const entries = InventoryManager.byCategory(cat.id);
         root.appendChild(el("h3", { text: cat.name }));
+        if (cat.id === "tonics") {
+          root.appendChild(el("p", { class: "sub", text: "Tonics re-roll a Mythling's personality traits. Open a Mythling's profile (PARTY or MYTHLINGS tab) and press RE-ROLL MOOD / RE-ROLL RATIONAL to use one." }));
+        }
         if (cat.id === "food") {
           root.appendChild(el("p", { class: "sub", text: `Feed food to a Mythling to convert it straight into EXP \u2014 a faster way to train than battling. You can feed a whole stack at once; the amount is capped at what it takes to reach Lv.${LEVEL_CAP}, so no food is ever wasted.` }));
         }
@@ -14093,13 +15802,13 @@ input[type="text"].wiki-search {
           const isFood = e.item.category === "food";
           const usable = e.item.heal || e.item.healFull || e.item.revive || e.item.restoreUses || e.item.restoreAllUses;
           root.appendChild(el("div", { class: "item-row" }, [
-            cat.id === "balls" ? ballCanvas(e.item.id, 30, "item-ico ball-icon") : icon(isFood ? "food" : cat.id === "key" ? "key" : "heal", "item-ico"),
+            cat.id === "balls" ? ballCanvas(e.item.id, 30, "item-ico ball-icon") : icon(isFood ? "food" : cat.id === "key" ? "key" : cat.id === "tonics" ? "swap" : "heal", "item-ico"),
             el("div", { class: "ir-main" }, [
               el("div", { class: "ir-name", text: e.item.name }),
               el("div", { class: "ir-desc", text: e.item.desc })
             ]),
             el("div", { class: "ir-qty", text: `x${e.qty}` }),
-            isFood ? iconTextBtn("food", "FEED", { class: "small primary", onclick: () => this.feedFromBag(e.id) }) : usable ? button("USE", { class: "small primary", onclick: () => this.useItemFromBag(e.id) }) : null
+            isFood ? iconTextBtn("food", "FEED", { class: "small primary", onclick: () => this.feedFromBag(e.id) }) : cat.id === "tonics" ? button("USE ON\u2026", { class: "small primary", onclick: () => this.useTonicFromBag(e.id) }) : usable ? button("USE", { class: "small primary", onclick: () => this.useItemFromBag(e.id) }) : null
           ]));
         }
       }
@@ -14231,6 +15940,38 @@ input[type="text"].wiki-search {
       toast(`${displayName(pick)} ${parts.join(" and ")}!`, "ok");
       this.renderTab();
     }
+    /** Tonics from the bag: pick a party Mythling, then re-roll its Mood or Rational. */
+    async useTonicFromBag(itemId) {
+      const item = getItem(itemId);
+      const pick = await this.pickPartyTarget(`${item.name.toUpperCase()} \u2014 CHOOSE A MYTHLING`, (m) => item.rerollMood ? `Mood: ${getMood(m.mood).name}` : `Rational: ${rationalSummary(m.rational).name} (${rationalSummary(m.rational).up} +10 / ${rationalSummary(m.rational).down} -10)`);
+      if (!pick) return;
+      if (!InventoryManager.has(itemId, 1)) {
+        toast(`You have no ${item.name} left.`, "bad");
+        return;
+      }
+      InventoryManager.remove(itemId, 1);
+      const r = item.rerollMood ? rerollMood2(pick) : rerollRational2(pick);
+      AudioManager.sfx("heal");
+      toast(item.rerollMood ? `${displayName(pick)}'s Mood: ${getMood(r.before).name} \u2192 ${getMood(r.after).name}` : `${displayName(pick)}'s Rational: ${rationalSummary(r.before).name} \u2192 ${rationalSummary(r.after).name}`, "ok");
+      this.renderTab();
+    }
+    /** Species ids grouped by element, in ELEMENT_ORDER (Nature, Water, Fire, Rock …). */
+    speciesByElement() {
+      const groups = [];
+      for (const elId of [...ELEMENT_ORDER, ...Object.keys(ELEMENTS).filter((e) => !ELEMENT_ORDER.includes(e))]) {
+        const ids = SPECIES_IDS.filter((id) => SPECIES[id].element === elId);
+        if (ids.length) groups.push({ element: elId, ids });
+      }
+      return groups;
+    }
+    elementHeader(elId, sub = "") {
+      const e = ELEMENTS[elId];
+      return el("div", { class: `element-group-head ${elId}` }, [
+        icon((e == null ? void 0 : e.icon) || "spark", elId),
+        el("b", { text: `${(e == null ? void 0 : e.name) || elId} type` }),
+        sub ? el("span", { class: "sub", text: sub }) : null
+      ]);
+    }
     // ---------------------------------------------------- MAP
     renderMap(root) {
       var _a;
@@ -14265,32 +16006,39 @@ input[type="text"].wiki-search {
       this.setTitle(`Mythling Index \u2014 ${seen}/${SPECIES_IDS.length} discovered`);
       root.appendChild(el("p", {
         class: "sub",
-        text: "Every Mythling and all four of its forms. Stages unlock at Lv.20, Lv.60 and Lv.80 \u2014 raise a Mythling to the level and it evolves on its own."
+        text: "Every Mythling, grouped by type. An evolution stays hidden until you have actually owned that form \u2014 catch the base form, raise it to Lv.20 / Lv.60 / Lv.80 and each new form is revealed as it evolves."
       }));
       const list = el("div", { class: "index-list" });
-      for (const id of SPECIES_IDS) {
-        const sp = SPECIES[id];
-        const entry = CollectionManager.entry(id);
-        const known = !!(entry && (entry.seen || entry.caught));
-        const card = el("div", { class: `index-card ${known ? "" : "locked"}` }, [
-          el("div", { class: "index-head" }, [
-            el("b", { text: known ? sp.displayName : "???" }),
-            elementChip(sp.element),
-            el("span", { class: "role", text: sp.role }),
-            el("span", { class: "role", text: `\xB7 ${sp.breed} \xB7 ${((_b = (_a = sp.spawnMaps) == null ? void 0 : _a[0]) == null ? void 0 : _b.replace(/_/g, " ")) || ""}` })
-          ]),
-          el("div", { class: "index-stages" }, sp.evolutions.map((ev, stage) => {
-            var _a2, _b2;
-            const unlocked = known;
-            return el("div", { class: `index-stage ${unlocked ? "" : "locked"}` }, [
-              unlocked ? mythCanvas({ speciesId: id, stage, mutation: "none" }, 96) : el("div", { class: "index-blank", text: "?" }),
-              el("div", { class: "is-name", text: unlocked ? ev.name : "???" }),
-              el("div", { class: "is-lv", text: stage === 0 ? "Base form" : `Lv.${ev.level}` }),
-              ((_a2 = ev.art) == null ? void 0 : _a2.horns) || ((_b2 = ev.art) == null ? void 0 : _b2.wings) ? el("div", { class: "is-tag", text: [ev.art.horns ? "Horns" : "", ev.art.wings ? "Wings" : ""].filter(Boolean).join(" + ") }) : null
-            ]);
-          }))
-        ]);
-        list.appendChild(card);
+      for (const group of this.speciesByElement()) {
+        const owned = group.ids.filter((id) => {
+          var _a2;
+          return (_a2 = CollectionManager.entry(id)) == null ? void 0 : _a2.caught;
+        }).length;
+        list.appendChild(this.elementHeader(group.element, `${owned}/${group.ids.length} caught`));
+        for (const id of group.ids) {
+          const sp = SPECIES[id];
+          const entry = CollectionManager.entry(id);
+          const known = !!(entry && (entry.seen || entry.caught));
+          const card = el("div", { class: `index-card ${known ? "" : "locked"}` }, [
+            el("div", { class: "index-head" }, [
+              el("b", { text: known ? sp.displayName : "???" }),
+              elementChip(sp.element),
+              el("span", { class: "role", text: known ? sp.role : "???" }),
+              el("span", { class: "role", text: `\xB7 ${known ? sp.breed : "???"} \xB7 ${((_b = MAPS[(_a = sp.spawnMaps) == null ? void 0 : _a[0]]) == null ? void 0 : _b.displayName) || ""}` })
+            ]),
+            el("div", { class: "index-stages" }, sp.evolutions.map((ev, stage) => {
+              var _a2, _b2;
+              const unlocked = stage === 0 ? known : CollectionManager.hasForm(id, stage);
+              return el("div", { class: `index-stage ${unlocked ? "" : "locked"}`, title: unlocked ? ev.name : stage === 0 ? "Not discovered yet" : `Locked \u2014 evolve a ${known ? sp.displayName : "???"} to Lv.${ev.level} to reveal this form` }, [
+                unlocked ? mythCanvas({ speciesId: id, stage, mutation: "none" }, 96) : el("div", { class: "index-blank" }, [icon("lock")]),
+                el("div", { class: "is-name", text: unlocked ? ev.name : "???" }),
+                el("div", { class: "is-lv", text: stage === 0 ? "Base form" : `Lv.${ev.level}` }),
+                !unlocked && stage > 0 ? el("div", { class: "is-tag", text: "LOCKED" }) : unlocked && (((_a2 = ev.art) == null ? void 0 : _a2.horns) || ((_b2 = ev.art) == null ? void 0 : _b2.wings)) ? el("div", { class: "is-tag", text: [ev.art.horns ? "Horns" : "", ev.art.wings ? "Wings" : ""].filter(Boolean).join(" + ") }) : null
+              ]);
+            }))
+          ]);
+          list.appendChild(card);
+        }
       }
       root.appendChild(list);
     }
@@ -14298,25 +16046,32 @@ input[type="text"].wiki-search {
       const s = CollectionManager.stats();
       this.setTitle(`Collection \u2014 ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen`);
       root.appendChild(el("p", { class: "sub", html: `Mutations discovered: ${iconSvg("shiny", "tiny")} Shiny ${s.shiny} \xB7 ${iconSvg("darkness", "tiny")} Darkness ${s.darkness}` }));
-      const grid = el("div", { class: "collection-grid" });
-      for (const id of SPECIES_IDS) {
-        const sp = SPECIES[id];
-        const e = CollectionManager.entry(id);
-        const known = e.seen || e.caught;
-        const card = el("div", { class: `col-card ${known ? "" : "unknown"} ${e.caught ? "caught" : ""}` }, [
-          mythCanvas({ speciesId: id, stage: 0, mutation: "none" }, 90),
-          el("div", { class: "cc-name", text: known ? sp.displayName : "???" }),
-          el("div", { class: "cc-status" }, e.caught ? [icon("check", "tiny"), el("span", { text: "Caught" })] : [el("span", { text: e.seen ? "Seen" : "Undiscovered" })]),
-          known ? el("div", { class: "row", style: { justifyContent: "center", gap: "4px", marginTop: "4px" } }, [
-            elementChip(sp.element),
-            e.mutations.shiny ? el("span", { class: "chip shiny" }, [icon("shiny")]) : null,
-            e.mutations.darkness ? el("span", { class: "chip darkness" }, [icon("darkness")]) : null
-          ]) : null
-        ]);
-        if (known) card.addEventListener("click", () => this.showSpeciesInfo(id));
-        grid.appendChild(card);
+      for (const group of this.speciesByElement()) {
+        const caught = group.ids.filter((id) => {
+          var _a;
+          return (_a = CollectionManager.entry(id)) == null ? void 0 : _a.caught;
+        }).length;
+        root.appendChild(this.elementHeader(group.element, `${caught}/${group.ids.length} caught`));
+        const grid = el("div", { class: "collection-grid" });
+        for (const id of group.ids) {
+          const sp = SPECIES[id];
+          const e = CollectionManager.entry(id);
+          const known = e.seen || e.caught;
+          const forms = sp.evolutions.filter((ev, st) => CollectionManager.hasForm(id, st)).length;
+          const card = el("div", { class: `col-card ${known ? "" : "unknown"} ${e.caught ? "caught" : ""}` }, [
+            known ? portrait({ speciesId: id, stage: 0, mutation: "none" }, 90) : mythCanvas({ speciesId: id, stage: 0, mutation: "none" }, 90),
+            el("div", { class: "cc-name", text: known ? sp.displayName : "???" }),
+            el("div", { class: "cc-status" }, e.caught ? [icon("check", "tiny"), el("span", { text: `Caught \xB7 ${forms}/${sp.evolutions.length} forms` })] : [el("span", { text: e.seen ? "Seen" : "Undiscovered" })]),
+            known ? el("div", { class: "row", style: { justifyContent: "center", gap: "4px", marginTop: "4px" } }, [
+              e.mutations.shiny ? el("span", { class: "chip shiny" }, [icon("shiny")]) : null,
+              e.mutations.darkness ? el("span", { class: "chip darkness" }, [icon("darkness")]) : null
+            ]) : null
+          ]);
+          if (known) card.addEventListener("click", () => this.showSpeciesInfo(id));
+          grid.appendChild(card);
+        }
+        root.appendChild(grid);
       }
-      root.appendChild(grid);
     }
     showSpeciesInfo(id) {
       const sp = SPECIES[id];
@@ -14331,10 +16086,17 @@ input[type="text"].wiki-search {
           ])
         ]),
         el("h3", { text: "Evolution line" }),
-        el("div", { class: "row", style: { gap: "8px" } }, sp.evolutions.map((ev) => el("div", { class: "chip", style: ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE ? { opacity: 0.55 } : {} }, [
-          el("span", { text: `${ev.name} (Lv.${ev.level})` }),
-          ev.future ? icon("lock", "tiny") : null
-        ])))
+        el("div", { class: "row", style: { gap: "8px" } }, sp.evolutions.map((ev, st) => {
+          const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
+          return el("div", { class: "chip", style: owned ? {} : { opacity: 0.55 }, title: owned ? ev.name : `Locked \u2014 evolve ${sp.displayName} to Lv.${ev.level} to reveal this form` }, [
+            el("span", { text: owned ? `${ev.name} (Lv.${ev.level})` : `??? (Lv.${ev.level})` }),
+            owned ? null : icon("lock", "tiny")
+          ]);
+        })),
+        el("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, sp.evolutions.map((ev, st) => {
+          const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
+          return owned ? mythCanvas({ speciesId: id, stage: st, mutation: "none" }, 84) : el("div", { class: "index-blank", style: { width: "84px", height: "84px" } }, [icon("lock")]);
+        }))
       ]);
       modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: "CLOSE", value: true, primary: true }] });
     }
@@ -15161,11 +16923,11 @@ input[type="text"].wiki-search {
     const stage = el("div", { class: "cinematic-stage" });
     layer.appendChild(stage);
     stage.append(
-      el("h2", { text: "EMBERWILD COMPLETE" }),
+      el("h2", { text: "STONEHOLLOW CRAGS COMPLETE" }),
       el("h2", { style: { fontSize: "1.4rem", color: "#eaf3ff" }, text: "Current Version Complete" }),
-      el("p", { text: "You have bested the Flame Warden and cleared every region of the current build of Wildbound." }),
-      el("p", { text: "The world stays open: keep exploring all three regions, hunt for Shiny and Darkness mutations, chase better Moods and Rarities, complete your collection, and raise your team to Lv.30." }),
-      el("p", { class: "sub", text: "More regions, Mythlings and the Lv.60 / Lv.80 evolutions arrive in future updates." }),
+      el("p", { text: "You have bested the Stone Warden and cleared every region of the current build of Wildbound." }),
+      el("p", { text: "The world stays open: keep exploring all four regions, hunt for Shiny and Darkness mutations, chase better Moods, Rationals and Rarities, complete your collection, and raise your team to Lv.100." }),
+      el("p", { class: "sub", text: "More regions and Mythlings arrive in future updates." }),
       button("CONTINUE EXPLORING", { class: "primary", onclick: () => {
         layer.remove();
         onDone();
@@ -15519,9 +17281,10 @@ input[type="text"].wiki-search {
         if (SettingsManager.get("tutorialHints") && !GameState.world.flags[`intro_${toMap}`]) {
           WorldManager.setFlag(`intro_${toMap}`);
           const lines = {
-            azure_coast: ["Azure Coast \u2014 wild Mythlings here are Lv.10 to Lv.20.", "Aquini and Rivruff live along these shores. Your Mythlings can evolve at Lv.20!"],
-            emberwild: ["Emberwild \u2014 the strongest region of this version. Wild Mythlings reach Lv.30.", "Emberu rules the ash. Remember: anything you catch still starts again at Lv.1."],
-            verdant_vale: ["Verdant Vale \u2014 home turf. Wild Mythlings Lv.1 to Lv.10."]
+            azure_coast: ["Azure Coast \u2014 wild Mythlings here are Lv.15 to Lv.30.", "Aquini and Rivruff live along these shores. Your Mythlings can evolve at Lv.20!"],
+            emberwild: ["Emberwild \u2014 wild Mythlings here are Lv.30 to Lv.45.", "Emberu rules the ash. Remember: anything you catch still starts again at Lv.1."],
+            stonehollow_crags: ["Stonehollow Crags \u2014 the strongest region of this version. Wild Mythlings are Lv.45 to Lv.60, and every one of them is Rock type.", "Rock smothers Fire and crumbles under Water and Nature. The Stone Warden waits at the Titan Summit."],
+            verdant_vale: ["Verdant Vale \u2014 home turf. Wild Mythlings Lv.1 to Lv.20."]
           }[toMap];
           if (lines) await Dialogue.show(lines, "GUIDE");
         }
@@ -15809,25 +17572,37 @@ input[type="text"].wiki-search {
       }
       if (mapId === "emberwild") {
         if (!WorldManager.isTrainerDefeated("flame_warden")) return goal("Challenge the Flame Warden in the Volcanic Ruins");
+        return goal("Travel east through the Emberwild Pass to Stonehollow Crags");
+      }
+      if (mapId === "stonehollow_crags") {
+        if (!WorldManager.isTrainerDefeated("stone_warden")) return goal("Climb to the Titan Summit and defeat the Stone Warden");
       }
       return null;
     }
     drawMinimap() {
+      var _a;
       const cv = document.getElementById("minimap");
       const ctx = cv.getContext("2d");
       const d = this.overworld.minimapData();
       const sx = cv.width / d.w, sy = cv.height / d.h;
       ctx.clearRect(0, 0, cv.width, cv.height);
-      ctx.fillStyle = "rgba(12,22,34,0.85)";
-      ctx.fillRect(0, 0, cv.width, cv.height);
-      ctx.fillStyle = "rgba(80,180,110,0.25)";
+      ctx.drawImage(this.minimapBase(d, cv.width, cv.height), 0, 0);
+      ctx.fillStyle = "rgba(60,220,110,0.16)";
       for (const z of d.zones) ctx.fillRect(z[0] * sx, z[1] * sy, z[2] * sx, z[3] * sy);
-      ctx.fillStyle = "rgba(240,200,120,0.85)";
-      for (const b of d.buildings) ctx.fillRect(b[0] * sx, b[1] * sy, Math.max(3, b[2] * sx), Math.max(3, b[3] * sy));
-      ctx.fillStyle = "rgba(160,220,255,0.9)";
-      for (const c of d.conns) ctx.fillRect(c[0] * sx, c[1] * sy, Math.max(3, c[2] * sx), Math.max(3, c[3] * sy));
+      for (const t of d.trainers) {
+        ctx.fillStyle = t[2] ? "rgba(255,255,255,0.55)" : "#ff5a5a";
+        ctx.beginPath();
+        ctx.arc(t[0] * sx, t[1] * sy, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffd76a";
+      for (const n of d.npcs) {
+        ctx.beginPath();
+        ctx.arc(n[0] * sx, n[1] * sy, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
       for (const w of d.wild) {
-        ctx.fillStyle = ELEMENTS[w[2]].color;
+        ctx.fillStyle = ((_a = ELEMENTS[w[2]]) == null ? void 0 : _a.color) || "#fff";
         ctx.beginPath();
         ctx.arc(w[0] * sx, w[1] * sy, 2.2, 0, Math.PI * 2);
         ctx.fill();
@@ -15836,8 +17611,44 @@ input[type="text"].wiki-search {
       ctx.beginPath();
       ctx.arc(d.px * sx, d.py * sy, 3.4, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
       ctx.strokeStyle = "rgba(255,255,255,0.5)";
       ctx.strokeRect(0.5, 0.5, cv.width - 1, cv.height - 1);
+    }
+    /** Cached base layer of the minimap for the current map (regions, water, bridges, buildings, gates). */
+    minimapBase(d, W, H) {
+      var _a;
+      const key = `${d.mapId}:${W}x${H}`;
+      if (((_a = this._minimapBase) == null ? void 0 : _a.key) === key) return this._minimapBase.canvas;
+      const c = document.createElement("canvas");
+      c.width = W;
+      c.height = H;
+      const g = c.getContext("2d");
+      const sx = W / d.w, sy = H / d.h;
+      g.fillStyle = "rgba(12,22,34,0.9)";
+      g.fillRect(0, 0, W, H);
+      for (const r of d.regions) {
+        g.fillStyle = r[4];
+        g.fillRect(r[0] * sx, r[1] * sy, Math.ceil(r[2] * sx), Math.ceil(r[3] * sy));
+      }
+      g.fillStyle = "rgba(255,255,255,0.08)";
+      g.fillRect(0, (d.h * 0.55 - 90) * sy, W, 180 * sy);
+      for (const w of d.water) {
+        g.fillStyle = w[4] === "lava" ? "#ff7a2a" : "#3fa9f5";
+        g.fillRect(w[0] * sx, w[1] * sy, Math.max(2, w[2] * sx), Math.max(2, w[3] * sy));
+      }
+      g.fillStyle = "#c99a5a";
+      for (const b of d.bridges) g.fillRect(b[0] * sx, b[1] * sy, Math.max(2, b[2] * sx), Math.max(2, b[3] * sy));
+      for (const b of d.buildings) {
+        g.fillStyle = b[4] === "center" ? "#ff8a8a" : b[4] === "shop" ? "#7fc4ff" : "rgba(240,200,120,0.95)";
+        g.fillRect(b[0] * sx, b[1] * sy, Math.max(3, b[2] * sx), Math.max(3, b[3] * sy));
+      }
+      g.fillStyle = "rgba(160,220,255,0.95)";
+      for (const cn of d.conns) g.fillRect(cn[0] * sx, cn[1] * sy, Math.max(3, cn[2] * sx), Math.max(3, cn[3] * sy));
+      this._minimapBase = { key, canvas: c };
+      return c;
     }
   };
   window.addEventListener("DOMContentLoaded", () => {

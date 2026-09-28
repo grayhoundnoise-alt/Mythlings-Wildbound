@@ -121,8 +121,8 @@ await step('game-format export round-trips maps / species / skills / vfx', async
   console.log('   project game files:', r.files.map((f) => `${f.name} ${(f.text.length / 1024).toFixed(0)}KB`).join(', '));
   const sk = evalExport(r.files.find((f) => f.name.endsWith('.skills.game.js')).text);
   const norm = (o) => JSON.parse(JSON.stringify(o, (k, v) => (v === Infinity ? 'Infinity' : v)));
-  let bad = 0; for (const [id, s] of Object.entries(GS.skills.SKILLS)) if (diff(norm(s), norm(sk.SKILLS[id])).length) bad++;
-  for (const [id, s] of Object.entries(GS.skills.ULTIMATES)) if (diff(norm(s), norm(sk.ULTIMATES[id])).length) bad++;
+  let bad = 0; for (const [id, s] of Object.entries(GS.skills.SKILLS)) { const d = diff(norm(s), norm(sk.SKILLS[id])); if (d.length) { bad++; if (bad <= 5) console.log('      skill diff', id, d.slice(0, 3).join('; ')); } }
+  for (const [id, s] of Object.entries(GS.skills.ULTIMATES)) { const d = diff(norm(s), norm(sk.ULTIMATES[id])); if (d.length) { bad++; if (bad <= 8) console.log('      ult diff', id, d.slice(0, 3).join('; ')); } }
   console.log('   skills round trip mismatches:', bad); assert(bad === 0, 'skills round trip');
   const vf = evalExport(r.files.find((f) => f.name.endsWith('.skillvfx.game.js')).text); let vbad = 0; for (const [id, v] of Object.entries(GS.skillVfx.SKILL_VFX)) if (diff(v, vf.SKILL_VFX[id]).length) vbad++; console.log('   vfx round trip mismatches:', vbad); assert(vbad === 0, 'vfx round trip');
   assert(/GAME PRESETS/.test(Exporter.arenaPackage('map', 'verdant_vale', r)), 'package note');

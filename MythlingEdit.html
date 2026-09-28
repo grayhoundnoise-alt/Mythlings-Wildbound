@@ -647,7 +647,7 @@ textarea.bad, input.bad { outline: 1px solid #ef4444; }
 
 <script>
 /* MYTHLING EDIT v1.0.0 — standalone offline editor for Mythlings: Wildbound.
-   Built 2026-09-27T17:54:01.225Z from tools/mythling-edit (18 modules + game data snapshot of 14 game modules). No network access, no build step, no dependencies. */
+   Built 2026-09-27T23:57:04.583Z from tools/mythling-edit (18 modules + game data snapshot of 14 game modules). No network access, no build step, no dependencies. */
 'use strict';
 // ---- GameSnapshot (generated from the game's data + art modules; read-only copy) ----
 const GameSnapshot = (function () {
@@ -833,15 +833,20 @@ const FUTURE_CONTENT_LIVE = true;
 
 const COUNTER_MAX_PERCENT = 35; // Counter can never make something untouchable
 /**
- * Counter is the EVASION stat: every point of Counter used to be a full 1% dodge,
- * which made attacks miss far too often. Each point is now worth half a percent and
- * the dodge chance is hard-capped, so a maxed Counter dodges 18% of hits, not 35%.
+ * Counter is the EVASION stat. A miss should be a rare surprise, never a routine
+ * annoyance: each point is now worth 0.15% dodge and the chance is hard-capped,
+ * so even a maxed Counter (35) dodges only about 5% of hits.
  */
-const COUNTER_DODGE_SCALE = 0.5;
-const COUNTER_MAX_DODGE = 18;
+const COUNTER_DODGE_SCALE = 0.15;
+const COUNTER_MAX_DODGE = 6;
 
-/** Crit Chance is a percentage (0-60). Crit Damage is a BONUS percentage (0-200 => up to x3). */
-const CRIT_MAX_PERCENT = 60;
+/**
+ * Crit Chance is a percentage. It used to grow 3% per level and cap at 60%, so a
+ * maxed Mythling crit on every other hit. Growth is now slow (see STAT_GROWTH) and
+ * the cap is 25%: a crit stays a highlight even at Lv.100.
+ * Crit Damage is a BONUS percentage (0-200 => up to x3).
+ */
+const CRIT_MAX_PERCENT = 25;
 const CRIT_MAX_MULT = 200;
 
 const DAMAGE_RANDOM_MIN = 0.85;
@@ -849,8 +854,14 @@ const DAMAGE_RANDOM_MAX = 1.0;
 
 const STAT_GROWTH = {
   hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
-  crit: 0.030, critMult: 0.008,
+  crit: 0.006, critMult: 0.008,
 };
+
+/**
+ * Rational (the second personality trait): a fixed +10 to one stat and -10 to
+ * another, flat, on top of level growth, Mood, Rarity and mutation bonuses.
+ */
+const RATIONAL_AMOUNT = 10;
 
 /** Counter (evasion stat) -> actual dodge chance in percent. Single source of truth. */
 function counterDodgePercent(counter) {
@@ -918,7 +929,7 @@ const DEFAULT_SETTINGS = {
   confirmImportantActions: true,
 };
 
-return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, STAT_GROWTH, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, DEFAULT_SETTINGS };
+return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, DEFAULT_SETTINGS };
 })();
 __m["src/data/elements.js"] = (function () {
 // Element definitions & effectiveness chart (data-driven, extensible).
@@ -927,8 +938,12 @@ const ELEMENTS = {
   nature: { id: 'nature', name: 'Nature', icon: 'nature', color: '#4fc76a', glow: '#9cff9c' },
   water:  { id: 'water',  name: 'Water',  icon: 'water', color: '#3fa9f5', glow: '#a5e6ff' },
   fire:   { id: 'fire',   name: 'Fire',   icon: 'fire', color: '#ff7a3d', glow: '#ffd08a' },
+  rock:   { id: 'rock',   name: 'Rock',   icon: 'rock', color: '#b99a6b', glow: '#f0dcb0' },
   // Future elements can simply be appended here.
 };
+
+/** Display order used by the Index, the Collection and the Wiki (grouped by element). */
+const ELEMENT_ORDER = ['nature', 'water', 'fire', 'rock'];
 
 const EFFECTIVENESS = {
   STRONG: 1.5,
@@ -937,10 +952,14 @@ const EFFECTIVENESS = {
 };
 
 // attacker -> defender it is strong against
+// Rock smothers Fire, but water erodes it and roots crack it: strong against
+// one element, weak to two — so a Rock team is a real puzzle for the Fire party
+// most players bring out of Emberwild, and a Water or Nature party shines there.
 const STRONG_AGAINST = {
-  nature: ['water'],
-  water: ['fire'],
+  nature: ['water', 'rock'],
+  water: ['fire', 'rock'],
   fire: ['nature'],
+  rock: ['fire'],
 };
 
 function elementMultiplier(attackElement, defenderElement) {
@@ -961,7 +980,7 @@ function elementOf(id) {
   return ELEMENTS[id] || { id, name: id, icon: 'spark', color: '#bbb', glow: '#fff' };
 }
 
-return { ELEMENTS, EFFECTIVENESS, elementMultiplier, effectivenessLabel, elementOf };
+return { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier, effectivenessLabel, elementOf };
 })();
 __m["src/data/rarity.js"] = (function () {
 // Rarity is stored independently from species. It only scales the Mood bonus magnitude.
@@ -1004,8 +1023,9 @@ function rollRarity(rng, luck = 0) {
 return { RARITIES, RARITY_ORDER, getRarity, rarityMagnitude, rollRarity };
 })();
 __m["src/data/moods.js"] = (function () {
-// Mood system: each mood raises 3 stats and lowers 1.
-// Magnitude comes from the RARITY table (see rarity.js) — Mood is deterministic & persistent.
+// Personality traits: MOOD (one stat up, magnitude from the RARITY table) and
+// RATIONAL (+10 / -10 on two stats). Both are deterministic & persistent, and both
+// can be re-rolled with shop tonics.
 const STAT_KEYS = ['hp', 'patk', 'satk', 'pdef', 'sdef', 'spd', 'counter', 'crit', 'critMult'];
 
 const STAT_LABELS = {
@@ -1033,39 +1053,30 @@ const STAT_INFO = {
   pdef: 'Reduces incoming Physical damage.',
   sdef: 'Reduces incoming Special damage.',
   spd: 'Higher Speed acts first each turn — and helps you flee.',
-  counter: 'Evasion. Each point is 0.5% dodge, capped at 18% (Counter caps at 35).',
-  crit: 'Chance to land a critical hit, in percent (caps at 60%).',
+  counter: 'Evasion. Each point is 0.15% dodge, capped at 6% — a miss is rare (Counter caps at 35).',
+  crit: 'Chance to land a critical hit, in percent (caps at 25% — a crit stays special even at Lv.100).',
   critMult: 'Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +200%).',
 };
 
 /** Reference used for the stat bars in the detail panel. */
 const STAT_BAR_MAX = {
-  hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 60, critMult: 200,
+  hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 25, critMult: 200,
 };
 
+// Mood: a purely POSITIVE trait. Every Mood boosts exactly ONE stat, so the nine
+// Moods cover every stat there is — nothing is hidden behind a lucky combination.
+// The old "three up, one down" Moods are gone: the DOWNSIDE now lives in the
+// separate Rational trait (see RATIONALS below), which stacks on top of the Mood.
 const MOODS = {
-  lazy:      { id: 'lazy',      name: 'Lazy',      up: ['hp', 'pdef', 'sdef'],     down: 'spd' },
-  energetic: { id: 'energetic', name: 'Energetic', up: ['patk', 'satk', 'spd'],    down: 'sdef' },
-  aggressive:{ id: 'aggressive',name: 'Aggressive',up: ['patk', 'spd', 'counter'], down: 'sdef' },
-  clever:    { id: 'clever',    name: 'Clever',    up: ['satk', 'sdef', 'counter'],down: 'patk' },
-  sturdy:    { id: 'sturdy',    name: 'Sturdy',    up: ['hp', 'pdef', 'sdef'],     down: 'satk' },
-  swift:     { id: 'swift',     name: 'Swift',     up: ['spd', 'counter', 'sdef'], down: 'hp' },
-  brave:     { id: 'brave',     name: 'Brave',     up: ['hp', 'patk', 'counter'],  down: 'sdef' },
-  focused:   { id: 'focused',   name: 'Focused',   up: ['patk', 'satk', 'spd'],    down: 'hp' },
-  guarded:   { id: 'guarded',   name: 'Guarded',   up: ['hp', 'pdef', 'sdef'],     down: 'counter' },
-  reckless:  { id: 'reckless',  name: 'Reckless',  up: ['patk', 'satk', 'spd'],    down: 'pdef' },
-  playful:   { id: 'playful',   name: 'Playful',   up: ['spd', 'counter', 'satk'], down: 'pdef' },
-  calm:      { id: 'calm',      name: 'Calm',      up: ['hp', 'sdef', 'counter'],  down: 'patk' },
-  stubborn:  { id: 'stubborn',  name: 'Stubborn',  up: ['hp', 'patk', 'pdef'],     down: 'spd' },
-  ambitious: { id: 'ambitious', name: 'Ambitious', up: ['patk', 'satk', 'counter'],down: 'hp' },
-  cautious:  { id: 'cautious',  name: 'Cautious',  up: ['pdef', 'sdef', 'counter'],down: 'patk' },
-  fierce:    { id: 'fierce',    name: 'Fierce',    up: ['hp', 'patk', 'spd'],      down: 'counter' },
-  // ---- Crit moods (Crit Chance / Crit Damage) ----
-  feral:     { id: 'feral',     name: 'Feral',     up: ['crit', 'critMult', 'patk'], down: 'sdef' },
-  savage:    { id: 'savage',    name: 'Savage',    up: ['crit', 'patk', 'spd'],      down: 'pdef' },
-  precise:   { id: 'precise',   name: 'Precise',   up: ['crit', 'critMult', 'satk'], down: 'hp' },
-  brutal:    { id: 'brutal',    name: 'Brutal',    up: ['critMult', 'patk', 'satk'], down: 'sdef' },
-  keen:      { id: 'keen',      name: 'Keen',      up: ['crit', 'spd', 'counter'],   down: 'pdef' },
+  sturdy: { id: 'sturdy', name: 'Sturdy', up: ['hp'],       desc: 'Thick-skinned and hard to put down. Boosts HP.' },
+  brave:  { id: 'brave',  name: 'Brave',  up: ['patk'],     desc: 'Charges in first. Boosts Physical Attack.' },
+  clever: { id: 'clever', name: 'Clever', up: ['satk'],     desc: 'Thinks three moves ahead. Boosts Special Attack.' },
+  guarded:{ id: 'guarded',name: 'Guarded',up: ['pdef'],     desc: 'Never drops its guard. Boosts Physical Defense.' },
+  calm:   { id: 'calm',   name: 'Calm',   up: ['sdef'],     desc: 'Unshaken by tricks and magic. Boosts Special Defense.' },
+  swift:  { id: 'swift',  name: 'Swift',  up: ['spd'],      desc: 'Always a step ahead. Boosts Speed.' },
+  agile:  { id: 'agile',  name: 'Agile',  up: ['counter'],  desc: 'Slips out of harm\'s way. Boosts Counter (evasion).' },
+  keen:   { id: 'keen',   name: 'Keen',   up: ['crit'],     desc: 'Finds every weak spot. Boosts Crit Chance.' },
+  brutal: { id: 'brutal', name: 'Brutal', up: ['critMult'], desc: 'Makes every opening count. Boosts Crit Damage.' },
 };
 
 const MOOD_IDS = Object.keys(MOODS);
@@ -1074,29 +1085,114 @@ const MOOD_IDS = Object.keys(MOODS);
 const CRIT_MOOD_IDS = MOOD_IDS.filter((id) =>
   MOODS[id].up.includes('crit') || MOODS[id].up.includes('critMult'));
 
-function getMood(id) {
-  return MOODS[id] || MOODS.brave;
+/**
+ * Moods from earlier versions (three up stats, one down) map onto the new
+ * single-stat Mood that boosts their FIRST up stat, so old saves keep a
+ * sensible personality instead of resetting to Brave.
+ */
+const LEGACY_MOODS = {
+  lazy: 'sturdy', energetic: 'brave', aggressive: 'brave', focused: 'brave', reckless: 'brave', stubborn: 'sturdy',
+  fierce: 'sturdy', ambitious: 'brave', cautious: 'guarded', playful: 'swift', feral: 'keen', savage: 'keen',
+  precise: 'keen',
+};
+
+function normalizeMoodId(id) {
+  if (MOODS[id]) return id;
+  return LEGACY_MOODS[id] || 'brave';
 }
 
-// Some stats need a bigger swing than one point per magnitude to matter.
-const MOOD_SCALE = { hp: 3, critMult: 2 };
+function getMood(id) {
+  return MOODS[normalizeMoodId(id)];
+}
 
-/** Returns {hp:+n, patk:-n, ...} deltas for a mood at a given magnitude. */
+// A single-stat Mood swings harder than one point per magnitude: the whole bonus
+// that used to be spread over three stats now lands on one.
+const MOOD_SCALE = { hp: 6, critMult: 4 };
+const MOOD_BASE = 2;
+
+/** Returns {hp:+n, patk:+n, ...} deltas for a mood at a given magnitude (never negative). */
 function moodModifiers(moodId, magnitude) {
   const mood = getMood(moodId);
   const out = {};
   for (const k of STAT_KEYS) out[k] = 0;
-  // HP scales a bit harder so the bonus is meaningful on the HP pool.
-  for (const k of mood.up) out[k] += magnitude * (MOOD_SCALE[k] || 1);
-  out[mood.down] -= magnitude * (MOOD_SCALE[mood.down] || 1);
+  for (const k of mood.up) out[k] += magnitude * MOOD_BASE * (MOOD_SCALE[k] || 1);
   return out;
+}
+
+// =============================================================================
+// RATIONAL — the second personality trait. Every Rational is a fixed +10 to one
+// of the six main stats and a fixed -10 to another (never HP-neutral: exactly one
+// pair). It stacks with Mood, Rarity and mutation bonuses. All 30 possible pairs
+// exist, so any stat can be traded for any other.
+// =============================================================================
+const RATIONAL_STATS = ['hp', 'patk', 'satk', 'pdef', 'sdef', 'spd'];
+
+const RATIONAL_NAMES = {
+  hp:   { patk: 'Placid',  satk: 'Docile',  pdef: 'Hearty',   sdef: 'Rugged',  spd: 'Stoic' },
+  patk: { hp: 'Reckless',  satk: 'Brash',   pdef: 'Bold',     sdef: 'Fierce',  spd: 'Mighty' },
+  satk: { hp: 'Frail',     patk: 'Mystic',  pdef: 'Arcane',   sdef: 'Cunning', spd: 'Pensive' },
+  pdef: { hp: 'Stony',     patk: 'Steady',  satk: 'Stubborn', sdef: 'Ironclad',spd: 'Lax' },
+  sdef: { hp: 'Wary',      patk: 'Serene',  satk: 'Careful',  pdef: 'Gentle',  spd: 'Patient' },
+  spd:  { hp: 'Hasty',     patk: 'Nimble',  satk: 'Jolly',    pdef: 'Flighty', sdef: 'Naive' },
+};
+
+const RATIONALS = {};
+for (const up of RATIONAL_STATS) {
+  for (const down of RATIONAL_STATS) {
+    if (up === down) continue;
+    const name = RATIONAL_NAMES[up][down];
+    const id = name.toLowerCase();
+    RATIONALS[id] = { id, name, up, down };
+  }
+}
+const RATIONAL_IDS = Object.keys(RATIONALS);
+
+function getRational(id) {
+  return RATIONALS[id] || null;
+}
+
+/** Returns {hp:+10, spd:-10, ...} for a rational; every other stat is 0. */
+function rationalModifiers(rationalId, amount = 10) {
+  const out = {};
+  for (const k of STAT_KEYS) out[k] = 0;
+  const r = getRational(rationalId);
+  if (!r) return out;
+  out[r.up] += amount;
+  out[r.down] -= amount;
+  return out;
+}
+
+function rationalSummary(rationalId) {
+  const r = getRational(rationalId);
+  if (!r) return { name: 'None', up: '—', down: '—' };
+  return { name: r.name, up: STAT_SHORT[r.up], down: STAT_SHORT[r.down] };
+}
+
+/** A random Rational id (uniform over all 30 pairs). */
+function rollRational(rng = Math.random) {
+  return RATIONAL_IDS[Math.floor(rng() * RATIONAL_IDS.length)] || RATIONAL_IDS[0];
+}
+
+/** A random Rational different from the current one (used by the Temper Tonic). */
+function rerollRational(current, rng = Math.random) {
+  if (RATIONAL_IDS.length < 2) return RATIONAL_IDS[0];
+  let next = current;
+  while (next === current) next = rollRational(rng);
+  return next;
+}
+
+/** A random Mood different from the current one (used by the Mood Tonic). */
+function rerollMood(current, rng = Math.random) {
+  let next = current;
+  while (next === current) next = MOOD_IDS[Math.floor(rng() * MOOD_IDS.length)];
+  return next;
 }
 
 function moodSummary(moodId) {
   const m = getMood(moodId);
   return {
     up: m.up.map((k) => STAT_SHORT[k]),
-    down: STAT_SHORT[m.down],
+    down: null,   // Moods no longer lower anything — the downside is the Rational trait
   };
 }
 
@@ -1109,7 +1205,7 @@ function formatStat(key, value) {
   return String(value);
 }
 
-return { STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, MOODS, MOOD_IDS, CRIT_MOOD_IDS, getMood, moodModifiers, moodSummary, formatStat };
+return { STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, MOODS, MOOD_IDS, CRIT_MOOD_IDS, normalizeMoodId, getMood, moodModifiers, RATIONAL_STATS, RATIONALS, RATIONAL_IDS, getRational, rationalModifiers, rationalSummary, rollRational, rerollRational, rerollMood, moodSummary, formatStat };
 })();
 __m["src/data/mutations.js"] = (function () {
 /**
@@ -1164,9 +1260,11 @@ const ITEMS = {
   normal_ball:   { id: 'normal_ball',   name: 'Normal Ball',   category: 'balls',   price: 260,  catchMult: 1.25, desc: 'A refined ball with a stronger binding field.' },
   advanced_ball: { id: 'advanced_ball', name: 'Advanced Ball', category: 'balls',   price: 550,  catchMult: 1.50, desc: 'Crafted with coast crystal. Notably more reliable.' },
   absolute_ball: { id: 'absolute_ball', name: 'Absolute Ball', category: 'balls',   price: 1100, catchMult: 1.80, desc: 'An ember-forged ball for stubborn Mythlings.' },
-  god_ball:      { id: 'god_ball',      name: 'God Ball',      category: 'balls',   price: 3000, catchMult: 2.50, desc: 'A legendary sphere. Almost never fails.' },
   // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
-  king_ball:     { id: 'king_ball',     name: 'King Ball',     category: 'balls',   price: 50000, catchMult: 99, guaranteed: true, desc: 'A crown-forged sphere that never fails. Guaranteed capture — for a royal price.' },
+  god_ball:      { id: 'god_ball',      name: 'God Ball',      category: 'balls',   price: 12000, catchMult: 99, guaranteed: true, desc: 'The supreme binding sphere. Never fails — a guaranteed capture.' },
+  // `forceMutation` turns the caught Mythling into that mutation, every time.
+  shiny_ball:    { id: 'shiny_ball',    name: 'Shiny Ball',    category: 'balls',   price: 60000, catchMult: 99, guaranteed: true, forceMutation: 'shiny',    desc: 'Forged from starlight. Guaranteed capture, and the Mythling always emerges SHINY.' },
+  dark_ball:     { id: 'dark_ball',     name: 'Dark Ball',     category: 'balls',   price: 90000, catchMult: 99, guaranteed: true, forceMutation: 'darkness', desc: 'Cut from an eclipse. Guaranteed capture, and the Mythling always emerges as a DARKNESS mutation.' },
 
   potion:         { id: 'potion',         name: 'Potion',         category: 'healing', price: 150,  heal: 60,   desc: 'Restores 60 HP to one Mythling.' },
   greater_potion: { id: 'greater_potion', name: 'Greater Potion', category: 'healing', price: 380,  heal: 160,  desc: 'Restores 160 HP to one Mythling.' },
@@ -1177,6 +1275,10 @@ const ITEMS = {
   skill_tonic:    { id: 'skill_tonic',    name: 'Skill Tonic',    category: 'healing', price: 320,  restoreUses: 8, desc: 'Restores 8 uses to every limited skill.' },
   skill_elixir:   { id: 'skill_elixir',   name: 'Skill Elixir',   category: 'healing', price: 950,  restoreAllUses: true, desc: 'Resets every limited skill back to full uses.' },
   full_restore:   { id: 'full_restore',   name: 'Full Restore',   category: 'healing', price: 3200, healFull: true, restoreAllUses: true, desc: 'Fully restores HP AND every skill\'s uses. Cannot revive.' },
+
+  // ---- TONICS: re-roll a Mythling's personality traits (used from its profile) ----
+  mood_tonic:   { id: 'mood_tonic',   name: 'Mood Tonic',   category: 'tonics', price: 2500, rerollMood: true,     desc: 'Re-rolls a Mythling\'s Mood into a different one. Use it from the Mythling\'s profile.' },
+  temper_tonic: { id: 'temper_tonic', name: 'Temper Tonic', category: 'tonics', price: 2500, rerollRational: true, desc: 'Re-rolls a Mythling\'s Rational (+10 / -10 trait) into a different one. Use it from the Mythling\'s profile.' },
 
   // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
   sweet_berry:  { id: 'sweet_berry',  name: 'Sweet Berry',  category: 'food', price: 90,   exp: 40,   desc: 'A sugary forest berry. Feeding it grants 40 EXP.' },
@@ -1200,12 +1302,17 @@ const ITEMS = {
 
   vale_charm:  { id: 'vale_charm',  name: 'Vale Charm',  category: 'key', desc: 'Proof that the Verdant Guardian was bested. Opens the Verdant Gate.' },
   coast_pass:  { id: 'coast_pass',  name: 'Coast Pass',  category: 'key', desc: 'Granted at Tidecrest Port. Opens the Emberwild Gate.' },
-  ember_sigil: { id: 'ember_sigil', name: 'Ember Sigil', category: 'key', desc: 'Awarded for completing the current Emberwild challenge.' },
+  ember_sigil: { id: 'ember_sigil', name: 'Ember Sigil', category: 'key', desc: 'Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags.' },
+  crag_seal:   { id: 'crag_seal',   name: 'Crag Seal',   category: 'key', desc: 'Proof that the Stone Warden of Stonehollow Crags was bested.' },
 };
+
+/** Item ids from earlier versions and what they became (applied when a save is loaded). */
+const LEGACY_ITEMS = { king_ball: 'god_ball' };
 
 const ITEM_CATEGORIES = [
   { id: 'balls',   name: 'Balls' },
   { id: 'healing', name: 'Healing' },
+  { id: 'tonics',  name: 'Tonics' },
   { id: 'food',    name: 'Food' },
   { id: 'key',     name: 'Key Items' },
 ];
@@ -1227,13 +1334,20 @@ const STARTING_INVENTORY = {
 
 const STARTING_WILDCOINS = 900;
 
-return { ITEMS, ITEM_CATEGORIES, FOOD_IDS, BALL_IDS, getItem, STARTING_INVENTORY, STARTING_WILDCOINS };
+return { ITEMS, LEGACY_ITEMS, ITEM_CATEGORIES, FOOD_IDS, BALL_IDS, getItem, STARTING_INVENTORY, STARTING_WILDCOINS };
 })();
 __m["src/data/skills.js"] = (function () {
-// DESIGN RULE: a Buff skill raises exactly ONE stat and a Debuff skill lowers
-// exactly ONE enemy stat. `effects` stays an array so the battle engine (and
-// future multi-effect content) needs no changes, but every buff/debuff in this
-// build ships with a single entry — see buffSummary() in ui code.
+// DESIGN RULE: a regular Buff skill raises exactly ONE stat and a regular Debuff
+// skill lowers exactly ONE enemy stat. `effects` is an array, and the ELITE
+// support skills (Lv.60 / Lv.80, few uses) and the support Ultimates use two
+// entries. An effect may carry `target: 'self' | 'foe'`: on the foe it is always
+// a debuff, on self always a buff — see buffSummary() in ui code.
+//
+// Extra skill riders the battle engine understands:
+//   drain: 0.5      heal 50% of the damage this hit dealt (crits heal more)
+//   healPct: 0.2    heal 20% of max HP after a successful hit (fixed heal)
+//   reflect: 2      deal 2x the damage the LAST enemy attack did to you (no
+//                   damage taken this round -> the skill fizzles)
 //
 // Skill definitions. Categories: 'normal' (infinite uses), 'special', 'buff',
 // 'debuff' (lowers a stat of the FOE) and 'ultimate'.
@@ -1342,6 +1456,60 @@ const SKILLS = {
   magma_brand:     { id: 'magma_brand',     name: 'Magma Brand',     category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'A searing brand. Lowers the foe\'s Physical Defense sharply.' },
   cinder_curse:    { id: 'cinder_curse',    name: 'Cinder Curse',    category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'Smouldering cinders cling to the foe. Lowers its Special Defense sharply.' },
 
+  // ---------- ROCK pool (Stonehollow Crags) ----------
+  pebble_toss:     { id: 'pebble_toss',     name: 'Pebble Toss',     category: 'normal', damageType: 'physical', element: null,   power: 10, uses: Infinity, desc: 'A flick of loose gravel. Unlimited uses.' },
+  rock_jab:        { id: 'rock_jab',        name: 'Rock Jab',        category: 'normal', damageType: 'physical', element: 'rock', power: 18, uses: Infinity, desc: 'A stone-hard headbutt. Unlimited uses.' },
+  boulder_smash:   { id: 'boulder_smash',   name: 'Boulder Smash',   category: 'normal', damageType: 'physical', element: 'rock', power: 31, uses: Infinity, desc: 'Brings a boulder down on the foe. Unlimited uses.' },
+  tectonic_slam:   { id: 'tectonic_slam',   name: 'Tectonic Slam',   category: 'normal', damageType: 'physical', element: 'rock', power: 42, uses: Infinity, desc: 'The ground itself lurches. Unlimited uses.' },
+  stone_shard:     { id: 'stone_shard',     name: 'Stone Shard',     category: 'special', damageType: 'physical', element: 'rock', power: 17, uses: 20, desc: 'Hurls a jagged shard of flint.' },
+  crag_lance:      { id: 'crag_lance',      name: 'Crag Lance',      category: 'special', damageType: 'physical', element: 'rock', power: 28, uses: 18, desc: 'A spear of stone erupts from the ground.' },
+  crystal_ray:     { id: 'crystal_ray',     name: 'Crystal Ray',     category: 'special', damageType: 'special',  element: 'rock', power: 27, uses: 18, desc: 'Light focused through a living crystal.' },
+  meteor_fist:     { id: 'meteor_fist',     name: 'Meteor Fist',     category: 'special', damageType: 'physical', element: 'rock', power: 42, uses: 15, desc: 'A punch that lands like a falling star.', future: true },
+  quartz_storm:    { id: 'quartz_storm',    name: 'Quartz Storm',    category: 'special', damageType: 'special',  element: 'rock', power: 40, uses: 15, desc: 'A blizzard of razor crystal.', future: true },
+  titan_quake:     { id: 'titan_quake',     name: 'Titan Quake',     category: 'special', damageType: 'physical', element: 'rock', power: 56, uses: 12, desc: 'The mountain answers. Everything shakes.', future: true },
+  core_beam:       { id: 'core_beam',       name: 'Core Beam',       category: 'special', damageType: 'special',  element: 'rock', power: 54, uses: 12, desc: 'A beam of pressure from the planet\'s heart.', future: true },
+  stone_skin:      { id: 'stone_skin',      name: 'Stone Skin',      category: 'buff', effects: [{ stat: 'pdef', amount: 4 }], uses: 10, desc: 'Raises Physical Defense.' },
+  granite_might:   { id: 'granite_might',   name: 'Granite Might',   category: 'buff', effects: [{ stat: 'patk', amount: 4 }], uses: 10, desc: 'Raises Physical Attack.' },
+  quartz_focus:    { id: 'quartz_focus',    name: 'Quartz Focus',    category: 'buff', effects: [{ stat: 'satk', amount: 4 }], uses: 10, desc: 'Raises Special Attack.' },
+  bedrock_will:    { id: 'bedrock_will',    name: 'Bedrock Will',    category: 'buff', effects: [{ stat: 'sdef', amount: 4 }], uses: 10, desc: 'Raises Special Defense.' },
+  landslide_pace:  { id: 'landslide_pace',  name: 'Landslide Pace',  category: 'buff', effects: [{ stat: 'spd', amount: 5 }], uses: 8, desc: 'Raises Speed.', future: true },
+  mountain_heart:  { id: 'mountain_heart',  name: 'Mountain Heart',  category: 'buff', effects: [{ stat: 'hp', amount: 9 }], uses: 10, desc: 'Raises max HP.' },
+  obsidian_edge:   { id: 'obsidian_edge',   name: 'Obsidian Edge',   category: 'buff', effects: [{ stat: 'patk', amount: 6 }], uses: 8, desc: 'Raises Physical Attack sharply.', future: true },
+  geode_mind:      { id: 'geode_mind',      name: 'Geode Mind',      category: 'buff', effects: [{ stat: 'satk', amount: 6 }], uses: 8, desc: 'Raises Special Attack sharply.', future: true },
+  // -- rock debuffs (same ladder as the other elements) --
+  grit_blind:      { id: 'grit_blind',      name: 'Grit Blind',      category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, desc: 'Grit in the eyes. Lowers the foe\'s Special Attack.' },
+  petrify:         { id: 'petrify',         name: 'Petrify',         category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, desc: 'Stiffens the foe\'s limbs. Lowers its Physical Attack.' },
+  sandstorm:       { id: 'sandstorm',       name: 'Sandstorm',       category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 12, desc: 'A wall of blowing sand. Lowers the foe\'s Speed.' },
+  crush_armor:     { id: 'crush_armor',     name: 'Crush Armor',     category: 'debuff', effects: [{ stat: 'pdef', amount: 5 }], uses: 10, desc: 'Cracks the foe\'s plating. Lowers its Physical Defense.' },
+  quake_shock:     { id: 'quake_shock',     name: 'Quake Shock',     category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, desc: 'A tremor that rattles focus. Lowers the foe\'s Special Defense.' },
+  fault_line:      { id: 'fault_line',      name: 'Fault Line',      category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'Splits the ground under the foe. Lowers its Physical Defense sharply.' },
+  stone_curse:     { id: 'stone_curse',     name: 'Stone Curse',     category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'An ancient curse of the crags. Lowers the foe\'s Special Defense sharply.' },
+
+  // ---------- LIFE STEAL: attack and heal in the same move ----------
+  // "drain" heals a share of the damage dealt (a crit heals more), "healPct" is a
+  // fixed heal that lands after any successful hit.
+  sap_bite:        { id: 'sap_bite',        name: 'Sap Bite',        category: 'special', damageType: 'physical', element: 'nature', power: 22, uses: 12, drain: 0.5, desc: 'Bites deep and drinks the sap. Heals 50% of the damage dealt.' },
+  siphon_tide:     { id: 'siphon_tide',     name: 'Siphon Tide',     category: 'special', damageType: 'special',  element: 'water',  power: 22, uses: 12, drain: 0.5, desc: 'Pulls the foe\'s strength out with the tide. Heals 50% of the damage dealt.' },
+  ember_leech:     { id: 'ember_leech',     name: 'Ember Leech',     category: 'special', damageType: 'special',  element: 'fire',   power: 22, uses: 12, drain: 0.5, desc: 'Steals the foe\'s warmth. Heals 50% of the damage dealt.' },
+  crystal_leech:   { id: 'crystal_leech',   name: 'Crystal Leech',   category: 'special', damageType: 'special',  element: 'rock',   power: 22, uses: 12, drain: 0.5, desc: 'Crystals drink the foe\'s vigour. Heals 50% of the damage dealt.' },
+  vampiric_maw:    { id: 'vampiric_maw',    name: 'Vampiric Maw',    category: 'special', damageType: 'physical', element: null,     power: 34, uses: 8,  drain: 0.75, desc: 'A ravenous bite. Heals 75% of the damage dealt — a crit heals a fortune.', future: true },
+  mending_strike:  { id: 'mending_strike',  name: 'Mending Strike',  category: 'special', damageType: 'physical', element: null,     power: 18, uses: 10, healPct: 0.2, desc: 'A measured strike that steadies the body. Heals 20% of max HP after it lands.' },
+  restoring_pulse: { id: 'restoring_pulse', name: 'Restoring Pulse', category: 'special', damageType: 'special',  element: null,     power: 26, uses: 8,  healPct: 0.3, desc: 'A pulse that hurts the foe and knits your wounds. Heals 30% of max HP after it lands.', future: true },
+
+  // ---------- REFLECT: pay the last hit back double ----------
+  retaliate:       { id: 'retaliate',       name: 'Retaliate',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 6, reflect: 2, desc: 'Returns the LAST hit you took at double strength. You still take the hit first — and if the foe only buffed, there is nothing to return.' },
+  vengeance:       { id: 'vengeance',       name: 'Vengeance',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 4, reflect: 3, desc: 'Returns the LAST hit you took at triple strength. Risky: a buffing foe leaves you nothing to return.', future: true },
+
+  // ---------- ELITE support skills: two effects, few uses ----------
+  // Foe-side entries are always debuffs, self-side entries always buffs.
+  war_cry:         { id: 'war_cry',         name: 'War Cry',         category: 'buff',   effects: [{ stat: 'patk', amount: 8 }, { stat: 'spd', amount: 6 }], uses: 4, desc: 'A roar that quickens the blood. Raises Physical Attack AND Speed.', future: true },
+  arcane_surge:    { id: 'arcane_surge',    name: 'Arcane Surge',    category: 'buff',   effects: [{ stat: 'satk', amount: 8 }, { stat: 'sdef', amount: 6 }], uses: 4, desc: 'Power floods every sense. Raises Special Attack AND Special Defense.', future: true },
+  bulwark:         { id: 'bulwark',         name: 'Bulwark',         category: 'buff',   effects: [{ stat: 'pdef', amount: 8 }, { stat: 'sdef', amount: 8 }], uses: 4, desc: 'Becomes a living wall. Raises both Defenses.', future: true },
+  intimidate:      { id: 'intimidate',      name: 'Intimidate',      category: 'debuff', effects: [{ stat: 'patk', amount: 7 }, { stat: 'satk', amount: 7 }], uses: 4, desc: 'A stare that drains the will to fight. Lowers the foe\'s Physical AND Special Attack.', future: true },
+  shatter:         { id: 'shatter',         name: 'Shatter',         category: 'debuff', effects: [{ stat: 'pdef', amount: 8 }, { stat: 'sdef', amount: 8 }], uses: 4, desc: 'Breaks every guard at once. Lowers both of the foe\'s Defenses.', future: true },
+  predator_focus:  { id: 'predator_focus',  name: 'Predator Focus',  category: 'buff',   effects: [{ stat: 'patk', amount: 7 }, { stat: 'pdef', amount: 6, target: 'foe' }], uses: 4, desc: 'Locks onto the prey. Raises your Physical Attack and lowers the foe\'s Physical Defense.', future: true },
+  mind_break:      { id: 'mind_break',      name: 'Mind Break',      category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }, { stat: 'satk', amount: 6, target: 'self' }], uses: 4, desc: 'Cracks the foe\'s focus and feeds on it. Lowers the foe\'s Special Defense and raises your Special Attack.', future: true },
+
 };
 
 // ---------- Ultimates ----------
@@ -1397,6 +1565,61 @@ const ULTIMATES = {
     ],
     desc: 'A cyclone of razor leaves engulfs the field.',
   },
+  // ---------- ROCK ----------
+  stone_avalanche: {
+    id: 'stone_avalanche', baseName: 'Stone Avalanche', element: 'rock', damageType: 'physical',
+    tiers: [
+      { suffix: '',    power: 35, unlockLevel: 10 },
+      { suffix: ' I',  power: 51, unlockLevel: 20 },
+      { suffix: ' II', power: 75, unlockLevel: 60, future: true },
+      { suffix: ' III',power: 105, unlockLevel: 80, future: true },
+    ],
+    desc: 'Half a mountainside comes down on the foe.',
+  },
+  crystal_cannon: {
+    id: 'crystal_cannon', baseName: 'Crystal Cannon', element: 'rock', damageType: 'special',
+    tiers: [
+      { suffix: '',    power: 34, unlockLevel: 10 },
+      { suffix: ' I',  power: 50, unlockLevel: 20 },
+      { suffix: ' II', power: 74, unlockLevel: 60, future: true },
+      { suffix: ' III',power: 104, unlockLevel: 80, future: true },
+    ],
+    desc: 'Every crystal on its body fires at once.',
+  },
+  // ---------- SUPPORT ULTIMATES (kind: 'support') ----------
+  // No damage: two effects that grow with the tier. Foe-side effects are ALWAYS
+  // debuffs, self-side effects ALWAYS buffs — an Ultimate-grade buff or debuff.
+  granite_bastion: {
+    id: 'granite_bastion', baseName: 'Granite Bastion', element: 'rock', damageType: null, kind: 'support',
+    tiers: [
+      { suffix: '',    unlockLevel: 10, effects: [{ stat: 'pdef', amount: 8,  target: 'self' }, { stat: 'sdef', amount: 8,  target: 'self' }] },
+      { suffix: ' I',  unlockLevel: 20, effects: [{ stat: 'pdef', amount: 11, target: 'self' }, { stat: 'sdef', amount: 11, target: 'self' }] },
+      { suffix: ' II', unlockLevel: 60, effects: [{ stat: 'pdef', amount: 15, target: 'self' }, { stat: 'sdef', amount: 15, target: 'self' }], future: true },
+      { suffix: ' III',unlockLevel: 80, effects: [{ stat: 'pdef', amount: 20, target: 'self' }, { stat: 'sdef', amount: 20, target: 'self' }], future: true },
+    ],
+    desc: 'Buff Ultimate: the Mythling turns to living granite. Raises BOTH of its Defenses by far more than any buff skill.',
+  },
+  quake_curse: {
+    id: 'quake_curse', baseName: 'Quake Curse', element: 'rock', damageType: null, kind: 'support',
+    tiers: [
+      { suffix: '',    unlockLevel: 10, effects: [{ stat: 'pdef', amount: 8,  target: 'foe' }, { stat: 'spd', amount: 6,  target: 'foe' }] },
+      { suffix: ' I',  unlockLevel: 20, effects: [{ stat: 'pdef', amount: 11, target: 'foe' }, { stat: 'spd', amount: 8,  target: 'foe' }] },
+      { suffix: ' II', unlockLevel: 60, effects: [{ stat: 'pdef', amount: 15, target: 'foe' }, { stat: 'spd', amount: 11, target: 'foe' }], future: true },
+      { suffix: ' III',unlockLevel: 80, effects: [{ stat: 'pdef', amount: 20, target: 'foe' }, { stat: 'spd', amount: 14, target: 'foe' }], future: true },
+    ],
+    desc: 'Debuff Ultimate: the ground swallows the foe\'s footing. Lowers the foe\'s Physical Defense AND Speed.',
+  },
+  crystal_resonance: {
+    id: 'crystal_resonance', baseName: 'Crystal Resonance', element: 'rock', damageType: null, kind: 'support',
+    tiers: [
+      { suffix: '',    unlockLevel: 10, effects: [{ stat: 'satk', amount: 8,  target: 'self' }, { stat: 'sdef', amount: 6,  target: 'foe' }] },
+      { suffix: ' I',  unlockLevel: 20, effects: [{ stat: 'satk', amount: 11, target: 'self' }, { stat: 'sdef', amount: 8,  target: 'foe' }] },
+      { suffix: ' II', unlockLevel: 60, effects: [{ stat: 'satk', amount: 15, target: 'self' }, { stat: 'sdef', amount: 11, target: 'foe' }], future: true },
+      { suffix: ' III',unlockLevel: 80, effects: [{ stat: 'satk', amount: 20, target: 'self' }, { stat: 'sdef', amount: 14, target: 'foe' }], future: true },
+    ],
+    desc: 'Buff + Debuff Ultimate: a resonance that empowers the caster and shatters the foe. Raises your Special Attack and lowers the foe\'s Special Defense.',
+  },
+
 };
 
 const ULTIMATE_MAX_CHARGE = 8;
@@ -1408,20 +1631,38 @@ const SKILL_CATEGORY_LABEL = { normal: 'Normal', special: 'Special', buff: 'Buff
 /** Sort order of the categories in the Skill Library and the wiki. */
 const SKILL_CATEGORY_ORDER = ['normal', 'special', 'buff', 'debuff', 'ultimate'];
 
-/** True when a skill deals damage (Normal / Special / Ultimate). */
+/** True when a skill deals damage (Normal / Special / damage Ultimate). */
 function isDamageSkill(sk) {
-  return !!sk && sk.category !== 'buff' && sk.category !== 'debuff';
+  return !!sk && sk.category !== 'buff' && sk.category !== 'debuff' && sk.kind !== 'support';
+}
+
+/** Which side an effect lands on: explicit `target`, else the skill's own category. */
+function effectTarget(sk, eff) {
+  if (eff.target) return eff.target;
+  return sk.category === 'debuff' ? 'foe' : 'self';
 }
 
 /**
- * Human-readable summary of a buff or debuff skill (always exactly one stat).
- * Buffs read "P.ATK +4", debuffs read "P.DEF -5" (they lower the FOE's stat).
+ * Human-readable summary of a buff / debuff skill or a support Ultimate.
+ * Self-side effects read "P.ATK +4", foe-side effects read "foe P.DEF -5".
  */
 function buffSummary(sk, joiner = ' ') {
   if (!sk || !sk.effects) return '';
   const short = { hp: 'HP', patk: 'P.ATK', satk: 'S.ATK', pdef: 'P.DEF', sdef: 'S.DEF', spd: 'SPD', counter: 'CNT' };
-  const sign = sk.category === 'debuff' ? '-' : '+';
-  return sk.effects.map((e) => `${short[e.stat] || e.stat.toUpperCase()}${joiner}${sign}${e.amount}`).join(', ');
+  return sk.effects.map((e) => {
+    const foe = effectTarget(sk, e) === 'foe';
+    return `${foe ? 'foe ' : ''}${short[e.stat] || e.stat.toUpperCase()}${joiner}${foe ? '-' : '+'}${e.amount}`;
+  }).join(', ');
+}
+
+/** Short text for the extra riders of a skill (life steal, fixed heal, reflect). */
+function riderSummary(sk) {
+  if (!sk) return '';
+  const out = [];
+  if (sk.drain) out.push(`heals ${Math.round(sk.drain * 100)}% of damage dealt`);
+  if (sk.healPct) out.push(`heals ${Math.round(sk.healPct * 100)}% max HP on hit`);
+  if (sk.reflect) out.push(`returns the last hit taken x${sk.reflect}`);
+  return out.join(' · ');
 }
 
 /**
@@ -1431,8 +1672,9 @@ function buffSummary(sk, joiner = ' ') {
  */
 function skillStrength(sk) {
   if (!sk) return 0;
-  if (sk.category === 'buff' || sk.category === 'debuff') return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
-  return sk.power || 0;
+  if (sk.category === 'buff' || sk.category === 'debuff' || sk.kind === 'support') return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+  if (sk.reflect) return 30 * sk.reflect;      // ranks between the mid and late specials
+  return (sk.power || 0) + (sk.drain ? 6 : 0) + (sk.healPct ? 6 : 0);
 }
 
 function getSkill(id) {
@@ -1455,16 +1697,23 @@ function resolveUltimate(ultId, tierIndex) {
     tierIndex: idx,
     name: ult.baseName + tier.suffix,
     category: 'ultimate',
+    kind: ult.kind || 'damage',
     damageType: ult.damageType,
     element: ult.element,
-    power: tier.power,
+    power: tier.power || 0,
+    effects: tier.effects || null,
     selfBuff: tier.selfBuff || null,
     desc: ult.desc,
     future: !!tier.future,
   };
 }
 
-return { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, SKILL_CATEGORY_LABEL, SKILL_CATEGORY_ORDER, isDamageSkill, buffSummary, skillStrength, getSkill, getUltimate, resolveUltimate };
+/** True for the buff / debuff Ultimates (no damage, two effects). */
+function isSupportUltimate(u) {
+  return !!u && (u.kind === 'support');
+}
+
+return { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, SKILL_CATEGORY_LABEL, SKILL_CATEGORY_ORDER, isDamageSkill, effectTarget, buffSummary, riderSummary, skillStrength, getSkill, getUltimate, resolveUltimate, isSupportUltimate };
 })();
 __m["src/data/skillVfx.js"] = (function () {
 // =============================================================================
@@ -1490,6 +1739,7 @@ const ELEMENT_VFX = {
   nature: { core: '#d8ffb0', mid: '#6fd36a', deep: '#2f7c3f', glow: '#a8f08a', dark: '#17402a', spark: '#eaffd0' },
   water:  { core: '#f2fdff', mid: '#5cc0f5', deep: '#1a5c9e', glow: '#bfe9ff', dark: '#0d3557', spark: '#ffffff' },
   fire:   { core: '#fff3b0', mid: '#ff9a2e', deep: '#d8391a', glow: '#ffcf7a', dark: '#5a1405', spark: '#fff6d8' },
+  rock:   { core: '#fff1cf', mid: '#c9a86e', deep: '#6e5a3c', glow: '#f0dcb0', dark: '#2e2418', spark: '#fff7e0' },
   none:   { core: '#ffffff', mid: '#d8e2f0', deep: '#7b8798', glow: '#ffffff', dark: '#2b3340', spark: '#ffffff' },
 };
 
@@ -1624,6 +1874,28 @@ const SKILL_VFX = {
     cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'leafStorm', dur: 0.44 },
     impact: { style: 'leafStorm', shake: 15, ring: true },
     aftermath: { style: 'pollen', dur: 0.9 }, camera: { shake: 15, flash: 0.35, dur: 1.5 } },
+  // ---- rock ultimates
+  stone_avalanche: { id: 'stone_avalanche', element: 'rock', category: 'ultimate',
+    cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'rootErupt', dur: 0.42 },
+    impact: { style: 'verdantCrush', shake: 17, ring: true, flash: 0.5 },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 17, flash: 0.4, dur: 1.5 } },
+  crystal_cannon: { id: 'crystal_cannon', element: 'rock', category: 'ultimate',
+    cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'orb', dur: 0.36 },
+    impact: { style: 'fireBlast', shake: 15, ring: true, flash: 0.45 },
+    aftermath: { style: 'dust', dur: 0.8 }, camera: { shake: 15, flash: 0.4, dur: 1.4 } },
+  // support ultimates (buff / debuff): a barrier-style burst at the caster, no projectile
+  granite_bastion: { id: 'granite_bastion', element: 'rock', category: 'ultimate', defensive: true,
+    cast: { style: 'charge', dur: 0.3 }, projectile: null,
+    impact: { style: 'oceanGuard', shake: 6, ring: true },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 5, flash: 0.2, dur: 1.4 } },
+  quake_curse: { id: 'quake_curse', element: 'rock', category: 'ultimate',
+    cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'rootErupt', dur: 0.4 },
+    impact: { style: 'verdantCrush', shake: 12, ring: true },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 10, flash: 0.25, dur: 1.4 } },
+  crystal_resonance: { id: 'crystal_resonance', element: 'rock', category: 'ultimate', defensive: true,
+    cast: { style: 'charge', dur: 0.3 }, projectile: null,
+    impact: { style: 'oceanGuard', shake: 6, ring: true },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 5, flash: 0.25, dur: 1.4 } },
 };
 
 /** Buff VFX keyed by the stat they raise (element tints the palette). */
@@ -1708,7 +1980,7 @@ const SPECIES = {
       12: ['pollen_veil'],
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
       40: ['blight_bloom'],
-      60: ['nature_burst', 'wild_instinct', 'briar_smash'],
+      60: ['nature_burst', 'wild_instinct', 'briar_smash', 'sap_bite'],
       80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
     },
     art: {
@@ -1744,7 +2016,7 @@ const SPECIES = {
       12: ['pressure_drop'],
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
       40: ['riptide_pull'],
-      60: ['whirlpool', 'deep_current', 'tide_smash'],
+      60: ['whirlpool', 'deep_current', 'tide_smash', 'siphon_tide'],
       80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
     },
     art: {
@@ -1760,7 +2032,7 @@ const SPECIES = {
     breed: 'Dragon',
     element: 'fire',
     defaultRarity: 'D',
-    defaultMood: 'fierce',
+    defaultMood: 'sturdy',
     role: 'Offensive',
     starter: true,
     catchRate: 0.45,
@@ -1780,7 +2052,7 @@ const SPECIES = {
       12: ['ash_cloud'],
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
       40: ['cinder_curse'],
-      60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
+      60: ['inferno_roar', 'dragon_heat', 'cinder_smash', 'ember_leech'],
       80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
     },
     art: {
@@ -1796,7 +2068,7 @@ const SPECIES = {
     breed: 'Wolf',
     element: 'water',
     defaultRarity: 'D',
-    defaultMood: 'lazy',
+    defaultMood: 'sturdy',
     role: 'Tank',
     starter: false,
     catchRate: 0.5,
@@ -1817,7 +2089,7 @@ const SPECIES = {
       20: ['heavy_wave', 'thick_fur', 'stream_jab'],
       40: ['abyssal_chill'],
       60: ['crushing_current', 'deep_guard', 'tide_smash'],
-      80: ['abyssal_wave', 'fortress_hide', 'abyss_slam'],
+      80: ['abyssal_wave', 'fortress_hide', 'abyss_slam', 'retaliate'],
     },
     art: {
       body: 'wolf',
@@ -1832,7 +2104,7 @@ const SPECIES = {
     breed: 'Avian',
     element: 'nature',
     defaultRarity: 'D',
-    defaultMood: 'playful',
+    defaultMood: 'swift',
     role: 'Speed / Evasion',
     starter: false,
     catchRate: 0.62,
@@ -1853,7 +2125,7 @@ const SPECIES = {
       20: ['razor_wing', 'wind_step', 'thorn_jab'],
       40: ['withering_curse'],
       60: ['sky_cutter', 'feather_flow', 'briar_smash'],
-      80: ['sky_cyclone', 'gale_mastery', 'worldroot_slam'],
+      80: ['sky_cyclone', 'gale_mastery', 'worldroot_slam', 'mending_strike'],
     },
     art: {
       body: 'avian',
@@ -1887,7 +2159,7 @@ const SPECIES = {
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
       40: ['withering_curse'],
       60: ['nature_burst', 'wild_instinct', 'briar_smash'],
-      80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
+      80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam', 'war_cry'],
     },
     art: {
       body: 'wolf',
@@ -1921,7 +2193,7 @@ const SPECIES = {
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
       40: ['blight_bloom'],
       60: ['nature_burst', 'wild_instinct', 'briar_smash'],
-      80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
+      80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam', 'mind_break'],
     },
     art: {
       body: 'fox',
@@ -1955,7 +2227,7 @@ const SPECIES = {
       20: ['thorn_spear', 'thorn_armor', 'thorn_jab'],
       40: ['blight_bloom'],
       60: ['nature_burst', 'wild_instinct', 'briar_smash'],
-      80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam'],
+      80: ['ancient_bloom', 'forest_blessing', 'worldroot_slam', 'restoring_pulse'],
     },
     art: {
       body: 'avian',
@@ -1969,7 +2241,7 @@ const SPECIES = {
     breed: 'Serpent',
     element: 'water',
     defaultRarity: 'C',
-    defaultMood: 'focused',
+    defaultMood: 'brave',
     role: 'Special Wall',
     catchRate: 0.46,
     expYield: 70,
@@ -1989,7 +2261,7 @@ const SPECIES = {
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
       40: ['riptide_pull'],
       60: ['whirlpool', 'deep_current', 'tide_smash'],
-      80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
+      80: ['ocean_pressure', 'ocean_mind', 'abyss_slam', 'arcane_surge'],
     },
     art: {
       body: 'dragon',
@@ -2022,8 +2294,8 @@ const SPECIES = {
       12: ['brine_rust'],
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
       40: ['abyssal_chill'],
-      60: ['whirlpool', 'deep_current', 'tide_smash'],
-      80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
+      60: ['whirlpool', 'deep_current', 'tide_smash', 'retaliate'],
+      80: ['ocean_pressure', 'ocean_mind', 'abyss_slam', 'bulwark'],
     },
     art: {
       body: 'wolf',
@@ -2037,7 +2309,7 @@ const SPECIES = {
     breed: 'Feline',
     element: 'water',
     defaultRarity: 'C',
-    defaultMood: 'aggressive',
+    defaultMood: 'brave',
     role: 'Fast Physical',
     catchRate: 0.5,
     expYield: 66,
@@ -2056,7 +2328,7 @@ const SPECIES = {
       12: ['brine_rust'],
       20: ['aqua_spear', 'tidal_focus', 'stream_jab'],
       40: ['abyssal_chill'],
-      60: ['whirlpool', 'deep_current', 'tide_smash'],
+      60: ['whirlpool', 'deep_current', 'tide_smash', 'mending_strike'],
       80: ['ocean_pressure', 'ocean_mind', 'abyss_slam'],
     },
     art: {
@@ -2071,7 +2343,7 @@ const SPECIES = {
     breed: 'Feline',
     element: 'fire',
     defaultRarity: 'C',
-    defaultMood: 'aggressive',
+    defaultMood: 'brave',
     role: 'Physical Sweeper',
     catchRate: 0.44,
     expYield: 72,
@@ -2091,7 +2363,7 @@ const SPECIES = {
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
       40: ['magma_brand'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
-      80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
+      80: ['dragon_inferno', 'ancient_flame', 'magma_slam', 'predator_focus'],
     },
     art: {
       body: 'feline',
@@ -2105,7 +2377,7 @@ const SPECIES = {
     breed: 'Avian',
     element: 'fire',
     defaultRarity: 'C',
-    defaultMood: 'fierce',
+    defaultMood: 'sturdy',
     role: 'Glass Cannon',
     catchRate: 0.42,
     expYield: 74,
@@ -2125,7 +2397,7 @@ const SPECIES = {
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
       40: ['cinder_curse'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
-      80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
+      80: ['dragon_inferno', 'ancient_flame', 'magma_slam', 'vampiric_maw'],
     },
     art: {
       body: 'avian',
@@ -2139,7 +2411,7 @@ const SPECIES = {
     breed: 'Dragon',
     element: 'fire',
     defaultRarity: 'B',
-    defaultMood: 'fierce',
+    defaultMood: 'sturdy',
     role: 'Heavy Hitter',
     catchRate: 0.38,
     expYield: 78,
@@ -2159,7 +2431,7 @@ const SPECIES = {
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
       40: ['magma_brand'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
-      80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
+      80: ['dragon_inferno', 'ancient_flame', 'magma_slam', 'intimidate'],
     },
     art: {
       body: 'dragon',
@@ -2193,12 +2465,187 @@ const SPECIES = {
       20: ['burning_fang', 'burning_scales', 'ember_jab'],
       40: ['magma_brand'],
       60: ['inferno_roar', 'dragon_heat', 'cinder_smash'],
-      80: ['dragon_inferno', 'ancient_flame', 'magma_slam'],
+      80: ['dragon_inferno', 'ancient_flame', 'magma_slam', 'shatter'],
     },
     art: {
       body: 'wolf',
       primary: '#a45a4a', secondary: '#6b332a', belly: '#f0dcc8',
       accent: '#d88a6a', eye: '#ffb090', dark: '#3a1a14',
+    },
+  },
+
+  // =====================================================================
+  // ROCK — Stonehollow Crags (Lv.45-60). Five new body plans: tortoise,
+  // boar, beetle, golem and lizard.
+  // =====================================================================
+  pebbleshell: {
+    id: 'pebbleshell',
+    displayName: 'Pebbleshell',
+    breed: 'Tortoise',
+    element: 'rock',
+    defaultRarity: 'C',
+    defaultMood: 'guarded',
+    role: 'Wall',
+    catchRate: 0.50,
+    expYield: 72,
+    description: 'A patient tortoise whose shell grows crystal spikes as it ages. Nothing hurries it, and very little hurts it.',
+    baseStats: { hp: 132, patk: 14, satk: 10, pdef: 21, sdef: 16, spd: 7, counter: 4, crit: 4, critMult: 40 },
+    ultimate: 'granite_bastion',
+    spawnMaps: ['stonehollow_crags'],
+    evolutions: [
+      { stage: 0, name: 'Pebbleshell', level: 1, statMult: 1.00, art: { scale: 1.00 } },
+      { stage: 1, name: 'Cragshell', level: 20, statMult: 1.36, art: { scale: 1.22 } },
+      { stage: 2, name: 'Terradome', level: 60, statMult: 1.80, art: { scale: 1.44, horns: true } },
+      { stage: 3, name: 'Titanshell', level: 80, statMult: 2.30, art: { scale: 1.68, horns: true } },
+    ],
+    skillUnlocks: {
+      1:  ['pebble_toss', 'stone_shard', 'stone_skin', 'petrify'],
+      12: ['crush_armor'],
+      20: ['crag_lance', 'mountain_heart', 'rock_jab'],
+      40: ['fault_line'],
+      60: ['meteor_fist', 'bulwark', 'boulder_smash'],
+      80: ['titan_quake', 'restoring_pulse', 'tectonic_slam'],
+    },
+    art: {
+      body: 'tortoise',
+      primary: '#7f9a6a', secondary: '#5e6f57', belly: '#e6dcb8',
+      accent: '#c9b27a', eye: '#f2e6a0', dark: '#2f3a2c',
+    },
+  },
+  gravelhog: {
+    id: 'gravelhog',
+    displayName: 'Gravelhog',
+    breed: 'Boar',
+    element: 'rock',
+    defaultRarity: 'C',
+    defaultMood: 'brave',
+    role: 'Physical Bruiser',
+    catchRate: 0.48,
+    expYield: 74,
+    description: 'A boar with a back of fused gravel and tusks of raw flint. It charges first and thinks never.',
+    baseStats: { hp: 118, patk: 21, satk: 9, pdef: 16, sdef: 11, spd: 12, counter: 6, crit: 8, critMult: 45 },
+    ultimate: 'stone_avalanche',
+    spawnMaps: ['stonehollow_crags'],
+    evolutions: [
+      { stage: 0, name: 'Gravelhog', level: 1, statMult: 1.00, art: { scale: 1.00 } },
+      { stage: 1, name: 'Bouldertusk', level: 20, statMult: 1.34, art: { scale: 1.22, horns: true } },
+      { stage: 2, name: 'Ridgeback', level: 60, statMult: 1.76, art: { scale: 1.43, horns: true } },
+      { stage: 3, name: 'Terratusk', level: 80, statMult: 2.22, art: { scale: 1.66, horns: true } },
+    ],
+    skillUnlocks: {
+      1:  ['pebble_toss', 'stone_shard', 'granite_might', 'sandstorm'],
+      12: ['crush_armor'],
+      20: ['crag_lance', 'stone_skin', 'rock_jab'],
+      40: ['fault_line'],
+      60: ['meteor_fist', 'war_cry', 'boulder_smash'],
+      80: ['titan_quake', 'obsidian_edge', 'tectonic_slam'],
+    },
+    art: {
+      body: 'boar',
+      primary: '#8b6f5a', secondary: '#5a4538', belly: '#d9c6a8',
+      accent: '#c4a57a', eye: '#ffcf7a', dark: '#2e211a',
+    },
+  },
+  quartzling: {
+    id: 'quartzling',
+    displayName: 'Quartzling',
+    breed: 'Beetle',
+    element: 'rock',
+    defaultRarity: 'C',
+    defaultMood: 'clever',
+    role: 'Special Attacker',
+    catchRate: 0.46,
+    expYield: 70,
+    description: 'A beetle grown around a seed crystal. Light gathers in its carapace and leaves as a searing ray.',
+    baseStats: { hp: 96, patk: 11, satk: 20, pdef: 13, sdef: 15, spd: 14, counter: 8, crit: 9, critMult: 44 },
+    ultimate: 'crystal_cannon',
+    spawnMaps: ['stonehollow_crags'],
+    evolutions: [
+      { stage: 0, name: 'Quartzling', level: 1, statMult: 1.00, art: { scale: 1.00 } },
+      { stage: 1, name: 'Geodrone', level: 20, statMult: 1.32, art: { scale: 1.20, horns: true } },
+      { stage: 2, name: 'Prismatid', level: 60, statMult: 1.72, art: { scale: 1.40, horns: true, wings: true } },
+      { stage: 3, name: 'Crystalisk', level: 80, statMult: 2.15, art: { scale: 1.62, horns: true, wings: true } },
+    ],
+    skillUnlocks: {
+      1:  ['pebble_toss', 'crystal_ray', 'quartz_focus', 'grit_blind'],
+      12: ['quake_shock'],
+      20: ['crystal_leech', 'bedrock_will', 'rock_jab'],
+      40: ['stone_curse'],
+      60: ['quartz_storm', 'arcane_surge', 'boulder_smash'],
+      80: ['core_beam', 'geode_mind', 'tectonic_slam'],
+    },
+    art: {
+      body: 'beetle',
+      primary: '#6d6a8c', secondary: '#3f3c5c', belly: '#cfc6e6',
+      accent: '#9ee6ff', eye: '#d8fbff', dark: '#221f36',
+    },
+  },
+  rubblekin: {
+    id: 'rubblekin',
+    displayName: 'Rubblekin',
+    breed: 'Golem',
+    element: 'rock',
+    defaultRarity: 'C',
+    defaultMood: 'sturdy',
+    role: 'Debuffer',
+    catchRate: 0.44,
+    expYield: 76,
+    description: 'A heap of quarry stones that woke up one morning and decided to walk. It fights by taking the ground from under you.',
+    baseStats: { hp: 126, patk: 16, satk: 13, pdef: 18, sdef: 14, spd: 6, counter: 3, crit: 5, critMult: 40 },
+    ultimate: 'quake_curse',
+    spawnMaps: ['stonehollow_crags'],
+    evolutions: [
+      { stage: 0, name: 'Rubblekin', level: 1, statMult: 1.00, art: { scale: 1.00 } },
+      { stage: 1, name: 'Cairnling', level: 20, statMult: 1.36, art: { scale: 1.23 } },
+      { stage: 2, name: 'Monolith', level: 60, statMult: 1.80, art: { scale: 1.45, horns: true } },
+      { stage: 3, name: 'Colossus', level: 80, statMult: 2.30, art: { scale: 1.70, horns: true } },
+    ],
+    skillUnlocks: {
+      1:  ['pebble_toss', 'stone_shard', 'stone_skin', 'sandstorm'],
+      12: ['quake_shock'],
+      20: ['crag_lance', 'mountain_heart', 'rock_jab'],
+      40: ['stone_curse'],
+      60: ['meteor_fist', 'shatter', 'boulder_smash'],
+      80: ['titan_quake', 'intimidate', 'tectonic_slam'],
+    },
+    art: {
+      body: 'golem',
+      primary: '#8a8478', secondary: '#5a554c', belly: '#bfb7a6',
+      accent: '#ffb75a', eye: '#ffd98a', dark: '#2a2723',
+    },
+  },
+  shalecrawl: {
+    id: 'shalecrawl',
+    displayName: 'Shalecrawl',
+    breed: 'Lizard',
+    element: 'rock',
+    defaultRarity: 'C',
+    defaultMood: 'swift',
+    role: 'Striker',
+    catchRate: 0.47,
+    expYield: 68,
+    description: 'A flat, quick lizard that skims across loose shale. Its crystal fins drink what its claws tear.',
+    baseStats: { hp: 90, patk: 17, satk: 15, pdef: 11, sdef: 11, spd: 19, counter: 12, crit: 12, critMult: 50 },
+    ultimate: 'crystal_resonance',
+    spawnMaps: ['stonehollow_crags'],
+    evolutions: [
+      { stage: 0, name: 'Shalecrawl', level: 1, statMult: 1.00, art: { scale: 1.00 } },
+      { stage: 1, name: 'Slatestrider', level: 20, statMult: 1.32, art: { scale: 1.20 } },
+      { stage: 2, name: 'Flintclaw', level: 60, statMult: 1.72, art: { scale: 1.40, horns: true } },
+      { stage: 3, name: 'Obsidrake', level: 80, statMult: 2.15, art: { scale: 1.62, horns: true, wings: true } },
+    ],
+    skillUnlocks: {
+      1:  ['scratch', 'stone_shard', 'granite_might', 'petrify'],
+      12: ['grit_blind'],
+      20: ['crystal_leech', 'stone_skin', 'rock_jab'],
+      40: ['fault_line'],
+      60: ['retaliate', 'predator_focus', 'boulder_smash'],
+      80: ['vampiric_maw', 'mind_break', 'tectonic_slam'],
+    },
+    art: {
+      body: 'lizard',
+      primary: '#5f6b7a', secondary: '#3c4552', belly: '#d2d8c8',
+      accent: '#7fe0c8', eye: '#c8fff0', dark: '#1e242c',
     },
   },
 };
@@ -2254,7 +2701,7 @@ const MAPS = {
     displayName: 'Verdant Vale',
     order: 0,
     element: 'nature',
-    levelRange: [1, 10],
+    levelRange: [1, 20],
     music: 'vale',
     visualTheme: 'nature',
     width: 3600,
@@ -2275,7 +2722,7 @@ const MAPS = {
     buildings: [
       { id: 'vale_center', type: 'center', x: 250, y: 520, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'vale_shop',   type: 'shop',   x: 620, y: 530, w: 190, h: 150, name: 'Leafrest Supplies',
-        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'skill_tonic', 'sweet_berry', 'crunchy_root', 'honey_nut', 'moon_melon'] },
+        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'revive_herb', 'skill_tonic', 'sweet_berry', 'crunchy_root', 'honey_nut', 'moon_melon'] },
       { id: 'vale_house1', type: 'house',  x: 120, y: 900, w: 170, h: 130, name: 'Cottage' },
       { id: 'vale_house2', type: 'house',  x: 700, y: 950, w: 170, h: 130, name: 'Cottage' },
     ],
@@ -2307,24 +2754,24 @@ const MAPS = {
         intro: 'My Leaflet never sits still! Show me what you have got.',
         defeat: 'So fast... and you were faster. Take this.',
         reward: { coins: 220, items: { basic_ball: 2 } },
-        team: [{ species: 'leaflet', level: 4 }, { species: 'spriggo', level: 5 }] },
+        team: [{ species: 'leaflet', level: 6 }, { species: 'spriggo', level: 7 }] },
       { id: 'vale_t2', name: 'Ranger Holt', x: 2180, y: 1050, color: '#9ec46a', flag: 'vale_t2',
         intro: 'Whisperwood tests every trainer. Ready?',
         defeat: 'The woods chose well today.',
         reward: { coins: 340, items: { potion: 2 } },
-        team: [{ species: 'spriggo', level: 7 }, { species: 'leaflet', level: 7 }, { species: 'spriggo', level: 8 }] },
+        team: [{ species: 'spriggo', level: 11 }, { species: 'leaflet', level: 11 }, { species: 'spriggo', level: 12 }] },
       { id: 'vale_guardian', name: 'Verdant Guardian Ysel', x: 3130, y: 730, color: '#3f8f4f', guardian: true, flag: 'vale_guardian',
         intro: 'None pass the Verdant Gate untested. Show me your bond!',
         defeat: 'The Vale accepts you. Take the Vale Charm — the gate is open.',
         reward: { coins: 700, items: { vale_charm: 1, normal_ball: 3 } },
-        team: [{ species: 'leaflet', level: 9, rarity: 'C' }, { species: 'spriggo', level: 10, rarity: 'C', mood: 'focused' }] },
+        team: [{ species: 'leaflet', level: 18, rarity: 'C' }, { species: 'spriggo', level: 20, rarity: 'B', mood: 'brave' }] },
     ],
     encounterZones: [
-      { id: 'vz1', rect: [1040, 150, 820, 1000], levelRange: [1, 4], density: 5,
+      { id: 'vz1', rect: [1040, 150, 820, 1000], levelRange: [1, 8], density: 5,
         species: [{ id: 'spriggo', weight: 30 }, { id: 'leaflet', weight: 30 }, { id: 'mosscoil', weight: 20 }, { id: 'thornhound', weight: 10 }, { id: 'petalwisp', weight: 10 }] },
-      { id: 'vz2', rect: [1920, 150, 840, 1200], levelRange: [4, 8], density: 6,
+      { id: 'vz2', rect: [1920, 150, 840, 1200], levelRange: [6, 14], density: 6,
         species: [{ id: 'spriggo', weight: 25 }, { id: 'leaflet', weight: 30 }, { id: 'mosscoil', weight: 20 }, { id: 'thornhound', weight: 15 }, { id: 'petalwisp', weight: 10 }] },
-      { id: 'vz3', rect: [2830, 200, 700, 1100], levelRange: [7, 10], density: 5,
+      { id: 'vz3', rect: [2830, 200, 700, 1100], levelRange: [12, 20], density: 5,
         species: [{ id: 'spriggo', weight: 30 }, { id: 'leaflet', weight: 20 }, { id: 'mosscoil', weight: 15 }, { id: 'thornhound', weight: 20 }, { id: 'petalwisp', weight: 15 }] },
     ],
     connections: [
@@ -2340,7 +2787,7 @@ const MAPS = {
     displayName: 'Azure Coast',
     order: 1,
     element: 'water',
-    levelRange: [10, 20],
+    levelRange: [15, 30],
     music: 'coast',
     visualTheme: 'water',
     width: 4000,
@@ -2364,7 +2811,7 @@ const MAPS = {
     buildings: [
       { id: 'coast_center', type: 'center', x: 300, y: 560, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'coast_shop',   type: 'shop',   x: 660, y: 570, w: 190, h: 150, name: 'Tidecrest Trading Post',
-        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'hyper_potion', 'revive_herb', 'skill_tonic', 'skill_elixir',
+        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'hyper_potion', 'revive_herb', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
           'honey_nut', 'moon_melon', 'river_jerky', 'glow_nectar', 'ember_roast', 'coral_cake', 'tide_pudding'] },
       { id: 'coast_dock1',  type: 'dock',   x: 180, y: 250, w: 300, h: 110, name: 'Docks' },
       { id: 'coast_dock2',  type: 'dock',   x: 720, y: 250, w: 260, h: 110, name: 'Docks' },
@@ -2393,28 +2840,28 @@ const MAPS = {
         intro: 'The tide favours the patient. And the prepared!',
         defeat: 'Well fought. The coast is yours to roam.',
         reward: { coins: 480, items: { normal_ball: 2 } },
-        team: [{ species: 'aquini', level: 12 }, { species: 'rivruff', level: 13 }] },
+        team: [{ species: 'aquini', level: 18 }, { species: 'rivruff', level: 19 }] },
       { id: 'coast_t2', name: 'Angler Bo', x: 2500, y: 1120, color: '#4f8fc0', flag: 'coast_t2',
         intro: 'Caught more Rivruff than fish this week.',
         defeat: 'Guess I should stick to fishing.',
         reward: { coins: 560, items: { greater_potion: 2 } },
-        team: [{ species: 'rivruff', level: 14 }, { species: 'aquini', level: 15 }, { species: 'rivruff', level: 15 }] },
+        team: [{ species: 'rivruff', level: 22 }, { species: 'aquini', level: 23 }, { species: 'rivruff', level: 23 }] },
       { id: 'coast_guardian', name: 'Cavern Guardian Nerith', x: 3450, y: 700, color: '#2f7fb0', guardian: true, flag: 'coast_guardian',
         intro: 'Beyond me lies fire. Prove the sea cannot break you.',
         defeat: 'Go. The Emberwild Gate will know you now. Take the Coast Pass.',
         reward: { coins: 1100, items: { coast_pass: 1, advanced_ball: 3 } },
         team: [
-          { species: 'aquini', level: 17, rarity: 'C' },
-          { species: 'rivruff', level: 18, rarity: 'B', mood: 'sturdy' },
-          { species: 'aquini', level: 19, rarity: 'B', mood: 'clever' },
+          { species: 'aquini', level: 27, rarity: 'B' },
+          { species: 'rivruff', level: 29, rarity: 'B', mood: 'sturdy' },
+          { species: 'aquini', level: 30, rarity: 'A', mood: 'clever' },
         ] },
     ],
     encounterZones: [
-      { id: 'az1', rect: [1140, 320, 820, 780], levelRange: [10, 13], density: 6,
+      { id: 'az1', rect: [1140, 320, 820, 780], levelRange: [15, 20], density: 6,
         species: [{ id: 'aquini', weight: 30 }, { id: 'rivruff', weight: 30 }, { id: 'currentkit', weight: 20 }, { id: 'shelldrake', weight: 10 }, { id: 'tidewyrm', weight: 10 }] },
-      { id: 'az2', rect: [2380, 320, 480, 1050], levelRange: [13, 16], density: 5,
+      { id: 'az2', rect: [2380, 320, 480, 1050], levelRange: [19, 25], density: 5,
         species: [{ id: 'aquini', weight: 25 }, { id: 'rivruff', weight: 25 }, { id: 'currentkit', weight: 20 }, { id: 'shelldrake', weight: 15 }, { id: 'tidewyrm', weight: 15 }] },
-      { id: 'az3', rect: [2930, 320, 620, 520], levelRange: [16, 20], density: 5,
+      { id: 'az3', rect: [2930, 320, 620, 520], levelRange: [24, 30], density: 5,
         species: [{ id: 'aquini', weight: 20 }, { id: 'rivruff', weight: 25 }, { id: 'currentkit', weight: 15 }, { id: 'shelldrake', weight: 20 }, { id: 'tidewyrm', weight: 20 }] },
     ],
     connections: [
@@ -2431,7 +2878,7 @@ const MAPS = {
     displayName: 'Emberwild',
     order: 2,
     element: 'fire',
-    levelRange: [20, 30],
+    levelRange: [30, 45],
     music: 'ember',
     visualTheme: 'fire',
     width: 4200,
@@ -2455,8 +2902,8 @@ const MAPS = {
     buildings: [
       { id: 'ember_center', type: 'center', x: 280, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'ember_shop',   type: 'shop',   x: 640, y: 550, w: 190, h: 150, name: 'Emberwatch Quartermaster',
-        stock: ['normal_ball', 'advanced_ball', 'absolute_ball', 'god_ball', 'king_ball',
-          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'full_restore',
+        stock: ['normal_ball', 'advanced_ball', 'absolute_ball', 'god_ball',
+          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'river_jerky', 'ember_roast', 'mythic_feast', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
       { id: 'ember_tower',  type: 'tower',  x: 140, y: 1020, w: 160, h: 200, name: 'Watchtower' },
     ],
@@ -2471,52 +2918,149 @@ const MAPS = {
     npcs: [
       { id: 'warden_scout', type: 'guide', x: 500, y: 700, name: 'Scout Cinder', color: '#ff9a5a',
         dialogue: [
-          'Emberwild is the end of the current road, trainer. Wild Mythlings here reach Lv.30.',
-          'Catch a Lv.30 Emberu if you like — it will still join you at Lv.1. That is the law of the bond.',
-          'The Flame Warden waits in the Volcanic Ruins. Come back when your team is near Lv.28.',
+          'Emberwild is no place for a Lv.20 team, trainer. Wild Mythlings here run Lv.30 to Lv.45.',
+          'Catch a Lv.45 Emberu if you like — it will still join you at Lv.1. That is the law of the bond.',
+          'The Flame Warden waits in the Volcanic Ruins. Come back when your team is near Lv.45 — beyond her lies the Emberwild Pass to the Crags.',
         ] },
       { id: 'ember_smith', type: 'villager', x: 830, y: 960, name: 'Forgehand Vull', color: '#ffb877',
-        dialogue: ['God Balls are pricey, but at Lv.30 a wild Emberu does not go quietly.'] },
+        dialogue: ['A God Ball never fails — pricey, but at Lv.45 a wild Emberu does not go quietly.'] },
     ],
     trainers: [
       { id: 'ember_t1', name: 'Ash Runner Dax', x: 1450, y: 560, color: '#e8743a', flag: 'ember_t1',
         intro: 'You made it past the coast? The ash is less forgiving.',
         defeat: 'Hot-headed of me to challenge you.',
         reward: { coins: 900, items: { advanced_ball: 2 } },
-        team: [{ species: 'emberu', level: 22 }, { species: 'emberu', level: 23, mood: 'aggressive' }] },
+        team: [{ species: 'emberu', level: 33 }, { species: 'emberu', level: 34, mood: 'brave' }] },
       { id: 'ember_t2', name: 'Cinder Witch Vex', x: 2350, y: 1080, color: '#c9502f', flag: 'ember_t2',
         intro: 'The forest burns, yet it grows. Curious, no?',
         defeat: 'Embers scatter. So do I.',
         reward: { coins: 1200, items: { greater_potion: 3 } },
-        team: [{ species: 'emberu', level: 24, rarity: 'C' }, { species: 'spriggo', level: 24 }, { species: 'emberu', level: 25, rarity: 'C' }] },
+        team: [{ species: 'emberu', level: 36, rarity: 'C' }, { species: 'spriggo', level: 36 }, { species: 'emberu', level: 37, rarity: 'C' }] },
       { id: 'ember_t3', name: 'Magma Diver Rho', x: 3050, y: 700, color: '#ff6a4a', flag: 'ember_t3',
         intro: 'Molten Cavern rules: hit hard, hit first.',
         defeat: 'Fast. Very fast.',
         reward: { coins: 1500, items: { absolute_ball: 1 } },
-        team: [{ species: 'emberu', level: 26, rarity: 'B' }, { species: 'rivruff', level: 26 }, { species: 'emberu', level: 27, rarity: 'B', mood: 'fierce' }] },
-      { id: 'flame_warden', name: 'Flame Warden Ignis', x: 3950, y: 900, color: '#ff4d2d', guardian: true, finalBoss: true, flag: 'flame_warden',
-        intro: 'I am the last trial of this age, trainer. Show me everything Wildbound taught you.',
-        defeat: 'Magnificent. Wildbound is yours to roam — until the world grows again.',
+        team: [{ species: 'emberu', level: 39, rarity: 'B' }, { species: 'rivruff', level: 39 }, { species: 'emberu', level: 40, rarity: 'B', mood: 'sturdy' }] },
+      { id: 'flame_warden', name: 'Flame Warden Ignis', x: 3950, y: 900, color: '#ff4d2d', guardian: true, flag: 'flame_warden',
+        intro: 'Beyond this pass the mountains themselves fight back. Prove you are ready for stone, trainer.',
+        defeat: 'Magnificent. Take the Ember Sigil — the Emberwild Pass to Stonehollow Crags is open to you.',
         reward: { coins: 3000, items: { ember_sigil: 1, god_ball: 1, absolute_ball: 2 } },
         team: [
-          { species: 'emberu', level: 28, rarity: 'B', mood: 'fierce' },
-          { species: 'rivruff', level: 29, rarity: 'A', mood: 'sturdy' },
-          { species: 'spriggo', level: 29, rarity: 'A', mood: 'focused' },
-          { species: 'emberu', level: 30, rarity: 'S', mood: 'aggressive' },
+          { species: 'emberu', level: 42, rarity: 'B', mood: 'sturdy' },
+          { species: 'rivruff', level: 43, rarity: 'A', mood: 'sturdy' },
+          { species: 'spriggo', level: 44, rarity: 'A', mood: 'brave' },
+          { species: 'emberu', level: 45, rarity: 'S', mood: 'brave' },
         ] },
     ],
     encounterZones: [
-      { id: 'ez1', rect: [1040, 250, 820, 850], levelRange: [20, 23], density: 6,
+      { id: 'ez1', rect: [1040, 250, 820, 850], levelRange: [30, 35], density: 6,
         species: [{ id: 'emberu', weight: 45 }, { id: 'emberlynx', weight: 20 }, { id: 'cinderhawk', weight: 15 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 5 }] },
-      { id: 'ez2', rect: [1930, 300, 730, 1050], levelRange: [23, 26], density: 6,
+      { id: 'ez2', rect: [1930, 300, 730, 1050], levelRange: [34, 39], density: 6,
         species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 20 }, { id: 'cinderhawk', weight: 20 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 5 }] },
-      { id: 'ez3', rect: [2740, 500, 620, 520], levelRange: [25, 28], density: 5,
+      { id: 'ez3', rect: [2740, 500, 620, 520], levelRange: [37, 42], density: 5,
         species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 15 }, { id: 'cinderhawk', weight: 15 }, { id: 'ashpup', weight: 20 }, { id: 'magmataur', weight: 10 }] },
-      { id: 'ez4', rect: [3440, 800, 700, 620], levelRange: [27, 30], density: 5,
+      { id: 'ez4', rect: [3440, 800, 700, 620], levelRange: [41, 45], density: 5,
         species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 15 }, { id: 'cinderhawk', weight: 10 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 20 }] },
     ],
     connections: [
       { id: 'back_coast', rect: [0, 580, 60, 320], toMap: 'azure_coast', toPoint: { x: 3840, y: 780 }, label: 'To Azure Coast' },
+      { id: 'to_crags', rect: [4120, 620, 80, 320], toMap: 'stonehollow_crags', toPoint: { x: 220, y: 880 },
+        requiresItem: 'ember_sigil',
+        lockedText: 'The Emberwild Pass is barred by fallen rock. Defeat the Flame Warden for the Ember Sigil.',
+        label: 'To Stonehollow Crags' },
+    ],
+  },
+
+  // =====================================================================
+  // STONEHOLLOW CRAGS — Rock, Lv.45-60. Quarry camp, crystal caves and the
+  // Titan Summit where the Stone Warden waits.
+  // =====================================================================
+  stonehollow_crags: {
+    id: 'stonehollow_crags',
+    displayName: 'Stonehollow Crags',
+    order: 3,
+    element: 'rock',
+    levelRange: [45, 60],
+    music: 'crags',
+    visualTheme: 'rock',
+    width: 4400,
+    height: 1500,
+    spawn: { x: 220, y: 880 },
+    ambient: { sky: ['#3b3f4e', '#c9b48b'], fog: 'rgba(210,196,170,0.12)' },
+    regions: [
+      { id: 'quarry_camp',    name: 'Quarry Camp',    rect: [0, 0, 1000, 1500],    terrain: 'quarry' },
+      { id: 'gravel_pass',    name: 'Gravel Pass',    rect: [1000, 0, 900, 1500],  terrain: 'crag' },
+      { id: 'crystal_hollow', name: 'Crystal Hollow', rect: [1900, 0, 800, 1500],  terrain: 'cavern' },
+      { id: 'shale_ridge',    name: 'Shale Ridge',    rect: [2700, 0, 800, 1500],  terrain: 'crag' },
+      { id: 'titan_summit',   name: 'Titan Summit',   rect: [3500, 0, 900, 1500],  terrain: 'summit' },
+    ],
+    water: [
+      { x: 1120, y: 1160, w: 640, h: 200, kind: 'pond' },
+      { x: 2880, y: 240, w: 540, h: 170, kind: 'river' },
+      { x: 3680, y: 1090, w: 560, h: 220, kind: 'pond' },
+    ],
+    bridges: [{ x: 1380, y: 1120, w: 190, h: 280 }, { x: 3040, y: 200, w: 180, h: 250 }],
+    buildings: [
+      { id: 'crag_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
+      { id: 'crag_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Crags Outfitter',
+        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'shiny_ball', 'dark_ball',
+          'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+          'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
+      { id: 'crag_lodge',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Quarry Lodge' },
+      { id: 'summit_watch',type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Summit Watch' },
+    ],
+    landmarks: [
+      { id: 'crag_sign', type: 'sign', x: 520, y: 820, text: 'STONEHOLLOW CRAGS — mind the falling rock. Titan Summit lies east.' },
+      { id: 'hollow_crystal', type: 'crystal', x: 2260, y: 700 },
+      { id: 'hollow_crystal2', type: 'crystal', x: 2520, y: 1120 },
+      { id: 'ridge_ruin', type: 'ruin', x: 3060, y: 760 },
+      { id: 'summit_ruin', type: 'ruin', x: 3720, y: 620 },
+    ],
+    npcs: [
+      { id: 'quarry_foreman', type: 'villager', x: 720, y: 860, name: 'Foreman Bram', color: '#b98b5a',
+        dialogue: ['Welcome to the Crags, trainer. Everything up here is Rock type — fire barely scratches them.', 'Water and Nature Mythlings crack stone wide open. Bring the right team, or bring a lot of potions.'] },
+      { id: 'crystal_hermit', type: 'guide', x: 2200, y: 480, name: 'Hermit Sela', color: '#8fb8c8',
+        dialogue: ['The crystals in this hollow remember everything. The Mythlings that live here drink light from them.', 'The Stone Warden guards the Titan Summit. She has never been beaten. Not once.'] },
+    ],
+    trainers: [
+      { id: 'crag_t1', name: 'Quarry Hand Doric', x: 1320, y: 720, color: '#a08a6a', flag: 'crag_t1',
+        intro: 'Heavy hitters only past this point. Let us see what you have got.',
+        defeat: 'Ha! Solid. Keep climbing.',
+        reward: { coins: 2200, items: { absolute_ball: 2 } },
+        team: [{ species: 'pebbleshell', level: 48 }, { species: 'gravelhog', level: 49 }] },
+      { id: 'crag_t2', name: 'Prospector Wren', x: 2320, y: 940, color: '#7fa0c0', flag: 'crag_t2',
+        intro: 'I dig for crystals. My Mythlings dig for weaknesses.',
+        defeat: 'Fine, fine — the hollow is yours to prospect.',
+        reward: { coins: 2800, items: { max_potion: 2, mood_tonic: 1 } },
+        team: [{ species: 'quartzling', level: 51 }, { species: 'shalecrawl', level: 52 }, { species: 'rubblekin', level: 52, rarity: 'C' }] },
+      { id: 'crag_t3', name: 'Ridge Runner Tamsin', x: 3220, y: 720, color: '#c08a6a', flag: 'crag_t3',
+        intro: 'Nobody outruns me on the shale. Nobody out-hits my boars either.',
+        defeat: 'Not bad, not bad. The summit is just ahead — good luck with HER.',
+        reward: { coins: 3400, items: { god_ball: 1, temper_tonic: 1 } },
+        team: [{ species: 'gravelhog', level: 54, rarity: 'B' }, { species: 'quartzling', level: 55, rarity: 'B' }, { species: 'pebbleshell', level: 55, rarity: 'B', mood: 'guarded' }] },
+      { id: 'stone_warden', name: 'Stone Warden Halda', x: 4030, y: 820, color: '#8a7f6a', guardian: true, finalBoss: true, flag: 'stone_warden',
+        intro: 'I am the mountain\'s answer to every trainer who climbed too high. Show me you belong up here.',
+        defeat: 'The mountain yields. Wildbound is yours to roam — until the world grows again.',
+        reward: { coins: 8000, items: { crag_seal: 1, god_ball: 2, shiny_ball: 1 } },
+        team: [
+          { species: 'rubblekin', level: 57, rarity: 'A', mood: 'sturdy' },
+          { species: 'shalecrawl', level: 58, rarity: 'A', mood: 'swift' },
+          { species: 'quartzling', level: 59, rarity: 'S', mood: 'clever' },
+          { species: 'gravelhog', level: 60, rarity: 'S', mood: 'brave' },
+        ] },
+    ],
+    encounterZones: [
+      { id: 'cz1', rect: [1040, 120, 820, 960], levelRange: [45, 50], density: 6,
+        species: [{ id: 'pebbleshell', weight: 30 }, { id: 'gravelhog', weight: 30 }, { id: 'shalecrawl', weight: 20 }, { id: 'quartzling', weight: 10 }, { id: 'rubblekin', weight: 10 }] },
+      { id: 'cz2', rect: [1940, 200, 720, 1100], levelRange: [49, 54], density: 6,
+        species: [{ id: 'quartzling', weight: 30 }, { id: 'shalecrawl', weight: 25 }, { id: 'rubblekin', weight: 20 }, { id: 'pebbleshell', weight: 15 }, { id: 'gravelhog', weight: 10 }] },
+      { id: 'cz3', rect: [2740, 480, 720, 900], levelRange: [53, 58], density: 5,
+        species: [{ id: 'gravelhog', weight: 25 }, { id: 'rubblekin', weight: 25 }, { id: 'pebbleshell', weight: 20 }, { id: 'quartzling', weight: 15 }, { id: 'shalecrawl', weight: 15 }] },
+      { id: 'cz4', rect: [3540, 560, 760, 480], levelRange: [56, 60], density: 5,
+        species: [{ id: 'rubblekin', weight: 30 }, { id: 'quartzling', weight: 20 }, { id: 'gravelhog', weight: 20 }, { id: 'shalecrawl', weight: 15 }, { id: 'pebbleshell', weight: 15 }] },
+    ],
+    connections: [
+      { id: 'back_ember', rect: [0, 600, 60, 320], toMap: 'emberwild', toPoint: { x: 4040, y: 780 }, label: 'To Emberwild' },
     ],
   },
 };
@@ -3600,6 +4144,469 @@ function twigLeg(ctx, len) {
   ctx.beginPath(); ctx.moveTo(-1, len); ctx.lineTo(-2, len + 4); ctx.stroke();
 }
 
+// =============================================================================
+// ROCK BODY PLANS — Stonehollow Crags.  Five new silhouettes: tortoise, boar,
+// beetle, golem and lizard.  Each line grows visibly per evolution stage
+// (ex.stage 0..3): more crystal, bigger tusks / horns / fins, extra plating.
+// Bones stay in the shared vocabulary so every animation state just works.
+// =============================================================================
+
+/** A faceted crystal spike (pointing up) with a lit facet and a dark facet. */
+function crystalSpike(ctx, x, y, h, w, color, tilt = 0) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(tilt);
+  poly(ctx, [[-w, 0], [-w * 0.35, -h], [0, -h * 1.15], [w * 0.4, -h * 0.92], [w, 0]], color);
+  poly(ctx, [[-w * 0.35, -h], [0, -h * 1.15], [0.2, 0], [-w * 0.55, 0]], shadeColor(color, 0.28));
+  poly(ctx, [[0, -h * 1.15], [w * 0.4, -h * 0.92], [w, 0], [0.2, 0]], shadeColor(color, -0.22));
+  ctx.restore();
+}
+
+/** Rough stone plate: a low polygon with a highlight edge. */
+function stonePlate(ctx, x, y, w, h, color, seed = 0) {
+  const j = (k) => Math.sin(seed * 3.1 + k * 1.7) * 0.18;
+  poly(ctx, [
+    [x - w * (0.9 + j(1)), y + h * 0.1], [x - w * 0.5, y - h * (0.9 + j(2))], [x + w * (0.35 + j(3)), y - h],
+    [x + w * (0.95 + j(4)), y - h * 0.2], [x + w * 0.6, y + h * 0.85], [x - w * (0.4 + j(5)), y + h],
+  ], color);
+  poly(ctx, [[x - w * 0.5, y - h * 0.9], [x + w * 0.35, y - h], [x + w * 0.15, y - h * 0.45], [x - w * 0.4, y - h * 0.4]], shadeColor(color, 0.16));
+}
+
+/** Small round pebble with a highlight. */
+function pebble(ctx, x, y, r, color) {
+  ell(ctx, x, y, r, r * 0.8, color);
+  ell(ctx, x - r * 0.3, y - r * 0.3, r * 0.4, r * 0.28, shadeColor(color, 0.22));
+}
+
+// -----------------------------------------------------------------------------
+// PEBBLESHELL — Rock Tortoise.  Domed shell that sprouts crystal spikes with
+// every stage, stubby legs, beaked head.  Patient, immovable.
+// -----------------------------------------------------------------------------
+const TORTOISE = {
+  skel: (ex) => skeleton(ex, { legLen: 13, legW: 6.5, bodyY: -25, headY: -37, headX: 24, hipX: -12, shoX: 9 }),
+  face: {
+    eyes: [{ x: 5.6, y: -2.6, r: 3.4, shape: 'droop', color: 'eye' },
+           { x: -4.6, y: -2.6, r: 3.0, shape: 'droop', color: 'eye' }],
+    brows: [{ x: 5.6, y: -7.4, w: 6 }, { x: -4.6, y: -7.4, w: 5.4, mirror: true }],
+    mouth: { x: 11, y: 5.6, w: 6.2, color: '#2a2f2a' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 14, r.bodyY + 6], box: [-16, -8, 20, 16],
+      draw(ctx, c) {
+        poly(ctx, [[0, -4], [-12, -1], [-14, 3], [0, 5]], c.primary);
+        ell(ctx, -12, 1.5, 2.6, 2.2, c.shadow);
+      } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY + 9], box: [-12, -4, 24, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 0.95, c.shadow, c.secondary, -1.2, 3) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 3, r.bodyY + 9], box: [-12, -4, 24, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.92, c.shadow, c.secondary, 1.1, 3) },
+
+    { // ---- torso + SHELL (the shell grows crystals per stage)
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-46, -58, 90, 82],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        // soft torso under the shell
+        volume(ctx, r.hipX + 6, r.bodyY + 6, 24 + g * 4, 11 + g * 2, c.light, c.shadow);
+        ell(ctx, r.shoX + 4, r.bodyY + 9, 14 + g * 2, 6.5 + g, c.belly);
+        // neck
+        poly(ctx, [[r.shoX + 6, r.bodyY - 2], [r.headX - 6, r.headY + 6], [r.headX + 4, r.headY + 9], [r.shoX + 14, r.bodyY + 8]], c.primary);
+        // shell dome
+        const sx = r.hipX + 4, sy = r.bodyY - 2, sw = 30 + g * 8, sh = 22 + g * 7;
+        ctx.save();
+        ctx.beginPath(); ctx.ellipse(sx, sy, sw, sh, 0, Math.PI, Math.PI * 2); ctx.lineTo(sx + sw, sy + 3); ctx.lineTo(sx - sw, sy + 3); ctx.closePath();
+        const dg = ctx.createLinearGradient(sx, sy - sh, sx, sy + 3);
+        dg.addColorStop(0, shadeColor(c.secondary, 0.22)); dg.addColorStop(1, shadeColor(c.secondary, -0.3));
+        ctx.fillStyle = dg; ctx.fill();
+        ctx.clip();
+        // hex-ish plates
+        ctx.strokeStyle = shadeColor(c.secondary, -0.45); ctx.lineWidth = 1.6;
+        for (let i = -2; i <= 2; i++) {
+          for (let j = 0; j < 2; j++) {
+            const px = sx + i * sw * 0.42 + (j ? sw * 0.21 : 0), py = sy - sh * 0.25 - j * sh * 0.5;
+            ctx.beginPath();
+            for (let k = 0; k < 6; k++) { const a = (Math.PI / 3) * k; const hx = px + Math.cos(a) * sw * 0.2, hy = py + Math.sin(a) * sh * 0.24; k ? ctx.lineTo(hx, hy) : ctx.moveTo(hx, hy); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+        // moss / lichen patches from stage 1
+        if (st >= 1) { ctx.globalAlpha *= 0.75; ell(ctx, sx - sw * 0.45, sy - sh * 0.35, 6 + g * 2, 3.5, c.accent); ell(ctx, sx + sw * 0.3, sy - sh * 0.15, 5 + g, 3, c.accent); }
+        ctx.restore();
+        // rim
+        ctx.beginPath(); ctx.ellipse(sx, sy + 3, sw + 2, 4.5, 0, 0, Math.PI * 2); ctx.fillStyle = shadeColor(c.secondary, -0.2); ctx.fill();
+        // crystal spikes: 0 / 2 / 4 / 6 with the stage
+        const n = st * 2;
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n;
+          const a = Math.PI + Math.PI * t;
+          const px = sx + Math.cos(a) * sw * 0.72, py = sy + Math.sin(a) * sh * 0.78 + 2;
+          crystalSpike(ctx, px, py, 8 + st * 3 + (i % 2) * 3, 3 + st * 0.6, c.accent, (t - 0.5) * 1.3);
+        }
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 6, r.bodyY + 10], box: [-12, -4, 25, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.belly, -1.1, 3) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 12, r.bodyY + 10], box: [-12, -4, 24, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.96, c.primary, c.belly, 1, 3) },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -22, 36, 36],
+      draw(ctx, c, ex) {
+        if (ex.horns) {                                  // stone crest ridge (stage 2+)
+          crystalSpike(ctx, -4, -10, 9 + (ex.stage || 0) * 2, 3, c.accent, -0.35);
+          crystalSpike(ctx, 3, -11, 6 + (ex.stage || 0) * 2, 2.4, c.accent, 0.1);
+        }
+        volume(ctx, 0, -1, 13, 11, c.light, c.shadow);
+        // beak
+        poly(ctx, [[8, 2], [17, 1], [18, 6], [10, 8]], shadeColor(c.belly, -0.1));
+        line(ctx, 10, 5.4, 16.5, 4.4, shadeColor(c.dark, 0.1), 1.2);
+        ell(ctx, -3, 7, 7, 3.4, c.belly);
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// GRAVELHOG — Rock Boar.  Gravel-plated back ridge (mane bone), flint tusks
+// that grow with every stage, hooves, tufted tail.  Charges first.
+// -----------------------------------------------------------------------------
+const BOAR = {
+  skel: (ex) => skeleton(ex, { legLen: 18, legW: 6, bodyY: -34, headY: -44, headX: 24, hipX: -12, shoX: 8 }),
+  face: {
+    eyes: [{ x: 4.8, y: -6.2, r: 3.1, shape: 'sharp', color: 'eye' },
+           { x: -5.6, y: -6.2, r: 2.8, shape: 'sharp', color: 'eye' }],
+    brows: [{ x: 4.8, y: -11, w: 6 }, { x: -5.6, y: -11, w: 5.4, mirror: true }],
+    mouth: { x: 16, y: 6.4, w: 6.5, color: '#2c211b', fangs: 2 },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 16, r.bodyY - 4], box: [-14, -12, 18, 26],
+      draw(ctx, c) {
+        line(ctx, 0, 0, -8, 9, c.secondary, 2.6);
+        furTufts(ctx, -9, 10, 2.5, 1.2, 4.2, 4, 7, c.dark);
+      } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 4, r.bodyY + 9], box: [-11, -4, 22, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 0.9, c.shadow, c.dark, -1.5, 2) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 4, r.bodyY + 9], box: [-11, -4, 22, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.88, c.shadow, c.dark, 1.3, 2) },
+
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-42, -34, 82, 60],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, r.hipX + 1, r.bodyY + 1, 21 + g * 5, 16 + g * 3.5, c.light, c.shadow);
+        volume(ctx, r.shoX + 2, r.bodyY - 1, 20 + g * 4.5, 16 + g * 3.5, c.light, c.shadow);
+        // thick neck into the head
+        poly(ctx, [[r.shoX + 4, r.bodyY - 14], [r.headX - 4, r.headY - 6], [r.headX + 6, r.headY + 12], [r.shoX + 16, r.bodyY + 6]], c.primary);
+        ell(ctx, r.shoX + 3, r.bodyY + 6, 13 + g * 2, 9 + g, c.belly);
+        // gravel patches on the flank
+        for (let i = 0; i < 3; i++) pebble(ctx, r.hipX - 6 + i * 9, r.bodyY - 5 + (i % 2) * 5, 2.6 + (i % 2), shadeColor(c.secondary, 0.1));
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 5, r.bodyY + 10], box: [-11, -4, 23, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.dark, -1.3, 2) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 12, r.bodyY + 10], box: [-11, -4, 22, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.95, c.primary, c.dark, 1.1, 2) },
+
+    { // ---- GRAVEL RIDGE along the back (more plates per stage)
+      name: 'mane', z: 3.4, space: 'creature', pivot: (r) => [r.hipX + 6, r.bodyY - 16], box: [-34, -26, 66, 30],
+      draw(ctx, c, ex, r) {
+        const st = ex.stage || 0, g = r.g;
+        const n = 3 + st;
+        for (let i = 0; i < n; i++) {
+          const t = i / (n - 1);
+          const x = r.hipX - 12 + t * (30 + g * 8), y = r.bodyY - 13 - g * 3 - Math.sin(t * Math.PI) * (5 + st * 1.5);
+          stonePlate(ctx, x, y, 5.5 + st * 0.6, 5 + st * 1.2 + Math.sin(t * Math.PI) * 3, shadeColor(c.secondary, 0.08 + (i % 2) * 0.08), i);
+        }
+        if (st >= 3) crystalSpike(ctx, r.hipX + 4, r.bodyY - 20 - g * 3, 9, 2.6, c.accent, -0.2);
+      },
+    },
+
+    { name: 'earL', z: 3.5, space: 'local', pivot: (r) => [r.headX - 6 * r.headS, r.headY - 11 * r.headS, r.headS], box: [-9, -12, 14, 14],
+      draw(ctx, c) { poly(ctx, [[0, 0], [-6, -10], [3, -6]], c.secondary); poly(ctx, [[-1, -1.5], [-4, -7], [1.5, -5]], shadeColor(c.accent, -0.1)); } },
+    { name: 'earR', z: 3.5, space: 'local', pivot: (r) => [r.headX + 6 * r.headS, r.headY - 12 * r.headS, r.headS], box: [-5, -12, 14, 14],
+      draw(ctx, c) { poly(ctx, [[0, 0], [7, -10], [-2, -6]], c.secondary); poly(ctx, [[1, -1.5], [5, -7], [-0.5, -5]], shadeColor(c.accent, -0.1)); } },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-18, -22, 44, 40],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        volume(ctx, 0, -3, 14.5, 12.5, c.light, c.shadow);
+        // long snout
+        volume(ctx, 11, 3, 11, 7.5, shadeColor(c.primary, 0.04), c.shadow);
+        ell(ctx, 20.5, 3.2, 4, 3.3, shadeColor(c.dark, 0.25));          // snout disc
+        ell(ctx, 19.6, 2.6, 1.1, 1.3, c.dark); ell(ctx, 21.6, 2.6, 1.1, 1.3, c.dark);
+        // flint tusks: longer and paler with every stage (horns flag from stage 1)
+        const tl = (ex.horns ? 7 : 4) + st * 2.2;
+        const tusk = shadeColor(c.belly, 0.1);
+        poly(ctx, [[12, 7], [16 + tl * 0.4, 7 - tl], [18 + tl * 0.5, 6 - tl * 0.8], [15, 8.5]], tusk);
+        poly(ctx, [[8, 8], [11 + tl * 0.3, 8 - tl * 0.8], [13 + tl * 0.4, 7.4 - tl * 0.6], [11, 9.6]], shadeColor(tusk, -0.12));
+        if (st >= 2) stonePlate(ctx, -2, -13, 6, 4, shadeColor(c.secondary, 0.1), 3);   // brow plate
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// QUARTZLING — Rock Beetle.  Crystal-studded carapace, elytra on the wing
+// bones (they open into flight wings at stage 2+), a rhino horn that grows
+// with every stage, antennae on the ear bones.
+// -----------------------------------------------------------------------------
+const BEETLE = {
+  skel: (ex) => skeleton(ex, { legLen: 15, legW: 3.4, bodyY: -30, headY: -34, headX: 22, hipX: -10, shoX: 6 }),
+  face: {
+    eyes: [{ x: 5.4, y: -3.2, r: 3.6, shape: 'bead', color: 'eye', dark: '#1a1730' },
+           { x: -4.8, y: -3.2, r: 3.2, shape: 'bead', color: 'eye', dark: '#1a1730' }],
+    brows: [{ x: 5.4, y: -8.4, w: 5.5 }, { x: -4.8, y: -8.4, w: 5, mirror: true }],
+    mouth: { x: 10, y: 5, w: 5.5, color: '#221f36' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 16, r.bodyY + 4], box: [-8, -5, 10, 10],
+      draw(ctx, c) { poly(ctx, [[0, -3], [-6, 0], [0, 3]], c.secondary); } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 6, r.bodyY + 8], box: [-10, -4, 20, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.secondary, -3, 2) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 2, r.bodyY + 8], box: [-10, -4, 20, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.secondary, 2.6, 2) },
+
+    { // ---- carapace with a seed crystal that grows per stage
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-40, -44, 78, 64],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        // abdomen + thorax
+        volume(ctx, r.hipX, r.bodyY + 2, 22 + g * 5, 15 + g * 3, c.light, c.shadow);
+        volume(ctx, r.shoX + 4, r.bodyY, 14 + g * 3, 12 + g * 2, shadeColor(c.primary, 0.04), c.shadow);
+        ell(ctx, r.hipX + 2, r.bodyY + 9, 16 + g * 3, 6 + g, c.belly);
+        // segment lines
+        ctx.strokeStyle = shadeColor(c.dark, 0.2); ctx.lineWidth = 1.4;
+        for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(r.hipX - 6 + i * 7, r.bodyY + 2, 12 + g * 3, 0.5, 2.6); ctx.stroke(); }
+        // crystals: 1 / 2 / 3 / 5
+        const n = [1, 2, 3, 5][st] || 1;
+        for (let i = 0; i < n; i++) {
+          const t = n === 1 ? 0.5 : i / (n - 1);
+          const x = r.hipX - 10 + t * 24, y = r.bodyY - 10 - g * 3 - Math.sin(t * Math.PI) * 4;
+          crystalSpike(ctx, x, y, 10 + st * 3 + (i === Math.floor(n / 2) ? 5 : 0), 3.2 + st * 0.5, c.accent, (t - 0.5) * 1.1);
+        }
+      },
+      live(ctx, c, ex, r, t) {                           // seed crystal glow pulse
+        const p = gemPulse(t, ex.excite);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.35 * p;
+        ell(ctx, r.hipX + 2, r.bodyY - 16 - r.g * 3, 12 + (ex.stage || 0) * 3, 8, c.accent);
+        ctx.restore();
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY + 9], box: [-10, -4, 21, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.belly, -2.6, 2) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 11, r.bodyY + 9], box: [-10, -4, 20, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.belly, 2.2, 2) },
+
+    { // ---- ELYTRA (wing bones). Closed shells; open with flight wings once ex.wings.
+      name: 'wingL', z: 3.3, space: 'local', pivot: (r) => [r.hipX + 2, r.bodyY - 10 - r.g * 3], box: [-30, -30, 44, 36],
+      draw(ctx, c, ex) {
+        if (ex.wings) { ctx.save(); ctx.globalAlpha *= 0.55; poly(ctx, [[-2, 0], [-30, -16], [-28, 4], [-6, 10]], shadeColor(c.accent, 0.3)); ctx.restore(); }
+        poly(ctx, [[0, -2], [-22, -10 - (ex.wings ? 10 : 0)], [-24, 4 - (ex.wings ? 6 : 0)], [-4, 12]], shadeColor(c.secondary, 0.1));
+        line(ctx, -3, 0, -20, -6 - (ex.wings ? 8 : 0), shadeColor(c.dark, 0.1), 1);
+      } },
+    { name: 'wingR', z: 3.6, space: 'local', pivot: (r) => [r.hipX + 6, r.bodyY - 9 - r.g * 3], box: [-14, -30, 44, 36],
+      draw(ctx, c, ex) {
+        if (ex.wings) { ctx.save(); ctx.globalAlpha *= 0.55; poly(ctx, [[2, 0], [28, -18], [30, 2], [8, 10]], shadeColor(c.accent, 0.3)); ctx.restore(); }
+        poly(ctx, [[0, -2], [20, -12 - (ex.wings ? 10 : 0)], [24, 3 - (ex.wings ? 6 : 0)], [6, 12]], shadeColor(c.secondary, 0.22));
+        line(ctx, 3, 0, 18, -8 - (ex.wings ? 8 : 0), shadeColor(c.dark, 0.1), 1);
+      } },
+
+    // antennae on the ear bones
+    { name: 'earL', z: 3.8, space: 'local', pivot: (r) => [r.headX - 4 * r.headS, r.headY - 10 * r.headS, r.headS], box: [-16, -18, 20, 20],
+      draw(ctx, c) { line(ctx, 0, 0, -11, -13, c.dark, 1.5); ell(ctx, -11.5, -13.5, 2.2, 2.2, c.accent); } },
+    { name: 'earR', z: 3.8, space: 'local', pivot: (r) => [r.headX + 3 * r.headS, r.headY - 11 * r.headS, r.headS], box: [-6, -18, 20, 20],
+      draw(ctx, c) { line(ctx, 0, 0, 9, -14, c.dark, 1.5); ell(ctx, 9.5, -14.5, 2.2, 2.2, c.accent); } },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -34, 36, 46],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        volume(ctx, 0, -2, 12, 10.5, c.light, c.shadow);
+        // rhino horn (grows with stage; horns flag from stage 1)
+        const hl = (ex.horns ? 10 : 5) + st * 4;
+        poly(ctx, [[2, -8], [8 + hl * 0.6, -8 - hl], [12 + hl * 0.5, -6 - hl * 0.7], [9, -4]], shadeColor(c.secondary, 0.16));
+        poly(ctx, [[8 + hl * 0.6, -8 - hl], [12 + hl * 0.5, -6 - hl * 0.7], [10 + hl * 0.55, -7 - hl * 0.8]], shadeColor(c.accent, 0.1));
+        // mandibles
+        poly(ctx, [[8, 5], [16, 3], [17, 7], [9, 8]], shadeColor(c.dark, 0.3));
+        poly(ctx, [[7, 7], [14, 9], [12, 11], [6, 9.5]], shadeColor(c.dark, 0.2));
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// RUBBLEKIN — Rock Golem.  Stacked quarry stones, long stone arms on the front
+// leg bones, a rune eye, and a ring of floating stones (mane bone) that grows
+// with every stage.
+// -----------------------------------------------------------------------------
+const GOLEM = {
+  skel: (ex) => skeleton(ex, { legLen: 12, legW: 7, bodyY: -38, headY: -62, headX: 10, hipX: -8, shoX: 10 }),
+  face: {
+    eyes: [{ x: 5.4, y: -2, r: 3.4, shape: 'bead', color: 'accent', dark: '#2a2723' },
+           { x: -5.4, y: -2, r: 3.4, shape: 'bead', color: 'accent', dark: '#2a2723' }],
+    brows: [{ x: 5.4, y: -8, w: 6.5 }, { x: -5.4, y: -8, w: 6.5, mirror: true }],
+    mouth: { x: 0, y: 7, w: 8, color: '#1e1b18' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 18, r.bodyY + 14], box: [-10, -8, 14, 14],
+      draw(ctx, c) { pebble(ctx, -3, 0, 4, c.secondary); pebble(ctx, -8, 3, 2.5, c.shadow); } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 4, r.bodyY + 16], box: [-12, -4, 24, 26],
+      draw(ctx, c, ex, r) { stonePlate(ctx, 0, r.legLen, 8, 6, c.shadow, 1); stonePlate(ctx, 0, r.legLen * 0.5, 6, 6, c.shadow, 2); } },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX - 2, r.bodyY - 6], box: [-14, -6, 22, 46],
+      draw(ctx, c, ex, r) {                              // long stone arm
+        stonePlate(ctx, -2, 10, 6, 7, c.shadow, 3); stonePlate(ctx, -4, 22, 6.5, 7, c.shadow, 4);
+        stonePlate(ctx, -5, 34 + r.g * 3, 8, 7, shadeColor(c.shadow, -0.1), 5);
+      } },
+
+    { // ---- stacked boulder torso with a chest rune
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-40, -36, 80, 60],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        stonePlate(ctx, r.hipX + 2, r.bodyY + 14, 24 + g * 5, 11 + g * 2, c.shadow, 7);
+        stonePlate(ctx, 2, r.bodyY - 2, 26 + g * 6, 15 + g * 3, c.primary, 8);
+        stonePlate(ctx, 6, r.bodyY - 16 - g * 2, 18 + g * 4, 9 + g * 2, c.light, 9);
+        // chest rune
+        ctx.strokeStyle = c.accent; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(6, r.bodyY - 8); ctx.lineTo(10, r.bodyY + 2); ctx.lineTo(2, r.bodyY + 6); ctx.stroke();
+        if (st >= 1) { ctx.beginPath(); ctx.moveTo(-6, r.bodyY - 4); ctx.lineTo(-2, r.bodyY + 6); ctx.stroke(); }
+        // crystal growths from stage 2
+        if (st >= 2) { crystalSpike(ctx, -16, r.bodyY - 8, 9 + st * 2, 3, c.accent, -0.5); crystalSpike(ctx, 22, r.bodyY - 12, 7 + st * 2, 2.6, c.accent, 0.4); }
+      },
+      live(ctx, c, ex, r, t) {                           // rune glow
+        const p = gemPulse(t, ex.excite);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.3 * p;
+        ell(ctx, 6, r.bodyY - 1, 9, 9, c.accent);
+        ctx.restore();
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 12, r.bodyY + 17], box: [-12, -4, 24, 26],
+      draw(ctx, c, ex, r) { stonePlate(ctx, 0, r.legLen, 8.5, 6, c.primary, 11); stonePlate(ctx, 1, r.legLen * 0.5, 6.5, 6, c.primary, 12); } },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 16, r.bodyY - 6], box: [-12, -6, 24, 46],
+      draw(ctx, c, ex, r) {
+        stonePlate(ctx, 2, 10, 6, 7, c.primary, 13); stonePlate(ctx, 4, 22, 6.5, 7, c.primary, 14);
+        stonePlate(ctx, 5, 34 + r.g * 3, 8, 7, shadeColor(c.primary, -0.08), 15);
+      } },
+
+    { // ---- floating stones (2 / 3 / 4 / 6 with the stage) — redrawn live so they orbit
+      name: 'mane', z: 3.6, space: 'creature', pivot: (r) => [4, r.bodyY - 20], liveOnly: true, box: [-44, -48, 88, 70],
+      draw(ctx, c, ex, r, t) {
+        const st = ex.stage || 0, n = [2, 3, 4, 6][st] || 2;
+        for (let i = 0; i < n; i++) {
+          const a = t * 0.9 + (i / n) * Math.PI * 2;
+          const x = 4 + Math.cos(a) * (30 + r.g * 6), y = r.bodyY - 20 - r.g * 4 + Math.sin(a) * 9 + Math.sin(t * 2 + i) * 2;
+          ctx.save(); ctx.globalAlpha *= Math.sin(a) > 0 ? 1 : 0.55;
+          pebble(ctx, x, y, 3 + (i % 3), i % 2 ? c.secondary : c.light);
+          ctx.restore();
+        }
+      },
+    },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-20, -26, 40, 40],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        if (ex.horns) { crystalSpike(ctx, -8, -12, 9 + st * 2, 3, c.accent, -0.3); crystalSpike(ctx, 0, -14, 12 + st * 2, 3.4, c.accent, 0); crystalSpike(ctx, 8, -12, 9 + st * 2, 3, c.accent, 0.3); }
+        stonePlate(ctx, 0, 2, 16, 13, c.light, 21);
+        stonePlate(ctx, -1, -9, 12, 5, shadeColor(c.light, 0.1), 22);
+        // brow shadow and the mouth crack
+        poly(ctx, [[-12, -6], [12, -6], [11, -3], [-11, -3]], shadeColor(c.shadow, -0.1));
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// SHALECRAWL — Rock Lizard.  Low flat body, crystal dorsal fins that multiply
+// with every stage, long spiked tail, frills on the ear bones, membranous
+// wings at the final stage (Obsidrake).
+// -----------------------------------------------------------------------------
+const LIZARD = {
+  skel: (ex) => skeleton(ex, { legLen: 12, legW: 4.4, bodyY: -22, headY: -30, headX: 26, hipX: -14, shoX: 10 }),
+  face: {
+    eyes: [{ x: 6.4, y: -3.4, r: 3.4, shape: 'sharp', color: 'eye' },
+           { x: -4.4, y: -3.4, r: 3, shape: 'sharp', color: 'eye' }],
+    brows: [{ x: 6.4, y: -8.4, w: 6.2 }, { x: -4.4, y: -8.4, w: 5.6, mirror: true }],
+    mouth: { x: 14, y: 4.6, w: 8, color: '#1e242c', fangs: 1 },
+  },
+  parts: [
+    { // ---- long tail with a crystal fin at the tip
+      name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 10, r.bodyY + 3], box: [-56, -30, 60, 40],
+      draw(ctx, c, ex, r) {
+        const TL = 34 + r.g * 12, st = ex.stage || 0;
+        ctx.beginPath();
+        ctx.moveTo(0, -5);
+        ctx.bezierCurveTo(-TL * 0.5, -6, -TL * 0.9, 2, -TL, -12 - r.g * 6);
+        ctx.bezierCurveTo(-TL * 0.85, 4, -TL * 0.5, 7, 0, 5);
+        ctx.closePath();
+        const tg = ctx.createLinearGradient(0, 0, -TL, 0);
+        tg.addColorStop(0, c.primary); tg.addColorStop(1, c.secondary);
+        ctx.fillStyle = tg; ctx.fill();
+        for (let i = 0; i < 2 + st; i++) crystalSpike(ctx, -TL * (0.25 + i * 0.16), -2 - i * 1.4, 6 + st * 1.5 + (i === 1 + st ? 4 : 0), 2, c.accent, -0.3 - i * 0.12);
+      },
+    },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY + 6], box: [-12, -4, 24, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.secondary, -3.5, 3) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 2, r.bodyY + 6], box: [-12, -4, 24, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.secondary, 3, 3) },
+
+    { // ---- low body with dorsal crystal fins (2 / 3 / 4 / 5)
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-40, -40, 80, 56],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        volume(ctx, -2, r.bodyY + 2, 28 + g * 6, 11 + g * 2.5, c.light, c.shadow);
+        poly(ctx, [[r.shoX + 6, r.bodyY - 6], [r.headX - 6, r.headY], [r.headX + 2, r.headY + 8], [r.shoX + 14, r.bodyY + 8]], c.primary);
+        ell(ctx, 0, r.bodyY + 8, 22 + g * 4, 5 + g, c.belly);
+        // shale scale marks
+        ctx.strokeStyle = shadeColor(c.secondary, -0.2); ctx.lineWidth = 1.2;
+        for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(-16 + i * 10, r.bodyY + 1, 6, -2.4, -0.7); ctx.stroke(); }
+        const n = 2 + st;
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n;
+          const x = -24 + t * (40 + g * 8), y = r.bodyY - 9 - g * 2;
+          crystalSpike(ctx, x, y, 8 + st * 2.5 + Math.sin(t * Math.PI) * 4, 2.6 + st * 0.4, c.accent, (t - 0.5) * 0.8);
+        }
+      },
+      live(ctx, c, ex, r, t) {                           // fins glow softly
+        const p = gemPulse(t, ex.excite);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.25 * p;
+        ell(ctx, -4, r.bodyY - 12 - r.g * 2, 24 + r.g * 4, 7, c.accent);
+        ctx.restore();
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 8, r.bodyY + 7], box: [-12, -4, 25, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 1.05, c.primary, c.belly, -3, 3) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 12, r.bodyY + 7], box: [-12, -4, 24, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.belly, 2.6, 3) },
+
+    { // ---- wings: only drawn once ex.wings (Obsidrake)
+      name: 'wingL', z: 1.8, space: 'local', pivot: (r) => [-4, r.bodyY - 6 - r.g * 2], box: [-44, -40, 50, 44],
+      draw(ctx, c, ex) {
+        if (!ex.wings) return;
+        poly(ctx, [[0, 0], [-16, -28], [-40, -20], [-30, 0], [-12, 4]], shadeColor(c.secondary, -0.05));
+        ctx.save(); ctx.globalAlpha *= 0.7; poly(ctx, [[-4, -2], [-16, -24], [-34, -18], [-26, -2]], shadeColor(c.accent, -0.2)); ctx.restore();
+        line(ctx, 0, 0, -16, -28, c.dark, 1.6); line(ctx, -4, -2, -34, -18, c.dark, 1.2);
+      } },
+    { name: 'wingR', z: 3.7, space: 'local', pivot: (r) => [2, r.bodyY - 5 - r.g * 2], box: [-6, -40, 50, 44],
+      draw(ctx, c, ex) {
+        if (!ex.wings) return;
+        poly(ctx, [[0, 0], [14, -30], [40, -22], [30, -2], [12, 4]], c.secondary);
+        ctx.save(); ctx.globalAlpha *= 0.7; poly(ctx, [[4, -2], [14, -26], [34, -20], [26, -4]], shadeColor(c.accent, -0.1)); ctx.restore();
+        line(ctx, 0, 0, 14, -30, c.dark, 1.6); line(ctx, 4, -2, 34, -20, c.dark, 1.2);
+      } },
+
+    // frills on the ear bones
+    { name: 'earL', z: 3.5, space: 'local', pivot: (r) => [r.headX - 8 * r.headS, r.headY - 4 * r.headS, r.headS], box: [-16, -12, 20, 22],
+      draw(ctx, c, ex) { const s = 1 + (ex.stage || 0) * 0.2; poly(ctx, [[0, -2], [-10 * s, -10 * s], [-12 * s, 2], [-6 * s, 8 * s]], shadeColor(c.accent, -0.15)); } },
+    { name: 'earR', z: 3.5, space: 'local', pivot: (r) => [r.headX + 6 * r.headS, r.headY - 6 * r.headS, r.headS], box: [-6, -14, 18, 22],
+      draw(ctx, c, ex) { const s = 1 + (ex.stage || 0) * 0.2; poly(ctx, [[0, 0], [8 * s, -11 * s], [12 * s, 0], [6 * s, 7 * s]], shadeColor(c.accent, -0.05)); } },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-18, -24, 40, 36],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        if (ex.horns) { crystalSpike(ctx, -6, -11, 8 + st * 2, 2.6, c.accent, -0.6); crystalSpike(ctx, 1, -12, 10 + st * 2, 2.8, c.accent, -0.2); }
+        // flat wedge head
+        poly(ctx, [[-13, -9], [10, -10], [21, 0], [18, 6], [-6, 8], [-14, 2]], c.light);
+        poly(ctx, [[-13, -9], [10, -10], [8, -4], [-11, -3]], shadeColor(c.light, 0.12));
+        ell(ctx, 16, 2, 2.2, 1.6, shadeColor(c.dark, 0.2));   // nostril
+      },
+    },
+  ],
+};
+
 // -----------------------------------------------------------------------------
 /** body plan -> art definition */
 const SPECIES_ART = {
@@ -3622,6 +4629,12 @@ const BODY_PLANS = {
   dragon: EMBERU,
   wolf: RIVRUFF,
   avian: LEAFLET,
+  // Rock plans (Stonehollow Crags)
+  tortoise: TORTOISE,
+  boar: BOAR,
+  beetle: BEETLE,
+  golem: GOLEM,
+  lizard: LIZARD,
 };
 
 function artFor(speciesId) {
@@ -4113,18 +5126,20 @@ function acquireRig(speciesId, stage, mutation, size, animTag) {
 // =============================================================================
 // RENDERER
 // =============================================================================
-const AMBIENT_ELEMENT = {
-  spriggo: 'nature', leaflet: 'nature',
-  aquini: 'water', rivruff: 'water',
-  emberu: 'fire',
-};
-
 /** A few ambient motes in creature space — element identity, ~5 shapes max. */
 function drawAmbient(ctx, c, speciesId, t, r, excite) {
-  const el = AMBIENT_ELEMENT[speciesId] || 'nature';
+  const el = getSpecies(speciesId)?.element || 'nature';
   const n = el === 'fire' ? 4 : 3;
   ctx.save();
-  if (el === 'nature') {
+  if (el === 'rock') {                            // drifting grit + a slow-orbiting pebble
+    ctx.globalAlpha *= 0.55;
+    for (let i = 0; i < 4; i++) {
+      const p = (t * 0.5 + i * 0.25) % 1;
+      ell(ctx, (r.hipX ?? -10) - 30 - p * 10 + Math.sin(t * 1.5 + i) * 4, (r.bodyY ?? -34) - 14 + p * 22, 1.6, 1.4, i % 2 ? c.accent : c.belly);
+    }
+    const a = t * 1.2;
+    ell(ctx, (r.hipX ?? -10) - 22 + Math.cos(a) * 14, (r.bodyY ?? -34) - 28 + Math.sin(a) * 4, 2.6, 2.2, c.secondary);
+  } else if (el === 'nature') {
     ctx.globalAlpha *= 0.5;
     for (let i = 0; i < n; i++) {
       const p = (t * 0.6 + i * 0.33) % 1;
@@ -4318,7 +5333,7 @@ function prewarm(speciesIds, stages = [0, 1, 2], size = 160) {
   for (const id of speciesIds) for (const st of stages) creatureAssets.get(id, st, 'none', size);
 }
 
-return { CreatureAssetLoader, creatureAssets, ANIMATIONS, ANIM_IDS, CreatureAnimationController, CreatureRig, drawMythling, prewarm, drawAmbient, AMBIENT_ELEMENT, tf, newTf, blinkAt, personality };
+return { CreatureAssetLoader, creatureAssets, ANIMATIONS, ANIM_IDS, CreatureAnimationController, CreatureRig, drawMythling, prewarm, drawAmbient, tf, newTf, blinkAt, personality };
 })();
 __m["src/render/worldRenderer.js"] = (function () {
 // Procedural world rendering: ground, water, props, buildings, weather particles.
@@ -4338,7 +5353,16 @@ const TERRAIN = {
   cinder:  { grass: '#59453f', grass2: '#4a3833', path: '#79615a', props: ['burnttree', 'ember', 'rock', 'deadtree'] },
   molten:  { grass: '#4a332f', grass2: '#3c2926', path: '#6d4b42', props: ['rock', 'ember', 'obsidian', 'crystal'] },
   volcanic_ruins: { grass: '#4f3a34', grass2: '#41302b', path: '#74564a', props: ['pillar', 'obsidian', 'ember', 'rock'] },
+  // ---- Stonehollow Crags (rock) ----
+  quarry:  { grass: '#9a8f78', grass2: '#877c67', path: '#c9bda0', props: ['rock', 'crate', 'barrel', 'deadtree'] },
+  crag:    { grass: '#7d7a72', grass2: '#6b685f', path: '#a39e90', props: ['rock', 'rock', 'stalag', 'crystal'] },
+  summit:  { grass: '#8f949c', grass2: '#7c8188', path: '#b8bcc2', props: ['pillar', 'rock', 'stalag', 'crystal'] },
 };
+
+/** Ground colour of a terrain id (used by the minimap so it matches the world). */
+function terrainColor(terrainId) {
+  return (TERRAIN[terrainId] || TERRAIN.forest).grass;
+}
 
 const WATER_COLORS = {
   stream: ['#4fb0e8', '#2d84c4'],
@@ -4732,6 +5756,12 @@ class WorldRenderer {
         ctx.globalAlpha = 0.45;
         ctx.fillStyle = '#e6faff';
         ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2); ctx.fill();
+      } else if (theme === 'rock') {
+        // drifting quarry dust + the odd falling pebble
+        ctx.globalAlpha = i % 4 === 0 ? 0.6 : 0.3;
+        ctx.fillStyle = i % 4 === 0 ? '#6e665c' : '#e8dcc4';
+        const py = i % 4 === 0 ? (y + time * 60) % (cam.h + 100) + cam.y - 50 : y;
+        ctx.beginPath(); ctx.arc(x, py, i % 4 === 0 ? 2.2 : 1.6, 0, Math.PI * 2); ctx.fill();
       } else {
         ctx.globalAlpha = 0.55;
         ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd07a';
@@ -4856,11 +5886,11 @@ function drawSignMark(ctx, kind, cx, cy, r) {
   ctx.restore();
 }
 
-return { WorldRenderer, roundRect, circle, drawTrainerAvatar, drawSignMark, TERRAIN, WATER_COLORS, hashStr, insideAny, insideBuildings };
+return { terrainColor, WorldRenderer, roundRect, circle, drawTrainerAvatar, drawSignMark, TERRAIN, WATER_COLORS, hashStr, insideAny, insideBuildings };
 })();
   } catch (e) { console.error('GameSnapshot failed to load:', e); return null; }
   return {
-    meta: {"builtAt":"2026-09-27T17:54:01.222Z","commit":"a871eb0","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.3.0"},
+    meta: {"builtAt":"2026-09-27T23:57:04.580Z","commit":"aefc9c9","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.3.0"},
     modules: __m,
     utils: __m['src/core/utils.js'], config: __m['src/data/config.js'], elements: __m['src/data/elements.js'], rarity: __m['src/data/rarity.js'],
     moods: __m['src/data/moods.js'], mutations: __m['src/data/mutations.js'], items: __m['src/data/items.js'], skills: __m['src/data/skills.js'],
@@ -5462,12 +6492,12 @@ const COLLISION_MODES = [
   { id: 'special', name: 'Special Zone', color: '#a855f7', value: 4 },
 ];
 const COLLISION_LAYERS = ['player', 'npc', 'mythling', 'projectile', 'interaction'];
-const ELEMENTS = { nature: { name: 'Nature', color: '#4fc76a' }, water: { name: 'Water', color: '#4aa8e8' }, fire: { name: 'Fire', color: '#f0743a' }, none: { name: 'None', color: '#9aa7bd' } };
+const ELEMENTS = { nature: { name: 'Nature', color: '#4fc76a' }, water: { name: 'Water', color: '#4aa8e8' }, fire: { name: 'Fire', color: '#f0743a' }, rock: { name: 'Rock', color: '#c9a86c' }, none: { name: 'None', color: '#9aa7bd' } };
 const RARITIES = ['D', 'C', 'B', 'A', 'S'];
 const MOODS = ['brave', 'clever', 'sturdy', 'playful', 'aggressive', 'focused', 'calm', 'brutal'];
 const ANIM_NAMES = ['Idle', 'Walk', 'Run', 'Battle Idle', 'Normal Attack', 'Special Attack', 'Buff', 'Ultimate', 'Hit', 'Faint', 'Capture', 'Evolution'];
 const VFX_TYPES = ['particle', 'trail', 'projectile', 'burst', 'ring', 'glow', 'shockwave', 'splash', 'flame', 'leaf', 'vine', 'smoke', 'spark', 'aura'];
-const VFX_CATEGORIES = ['Nature', 'Water', 'Fire', 'Universal', 'Buff', 'Debuff', 'Ultimate'];
+const VFX_CATEGORIES = ['Nature', 'Water', 'Fire', 'Rock', 'Universal', 'Buff', 'Debuff', 'Ultimate'];
 const ATTACH_POINTS = ['AttackOrigin', 'VFXOrigin', 'Mouth', 'Head', 'Body', 'BodyCenter', 'Tail', 'TailBase', 'Root', 'Target', 'TargetCenter', 'World'];
 const NPC_TYPES = ['regular', 'trainer', 'shop', 'healer', 'savepoint', 'quest', 'guide'];
 const BLEND_MODES = ['source-over', 'lighter', 'multiply', 'screen', 'overlay'];
@@ -6425,7 +7455,7 @@ const Game = {
     if (!sk && !ult) return null;
     const fx = S.skillVfx.SKILL_VFX[id];
     if (ult) {
-      return { id, name: ult.baseName, element: ult.element || 'none', type: 'ultimate', damageType: ult.damageType || 'special', power: ult.tiers?.[0]?.power || 0, uses: 0, animation: 'Ultimate', vfx: fx ? id : `fx_${ult.element || 'none'}_ultimate`, sound: 'rumble', shake: fx?.impact?.shake ?? 14, description: ult.desc || '', tiers: deepClone(ult.tiers || []), source: 'game', game: deepClone(ult) };
+      return { id, name: ult.baseName, element: ult.element || 'none', type: 'ultimate', damageType: ult.damageType === undefined ? 'special' : ult.damageType, power: ult.tiers?.[0]?.power || 0, uses: 0, animation: 'Ultimate', vfx: fx ? id : `fx_${ult.element || 'none'}_ultimate`, sound: 'rumble', shake: fx?.impact?.shake ?? 14, description: ult.desc || '', tiers: deepClone(ult.tiers || []), source: 'game', game: deepClone(ult) };
     }
     const cat = sk.category || 'normal'; const el = sk.element || 'none';
     const s = { id, name: sk.name, element: el, type: cat, damageType: sk.damageType || (cat === 'special' ? 'special' : 'physical'), power: sk.power || 0, uses: sk.uses === Infinity || sk.uses == null ? 0 : sk.uses, animation: this.skillAnimationFor(cat), vfx: fx ? id : `fx_${el}_${cat}`, sound: { normal: 'hit_soft', special: 'whoosh', buff: 'chime', debuff: 'hiss', ultimate: 'rumble' }[cat] || 'hit_soft', shake: fx?.impact?.shake ?? { normal: 3, special: 7, buff: 0, debuff: 2, ultimate: 14 }[cat], description: sk.desc || '', source: 'game', game: deepClone(sk) };
@@ -6439,12 +7469,12 @@ const Game = {
     for (const id of [...Object.keys(S.skills.SKILLS), ...Object.keys(S.skills.ULTIMATES)]) { const s = this.importSkill(id); if (s) { project.skills[s.id] = s; n++; } }
     return n;
   },
-  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire' }[el] || 'Universal'; },
+  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire', rock: 'Rock' }[el] || 'Universal'; },
   /** Editable emitter VFX approximating a SKILL_VFX descriptor (cast → projectile → impact → aftermath) with the game's element palette. */
   importVfx(id) {
     const S = GameSnapshot; const d = S.skillVfx.SKILL_VFX[id]; if (!d) return null;
     const P = S.skillVfx.ELEMENT_VFX[d.element] || S.skillVfx.ELEMENT_VFX.none; const el = d.element || 'none'; const cat = d.category || 'special';
-    const scatter = el === 'nature' ? 'leaf' : el === 'water' ? 'splash' : el === 'fire' ? 'flame' : 'spark';
+    const scatter = el === 'nature' ? 'leaf' : el === 'water' ? 'splash' : el === 'fire' ? 'flame' : el === 'rock' ? 'shockwave' : 'spark';
     const em = (type, o) => { const e = emitter(type, Object.assign({ color: P.mid, color2: P.core }, o)); for (const k of ['delay', 'duration', 'lifetime']) if (typeof e[k] === 'number') e[k] = round(e[k], 3); return e; };
     const emitters = []; let t = 0;
     const castDur = d.cast?.dur ?? 0.15;
@@ -6483,7 +7513,11 @@ const Game = {
   },
   exportSkillEntry(s) {
     const base = s.game ? deepClone(s.game) : {}; // keeps fields the editor does not model (e.g. future: true)
-    if (s.type === 'ultimate') return Object.assign(base, { id: s.id, baseName: s.name, element: s.element === 'none' ? null : s.element, damageType: s.damageType || 'special', tiers: deepClone(s.tiers || [{ suffix: '', power: s.power, unlockLevel: 10 }]), desc: s.description || '' });
+    if (s.type === 'ultimate') {
+      // support ultimates (buff / debuff) carry damageType: null in the game data — keep it that way
+      const dt = s.damageType !== undefined ? s.damageType : base.damageType;
+      return Object.assign(base, { id: s.id, baseName: s.name, element: s.element === 'none' ? null : s.element, damageType: dt === undefined ? 'special' : dt, tiers: deepClone(s.tiers || [{ suffix: '', power: s.power, unlockLevel: 10 }]), desc: s.description || '' });
+    }
     const e = Object.assign(base, { id: s.id, name: s.name, category: s.type });
     if (['normal', 'special'].includes(s.type) || s.power) { e.damageType = s.damageType || (s.type === 'special' ? 'special' : 'physical'); e.element = s.element === 'none' ? null : s.element; e.power = s.power; }
     else { delete e.damageType; delete e.element; delete e.power; }

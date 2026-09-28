@@ -22,12 +22,12 @@ const COLLISION_MODES = [
   { id: 'special', name: 'Special Zone', color: '#a855f7', value: 4 },
 ];
 const COLLISION_LAYERS = ['player', 'npc', 'mythling', 'projectile', 'interaction'];
-const ELEMENTS = { nature: { name: 'Nature', color: '#4fc76a' }, water: { name: 'Water', color: '#4aa8e8' }, fire: { name: 'Fire', color: '#f0743a' }, none: { name: 'None', color: '#9aa7bd' } };
+const ELEMENTS = { nature: { name: 'Nature', color: '#4fc76a' }, water: { name: 'Water', color: '#4aa8e8' }, fire: { name: 'Fire', color: '#f0743a' }, rock: { name: 'Rock', color: '#c9a86c' }, none: { name: 'None', color: '#9aa7bd' } };
 const RARITIES = ['D', 'C', 'B', 'A', 'S'];
 const MOODS = ['brave', 'clever', 'sturdy', 'playful', 'aggressive', 'focused', 'calm', 'brutal'];
 const ANIM_NAMES = ['Idle', 'Walk', 'Run', 'Battle Idle', 'Normal Attack', 'Special Attack', 'Buff', 'Ultimate', 'Hit', 'Faint', 'Capture', 'Evolution'];
 const VFX_TYPES = ['particle', 'trail', 'projectile', 'burst', 'ring', 'glow', 'shockwave', 'splash', 'flame', 'leaf', 'vine', 'smoke', 'spark', 'aura'];
-const VFX_CATEGORIES = ['Nature', 'Water', 'Fire', 'Universal', 'Buff', 'Debuff', 'Ultimate'];
+const VFX_CATEGORIES = ['Nature', 'Water', 'Fire', 'Rock', 'Universal', 'Buff', 'Debuff', 'Ultimate'];
 const ATTACH_POINTS = ['AttackOrigin', 'VFXOrigin', 'Mouth', 'Head', 'Body', 'BodyCenter', 'Tail', 'TailBase', 'Root', 'Target', 'TargetCenter', 'World'];
 const NPC_TYPES = ['regular', 'trainer', 'shop', 'healer', 'savepoint', 'quest', 'guide'];
 const BLEND_MODES = ['source-over', 'lighter', 'multiply', 'screen', 'overlay'];

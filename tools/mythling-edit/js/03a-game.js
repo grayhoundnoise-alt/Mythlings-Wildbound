@@ -371,7 +371,7 @@ const Game = {
     if (!sk && !ult) return null;
     const fx = S.skillVfx.SKILL_VFX[id];
     if (ult) {
-      return { id, name: ult.baseName, element: ult.element || 'none', type: 'ultimate', damageType: ult.damageType || 'special', power: ult.tiers?.[0]?.power || 0, uses: 0, animation: 'Ultimate', vfx: fx ? id : `fx_${ult.element || 'none'}_ultimate`, sound: 'rumble', shake: fx?.impact?.shake ?? 14, description: ult.desc || '', tiers: deepClone(ult.tiers || []), source: 'game', game: deepClone(ult) };
+      return { id, name: ult.baseName, element: ult.element || 'none', type: 'ultimate', damageType: ult.damageType === undefined ? 'special' : ult.damageType, power: ult.tiers?.[0]?.power || 0, uses: 0, animation: 'Ultimate', vfx: fx ? id : `fx_${ult.element || 'none'}_ultimate`, sound: 'rumble', shake: fx?.impact?.shake ?? 14, description: ult.desc || '', tiers: deepClone(ult.tiers || []), source: 'game', game: deepClone(ult) };
     }
     const cat = sk.category || 'normal'; const el = sk.element || 'none';
     const s = { id, name: sk.name, element: el, type: cat, damageType: sk.damageType || (cat === 'special' ? 'special' : 'physical'), power: sk.power || 0, uses: sk.uses === Infinity || sk.uses == null ? 0 : sk.uses, animation: this.skillAnimationFor(cat), vfx: fx ? id : `fx_${el}_${cat}`, sound: { normal: 'hit_soft', special: 'whoosh', buff: 'chime', debuff: 'hiss', ultimate: 'rumble' }[cat] || 'hit_soft', shake: fx?.impact?.shake ?? { normal: 3, special: 7, buff: 0, debuff: 2, ultimate: 14 }[cat], description: sk.desc || '', source: 'game', game: deepClone(sk) };
@@ -385,12 +385,12 @@ const Game = {
     for (const id of [...Object.keys(S.skills.SKILLS), ...Object.keys(S.skills.ULTIMATES)]) { const s = this.importSkill(id); if (s) { project.skills[s.id] = s; n++; } }
     return n;
   },
-  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire' }[el] || 'Universal'; },
+  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire', rock: 'Rock' }[el] || 'Universal'; },
   /** Editable emitter VFX approximating a SKILL_VFX descriptor (cast → projectile → impact → aftermath) with the game's element palette. */
   importVfx(id) {
     const S = GameSnapshot; const d = S.skillVfx.SKILL_VFX[id]; if (!d) return null;
     const P = S.skillVfx.ELEMENT_VFX[d.element] || S.skillVfx.ELEMENT_VFX.none; const el = d.element || 'none'; const cat = d.category || 'special';
-    const scatter = el === 'nature' ? 'leaf' : el === 'water' ? 'splash' : el === 'fire' ? 'flame' : 'spark';
+    const scatter = el === 'nature' ? 'leaf' : el === 'water' ? 'splash' : el === 'fire' ? 'flame' : el === 'rock' ? 'shockwave' : 'spark';
     const em = (type, o) => { const e = emitter(type, Object.assign({ color: P.mid, color2: P.core }, o)); for (const k of ['delay', 'duration', 'lifetime']) if (typeof e[k] === 'number') e[k] = round(e[k], 3); return e; };
     const emitters = []; let t = 0;
     const castDur = d.cast?.dur ?? 0.15;
@@ -429,7 +429,11 @@ const Game = {
   },
   exportSkillEntry(s) {
     const base = s.game ? deepClone(s.game) : {}; // keeps fields the editor does not model (e.g. future: true)
-    if (s.type === 'ultimate') return Object.assign(base, { id: s.id, baseName: s.name, element: s.element === 'none' ? null : s.element, damageType: s.damageType || 'special', tiers: deepClone(s.tiers || [{ suffix: '', power: s.power, unlockLevel: 10 }]), desc: s.description || '' });
+    if (s.type === 'ultimate') {
+      // support ultimates (buff / debuff) carry damageType: null in the game data — keep it that way
+      const dt = s.damageType !== undefined ? s.damageType : base.damageType;
+      return Object.assign(base, { id: s.id, baseName: s.name, element: s.element === 'none' ? null : s.element, damageType: dt === undefined ? 'special' : dt, tiers: deepClone(s.tiers || [{ suffix: '', power: s.power, unlockLevel: 10 }]), desc: s.description || '' });
+    }
     const e = Object.assign(base, { id: s.id, name: s.name, category: s.type });
     if (['normal', 'special'].includes(s.type) || s.power) { e.damageType = s.damageType || (s.type === 'special' ? 'special' : 'physical'); e.element = s.element === 'none' ? null : s.element; e.power = s.power; }
     else { delete e.damageType; delete e.element; delete e.power; }
