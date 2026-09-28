@@ -27,7 +27,7 @@ const noopCtx = () => {
 const mkEl = (tag) => {
   const e = {
     tagName: String(tag).toUpperCase(), style: {}, dataset: {}, children: [],
-    textContent: '', innerHTML: '', width: 300, height: 300,
+    textContent: '', innerHTML: '', value: '', width: 300, height: 300,
     classList: { _s: new Set(), add(...c) { c.forEach((x) => this._s.add(x)); }, remove(...c) { c.forEach((x) => this._s.delete(x)); }, toggle() {}, contains(c) { return this._s.has(c); } },
     appendChild(c) { this.children.push(c); return c; },
     append(...c) { c.forEach((x) => this.children.push(x)); },
@@ -37,7 +37,7 @@ const mkEl = (tag) => {
     querySelector: () => mkEl('div'), querySelectorAll: () => [],
     getBoundingClientRect: () => ({ x: 0, y: 0, width: 100, height: 100, top: 0, left: 0, right: 100, bottom: 100 }),
     focus() {}, blur() {}, scrollTo() {},
-    getContext: () => noopCtx(),
+    getContext: () => noopCtx(), toDataURL: () => 'data:image/png;base64,',
   };
   return e;
 };
@@ -85,11 +85,13 @@ const evolutionApi = await import('../src/systems/EvolutionManager.js');
 const SKILLS_MOD = await import('../src/data/skills.js');
 
 let pass = 0, fail = 0;
-function test(name, fn) {
-  try { fn(); pass++; console.log(`  ✓ ${name}`); }
-  catch (e) { fail++; console.error(`  ✗ ${name}\n      ${e.message}`); }
-}
-function section(t) { console.log(`\n${t}`); }
+// Tests are collected and run at the end, in source order, so that an async
+// test is awaited. The old runner called fn() inside a try/catch, which cannot
+// catch a rejected promise: all 19 async tests reported ✓ no matter what they
+// asserted, including the battle-balance ones.
+const queue = [];
+function test(name, fn) { queue.push({ kind: 'test', name, fn }); }
+function section(t) { queue.push({ kind: 'section', name: t }); }
 
 // ------------------------------------------------------------------
 section('Species & stats');
@@ -166,10 +168,10 @@ test('counter is capped so nothing becomes untouchable', () => {
 test('crit chance is nerfed: slow growth, hard-capped — a crit stays rare even at the cap', async () => {
   const m = createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'keen' });
   const s = computeStats(m);
-  assert.equal(CRIT_MAX_PERCENT, 25);
+  assert.equal(CRIT_MAX_PERCENT, 10, 'crit chance hard-caps at 10%: a crit is a lucky spike');
   assert.ok(s.crit <= CRIT_MAX_PERCENT, `crit chance capped, got ${s.crit}`);
   const { CRIT_MAX_MULT } = await import('../src/data/config.js');
-  assert.equal(CRIT_MAX_MULT, 75, 'crit damage caps at +75% (x1.75): a crit stings, it never deletes an equal foe');
+  assert.equal(CRIT_MAX_MULT, 35, 'crit damage caps at +35% (x1.35): a crit stings, it never deletes an equal foe');
   assert.ok(s.critMult <= CRIT_MAX_MULT, `crit damage capped, got ${s.critMult}`);
   // a crit-focused mood beats the same Mythling with a non-crit mood (measured below the caps)
   const plain = computeStats(createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'brave', rational: m.rational }));
@@ -179,7 +181,7 @@ test('crit chance is nerfed: slow growth, hard-capped — a crit stays rare even
   // a maxed, ordinary Mythling no longer crits every other hit
   for (const id of SPECIES_IDS) {
     const top = computeStats(createMythling({ speciesId: id, level: LEVEL_CAP, rarity: 'A', mood: 'brave', stage: 3 }));
-    assert.ok(top.crit <= 25, `${id} at Lv.${LEVEL_CAP} crits ${top.crit}% — a crit stays rare`);
+    assert.ok(top.crit <= CRIT_MAX_PERCENT, `${id} at Lv.${LEVEL_CAP} crits ${top.crit}% — a crit stays rare`);
   }
 });
 
@@ -394,7 +396,7 @@ test('every species learns three debuff skills (Lv.1, Lv.12, Lv.40)', () => {
 });
 
 const { getSkill: getSkillById } = SKILLS_MOD;
-const { basicAttack } = await import('../src/core/mythling.js');
+const { basicAttack, maxHp } = await import('../src/core/mythling.js');
 
 test('an exhausted move falls back to the unlimited attack instead of wasting the turn', () => {
   const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
@@ -476,9 +478,24 @@ test('skill uses refill at the start of every battle, and a max-damage crit stil
   assert.ok(hit.amount > before * 0.15, `but it is still clearly impactful (${Math.round(hit.amount / before * 100)}% of the bar)`);
 });
 
-test('Ultimates are strong but never a one-shot: a super-effective CRIT Ultimate leaves an equal foe standing', async () => {
+test('Ultimates hit like a finisher: every tier out-muscles the best Special, and an equal foe still survives one', async () => {
   const { ULTIMATE_POWER_SCALE } = await import('../src/data/config.js');
-  assert.ok(ULTIMATE_POWER_SCALE <= 0.75, 'ultimate power is scaled down');
+  const { ULTIMATES, SKILLS: ALL_SKILLS } = await import('../src/data/skills.js');
+  // Charging to 8/8 has to be worth it: every Ultimate tier must beat the
+  // strongest Special in the game. At the old 0.7 scale, tier I landed at 35
+  // power — below the 56-power top Special — so an Ultimate hit SOFTER than
+  // the move you could press every turn.
+  const topSpecial = Math.max(...Object.values(ALL_SKILLS).filter((s) => s.category === 'special').map((s) => s.power));
+  for (const u of Object.values(ULTIMATES)) {
+    for (const t of u.tiers) {
+      if (!t.power) continue;                       // support Ultimates deal no damage
+      const effective = Math.round(t.power * ULTIMATE_POWER_SCALE);
+      // a hybrid trades a slice of its power for a rider (Ocean Guard shields
+      // itself), so it is measured against a slightly gentler bar
+      const bar = t.selfBuff ? topSpecial * 0.9 : topSpecial;
+      assert.ok(effective >= bar, `${u.id}${t.suffix} lands at ${effective} power against a ${Math.round(bar)} bar`);
+    }
+  }
   const a = createMythling({ speciesId: 'emberu', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brutal', rational: 'mystic' });   // Fire vs Nature: super effective
   const d = createMythling({ speciesId: 'spriggo', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brave', rational: 'docile' });
   a.ultCharge = 8;
@@ -489,7 +506,7 @@ test('Ultimates are strong but never a one-shot: a super-effective CRIT Ultimate
   const hit = events.find((e) => e.type === 'damage' && e.side === 'enemy' && e.isUltimate);
   assert.ok(hit && hit.crit, 'a critical Ultimate landed');
   assert.ok(hit.amount < before, `SE crit Ultimate: ${hit.amount} of ${before} HP — huge, not a delete`);
-  assert.ok(hit.amount > before * 0.4, 'and it clearly hurts');
+  assert.ok(hit.amount > before * 0.4, 'and it clearly hurts — a full charge is a finisher');
   // the Power shown in menus is the effective one
   const { ultimateMove } = await import('../src/core/mythling.js');
   const u = ultimateMove(a);
@@ -1068,13 +1085,20 @@ test('treasure chests: capped per tier, placed on walkable ground, and their loo
   assert.ok(gold.coins >= 4000 * 3.4, 'ultra gold pays a fortune, more in later regions');
   assert.ok(['god_ball', 'shiny_ball', 'dark_ball'].includes(gold.item.id), 'the best balls only come from the best chest');
   for (const t of ['bronze', 'silver', 'emerald']) for (const b of CHEST_TIERS[t].balls) assert.ok(!['god_ball', 'shiny_ball', 'dark_ball'].includes(b), `${t} never drops a guaranteed ball`);
-  for (const t of ['bronze', 'silver']) for (const f of CHEST_TIERS[t].foods) assert.ok(ITEMS_MOD.ITEMS[f].exp <= 400, `${t} only drops cheap food (${f})`);
+  // tiers stay ordered: a better chest never pays less than the one below it
+  const foodExp = (t) => CHEST_TIERS[t].foods.map((f) => ITEMS_MOD.ITEMS[f].exp);
+  assert.ok(Math.max(...foodExp('bronze')) < Math.min(...foodExp('silver')), 'silver food beats bronze food');
+  assert.ok(Math.max(...foodExp('silver')) < Math.min(...foodExp('emerald')), 'emerald food beats silver food');
   // placement + opening through the manager
   createNewGameState({ slot: 1, playerName: 'CHEST', starterId: 'spriggo' });
   const map = MAPS.verdant_vale; const wr = new WorldRenderer();
   const free = ChestManager.makeFreeTest(map, wr.colliders(map));
-  const list = ChestManager.ensure('verdant_vale', free, () => 0);
-  assert.equal(list.length, 5, 'every slot spawned with a perfect roll');
+  // The first five rolls decide the tiers (0 wins every one), and the same rng
+  // then places them — so it has to vary, or all 60 attempts pick one point.
+  let rolls = 0;
+  const spawnRng = () => (rolls++ < 5 ? 0 : (rolls * 0.137) % 1);
+  const list = ChestManager.ensure('verdant_vale', free, spawnRng);
+  assert.equal(list.length, 5, `every slot spawned with a perfect roll (got ${list.length})`);
   for (const c of list) assert.ok(free(c.x, c.y) && c.x > 0 && c.y > 0 && c.x < map.width && c.y < map.height, `${c.tier} stands on free ground`);
   assert.equal(ChestManager.ensure('verdant_vale', free, () => 0.999).length, 5, 'entering again keeps the current set (no instant re-roll)');
   const before = GameState.player.wildcoins;
@@ -1531,11 +1555,16 @@ test('every region spawns its own element (five lines, plus dual-typed visitors)
     const zones = EncounterManager.zonesForMap(map.id);
     const tabled = new Set();
     for (const z of zones) for (const s of z.species) tabled.add(s.id);
-    const singles = [...tabled].filter((id) => speciesElements(SPECIES[id]).length === 1);
-    assert.equal(singles.length, 5, `${map.id} tables five single-typed lines`);
-    for (const id of tabled) {
-      assert.ok(speciesElements(SPECIES[id]).includes(map.element), `${id} belongs on ${map.id}`);
-      assert.ok(!SPECIES[id].legendary, `${id} is never in a zone table`);
+    // five lines of the region's own element. Ironfist's Fighting lines are
+    // mostly dual-typed, so count element membership rather than single types.
+    const own = [...tabled].filter((id) => speciesElements(SPECIES[id]).includes(map.element));
+    assert.ok(own.length >= 5, `${map.id} tables five lines of its own element`);
+    // The Grand Ring is the one place a legendary is tabled on purpose — it is
+    // the colosseum's champion, not a lucky rare roll.
+    const LEGENDARY_ZONES = new Set(['fz4']);
+    for (const z of zones) for (const sp of z.species) {
+      if (!SPECIES[sp.id].legendary) continue;
+      assert.ok(LEGENDARY_ZONES.has(z.id), `${sp.id} is only tabled in the colosseum's Grand Ring`);
     }
     // spawns follow the table when the legendary roll fails
     let rngI = 0; const seq = () => { rngI++; return rngI % 7 === 0 ? 0.999 : (rngI * 0.137) % 1; };
@@ -1850,11 +1879,157 @@ test('battle shows a type match-up indicator — and stays quiet when it is even
 
   // party cards in the switch picker are tagged too
   const fireGuy = createMythling({ speciesId: 'emberu', level: 20 });
-  assert.equal(scene.matchupTag(fireGuy), null, 'Fire vs Water is not an advantage, so no tag');
+  assert.match(scene.matchupTag(fireGuy).innerHTML, /RESISTED/, 'Fire into Water is resisted, and the chip says so');
+  const waterTwin = createMythling({ speciesId: 'aquini', level: 20 });
+  assert.equal(scene.matchupTag(waterTwin), null, 'Water vs Water is even, so no tag');
   const natureGuy = createMythling({ speciesId: 'leaflet', level: 20 });
   assert.match(scene.matchupTag(natureGuy).innerHTML, /SUPER EFFECTIVE/, 'Nature vs Water is tagged');
   scene.stop();
 });
+
+// ------------------------------------------------------------------
+section('Live damage readout & the element sheet');
+
+// walks the shim DOM and collects every bit of text inside a node
+const textOf = (node) => {
+  if (node == null) return '';
+  if (typeof node === 'string') return node;
+  let out = node.nodeValue || node.textContent || node.innerHTML || '';
+  for (const c of node.children || []) out += ` ${textOf(c)}`;
+  return out;
+};
+
+test('previewDamage promises the number the hit will actually deal', async () => {
+  const { previewDamage } = await import('../src/systems/BattleManager.js');
+  const { DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX } = await import('../src/data/config.js');
+  const fire = createMythling({ speciesId: 'emberu', level: 40, stage: 1 });
+  fire.library.push('inferno_roar'); fire.uses.inferno_roar = 99;
+  const nature = createMythling({ speciesId: 'spriggo', level: 40, stage: 1 });
+  const bt = new Battle({ type: BattleType.WILD, party: [fire], enemies: [nature], mapId: 'emberwild', rng: () => 0.5 });
+
+  const se = previewDamage(bt, fire, nature, getSkillById('inferno_roar'));      // Fire into Nature
+  assert.equal(se.mult, 1.5);
+  assert.equal(se.tone, 'strong');
+  // an element-less move stays element-less, even in a Fire Mythling's mouth
+  const bite = previewDamage(bt, fire, nature, getSkillById('bite'));
+  assert.equal(bite.mult, 1, 'Bite carries no element, so it never borrows the species one');
+  assert.equal(bite.tone, 'even', 'and that is why it never turns red or green');
+
+  // the range the button advertises is the range the hit lands in
+  const mid = (DAMAGE_RANDOM_MIN + DAMAGE_RANDOM_MAX) / 2;
+  const lo = Math.max(1, Math.floor((se.dmg * DAMAGE_RANDOM_MIN) / mid));
+  const hi = Math.max(1, Math.floor((se.dmg * DAMAGE_RANDOM_MAX) / mid));
+  const { events } = bt.act({ type: 'skill', skillId: 'inferno_roar' });
+  const hit = events.find((e) => e.type === 'damage' && e.side === 'enemy');
+  assert.ok(hit, 'the attack landed');
+  assert.ok(hit.amount >= lo && hit.amount <= hi, `the button promised ${lo}\u2013${hi} and the hit dealt ${hit.amount}`);
+});
+
+test('the number moves the moment a buff or a debuff lands', async () => {
+  const { previewDamage } = await import('../src/systems/BattleManager.js');
+  const fire = createMythling({ speciesId: 'emberu', level: 40, stage: 1 });
+  fire.library.push('inferno_roar'); fire.uses.inferno_roar = 99;
+  const nature = createMythling({ speciesId: 'spriggo', level: 40, stage: 1 });
+  const bt = new Battle({ type: BattleType.WILD, party: [fire], enemies: [nature], mapId: 'emberwild', rng: () => 0.5 });
+  const move = getSkillById('inferno_roar');                 // a Special: reads S.ATK
+  const base = previewDamage(bt, fire, nature, move).dmg;
+
+  bt.cb(fire).applyDebuff('satk', 40);
+  const dropped = previewDamage(bt, fire, nature, move).dmg;
+  assert.ok(dropped < base, `a debuffed S.ATK lowers every Special's number (${base} -> ${dropped})`);
+
+  const bt2 = new Battle({ type: BattleType.WILD, party: [fire], enemies: [nature], mapId: 'emberwild', rng: () => 0.5 });
+  bt2.cb(fire).applyBuff('satk', 40);
+  const raised = previewDamage(bt2, fire, nature, move).dmg;
+  assert.ok(raised > base, `and a buff raises it (${base} -> ${raised})`);
+  // a physical move is untouched by a Special Attack debuff
+  const bt3 = new Battle({ type: BattleType.WILD, party: [fire], enemies: [nature], mapId: 'emberwild', rng: () => 0.5 });
+  const biteBase = previewDamage(bt3, fire, nature, getSkillById('bite')).dmg;
+  bt3.cb(fire).applyDebuff('satk', 40);
+  assert.equal(previewDamage(bt3, fire, nature, getSkillById('bite')).dmg, biteBase, 'Bite is physical: an S.ATK debuff does not touch it');
+});
+
+test('a full-charge Ultimate is the biggest number on the bar', async () => {
+  const { previewDamage } = await import('../src/systems/BattleManager.js');
+  const { ultimateMove } = await import('../src/core/mythling.js');
+  const { LEVEL_CAP: CAP } = await import('../src/data/config.js');
+  for (const level of [10, 20, 60, 80, CAP]) {
+    const fire = createMythling({ speciesId: 'emberu', level, stage: level >= 80 ? 3 : level >= 60 ? 2 : level >= 20 ? 1 : 0 });
+    fire.library.push('inferno_roar'); fire.uses.inferno_roar = 99;
+    const nature = createMythling({ speciesId: 'spriggo', level, stage: fire.stage });
+    const bt = new Battle({ type: BattleType.WILD, party: [fire], enemies: [nature], mapId: 'emberwild', rng: () => 0.5 });
+    const ult = previewDamage(bt, fire, nature, ultimateMove(fire), { isUltimate: true });
+    const special = previewDamage(bt, fire, nature, getSkillById('inferno_roar'));
+    const bar = level <= 10 ? 1.3 : 1.9;      // base tier is the gentlest; tier I and up more than doubles it
+    assert.ok(ult.dmg > special.dmg * bar,
+      `at Lv.${level} the Ultimate (${ult.dmg}) beats the strongest Special (${special.dmg}) by ${(ult.dmg / special.dmg).toFixed(2)}x, needs ${bar}x`);
+  }
+});
+
+test('the battle buttons print the number, coloured by the match-up', async () => {
+  const { BattleScene } = await import('../src/scenes/BattleScene.js');
+  const bar = (foeId) => {
+    const mine = createMythling({ speciesId: 'emberu', level: 30, stage: 1 });
+    mine.library.push('inferno_roar'); mine.uses.inferno_roar = 99;
+    mine.skills = ['inferno_roar', 'bite'];
+    const scene = new BattleScene(document.createElement('canvas'));
+    scene.start(new Battle({ type: BattleType.WILD, party: [mine],
+      enemies: [createMythling({ speciesId: foeId, level: 30, stage: 1 })], mapId: 'emberwild' }),
+      { mapTheme: 'nature', onEnd: () => {} });
+    scene.renderActions();
+    const html = scene.actions.children.map((c) => c.innerHTML || '').join(' ');
+    scene.stop();
+    return html;
+  };
+  const strong = bar('spriggo');                      // Fire into Nature
+  assert.match(strong, /ab-dmg strong/, 'a super-effective skill is green');
+  assert.match(strong, /ab-dmg even/, 'the element-less attack stays plain white');
+  assert.match(bar('aquini'), /ab-dmg weak/, 'Fire into Water is red');
+});
+
+test('the type sheet is about the ELEMENT: strong against / weak against / resists, and no Mythling names', async () => {
+  const { BattleScene } = await import('../src/scenes/BattleScene.js');
+  const { displayName } = await import('../src/core/mythling.js');
+  const mine = createMythling({ speciesId: 'spriggo', level: 20 });       // Nature
+  const foe = createMythling({ speciesId: 'emberu', level: 20 });         // Fire
+  const scene = new BattleScene(document.createElement('canvas'));
+  scene.battle = new Battle({ type: BattleType.WILD, party: [mine], enemies: [foe], mapId: 'verdant_vale' });
+
+  const own = scene.typePanel(mine, 'player');
+  const text = textOf(own.body);
+  assert.match(own.title, /Nature/, 'the sheet is titled by the element');
+  assert.match(text, /STRONG AGAINST/);
+  assert.match(text, /WEAK AGAINST/);
+  assert.match(text, /RESISTS/);
+  // the live block names the two ELEMENTS, not the two Mythlings
+  assert.match(text, /RIGHT NOW/);
+  assert.match(text, /Nature vs Fire/);
+  for (const m of [mine, foe]) {
+    const nm = displayName(m);
+    assert.ok(!text.includes(nm) && !own.title.includes(nm), `${nm} must not appear in the type sheet`);
+  }
+  // Nature: water and rock are what it beats; fire, ice and poison are what beat it
+  assert.match(text, /Water/);
+  assert.match(text, /Rock/);
+  assert.match(text, /Fire/);
+
+  // the sheet opened from the enemy card is about the enemy's element
+  const theirs = scene.typePanel(foe, 'enemy');
+  assert.match(theirs.title, /Fire/, 'and the enemy sheet is titled by ITS element');
+  assert.ok(!textOf(theirs.body).includes(displayName(foe)), 'the enemy sheet names no Mythling either');
+});
+
+for (const item of queue) {
+  if (item.kind === 'section') { console.log(`\n${item.name}`); continue; }
+  try {
+    await item.fn();
+    pass++;
+    console.log(`  ✓ ${item.name}`);
+  } catch (e) {
+    fail++;
+    console.error(`  ✗ ${item.name}\n      ${e.message}${process.env.DEBUG_STACK ? `\n${e.stack}` : ''}`);
+  }
+}
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

@@ -1,6 +1,6 @@
 // Battle presentation layer: arena rendering, effects, and the battle HUD.
 // All rules live in BattleManager — this file only shows them.
-import { Battle, BattleType, BattlePhase } from '../systems/BattleManager.js';
+import { Battle, BattleType, BattlePhase, previewDamage } from '../systems/BattleManager.js';
 import { CaptureManager } from '../systems/CaptureManager.js';
 import { InventoryManager, PartyManager, GameState, CollectionManager, bus } from '../systems/GameState.js';
 import {
@@ -23,7 +23,7 @@ import { buffSummary, isDamageSkill } from '../data/skills.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { clamp, coins, randInt } from '../core/utils.js';
-import { LEVEL_CAP } from '../data/config.js';
+import { LEVEL_CAP, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX } from '../data/config.js';
 
 const SLOT_POS = {
   player: { x: 0.30, y: 0.80 },
@@ -312,62 +312,79 @@ export class BattleScene {
     return b;
   }
 
-  /** Full element sheet for one combatant, including the live match-up. */
+  /**
+   * The element sheet for whichever TYPE this Mythling is — no names, no
+   * roster noise: what the type beats, what beats it, what it shrugs off, and
+   * how all of that lands against the type across the arena right now.
+   */
   showTypePanel(m, side) {
+    const { title, body } = this.typePanel(m, side);
+    modal({ title, body, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
+  }
+
+  /** Builds the type sheet (title + body) for one combatant. */
+  typePanel(m, side) {
     const sp = speciesOf(m);
     const { foe } = this.facing(side);
     const mine = speciesElements(sp);
     const prof = typeProfile(mine);
+    const nameOf = (e) => ELEMENTS[e]?.name || e;
+    const names = mine.map(nameOf).join(' / ');
+
     const list = (entries, empty) => {
       if (!entries.length) return el('div', { class: 'tp-empty', text: empty });
       const row = el('div', { class: 'tp-list' });
       for (const e of entries) {
-        const c = el('span', { class: `chip ${e.element}`, title: `x${e.mult} damage` }, [
+        row.appendChild(el('span', {
+          class: `chip ${e.element}`,
+          title: `${nameOf(e.element)} \u00d7${e.mult} damage`,
+        }, [
           icon(ELEMENTS[e.element]?.icon || 'spark'),
-          el('span', { text: ELEMENTS[e.element]?.name || e.element }),
-          el('b', { class: 'tp-mult', text: `x${e.mult}` }),
-        ]);
-        row.appendChild(c);
+          el('span', { text: nameOf(e.element) }),
+          el('b', { class: 'tp-mult', text: `\u00d7${e.mult}` }),
+        ]));
       }
       return row;
     };
 
     const body = el('div', { class: 'type-panel' }, [
-      el('div', { class: 'row', style: { gap: '6px', marginBottom: '10px' } }, [
-        ...elementChips(sp), el('span', { class: 'chip', text: `Lv.${m.level}` }),
-      ]),
+      el('div', { class: 'row', style: { gap: '6px', marginBottom: '10px' } }, elementChips(sp)),
     ]);
 
+    // live match-up, element against element: what matters is "am I hitting
+    // hard or am I being hit hard", not who is standing there
     if (foe && foe.uid !== m.uid) {
       const theirs = speciesElements(speciesOf(foe));
       const off = attackMatchup(mine, theirs);
       const def = attackMatchup(theirs, mine);
-      const line = (label, res) => {
+      const row = (label, res) => {
         const tone = res.tone || 'even';
         const word = res.tone === 'strong' ? 'SUPER EFFECTIVE' : res.tone === 'weak' ? 'RESISTED' : 'NEUTRAL';
         return el('div', { class: `tp-vs ${tone}` }, [
           el('span', { class: 'tp-vs-label', text: label }),
           el('span', { class: 'tp-vs-word', text: word }),
-          el('span', { class: 'tp-vs-mult', text: `x${res.mult}` }),
+          el('span', { class: 'tp-vs-mult', text: `\u00d7${res.mult}` }),
         ]);
       };
-      body.appendChild(el('h3', { class: 'tp-head', text: `RIGHT NOW — vs ${displayName(foe)}` }));
-      body.appendChild(line(`${displayName(m)} attacking`, off));
-      body.appendChild(line(`${displayName(foe)} attacking`, def));
+      body.appendChild(el('h3', { class: 'tp-head', text: `RIGHT NOW \u00b7 ${names} vs ${theirs.map(nameOf).join(' / ')}` }));
+      body.appendChild(row('Attacking', off));
+      body.appendChild(row('Taking hits', def));
     }
 
-    body.appendChild(el('h3', { class: 'tp-head', text: 'ITS ATTACKS ARE STRONG AGAINST' }));
+    body.appendChild(el('h3', { class: 'tp-head', text: 'STRONG AGAINST' }));
     body.appendChild(list(prof.hits, 'Nothing — this type has no offensive advantage.'));
-    body.appendChild(el('h3', { class: 'tp-head', text: 'IT TAKES EXTRA DAMAGE FROM' }));
+    body.appendChild(el('h3', { class: 'tp-head', text: 'WEAK AGAINST' }));
     body.appendChild(list(prof.weakTo, 'Nothing — no element hits it for extra.'));
-    body.appendChild(el('h3', { class: 'tp-head', text: 'IT SHRUGS OFF' }));
+    body.appendChild(el('h3', { class: 'tp-head', text: 'RESISTS' }));
     body.appendChild(list(prof.resists, 'Nothing — no element is resisted.'));
+    body.appendChild(el('p', { class: 'sub', style: { marginTop: '10px' },
+      text: 'Weak against = elements that hit this one harder. Resists = elements it shrugs off: those attacks land for less.' }));
     if (mine.length > 1) {
-      body.appendChild(el('p', { class: 'sub', style: { marginTop: '10px' },
-        text: 'Dual type: every one of its elements is weighed in, so a 1.5x and a 0.75x multiply out to 1.125x.' }));
+      body.appendChild(el('p', { class: 'sub', style: { marginTop: '6px' },
+        text: 'Dual type: every one of its elements is weighed in, so a \u00d71.5 and a \u00d70.75 multiply out to \u00d71.125.' }));
     }
 
-    modal({ title: `${displayName(m)} — TYPE MATCH-UP`, body, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
+    return { title: `${names} \u2014 TYPE MATCH-UP`, body };
   }
 
   /**
@@ -414,6 +431,39 @@ export class BattleScene {
     if (row) row.dataset.sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
   }
 
+  /** "12 uses" / "∞ unlimited" — the tail of every skill button's meta line. */
+  usesTag(sk, left) {
+    return Number.isFinite(left) ? `${left} uses` : `${iconSvg('infinity', 'tiny')} unlimited`;
+  }
+
+  /**
+   * Live damage readout for one move against the Mythling across the arena:
+   * the number the button shows, coloured by how the elements actually match up
+   * (green = super effective, red = resisted, plain white = neutral).
+   *
+   * Buffs and debuffs on both sides are folded in, so a debuffed Special Attack
+   * drops every Special's number the moment it lands. Element-less moves stay
+   * neutral — a plain Bite never turns red.
+   *
+   * @returns {{pv:object, html:string, title:string}|null} null for moves that
+   *   deal no damage (buffs, debuffs, support Ultimates): there is no number to show.
+   */
+  dmgInfo(move, { isUltimate = false } = {}) {
+    const b = this.battle;
+    if (!b || !b.enemy || !move) return null;
+    const pv = previewDamage(b, b.player, b.enemy, move, { isUltimate });
+    if (!pv) return null;
+    const mid = (DAMAGE_RANDOM_MIN + DAMAGE_RANDOM_MAX) / 2;
+    const lo = Math.max(1, Math.floor((pv.dmg * DAMAGE_RANDOM_MIN) / mid));
+    const hi = Math.max(1, Math.floor((pv.dmg * DAMAGE_RANDOM_MAX) / mid));
+    const word = pv.tone === 'strong' ? 'SUPER EFFECTIVE' : pv.tone === 'weak' ? 'RESISTED' : 'neutral damage';
+    const html = `<b class="ab-dmg ${pv.tone}">${pv.dmg.toLocaleString('en-US')}</b>`
+      + (pv.mult !== 1 ? `<span class="ab-x">\u00d7${pv.mult}</span>` : '');
+    const title = `${word}${pv.element ? ` (${ELEMENTS[pv.element]?.name || pv.element})` : ' (no element)'}`
+      + ` \u00b7 lands for about ${lo.toLocaleString('en-US')}\u2013${hi.toLocaleString('en-US')}`;
+    return { pv, html, title };
+  }
+
   renderActions() {
     const b = this.battle;
     this.actions.innerHTML = '';
@@ -435,14 +485,19 @@ export class BattleScene {
       }
       const left = usesLeft(p, sk.id);
       const disabled = Number.isFinite(left) && left <= 0;
+      // Damage moves lead with what they will actually do to the foe across the
+      // arena right now; support moves keep describing their effect instead.
+      const dmg = this.dmgInfo(sk);
+      const uses = this.usesTag(sk, left);
       const power = isDamageSkill(sk)
         ? `PWR ${sk.power} · ${sk.damageType === 'physical' ? 'P.ATK' : 'S.ATK'}`
         : `${buffSummary(sk, ' ')} ${sk.category === 'debuff' ? 'foe' : 'self'}`;
+      const detail = dmg ? `${dmg.html} · ${uses}` : `${power} · ${uses}`;
       const glyph = sk.element || (sk.category === 'buff' ? 'shield' : sk.category === 'debuff' ? 'down' : 'strike');
       const btn = button('', { class: `action-btn ${sk.category}`, disabled, onclick: () => this.doAction({ type: 'skill', index }) });
       btn.innerHTML = `<div class="ab-name"><span class="slot-badge">${index + 1}</span>${iconSvg(glyph, sk.element || '')}<span>${sk.name}</span></div>`
-        + `<small>${power} · ${Number.isFinite(left) ? `${left} uses` : `${iconSvg('infinity', 'tiny')} unlimited`}</small>`;
-      btn.title = `[${index + 1}] ${sk.desc}`;
+        + `<small>${detail}</small>`;
+      btn.title = `[${index + 1}] ${sk.desc}${dmg ? ` — PWR ${sk.power} · ${dmg.title}` : ''}`;
       return btn;
     };
     // If every equipped skill is empty (or nothing is equipped at all) there is
@@ -456,9 +511,10 @@ export class BattleScene {
         class: 'action-btn basic',
         onclick: () => this.doAction({ type: 'skill', skillId: basic.id }),
       });
+      const bDmg = this.dmgInfo(basic);
       btn.innerHTML = `<div class="ab-name">${iconSvg(basic.element || 'strike', basic.element || '')}<span>${basic.name}</span></div>`
-        + `<small>Out of uses · PWR ${basic.power} · ${iconSvg('infinity', 'tiny')} unlimited</small>`;
-      btn.title = basic.desc;
+        + `<small>${bDmg ? `${bDmg.html} · ` : ''}Out of uses · ${iconSvg('infinity', 'tiny')} unlimited</small>`;
+      btn.title = basic.desc + (bDmg ? ` — ${bDmg.title}` : '');
       btn.style.gridColumn = '1/-1';
       this.actions.appendChild(btn);
     }
@@ -473,9 +529,11 @@ export class BattleScene {
       sfx: 'ultimate-ready',
       onclick: () => this.doAction({ type: 'ultimate' }),
     });
+    const ultDmg = unlocked ? this.dmgInfo(ult, { isUltimate: true }) : null;
     ultBtn.innerHTML = unlocked
-      ? `<div class="ab-name">${iconSvg('ultimate')}<span>${ult.name}</span></div><small>${p.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? '— READY' : 'charge'}</small>`
+      ? `<div class="ab-name">${iconSvg('ultimate')}<span>${ult.name}</span></div><small>${ultDmg ? `${ultDmg.html} · ` : ''}${p.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? '— READY' : 'charge'}</small>`
       : `<div class="ab-name">${iconSvg('lock')}<span>ULTIMATE</span></div><small>Unlocks at Lv.10</small>`;
+    ultBtn.title = `${ult.desc}${ultDmg ? ` — ${ultDmg.title}` : ''}`;
     const fill = el('div', { class: 'ult-fill', style: { width: `${(p.ultCharge / ULTIMATE_MAX_CHARGE) * 100}%` } });
     ultBtn.appendChild(fill);
     this.actions.appendChild(ultBtn);

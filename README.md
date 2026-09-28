@@ -85,7 +85,8 @@ Optional headless regression test for the editor (drives the built file in jsdom
 | **Mythlings** | 55 species — 20 originals, 25 new lines across Electric / Ice / Metal / Poison / Psychic (5 each), **5 Fighting lines** (pure-Fighting Cubrawl plus dual-typed Ironpaw, Emberfist, Stormkick and Zenram), two other **dual-typed** lines (Poison/Psychic Mirewisp, Electric/Metal Sparkbug) and three **legendaries** (Aetherion, Venomyr, Basaltyr: one form, 2–3 elements, rare spawns, Absolute Ball or better). 14 procedural body plans, 4 visibly different stages per line |
 | **Regions** | 9 with **fixed level bands** — Verdant Vale 1–20, Azure Coast 15–30, Emberwild 28–40, Stonehollow Crags 38–48, Stormreach Plateau 46–56, Frostveil Tundra 54–64, Ironhold Foundry 62–72, Miremarsh Fen 70–80, Astral Spire 78–90. Wild levels never scale to your party and **trainer teams are fixed** at their written levels |
 | **Elements** | 10 — Nature, Water, Fire, Rock, Electric, Ice, Metal, Poison, Psychic, Fighting. Every element beats two or three and fears one to three; dual / triple types multiply every one of their elements (1.5× / 0.75× / 1.0×) |
-| **Battle** | Damage scaling reworked: no more Lv.100 coin-flip one-shots — a neutral Special takes ~7 hits, a super-effective Ultimate 2–3. Crit is a lucky spike, not a coin flip: chance caps at 10 %, crit damage at +35 % |
+| **Battle** | Damage scaling reworked: no more Lv.100 coin-flip one-shots — a neutral Special takes ~7 hits, a super-effective Ultimate ~1.8. Crit is a lucky spike, not a coin flip: chance caps at 10 %, crit damage at +35 % |
+| **Damage you can read** | Every attack button prints the damage it will do to the Mythling across the arena **right now** — green when super effective, red when resisted, white when neutral — and it updates the moment a buff, a debuff or a switch changes it |
 | **Level cap** | Lv.100 — every evolution stage is reachable |
 | **Evolution** | Lv.20 / Lv.60 / Lv.80. The **Index only reveals a form once you have owned it**. Legendaries never evolve; their Ultimate tiers unlock by level |
 | **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades a tier per evolution. Support Ultimates buff the caster and/or debuff the foe with two effects per tier |
@@ -111,6 +112,7 @@ Optional headless regression test for the editor (drives the built file in jsdom
 * **Starter = S rarity** — whichever partner you pick starts as an S-tier Mythling.
 * **Elemental Normal skills have limited uses** (30 / 25 / 20 by tier); only the element-less
   starter attack (Bite / Scratch / Peck / Pebble Toss) is unlimited and is the fallback move.
+  Being element-less it is always neutral damage, so it never picks up a type advantage.
 * **God Ball** — 12,000 Wildcoins, **100 % catch**. **Shiny Ball** (60,000) and **Dark Ball**
   (90,000) also force the Shiny / Darkness mutation; both are sold only in the Stonehollow Crags.
   (The King Ball is gone — old saves convert it to God Balls.)
@@ -130,15 +132,28 @@ Optional headless regression test for the editor (drives the built file in jsdom
   caps at 35). It used to be a full 1 % per point, which made attacks miss far too often.
 * **Type match-up indicator** — in battle each card shows a chip when the match-up is
   actually for or against it (`YOUR ATTACKS · SUPER EFFECTIVE ×1.5`, `ITS ATTACKS · RESISTED ×0.75`);
-  an even match-up shows nothing. The icon button on each card opens that Mythling's full type
-  sheet: the live match-up both ways, what its attacks are strong against, what hits it for extra
-  and what it shrugs off. Party cards in the switch picker carry the same tag.
+  an even match-up shows nothing. Party cards in the switch picker carry the same tag.
+* **The type sheet is about the element** — the icon button on either card opens a sheet titled
+  by the **element**, not the creature: `NATURE — TYPE MATCH-UP`, then **STRONG AGAINST**
+  (Water ×1.5, Rock ×1.5), **WEAK AGAINST** (Fire ×1.5, Ice ×1.5, Poison ×1.5) and **RESISTS**
+  (the attacks it shrugs off — those land for less). A `RIGHT NOW · Nature vs Fire` block gives
+  both directions against whatever is across the arena, and opening it from the enemy card is
+  about the enemy's element.
 * **Crits** — Crit Chance is the % chance an attack lands critically (hard cap **10 %**); Crit Damage is
   the bonus damage on a crit (`+20 %` = a 1.2× hit, hard cap **+35 %**). Five moods feed them.
 * **Battle log** — every attack line now reports the exact damage:
   `Emberu used Burning Fang! — 163 damage! CRITICAL HIT! (x2.15)`.
 * **Trainer teams** — the enemy card shows a pip strip and a `2/3 LEFT` counter, and shouts
   `LAST MYTHLING!` when you are down to the trainer's final Mythling.
+* **The Ultimate is a finisher** — it used to be scaled to 70 % of its tier power, which left a
+  full-charge Ultimate hitting *softer* than the best Special, so saving up felt pointless. At
+  175 % every tier out-muscles the best Special in the game: a full charge takes about **two**
+  hits to KO an equal foe, and even a super-effective crit lands around three quarters of the bar.
+* **Regular skills hit a little harder** — Normal and Special moves carry an extra `×1.12`
+  (`SKILL_POWER_SCALE` in `src/data/config.js`) so the buttons you press every turn have weight.
+* **Element-less really means element-less** — Bite / Scratch / Peck / Pebble Toss used to borrow
+  the element of the Mythling using them, so a Fire Mythling's Bite counted as Fire. They are
+  neutral now, which is also why that button never turns red or green.
 * **Level ups** — a whole party levelling at once collapses into one entry per Mythling
   (`Lv.12 → Lv.15`) in a scrollable summary.
 

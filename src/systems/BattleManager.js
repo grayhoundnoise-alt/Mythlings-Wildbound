@@ -5,14 +5,14 @@ import {
   equippedSkill, equippedSkills, usesLeft, consumeUse, restoreUses, ultimateMove, ultimateReady, ultimateUnlocked, basicAttack,
   addUltimateCharge, gainExp, hpPercent, applyItemEffects,
 } from '../core/mythling.js';
-import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE, effectTarget, isSupportUltimate } from '../data/skills.js';
+import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE, effectTarget, isSupportUltimate, isDamageSkill } from '../data/skills.js';
 import { elementMultiplier, effectivenessLabel, speciesElements } from '../data/elements.js';
 import { getItem } from '../data/items.js';
 import { getRarity } from '../data/rarity.js';
 import {
   DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, COUNTER_MAX_PERCENT, expReward, LEVEL_CAP,
   counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT, coinReward, FUTURE_CONTENT_LIVE,
-  DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE,
+  DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, SKILL_POWER_SCALE,
 } from '../data/config.js';
 import { clamp, randInt } from '../core/utils.js';
 
@@ -60,6 +60,38 @@ class Combatant {
     this.buffs[stat] = cur;
     return { applied: true, stacks: cur.stacks, total: cur.total };
   }
+}
+
+/**
+ * What `move` will actually do to `defender` right now — the number the battle
+ * buttons show.
+ *
+ * It is the same arithmetic as _dealDamage with the dice taken out: the random
+ * roll is averaged, crits and dodges are left off, so what you read is a normal
+ * hit. Both sides' live buffs / debuffs are folded in, which is why the number
+ * drops the moment the foe debuffs your Special Attack and jumps when you buff
+ * yourself. Element-less moves stay neutral.
+ *
+ * @returns {{dmg:number, mult:number, element:string|null, tone:'strong'|'weak'|'even'}|null}
+ *   null when the move is not a damage move (buffs, debuffs, support Ultimates).
+ */
+export function previewDamage(battle, attacker, defender, move, { isUltimate = false } = {}) {
+  if (!battle || !attacker || !defender || !move) return null;
+  if (!isDamageSkill(move)) return null;
+  const acb = battle.cb(attacker);
+  const dcb = battle.cb(defender);
+  const offKey = move.damageType === 'physical' ? 'patk' : 'satk';
+  const defKey = move.damageType === 'physical' ? 'pdef' : 'sdef';
+  const off = acb.stat(offKey);
+  const def = dcb.stat(defKey);
+  const atkElement = move.element || null;
+  const mult = elementMultiplier(atkElement, speciesElements(speciesOf(defender)));
+  const rand = (DAMAGE_RANDOM_MIN + DAMAGE_RANDOM_MAX) / 2;
+  const levelFactor = 1 + DAMAGE_LEVEL_SCALE * (attacker.level - 1);
+  const stageFactor = 1 + DAMAGE_STAGE_SCALE * (attacker.stage || 0);
+  const powerScale = isUltimate ? 1 : SKILL_POWER_SCALE;
+  const dmg = Math.max(1, Math.floor(((move.power * powerScale * off) / Math.max(1, def)) * levelFactor * stageFactor * rand * mult));
+  return { dmg, mult, element: atkElement, tone: mult > 1.01 ? 'strong' : mult < 0.99 ? 'weak' : 'even' };
 }
 
 export class Battle {
@@ -399,7 +431,9 @@ export class Battle {
     const critBonus = clamp(acb.stat('critMult'), 0, CRIT_MAX_MULT);
     const crit = this.rng() * 100 < critChance;
 
-    const atkElement = move.element || speciesOf(attacker).element;
+    // An element-less move stays element-less: a plain Bite is never a Fire move,
+    // even in a Fire Mythling's mouth. Only moves that carry an element get one.
+    const atkElement = move.element || null;
     // dual / triple-typed defenders weigh every one of their elements
     const mult = elementMultiplier(atkElement, speciesElements(speciesOf(defender)));
     const rand = DAMAGE_RANDOM_MIN + this.rng() * (DAMAGE_RANDOM_MAX - DAMAGE_RANDOM_MIN);
@@ -409,7 +443,10 @@ export class Battle {
     const levelFactor = 1 + DAMAGE_LEVEL_SCALE * (attacker.level - 1);
     const stageFactor = 1 + DAMAGE_STAGE_SCALE * (attacker.stage || 0);
 
-    let dmg = Math.floor(((move.power * off) / Math.max(1, def)) * levelFactor * stageFactor * rand * mult);
+    // Regular skills get a small across-the-board bump (SKILL_POWER_SCALE) so they
+    // feel weightier; Ultimates are balanced separately through their own scale.
+    const powerScale = isUltimate ? 1 : SKILL_POWER_SCALE;
+    let dmg = Math.floor(((move.power * powerScale * off) / Math.max(1, def)) * levelFactor * stageFactor * rand * mult);
     if (crit) dmg = Math.floor(dmg * (1 + critBonus / 100));
     // Reflected damage ignores stats and elements: it is the foe's own hit, multiplied.
     if (fixedDamage != null) dmg = crit ? Math.floor(fixedDamage * (1 + critBonus / 100)) : fixedDamage;

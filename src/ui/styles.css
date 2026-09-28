@@ -445,6 +445,17 @@ select {
 .battle-actions .btn { padding: 13px 8px; font-size: .95rem; }
 .action-btn { position: relative; text-align: center; }
 .action-btn small { display: block; font-weight: 600; font-size: .7rem; color: #a9c0d6; margin-top: 3px; letter-spacing: .02em; }
+/* live damage readout: green = super effective, red = resisted, plain = neutral */
+.ab-dmg { font-size: .84rem; font-weight: 900; letter-spacing: 0; }
+.ab-dmg.strong { color: #6ee87f; text-shadow: 0 0 9px rgba(110,232,127,.45); }
+.ab-dmg.weak { color: #ff7b7b; text-shadow: 0 0 9px rgba(255,123,123,.4); }
+.ab-dmg.even { color: #eaf2fb; }
+.ab-x { margin-left: 4px; font-size: .68rem; font-weight: 800; opacity: .72; }
+/* the READY ultimate is a gold button with dark text — darken the readout to match */
+.action-btn.ultimate.ready .ab-dmg.strong { color: #0d6b20; text-shadow: none; }
+.action-btn.ultimate.ready .ab-dmg.weak { color: #961616; text-shadow: none; }
+.action-btn.ultimate.ready .ab-dmg.even { color: #241804; }
+.action-btn.ultimate.ready .ab-x { color: #5a4310; }
 .action-btn.normal { border-color: #9fb3c9; }
 .action-btn.special { border-color: #7fd8ff; }
 .action-btn.buff { border-color: #b6f09b; }
@@ -921,6 +932,9 @@ select {
   font-size: .88rem; line-height: 1.55; color: #f2e7cd;
 }
 .wiki-dim { color: var(--muted); font-size: .82rem; }
+/* the wiki borrows the battle readout's colours when it explains them */
+.wiki-good { color: #6ee87f; font-weight: 800; }
+.wiki-bad { color: #ff7b7b; font-weight: 800; }
 .wiki-hidden { display: none !important; }
 .wiki-card { border: 1.5px solid rgba(255, 255, 255, 0.12); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; background: rgba(255, 255, 255, 0.04); }
 .wiki-card-head { display: flex; gap: 14px; align-items: flex-start; }

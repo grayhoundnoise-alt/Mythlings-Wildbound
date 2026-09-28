@@ -453,6 +453,17 @@ select {
 .battle-actions .btn { padding: 13px 8px; font-size: .95rem; }
 .action-btn { position: relative; text-align: center; }
 .action-btn small { display: block; font-weight: 600; font-size: .7rem; color: #a9c0d6; margin-top: 3px; letter-spacing: .02em; }
+/* live damage readout: green = super effective, red = resisted, plain = neutral */
+.ab-dmg { font-size: .84rem; font-weight: 900; letter-spacing: 0; }
+.ab-dmg.strong { color: #6ee87f; text-shadow: 0 0 9px rgba(110,232,127,.45); }
+.ab-dmg.weak { color: #ff7b7b; text-shadow: 0 0 9px rgba(255,123,123,.4); }
+.ab-dmg.even { color: #eaf2fb; }
+.ab-x { margin-left: 4px; font-size: .68rem; font-weight: 800; opacity: .72; }
+/* the READY ultimate is a gold button with dark text — darken the readout to match */
+.action-btn.ultimate.ready .ab-dmg.strong { color: #0d6b20; text-shadow: none; }
+.action-btn.ultimate.ready .ab-dmg.weak { color: #961616; text-shadow: none; }
+.action-btn.ultimate.ready .ab-dmg.even { color: #241804; }
+.action-btn.ultimate.ready .ab-x { color: #5a4310; }
 .action-btn.normal { border-color: #9fb3c9; }
 .action-btn.special { border-color: #7fd8ff; }
 .action-btn.buff { border-color: #b6f09b; }
@@ -929,6 +940,9 @@ select {
   font-size: .88rem; line-height: 1.55; color: #f2e7cd;
 }
 .wiki-dim { color: var(--muted); font-size: .82rem; }
+/* the wiki borrows the battle readout's colours when it explains them */
+.wiki-good { color: #6ee87f; font-weight: 800; }
+.wiki-bad { color: #ff7b7b; font-weight: 800; }
 .wiki-hidden { display: none !important; }
 .wiki-card { border: 1.5px solid rgba(255, 255, 255, 0.12); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; background: rgba(255, 255, 255, 0.04); }
 .wiki-card-head { display: flex; gap: 14px; align-items: flex-start; }
@@ -1164,7 +1178,8 @@ h3 .name-el { vertical-align: middle; }
   var DAMAGE_RANDOM_MAX = 1;
   var DAMAGE_LEVEL_SCALE = 0.03;
   var DAMAGE_STAGE_SCALE = 0.08;
-  var ULTIMATE_POWER_SCALE = 0.7;
+  var SKILL_POWER_SCALE = 1.12;
+  var ULTIMATE_POWER_SCALE = 1.75;
   var STAT_GROWTH = {
     // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.
     hp: 0.105,
@@ -7046,6 +7061,24 @@ h3 .name-el { vertical-align: middle; }
       return { applied: true, stacks: cur.stacks, total: cur.total };
     }
   };
+  function previewDamage(battle, attacker, defender, move, { isUltimate = false } = {}) {
+    if (!battle || !attacker || !defender || !move) return null;
+    if (!isDamageSkill(move)) return null;
+    const acb = battle.cb(attacker);
+    const dcb = battle.cb(defender);
+    const offKey = move.damageType === "physical" ? "patk" : "satk";
+    const defKey = move.damageType === "physical" ? "pdef" : "sdef";
+    const off = acb.stat(offKey);
+    const def = dcb.stat(defKey);
+    const atkElement = move.element || null;
+    const mult = elementMultiplier(atkElement, speciesElements(speciesOf(defender)));
+    const rand2 = (DAMAGE_RANDOM_MIN + DAMAGE_RANDOM_MAX) / 2;
+    const levelFactor = 1 + DAMAGE_LEVEL_SCALE * (attacker.level - 1);
+    const stageFactor = 1 + DAMAGE_STAGE_SCALE * (attacker.stage || 0);
+    const powerScale = isUltimate ? 1 : SKILL_POWER_SCALE;
+    const dmg = Math.max(1, Math.floor(move.power * powerScale * off / Math.max(1, def) * levelFactor * stageFactor * rand2 * mult));
+    return { dmg, mult, element: atkElement, tone: mult > 1.01 ? "strong" : mult < 0.99 ? "weak" : "even" };
+  }
   var Battle = class {
     /**
      * @param {object} cfg
@@ -7376,12 +7409,13 @@ h3 .name-el { vertical-align: middle; }
       const critChance = clamp(acb.stat("crit"), 0, CRIT_MAX_PERCENT);
       const critBonus = clamp(acb.stat("critMult"), 0, CRIT_MAX_MULT);
       const crit = this.rng() * 100 < critChance;
-      const atkElement = move.element || speciesOf(attacker).element;
+      const atkElement = move.element || null;
       const mult = elementMultiplier(atkElement, speciesElements(speciesOf(defender)));
       const rand2 = DAMAGE_RANDOM_MIN + this.rng() * (DAMAGE_RANDOM_MAX - DAMAGE_RANDOM_MIN);
       const levelFactor = 1 + DAMAGE_LEVEL_SCALE * (attacker.level - 1);
       const stageFactor = 1 + DAMAGE_STAGE_SCALE * (attacker.stage || 0);
-      let dmg = Math.floor(move.power * off / Math.max(1, def) * levelFactor * stageFactor * rand2 * mult);
+      const powerScale = isUltimate ? 1 : SKILL_POWER_SCALE;
+      let dmg = Math.floor(move.power * powerScale * off / Math.max(1, def) * levelFactor * stageFactor * rand2 * mult);
       if (crit) dmg = Math.floor(dmg * (1 + critBonus / 100));
       if (fixedDamage != null) dmg = crit ? Math.floor(fixedDamage * (1 + critBonus / 100)) : fixedDamage;
       dmg = Math.max(1, dmg);
@@ -16832,63 +16866,81 @@ h3 .name-el { vertical-align: middle; }
       b.innerHTML = iconSvg("matchup");
       return b;
     }
-    /** Full element sheet for one combatant, including the live match-up. */
+    /**
+     * The element sheet for whichever TYPE this Mythling is — no names, no
+     * roster noise: what the type beats, what beats it, what it shrugs off, and
+     * how all of that lands against the type across the arena right now.
+     */
     showTypePanel(m, side) {
+      const { title, body } = this.typePanel(m, side);
+      modal({ title, body, buttons: [{ label: "CLOSE", value: true, primary: true }] });
+    }
+    /** Builds the type sheet (title + body) for one combatant. */
+    typePanel(m, side) {
       const sp = speciesOf(m);
       const { foe } = this.facing(side);
       const mine = speciesElements(sp);
       const prof = typeProfile(mine);
+      const nameOf = (e) => {
+        var _a;
+        return ((_a = ELEMENTS[e]) == null ? void 0 : _a.name) || e;
+      };
+      const names = mine.map(nameOf).join(" / ");
       const list = (entries, empty) => {
-        var _a, _b;
+        var _a;
         if (!entries.length) return el("div", { class: "tp-empty", text: empty });
         const row = el("div", { class: "tp-list" });
         for (const e of entries) {
-          const c = el("span", { class: `chip ${e.element}`, title: `x${e.mult} damage` }, [
+          row.appendChild(el("span", {
+            class: `chip ${e.element}`,
+            title: `${nameOf(e.element)} \xD7${e.mult} damage`
+          }, [
             icon(((_a = ELEMENTS[e.element]) == null ? void 0 : _a.icon) || "spark"),
-            el("span", { text: ((_b = ELEMENTS[e.element]) == null ? void 0 : _b.name) || e.element }),
-            el("b", { class: "tp-mult", text: `x${e.mult}` })
-          ]);
-          row.appendChild(c);
+            el("span", { text: nameOf(e.element) }),
+            el("b", { class: "tp-mult", text: `\xD7${e.mult}` })
+          ]));
         }
         return row;
       };
       const body = el("div", { class: "type-panel" }, [
-        el("div", { class: "row", style: { gap: "6px", marginBottom: "10px" } }, [
-          ...elementChips(sp),
-          el("span", { class: "chip", text: `Lv.${m.level}` })
-        ])
+        el("div", { class: "row", style: { gap: "6px", marginBottom: "10px" } }, elementChips(sp))
       ]);
       if (foe && foe.uid !== m.uid) {
         const theirs = speciesElements(speciesOf(foe));
         const off = attackMatchup(mine, theirs);
         const def = attackMatchup(theirs, mine);
-        const line3 = (label, res) => {
+        const row = (label, res) => {
           const tone = res.tone || "even";
           const word = res.tone === "strong" ? "SUPER EFFECTIVE" : res.tone === "weak" ? "RESISTED" : "NEUTRAL";
           return el("div", { class: `tp-vs ${tone}` }, [
             el("span", { class: "tp-vs-label", text: label }),
             el("span", { class: "tp-vs-word", text: word }),
-            el("span", { class: "tp-vs-mult", text: `x${res.mult}` })
+            el("span", { class: "tp-vs-mult", text: `\xD7${res.mult}` })
           ]);
         };
-        body.appendChild(el("h3", { class: "tp-head", text: `RIGHT NOW \u2014 vs ${displayName(foe)}` }));
-        body.appendChild(line3(`${displayName(m)} attacking`, off));
-        body.appendChild(line3(`${displayName(foe)} attacking`, def));
+        body.appendChild(el("h3", { class: "tp-head", text: `RIGHT NOW \xB7 ${names} vs ${theirs.map(nameOf).join(" / ")}` }));
+        body.appendChild(row("Attacking", off));
+        body.appendChild(row("Taking hits", def));
       }
-      body.appendChild(el("h3", { class: "tp-head", text: "ITS ATTACKS ARE STRONG AGAINST" }));
+      body.appendChild(el("h3", { class: "tp-head", text: "STRONG AGAINST" }));
       body.appendChild(list(prof.hits, "Nothing \u2014 this type has no offensive advantage."));
-      body.appendChild(el("h3", { class: "tp-head", text: "IT TAKES EXTRA DAMAGE FROM" }));
+      body.appendChild(el("h3", { class: "tp-head", text: "WEAK AGAINST" }));
       body.appendChild(list(prof.weakTo, "Nothing \u2014 no element hits it for extra."));
-      body.appendChild(el("h3", { class: "tp-head", text: "IT SHRUGS OFF" }));
+      body.appendChild(el("h3", { class: "tp-head", text: "RESISTS" }));
       body.appendChild(list(prof.resists, "Nothing \u2014 no element is resisted."));
+      body.appendChild(el("p", {
+        class: "sub",
+        style: { marginTop: "10px" },
+        text: "Weak against = elements that hit this one harder. Resists = elements it shrugs off: those attacks land for less."
+      }));
       if (mine.length > 1) {
         body.appendChild(el("p", {
           class: "sub",
-          style: { marginTop: "10px" },
-          text: "Dual type: every one of its elements is weighed in, so a 1.5x and a 0.75x multiply out to 1.125x."
+          style: { marginTop: "6px" },
+          text: "Dual type: every one of its elements is weighed in, so a \xD71.5 and a \xD70.75 multiply out to \xD71.125."
         }));
       }
-      modal({ title: `${displayName(m)} \u2014 TYPE MATCH-UP`, body, buttons: [{ label: "CLOSE", value: true, primary: true }] });
+      return { title: `${names} \u2014 TYPE MATCH-UP`, body };
     }
     /**
      * Active buff / debuff chips: which stat, the total modifier and how many
@@ -16927,6 +16979,36 @@ h3 .name-el { vertical-align: middle; }
       const row = card.querySelector(".buff-row");
       if (row) row.dataset.sig = JSON.stringify(Object.entries(v.buffs || {}).sort());
     }
+    /** "12 uses" / "∞ unlimited" — the tail of every skill button's meta line. */
+    usesTag(sk, left) {
+      return Number.isFinite(left) ? `${left} uses` : `${iconSvg("infinity", "tiny")} unlimited`;
+    }
+    /**
+     * Live damage readout for one move against the Mythling across the arena:
+     * the number the button shows, coloured by how the elements actually match up
+     * (green = super effective, red = resisted, plain white = neutral).
+     *
+     * Buffs and debuffs on both sides are folded in, so a debuffed Special Attack
+     * drops every Special's number the moment it lands. Element-less moves stay
+     * neutral — a plain Bite never turns red.
+     *
+     * @returns {{pv:object, html:string, title:string}|null} null for moves that
+     *   deal no damage (buffs, debuffs, support Ultimates): there is no number to show.
+     */
+    dmgInfo(move, { isUltimate = false } = {}) {
+      var _a;
+      const b = this.battle;
+      if (!b || !b.enemy || !move) return null;
+      const pv = previewDamage(b, b.player, b.enemy, move, { isUltimate });
+      if (!pv) return null;
+      const mid = (DAMAGE_RANDOM_MIN + DAMAGE_RANDOM_MAX) / 2;
+      const lo = Math.max(1, Math.floor(pv.dmg * DAMAGE_RANDOM_MIN / mid));
+      const hi = Math.max(1, Math.floor(pv.dmg * DAMAGE_RANDOM_MAX / mid));
+      const word = pv.tone === "strong" ? "SUPER EFFECTIVE" : pv.tone === "weak" ? "RESISTED" : "neutral damage";
+      const html = `<b class="ab-dmg ${pv.tone}">${pv.dmg.toLocaleString("en-US")}</b>` + (pv.mult !== 1 ? `<span class="ab-x">\xD7${pv.mult}</span>` : "");
+      const title = `${word}${pv.element ? ` (${((_a = ELEMENTS[pv.element]) == null ? void 0 : _a.name) || pv.element})` : " (no element)"} \xB7 lands for about ${lo.toLocaleString("en-US")}\u2013${hi.toLocaleString("en-US")}`;
+      return { pv, html, title };
+    }
     renderActions() {
       const b = this.battle;
       this.actions.innerHTML = "";
@@ -16949,11 +17031,14 @@ h3 .name-el { vertical-align: middle; }
         }
         const left = usesLeft(p, sk.id);
         const disabled = Number.isFinite(left) && left <= 0;
+        const dmg = this.dmgInfo(sk);
+        const uses = this.usesTag(sk, left);
         const power = isDamageSkill(sk) ? `PWR ${sk.power} \xB7 ${sk.damageType === "physical" ? "P.ATK" : "S.ATK"}` : `${buffSummary(sk, " ")} ${sk.category === "debuff" ? "foe" : "self"}`;
+        const detail = dmg ? `${dmg.html} \xB7 ${uses}` : `${power} \xB7 ${uses}`;
         const glyph = sk.element || (sk.category === "buff" ? "shield" : sk.category === "debuff" ? "down" : "strike");
         const btn = button("", { class: `action-btn ${sk.category}`, disabled, onclick: () => this.doAction({ type: "skill", index }) });
-        btn.innerHTML = `<div class="ab-name"><span class="slot-badge">${index + 1}</span>${iconSvg(glyph, sk.element || "")}<span>${sk.name}</span></div><small>${power} \xB7 ${Number.isFinite(left) ? `${left} uses` : `${iconSvg("infinity", "tiny")} unlimited`}</small>`;
-        btn.title = `[${index + 1}] ${sk.desc}`;
+        btn.innerHTML = `<div class="ab-name"><span class="slot-badge">${index + 1}</span>${iconSvg(glyph, sk.element || "")}<span>${sk.name}</span></div><small>${detail}</small>`;
+        btn.title = `[${index + 1}] ${sk.desc}${dmg ? ` \u2014 PWR ${sk.power} \xB7 ${dmg.title}` : ""}`;
         return btn;
       };
       if (this.anySkillUsable()) {
@@ -16964,8 +17049,9 @@ h3 .name-el { vertical-align: middle; }
           class: "action-btn basic",
           onclick: () => this.doAction({ type: "skill", skillId: basic.id })
         });
-        btn.innerHTML = `<div class="ab-name">${iconSvg(basic.element || "strike", basic.element || "")}<span>${basic.name}</span></div><small>Out of uses \xB7 PWR ${basic.power} \xB7 ${iconSvg("infinity", "tiny")} unlimited</small>`;
-        btn.title = basic.desc;
+        const bDmg = this.dmgInfo(basic);
+        btn.innerHTML = `<div class="ab-name">${iconSvg(basic.element || "strike", basic.element || "")}<span>${basic.name}</span></div><small>${bDmg ? `${bDmg.html} \xB7 ` : ""}Out of uses \xB7 ${iconSvg("infinity", "tiny")} unlimited</small>`;
+        btn.title = basic.desc + (bDmg ? ` \u2014 ${bDmg.title}` : "");
         btn.style.gridColumn = "1/-1";
         this.actions.appendChild(btn);
       }
@@ -16978,7 +17064,9 @@ h3 .name-el { vertical-align: middle; }
         sfx: "ultimate-ready",
         onclick: () => this.doAction({ type: "ultimate" })
       });
-      ultBtn.innerHTML = unlocked ? `<div class="ab-name">${iconSvg("ultimate")}<span>${ult.name}</span></div><small>${p.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? "\u2014 READY" : "charge"}</small>` : `<div class="ab-name">${iconSvg("lock")}<span>ULTIMATE</span></div><small>Unlocks at Lv.10</small>`;
+      const ultDmg = unlocked ? this.dmgInfo(ult, { isUltimate: true }) : null;
+      ultBtn.innerHTML = unlocked ? `<div class="ab-name">${iconSvg("ultimate")}<span>${ult.name}</span></div><small>${ultDmg ? `${ultDmg.html} \xB7 ` : ""}${p.ultCharge}/${ULTIMATE_MAX_CHARGE} ${ready ? "\u2014 READY" : "charge"}</small>` : `<div class="ab-name">${iconSvg("lock")}<span>ULTIMATE</span></div><small>Unlocks at Lv.10</small>`;
+      ultBtn.title = `${ult.desc}${ultDmg ? ` \u2014 ${ultDmg.title}` : ""}`;
       const fill = el("div", { class: "ult-fill", style: { width: `${p.ultCharge / ULTIMATE_MAX_CHARGE * 100}%` } });
       ultBtn.appendChild(fill);
       this.actions.appendChild(ultBtn);
@@ -18195,11 +18283,21 @@ h3 .name-el { vertical-align: middle; }
         "<b>OFF</b> is P.ATK and <b>DEF</b> is P.DEF for Physical skills; S.ATK / S.DEF for Special skills and Ultimates.",
         `<b>levelFactor</b> grows ${(DAMAGE_LEVEL_SCALE * 100).toFixed(1)}% per level above Lv.1 (it used to be 8.5% \u2014 at Lv.100 two equal Mythlings one-shot each other and speed decided everything; a neutral Special now takes about seven hits, a super-effective Ultimate two or three).`,
         `<b>stageFactor</b> adds ${(DAMAGE_STAGE_SCALE * 100).toFixed(0)}% per evolution stage on top of the stats the stage already multiplies.`,
-        `<b>Ultimates</b> use ${Math.round(ULTIMATE_POWER_SCALE * 100)}% of their tier power (the Power shown everywhere is already that number): strong \u2014 about four hits to KO an equal foe, two or three when super effective \u2014 but never a one-shot, not even on a crit. HP also grows a little faster than attack with level, so fights get longer at high level, not shorter.`,
+        `<b>Ultimates</b> use ${Math.round(ULTIMATE_POWER_SCALE * 100)}% of their tier power (the Power shown everywhere is already that number). They used to be cut to 70%, which left a full-charge Ultimate hitting <i>softer than the best Special</i> \u2014 pointless to save up for. Now every tier out-muscles it: a full charge takes about <b>two</b> hits to KO an equal foe, and even a super-effective crit lands around three quarters of the bar rather than deleting it.`,
+        `<b>Regular skills</b> (Normal and Special) get a further <b>\xD7${SKILL_POWER_SCALE}</b> on top, so the buttons you press every turn land with weight.`,
+        "A move with <b>no element</b> stays element-less: a plain Bite never borrows the element of the Mythling using it, so it is always neutral damage.",
         "<b>elementMultiplier</b> multiplies once per defender element: a Poison/Psychic Mythling hit by Fire takes 1.5 \xD7 0.75 = <b>x1.125</b>; hit by Psychic it takes 1.5 \xD7 1.0 = <b>x1.5</b>.",
         "Every hit deals at least <b>1</b> damage.",
         "The battle log now reports the exact damage of every attack."
       ], "power off def level factor random"),
+      h3("Reading your damage", "damage number button preview green red white neutral"),
+      bullets([
+        "Every attack button prints the damage that move will do to the Mythling across the arena <b>right now</b> \u2014 the same sum the engine rolls, with the dice averaged out.",
+        '<span class="wiki-good">Green</span> = super effective. <span class="wiki-bad">Red</span> = resisted. <span class="wiki-dim">Plain white</span> = neutral. The number carries a <b>\xD71.5</b> or <b>\xD70.75</b> tag whenever the match-up is not even.',
+        "It moves with the fight: buffing a stat raises every number that uses it, a debuff drops them the moment it lands, and switching the foe re-reads the match-up at once.",
+        "The Ultimate prints its number too, and it is the biggest one on the bar.",
+        "Hover a button for the exact range the hit lands in, and press the type button on either card for the full element sheet: <b>Strong against</b>, <b>Weak against</b> and <b>Resists</b>, all by element."
+      ]),
       h3("Dodging (Counter)", "dodge miss counter evasion"),
       para(`Before damage is rolled, the defender gets a <b>${COUNTER_DODGE_SCALE * 100}% per point of Counter</b>
       chance to dodge, capped at <b>${COUNTER_MAX_DODGE}%</b>. A dodge grants the attacker no Ultimate Charge.`),
@@ -18329,7 +18427,7 @@ h3 .name-el { vertical-align: middle; }
       in its <b>Skill Library</b> forever, and leaving a button empty is allowed (nothing refills it, and the choice
       is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
       bullets([
-        "<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. The stronger <b>elemental</b> Normals every evolution teaches carry an element and therefore have <b>limited uses</b> (30 / 25 / 20).",
+        "<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. Being element-less it is always <b>neutral</b> damage \u2014 it never borrows its user\u2019s element. The stronger <b>elemental</b> Normals every evolution teaches carry an element, are judged on it, and therefore have <b>limited uses</b> (30 / 25 / 20).",
         "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses. <b>Uses are a per-battle resource: every fight starts with every skill full</b> \u2014 a limited move is a budget for one battle, not for the whole trip.",
         "<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe's stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.",
         "Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.",

@@ -60,11 +60,26 @@ export const DAMAGE_RANDOM_MAX = 1.0;
 export const DAMAGE_LEVEL_SCALE = 0.03;
 export const DAMAGE_STAGE_SCALE = 0.08;
 /**
- * Ultimates are strong, not a delete button: their listed tier power is scaled by this before
- * anything else. With it, a neutral Ultimate takes ~4 hits to KO an equal foe, a super-effective
- * one ~2.7, and even a super-effective CRIT Ultimate cannot one-shot an equal, full-HP foe.
+ * A small across-the-board bump for every regular skill (Normal / Special).
+ * Deliberately gentle: it makes the moves you press all battle feel weightier
+ * without undoing the "no one-shots at parity" rule. Ultimates are not affected
+ * — they are tuned through ULTIMATE_POWER_SCALE instead.
  */
-export const ULTIMATE_POWER_SCALE = 0.7;
+export const SKILL_POWER_SCALE = 1.12;
+/**
+ * Ultimates are a finisher, not a delete button: their listed tier power is scaled by
+ * this before anything else.
+ *
+ * It used to be 0.7, which made an Ultimate *weaker* than the best Special at every
+ * tier (tier I landed at 35 power against a 56-power Special), so charging to 8/8
+ * felt pointless. At 1.75 the tiers land at 60 / 88 / 130 / 182 power — roughly
+ * 1.1x to 3.3x the top Special — so a full-charge Ultimate is the biggest button
+ * you have and takes about two of them to KO an equal foe.
+ *
+ * Even so it is not a one-shot button: a super-effective CRIT Ultimate from an
+ * equal Lv.100 Mythling lands around three quarters of the bar.
+ */
+export const ULTIMATE_POWER_SCALE = 1.75;
 
 export const STAT_GROWTH = {
   // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.

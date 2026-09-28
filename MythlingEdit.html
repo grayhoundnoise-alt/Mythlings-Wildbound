@@ -647,7 +647,7 @@ textarea.bad, input.bad { outline: 1px solid #ef4444; }
 
 <script>
 /* MYTHLING EDIT v1.0.0 — standalone offline editor for Mythlings: Wildbound.
-   Built 2026-09-28T19:50:55.093Z from tools/mythling-edit (18 modules + game data snapshot of 15 game modules). No network access, no build step, no dependencies. */
+   Built 2026-09-28T20:22:18.096Z from tools/mythling-edit (18 modules + game data snapshot of 15 game modules). No network access, no build step, no dependencies. */
 'use strict';
 // ---- GameSnapshot (generated from the game's data + art modules; read-only copy) ----
 const GameSnapshot = (function () {
@@ -868,11 +868,26 @@ const DAMAGE_RANDOM_MAX = 1.0;
 const DAMAGE_LEVEL_SCALE = 0.03;
 const DAMAGE_STAGE_SCALE = 0.08;
 /**
- * Ultimates are strong, not a delete button: their listed tier power is scaled by this before
- * anything else. With it, a neutral Ultimate takes ~4 hits to KO an equal foe, a super-effective
- * one ~2.7, and even a super-effective CRIT Ultimate cannot one-shot an equal, full-HP foe.
+ * A small across-the-board bump for every regular skill (Normal / Special).
+ * Deliberately gentle: it makes the moves you press all battle feel weightier
+ * without undoing the "no one-shots at parity" rule. Ultimates are not affected
+ * — they are tuned through ULTIMATE_POWER_SCALE instead.
  */
-const ULTIMATE_POWER_SCALE = 0.7;
+const SKILL_POWER_SCALE = 1.12;
+/**
+ * Ultimates are a finisher, not a delete button: their listed tier power is scaled by
+ * this before anything else.
+ *
+ * It used to be 0.7, which made an Ultimate *weaker* than the best Special at every
+ * tier (tier I landed at 35 power against a 56-power Special), so charging to 8/8
+ * felt pointless. At 1.75 the tiers land at 60 / 88 / 130 / 182 power — roughly
+ * 1.1x to 3.3x the top Special — so a full-charge Ultimate is the biggest button
+ * you have and takes about two of them to KO an equal foe.
+ *
+ * Even so it is not a one-shot button: a super-effective CRIT Ultimate from an
+ * equal Lv.100 Mythling lands around three quarters of the bar.
+ */
+const ULTIMATE_POWER_SCALE = 1.75;
 
 const STAT_GROWTH = {
   // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.
@@ -957,7 +972,7 @@ const DEFAULT_SETTINGS = {
   confirmImportantActions: true,
 };
 
-return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, STARTER_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, ULTIMATE_POWER_SCALE, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP, DEFAULT_SETTINGS };
+return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, STARTER_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, SKILL_POWER_SCALE, ULTIMATE_POWER_SCALE, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP, DEFAULT_SETTINGS };
 })();
 __m["src/data/elements.js"] = (function () {
 // Element definitions & effectiveness chart (data-driven, extensible).
@@ -7544,7 +7559,7 @@ return { drawChest, terrainColor, WorldRenderer, roundRect, circle, drawTrainerA
 })();
   } catch (e) { console.error('GameSnapshot failed to load:', e); return null; }
   return {
-    meta: {"builtAt":"2026-09-28T19:50:55.090Z","commit":"d0b3bfc","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/data/chests.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.5.1"},
+    meta: {"builtAt":"2026-09-28T20:22:18.094Z","commit":"63e6398","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/data/chests.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.5.1"},
     modules: __m,
     utils: __m['src/core/utils.js'], config: __m['src/data/config.js'], elements: __m['src/data/elements.js'], rarity: __m['src/data/rarity.js'],
     moods: __m['src/data/moods.js'], mutations: __m['src/data/mutations.js'], items: __m['src/data/items.js'], skills: __m['src/data/skills.js'],

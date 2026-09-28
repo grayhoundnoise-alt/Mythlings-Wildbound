@@ -14,7 +14,7 @@ import {
   MOODS, MOOD_IDS, STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO,
   STAT_BAR_MAX, formatStat, RATIONALS, RATIONAL_IDS, RATIONAL_STATS,
 } from '../data/moods.js';
-import { RATIONAL_AMOUNT, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, ULTIMATE_POWER_SCALE } from '../data/config.js';
+import { RATIONAL_AMOUNT, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, ULTIMATE_POWER_SCALE, SKILL_POWER_SCALE } from '../data/config.js';
 import { CollectionManager } from '../systems/GameState.js';
 import { RARITIES, RARITY_ORDER } from '../data/rarity.js';
 import { MUTATIONS, MUTATION_IDS } from '../data/mutations.js';
@@ -299,11 +299,21 @@ function battleSection() {
       '<b>OFF</b> is P.ATK and <b>DEF</b> is P.DEF for Physical skills; S.ATK / S.DEF for Special skills and Ultimates.',
       `<b>levelFactor</b> grows ${(DAMAGE_LEVEL_SCALE * 100).toFixed(1)}% per level above Lv.1 (it used to be 8.5% — at Lv.100 two equal Mythlings one-shot each other and speed decided everything; a neutral Special now takes about seven hits, a super-effective Ultimate two or three).`,
       `<b>stageFactor</b> adds ${(DAMAGE_STAGE_SCALE * 100).toFixed(0)}% per evolution stage on top of the stats the stage already multiplies.`,
-      `<b>Ultimates</b> use ${Math.round(ULTIMATE_POWER_SCALE * 100)}% of their tier power (the Power shown everywhere is already that number): strong — about four hits to KO an equal foe, two or three when super effective — but never a one-shot, not even on a crit. HP also grows a little faster than attack with level, so fights get longer at high level, not shorter.`,
+      `<b>Ultimates</b> use ${Math.round(ULTIMATE_POWER_SCALE * 100)}% of their tier power (the Power shown everywhere is already that number). They used to be cut to 70%, which left a full-charge Ultimate hitting <i>softer than the best Special</i> — pointless to save up for. Now every tier out-muscles it: a full charge takes about <b>two</b> hits to KO an equal foe, and even a super-effective crit lands around three quarters of the bar rather than deleting it.`,
+      `<b>Regular skills</b> (Normal and Special) get a further <b>\u00d7${SKILL_POWER_SCALE}</b> on top, so the buttons you press every turn land with weight.`,
+      'A move with <b>no element</b> stays element-less: a plain Bite never borrows the element of the Mythling using it, so it is always neutral damage.',
       '<b>elementMultiplier</b> multiplies once per defender element: a Poison/Psychic Mythling hit by Fire takes 1.5 × 0.75 = <b>x1.125</b>; hit by Psychic it takes 1.5 × 1.0 = <b>x1.5</b>.',
       'Every hit deals at least <b>1</b> damage.',
       'The battle log now reports the exact damage of every attack.',
     ], 'power off def level factor random'),
+    h3('Reading your damage', 'damage number button preview green red white neutral'),
+    bullets([
+      'Every attack button prints the damage that move will do to the Mythling across the arena <b>right now</b> — the same sum the engine rolls, with the dice averaged out.',
+      '<span class="wiki-good">Green</span> = super effective. <span class="wiki-bad">Red</span> = resisted. <span class="wiki-dim">Plain white</span> = neutral. The number carries a <b>\u00d71.5</b> or <b>\u00d70.75</b> tag whenever the match-up is not even.',
+      'It moves with the fight: buffing a stat raises every number that uses it, a debuff drops them the moment it lands, and switching the foe re-reads the match-up at once.',
+      'The Ultimate prints its number too, and it is the biggest one on the bar.',
+      'Hover a button for the exact range the hit lands in, and press the type button on either card for the full element sheet: <b>Strong against</b>, <b>Weak against</b> and <b>Resists</b>, all by element.',
+    ]),
     h3('Dodging (Counter)', 'dodge miss counter evasion'),
     para(`Before damage is rolled, the defender gets a <b>${COUNTER_DODGE_SCALE * 100}% per point of Counter</b>
       chance to dodge, capped at <b>${COUNTER_MAX_DODGE}%</b>. A dodge grants the attacker no Ultimate Charge.`),
@@ -448,7 +458,7 @@ function skillsSection() {
       in its <b>Skill Library</b> forever, and leaving a button empty is allowed (nothing refills it, and the choice
       is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
     bullets([
-      '<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. The stronger <b>elemental</b> Normals every evolution teaches carry an element and therefore have <b>limited uses</b> (30 / 25 / 20).',
+      '<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. Being element-less it is always <b>neutral</b> damage — it never borrows its user\u2019s element. The stronger <b>elemental</b> Normals every evolution teaches carry an element, are judged on it, and therefore have <b>limited uses</b> (30 / 25 / 20).',
       '<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses. <b>Uses are a per-battle resource: every fight starts with every skill full</b> — a limited move is a budget for one battle, not for the whole trip.',
       '<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe\'s stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.',
       'Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.',
