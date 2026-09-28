@@ -123,37 +123,6 @@ export function previewDamage(battle, attacker, defender, move, { isUltimate = f
   return { dmg, mult, element: atkElement, weatherMult, tone: mult > 1.01 ? 'strong' : mult < 0.99 ? 'weak' : 'even' };
 }
 
-/**
- * What `move` will actually do to `defender` right now — the number the battle
- * buttons show.
- *
- * It is the same arithmetic as _dealDamage with the dice taken out: the random
- * roll is averaged, crits and dodges are left off, so what you read is a normal
- * hit. Both sides' live buffs / debuffs are folded in, which is why the number
- * drops the moment the foe debuffs your Special Attack and jumps when you buff
- * yourself. Element-less moves stay neutral.
- *
- * @returns {{dmg:number, mult:number, element:string|null, tone:'strong'|'weak'|'even'}|null}
- *   null when the move is not a damage move (buffs, debuffs, support Ultimates).
- */
-export function previewDamage(battle, attacker, defender, move, { isUltimate = false } = {}) {
-  if (!battle || !attacker || !defender || !move) return null;
-  if (!isDamageSkill(move)) return null;
-  const acb = battle.cb(attacker);
-  const dcb = battle.cb(defender);
-  const offKey = move.damageType === 'physical' ? 'patk' : 'satk';
-  const defKey = move.damageType === 'physical' ? 'pdef' : 'sdef';
-  const off = acb.stat(offKey);
-  const def = dcb.stat(defKey);
-  const atkElement = move.element || null;
-  const mult = elementMultiplier(atkElement, speciesElements(speciesOf(defender)));
-  const rand = (DAMAGE_RANDOM_MIN + DAMAGE_RANDOM_MAX) / 2;
-  const levelFactor = 1 + DAMAGE_LEVEL_SCALE * (attacker.level - 1);
-  const stageFactor = 1 + DAMAGE_STAGE_SCALE * (attacker.stage || 0);
-  const powerScale = isUltimate ? 1 : SKILL_POWER_SCALE;
-  const dmg = Math.max(1, Math.floor(((move.power * powerScale * off) / Math.max(1, def)) * levelFactor * stageFactor * rand * mult));
-  return { dmg, mult, element: atkElement, tone: mult > 1.01 ? 'strong' : mult < 0.99 ? 'weak' : 'even' };
-}
 
 export class Battle {
   /**
