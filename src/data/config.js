@@ -39,7 +39,7 @@ export const COUNTER_MAX_DODGE = 6;
  * Crit Damage is a BONUS percentage (0-200 => up to x3).
  */
 export const CRIT_MAX_PERCENT = 25;
-export const CRIT_MAX_MULT = 150;
+export const CRIT_MAX_MULT = 75;
 
 export const DAMAGE_RANDOM_MIN = 0.85;
 export const DAMAGE_RANDOM_MAX = 1.0;
@@ -56,7 +56,7 @@ export const DAMAGE_STAGE_SCALE = 0.08;
 
 export const STAT_GROWTH = {
   hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
-  crit: 0.006, critMult: 0.008,
+  crit: 0.006, critMult: 0.004,
 };
 
 /**

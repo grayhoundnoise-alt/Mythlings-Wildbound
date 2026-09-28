@@ -979,7 +979,17 @@ input[type="text"].wiki-search {
 
 /* ---- element icon in front of every Mythling name ---- */
 .name-el { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-.name-el .ico { width: 1em; height: 1em; flex: none; }
+.name-el .ico { width: 1.05em; height: 1.05em; flex: none; filter: drop-shadow(0 0 3px rgba(0,0,0,.6)); }
+/* element-coloured glyphs in front of names (cards, profile, battle) — bright enough to read at a glance */
+.ico.el.nature   { color: #5fe37a; }
+.ico.el.water    { color: #5fc4ff; }
+.ico.el.fire     { color: #ff8a4a; }
+.ico.el.rock     { color: #e0bf7a; }
+.ico.el.electric { color: #ffe23a; }
+.ico.el.ice      { color: #a8ecff; }
+.ico.el.metal    { color: #d0dae6; }
+.ico.el.poison   { color: #cf8cff; }
+.ico.el.psychic  { color: #ff8ccb; }
 h3 .name-el { vertical-align: middle; }
 /* the Release button: plain text, light red */
 .btn.release, button.release { color: #ff9a9a; border-color: rgba(255,120,120,.45); background: rgba(255,90,90,.08); }
@@ -1079,7 +1089,7 @@ h3 .name-el { vertical-align: middle; }
   var COUNTER_DODGE_SCALE = 0.15;
   var COUNTER_MAX_DODGE = 6;
   var CRIT_MAX_PERCENT = 25;
-  var CRIT_MAX_MULT = 150;
+  var CRIT_MAX_MULT = 75;
   var DAMAGE_RANDOM_MIN = 0.85;
   var DAMAGE_RANDOM_MAX = 1;
   var DAMAGE_LEVEL_SCALE = 0.035;
@@ -1093,7 +1103,7 @@ h3 .name-el { vertical-align: middle; }
     spd: 0.06,
     counter: 0.035,
     crit: 6e-3,
-    critMult: 8e-3
+    critMult: 4e-3
   };
   var RATIONAL_AMOUNT = 10;
   function counterDodgePercent(counter) {
@@ -4685,7 +4695,7 @@ h3 .name-el { vertical-align: middle; }
     spd: "Higher Speed acts first each turn \u2014 and helps you flee.",
     counter: "Evasion. Each point is 0.15% dodge, capped at 6% \u2014 a miss is rare (Counter caps at 35).",
     crit: "Chance to land a critical hit, in percent (caps at 25% \u2014 a crit stays special even at Lv.100).",
-    critMult: "Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +150%)."
+    critMult: "Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +75% \u2014 a crit stings, it never deletes an equal foe)."
   };
   var STAT_BAR_MAX = {
     hp: 600,
@@ -4696,7 +4706,7 @@ h3 .name-el { vertical-align: middle; }
     spd: 90,
     counter: 35,
     crit: 25,
-    critMult: 150
+    critMult: 75
   };
   var MOODS = {
     sturdy: { id: "sturdy", name: "Sturdy", up: ["hp", "pdef", "patk"], desc: "Thick-skinned and hard to put down." },
@@ -5428,6 +5438,12 @@ h3 .name-el { vertical-align: middle; }
     const sk = getSkill(skillId);
     if (!sk || !Number.isFinite(sk.uses)) return;
     m.uses[skillId] = Math.max(0, (m.uses[skillId] ?? sk.uses) - 1);
+  }
+  function restoreUses(m, amount) {
+    for (const id of m.library) {
+      const sk = getSkill(id);
+      if (sk && Number.isFinite(sk.uses)) m.uses[id] = Math.min(sk.uses, (m.uses[id] ?? 0) + amount);
+    }
   }
   function equipSkill(m, skillId, index = null) {
     if (!skillId || !getSkill(skillId)) return false;
@@ -6619,6 +6635,8 @@ h3 .name-el { vertical-align: middle; }
       this.enemies = cfg.enemies;
       this.canRun = cfg.canRun !== false;
       this.rng = cfg.rng || Math.random;
+      for (const m of this.party) restoreUses(m, Infinity);
+      for (const m of this.enemies) restoreUses(m, Infinity);
       this.playerIndex = this.party.findIndex((m) => !isFainted(m));
       if (this.playerIndex < 0) this.playerIndex = 0;
       this.enemyIndex = 0;
@@ -12730,8 +12748,8 @@ h3 .name-el { vertical-align: middle; }
   }
   function icon(name, cls = "") {
     const span = document.createElement("span");
-    span.className = `ico-wrap ${cls}`;
-    span.innerHTML = iconSvg(name);
+    span.className = "ico-wrap";
+    span.innerHTML = iconSvg(name, cls);
     return span.firstElementChild;
   }
   function iconLabel(name, text, cls = "") {
@@ -16236,14 +16254,16 @@ h3 .name-el { vertical-align: middle; }
       }
     }
     combatantCard(m, side) {
-      var _a;
       const sp = speciesOf(m);
       const v = this.view[side] && this.view[side].uid === m.uid ? this.view[side] : this.viewOf(m, side);
       const hp = clamp(v.hp, 0, v.maxHp);
       const pct = v.maxHp > 0 ? hp / v.maxHp : 0;
       const rows = [
         el("div", { class: "cc-top" }, [
-          el("span", { class: "cc-name" }, [icon(((_a = ELEMENTS[sp.element]) == null ? void 0 : _a.icon) || "spark", sp.element), el("span", { text: displayName(m) })]),
+          el("span", { class: "cc-name" }, [...speciesElements(sp).map((e) => {
+            var _a;
+            return icon(((_a = ELEMENTS[e]) == null ? void 0 : _a.icon) || "spark", `el ${e}`);
+          }), el("span", { text: displayName(m) })]),
           mutationChip(m.mutation),
           el("span", { class: "cc-lv", text: `Lv.${m.level}` })
         ])
@@ -17720,7 +17740,7 @@ h3 .name-el { vertical-align: middle; }
       is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
       bullets([
         "<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. The stronger <b>elemental</b> Normals every evolution teaches carry an element and therefore have <b>limited uses</b> (30 / 25 / 20).",
-        "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.",
+        "<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses. <b>Uses are a per-battle resource: every fight starts with every skill full</b> \u2014 a limited move is a budget for one battle, not for the whole trip.",
         "<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe's stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.",
         "Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.",
         "<b>ELITE</b> support skills (Lv.60 / Lv.80, only 4 uses) carry <b>two</b> effects \u2014 two buffs, two debuffs, or one of each. Effects on the foe are always debuffs; effects on yourself are always buffs.",
@@ -18099,19 +18119,19 @@ h3 .name-el { vertical-align: middle; }
     return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} \xB7 ${what}${rider ? ` \xB7 ${rider}` : ""} \xB7 ${uses}`;
   }
   function nameWithElement(m, cls = "") {
-    var _a, _b;
     const sp = getSpecies(m.speciesId);
-    const elId = (sp == null ? void 0 : sp.element) || "nature";
-    return el("span", { class: `name-el ${cls}`, title: `${((_a = ELEMENTS[elId]) == null ? void 0 : _a.name) || elId} type` }, [icon(((_b = ELEMENTS[elId]) == null ? void 0 : _b.icon) || "spark", elId), el("span", { text: displayName(m) })]);
+    const els = speciesElements(sp);
+    const title = els.map((e) => {
+      var _a;
+      return ((_a = ELEMENTS[e]) == null ? void 0 : _a.name) || e;
+    }).join(" / ") + " type";
+    return el("span", { class: `name-el ${cls}`, title }, [...els.map((e) => {
+      var _a;
+      return icon(((_a = ELEMENTS[e]) == null ? void 0 : _a.icon) || "spark", `el ${e}`);
+    }), el("span", { text: displayName(m) })]);
   }
   function portrait(m, size = 66, animated = false) {
-    var _a, _b;
-    const sp = getSpecies(m.speciesId);
-    const elId = (sp == null ? void 0 : sp.element) || "nature";
-    const wrap = el("div", { class: "portrait", style: { width: `${size}px`, height: `${size}px` } }, [mythCanvas(m, size, animated)]);
-    const badge = el("span", { class: `el-badge ${elId}`, title: `${((_a = ELEMENTS[elId]) == null ? void 0 : _a.name) || elId} type` }, [icon(((_b = ELEMENTS[elId]) == null ? void 0 : _b.icon) || "spark")]);
-    wrap.appendChild(badge);
-    return wrap;
+    return el("div", { class: "portrait", style: { width: `${size}px`, height: `${size}px` } }, [mythCanvas(m, size, animated)]);
   }
   function mythCanvas(m, size = 66, animated = false) {
     const dpr = () => Math.min(2, typeof window !== "undefined" && window.devicePixelRatio || 1);

@@ -114,8 +114,8 @@ export function iconSvg(name, cls = '') {
 /** SVG element — use with the `el()` DOM helper. */
 export function icon(name, cls = '') {
   const span = document.createElement('span');
-  span.className = `ico-wrap ${cls}`;
-  span.innerHTML = iconSvg(name);
+  span.className = 'ico-wrap';
+  span.innerHTML = iconSvg(name, cls);   // the class goes on the <svg> itself (e.g. an element colour)
   return span.firstElementChild;
 }
 

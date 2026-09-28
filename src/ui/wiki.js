@@ -440,7 +440,7 @@ function skillsSection() {
       is saved). The Ultimate is fixed to the species and always sits on button <b>4</b>.`),
     bullets([
       '<b>Normal</b> skills: the element-less starter attack (Bite / Scratch / Peck / Pebble Toss) has unlimited uses and is the move a Mythling falls back on. The stronger <b>elemental</b> Normals every evolution teaches carry an element and therefore have <b>limited uses</b> (30 / 25 / 20).',
-      '<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses.',
+      '<b>Special</b> skills hit harder and carry the elemental damage, but have limited uses. <b>Uses are a per-battle resource: every fight starts with every skill full</b> — a limited move is a budget for one battle, not for the whole trip.',
       '<b>Buff</b> skills raise one of your own stats. <b>Debuff</b> skills lower one of the foe\'s stats (P.ATK, S.ATK, P.DEF, S.DEF or Speed). Neither grants Ultimate Charge.',
       'Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.',
       '<b>ELITE</b> support skills (Lv.60 / Lv.80, only 4 uses) carry <b>two</b> effects — two buffs, two debuffs, or one of each. Effects on the foe are always debuffs; effects on yourself are always buffs.',

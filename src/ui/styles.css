@@ -971,7 +971,17 @@ input[type="text"].wiki-search {
 
 /* ---- element icon in front of every Mythling name ---- */
 .name-el { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-.name-el .ico { width: 1em; height: 1em; flex: none; }
+.name-el .ico { width: 1.05em; height: 1.05em; flex: none; filter: drop-shadow(0 0 3px rgba(0,0,0,.6)); }
+/* element-coloured glyphs in front of names (cards, profile, battle) — bright enough to read at a glance */
+.ico.el.nature   { color: #5fe37a; }
+.ico.el.water    { color: #5fc4ff; }
+.ico.el.fire     { color: #ff8a4a; }
+.ico.el.rock     { color: #e0bf7a; }
+.ico.el.electric { color: #ffe23a; }
+.ico.el.ice      { color: #a8ecff; }
+.ico.el.metal    { color: #d0dae6; }
+.ico.el.poison   { color: #cf8cff; }
+.ico.el.psychic  { color: #ff8ccb; }
 h3 .name-el { vertical-align: middle; }
 /* the Release button: plain text, light red */
 .btn.release, button.release { color: #ff9a9a; border-color: rgba(255,120,120,.45); background: rgba(255,90,90,.08); }

@@ -10,7 +10,7 @@ import {
 } from '../core/mythling.js';
 import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
 import { STAT_SHORT, getMood } from '../data/moods.js';
-import { ELEMENTS } from '../data/elements.js';
+import { ELEMENTS, speciesElements } from '../data/elements.js';
 import { BALL_IDS, getItem } from '../data/items.js';
 import { drawMythling, prewarm } from '../render/creatures.js';
 import { SkillVFX } from '../render/vfx/SkillVFX.js';
@@ -169,7 +169,7 @@ export class BattleScene {
     const pct = v.maxHp > 0 ? hp / v.maxHp : 0;   // 0..1, matching hpPercent()
     const rows = [
       el('div', { class: 'cc-top' }, [
-        el('span', { class: 'cc-name' }, [icon(ELEMENTS[sp.element]?.icon || 'spark', sp.element), el('span', { text: displayName(m) })]),
+        el('span', { class: 'cc-name' }, [...speciesElements(sp).map((e) => icon(ELEMENTS[e]?.icon || 'spark', `el ${e}`)), el('span', { text: displayName(m) })]),
         mutationChip(m.mutation),
         el('span', { class: 'cc-lv', text: `Lv.${m.level}` }),
       ]),

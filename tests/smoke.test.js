@@ -163,16 +163,19 @@ test('counter is capped so nothing becomes untouchable', () => {
   assert.ok(computeStats(m).counter <= 35);
 });
 
-test('crit chance is nerfed: slow growth, capped at 30% — a crit stays rare even at the cap', () => {
+test('crit chance is nerfed: slow growth, capped at 30% — a crit stays rare even at the cap', async () => {
   const m = createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'keen' });
   const s = computeStats(m);
   assert.equal(CRIT_MAX_PERCENT, 25);
   assert.ok(s.crit <= CRIT_MAX_PERCENT, `crit chance capped, got ${s.crit}`);
-  assert.ok(s.critMult <= 200, `crit damage capped, got ${s.critMult}`);
-  // a crit-focused mood beats the same Mythling with a non-crit mood
+  const { CRIT_MAX_MULT } = await import('../src/data/config.js');
+  assert.equal(CRIT_MAX_MULT, 75, 'crit damage caps at +75% (x1.75): a crit stings, it never deletes an equal foe');
+  assert.ok(s.critMult <= CRIT_MAX_MULT, `crit damage capped, got ${s.critMult}`);
+  // a crit-focused mood beats the same Mythling with a non-crit mood (measured below the caps)
   const plain = computeStats(createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'brave', rational: m.rational }));
   assert.ok(s.crit > plain.crit, 'keen raises crit chance');
-  assert.ok(computeStats(createMythling({ speciesId: 'leaflet', level: 30, rarity: 'SSS+', mood: 'brutal', rational: m.rational })).critMult > plain.critMult, 'brutal raises crit damage');
+  const low = (mood) => computeStats(createMythling({ speciesId: 'spriggo', level: 5, rarity: 'A', mood, rational: m.rational }));
+  assert.ok(low('brutal').critMult > low('brave').critMult, 'brutal raises crit damage');
   // a maxed, ordinary Mythling no longer crits every other hit
   for (const id of SPECIES_IDS) {
     const top = computeStats(createMythling({ speciesId: id, level: LEVEL_CAP, rarity: 'A', mood: 'brave', stage: 3 }));
@@ -448,6 +451,29 @@ test('battles are fair at Lv.100: no one-shots at parity, trainer teams stay at 
   const t = MAPS.verdant_vale.trainers[0];
   const enemies = t.team.map((spec) => createMythling({ speciesId: spec.species, level: Math.min(LEVEL_CAP, spec.level || 1) }));
   assert.deepEqual(enemies.map((e) => e.level), t.team.map((x) => x.level));
+});
+
+test('skill uses refill at the start of every battle, and a max-damage crit still cannot one-shot an equal foe', () => {
+  const m = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  for (const id of m.library) if (Number.isFinite(getSkillById(id)?.uses)) m.uses[id] = 0;
+  const foe = createMythling({ speciesId: 'aquini', level: 20 });
+  new Battle({ type: BattleType.WILD, party: [m], enemies: [foe], mapId: 'verdant_vale' });
+  for (const id of m.library) { const sk = getSkillById(id); if (Number.isFinite(sk.uses)) assert.equal(m.uses[id], sk.uses, `${id} starts the battle full`); }
+  // crit: super-effective Special, max damage roll, forced crit, Lv.100 vs Lv.100 → still not a one-shot
+  const a = createMythling({ speciesId: 'emberu', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brutal', rational: 'docile' });
+  const d = createMythling({ speciesId: 'spriggo', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brave', rational: 'docile' });
+  a.library.push('inferno_roar'); a.uses.inferno_roar = 99;
+  // rng sequence per turn: enemy AI pick, [speed tie], dodge (no), crit (YES), damage roll (max)...
+  const seq = [0.5, 0.99, 0.0, 0.99, 0.5, 0.99, 0.0, 0.99]; let i = 0;
+  const rng = () => seq[i++] ?? 0.99;
+  const bt = new Battle({ type: BattleType.WILD, party: [a], enemies: [d], mapId: 'emberwild', rng });
+  const before = d.currentHp;
+  const { events } = bt.act({ type: 'skill', skillId: 'inferno_roar' });
+  const hit = events.find((e) => e.type === 'damage' && e.side === 'enemy');
+  assert.ok(hit, 'the attack landed');
+  assert.ok(hit.crit, 'the hit was a crit');
+  assert.ok(hit.amount < before, `a super-effective crit deals ${hit.amount} of ${before} HP — big, not a one-shot`);
+  assert.ok(hit.amount > before * 0.25, 'but it is still clearly impactful');
 });
 
 test('a full wild battle can be fought and won', () => {

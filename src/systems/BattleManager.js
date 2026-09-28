@@ -2,7 +2,7 @@
 // that the battle UI animates. No DOM access in here.
 import {
   computeStats, maxHp, displayName, stageData, speciesOf, isFainted,
-  equippedSkill, equippedSkills, usesLeft, consumeUse, ultimateMove, ultimateReady, ultimateUnlocked, basicAttack,
+  equippedSkill, equippedSkills, usesLeft, consumeUse, restoreUses, ultimateMove, ultimateReady, ultimateUnlocked, basicAttack,
   addUltimateCharge, gainExp, hpPercent, applyItemEffects,
 } from '../core/mythling.js';
 import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE, effectTarget, isSupportUltimate } from '../data/skills.js';
@@ -77,6 +77,10 @@ export class Battle {
     // Running is absolute: any battle, wild or trainer, can be left at any time.
     this.canRun = cfg.canRun !== false;
     this.rng = cfg.rng || Math.random;
+
+    // Skill uses are a PER-BATTLE resource: every fight starts with every skill full.
+    for (const m of this.party) restoreUses(m, Infinity);
+    for (const m of this.enemies) restoreUses(m, Infinity);
 
     this.playerIndex = this.party.findIndex((m) => !isFainted(m));
     if (this.playerIndex < 0) this.playerIndex = 0;

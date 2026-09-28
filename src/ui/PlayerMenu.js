@@ -19,7 +19,7 @@ import { RARITY_ORDER, getRarity } from '../data/rarity.js';
 import { MUTATIONS, getMutation } from '../data/mutations.js';
 import { ITEM_CATEGORIES, getItem } from '../data/items.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
-import { ELEMENTS, ELEMENT_ORDER } from '../data/elements.js';
+import { ELEMENTS, ELEMENT_ORDER, speciesElements } from '../data/elements.js';
 import { ChestManager } from '../systems/ChestManager.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
 import { drawMythling } from '../render/creatures.js';
@@ -72,8 +72,10 @@ export function skillMetaText(sk, m = null) {
 /** "<element icon> <name>" — the way a Mythling's name is written everywhere in the menus. */
 export function nameWithElement(m, cls = '') {
   const sp = getSpecies(m.speciesId);
-  const elId = sp?.element || 'nature';
-  return el('span', { class: `name-el ${cls}`, title: `${ELEMENTS[elId]?.name || elId} type` }, [icon(ELEMENTS[elId]?.icon || 'spark', elId), el('span', { text: displayName(m) })]);
+  const els = speciesElements(sp);
+  const title = els.map((e) => ELEMENTS[e]?.name || e).join(' / ') + ' type';
+  // one coloured icon per element (dual / triple types show two or three), then the name
+  return el('span', { class: `name-el ${cls}`, title }, [...els.map((e) => icon(ELEMENTS[e]?.icon || 'spark', `el ${e}`)), el('span', { text: displayName(m) })]);
 }
 
 /**
@@ -81,12 +83,8 @@ export function nameWithElement(m, cls = '') {
  * glance on every card (party, storage, index).
  */
 export function portrait(m, size = 66, animated = false) {
-  const sp = getSpecies(m.speciesId);
-  const elId = sp?.element || 'nature';
-  const wrap = el('div', { class: 'portrait', style: { width: `${size}px`, height: `${size}px` } }, [mythCanvas(m, size, animated)]);
-  const badge = el('span', { class: `el-badge ${elId}`, title: `${ELEMENTS[elId]?.name || elId} type` }, [icon(ELEMENTS[elId]?.icon || 'spark')]);
-  wrap.appendChild(badge);
-  return wrap;
+  // Plain portrait: the element is shown as the coloured icon in front of the name, not on the art.
+  return el('div', { class: 'portrait', style: { width: `${size}px`, height: `${size}px` } }, [mythCanvas(m, size, animated)]);
 }
 
 export function mythCanvas(m, size = 66, animated = false) {
