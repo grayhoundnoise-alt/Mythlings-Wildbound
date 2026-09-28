@@ -165,6 +165,37 @@ areas cannot be farmed forever. Trainer battles still pay their own bounty — a
 Mythling never double-pays. Need coins right now? Press **`Del`** anywhere for the cheat menu
 (`+100`, `+1,000`, `+100,000`, `+1,000,000`).
 
+### Bags, shop shelves & premium balls
+
+**Your bag is the limit.** Party *and* storage together can never hold more than your bag allows.
+You start on **Bag 1** (20 Mythlings) and buy permanent upgrades from any shop:
+
+| Bag | Capacity | Price | | Bag | Capacity | Price |
+|---|---|---|---|---|---|---|
+| Bag 1 | 20 | — (start) | | Bag 6 | 70 | 130,000 |
+| Bag 2 | 30 | 2,500 | | Bag 7 | 80 | 260,000 |
+| Bag 3 | 40 | 9,000 | | Bag 8 | 90 | 500,000 |
+| Bag 4 | 50 | 25,000 | | Bag 9 | 100 | 900,000 |
+| Bag 5 | 60 | 60,000 | | | | |
+
+Every shop sells bags — but only ones **bigger than the bag you carry** and never past its own
+ceiling, so you can upgrade from wherever you are while the last bags still demand that you push
+deeper into the world (Verdant Vale stops at Bag 2; only the Ironfist Colosseum stocks Bag 9).
+A full bag **refuses the catch before the ball is spent** — capacity is never used to delete a
+Mythling from a save.
+
+**Shelves are finite.** Staples arrive by the dozen; the further up the price ladder an item sits,
+the fewer it stocks and the likelier it is missing entirely. An empty row reads `SOLD OUT`, and the
+whole shelf is refilled every **5 minutes of play** (live countdown above the goods).
+
+**Premium balls** — God (120,000) · Shiny (800,000) · Dark (950,000) — all guarantee the catch
+*and* land at **SSS+**, with the Shiny and Dark balls also forcing their mutation. They are priced
+so that owning a second one is an achievement, and late shops only list them occasionally.
+
+**Food** gets steadily worse value per EXP as it gets stronger (2.25 coins/EXP at the bottom →
+15 coins/EXP for Wildbound Ambrosia at 1,800,000), so early berries stay the efficient everyday
+food and the top of the ladder is endgame money.
+
 ### Creature rig — Mythlings are puppets, not pictures
 
 Every Mythling is still drawn procedurally (this project ships **zero external art**), but the

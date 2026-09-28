@@ -180,6 +180,31 @@ export function computeStats(m) {
   return out;
 }
 
+/**
+ * Where each of a Mythling's CURRENT stats comes from: the level-and-stage
+ * growth, the Mood bonus (scaled by its Rarity tier), the Rational's +10 / -10
+ * and the Shiny / Darkness bonus. Drives the battle type sheet's SEE MORE panel.
+ * @returns {Array<{key:string,total:number,grown:number,mood:number,rational:number,mutation:number,rarityMag:number}>}
+ */
+export function statBreakdown(m) {
+  const sp = speciesOf(m);
+  const st = stageData(m);
+  const mag = rarityMagnitude(m.rarity);
+  const mods = moodModifiers(m.mood, mag);
+  const rat = rationalModifiers(m.rational, RATIONAL_AMOUNT);
+  const mutBonus = getMutation(m.mutation).statBonus || 0;
+  const stats = computeStats(m);
+  return STAT_KEYS.map((k) => ({
+    key: k,
+    total: stats[k],
+    grown: Math.floor(sp.baseStats[k] * (1 + STAT_GROWTH[k] * (m.level - 1)) * st.statMult),
+    mood: mods[k] || 0,
+    rational: rat[k] || 0,
+    mutation: mutBonus,
+    rarityMag: mag,
+  }));
+}
+
 export function maxHp(m) { return computeStats(m).hp; }
 
 /** Re-roll the Mood into a different one (Mood Tonic). Current HP is kept in proportion. */
@@ -475,6 +500,9 @@ export function libraryByLevel(m) {
 export function applyItemEffects(item, m, { dryRun = false } = {}) {
   const out = { ok: false, reason: null, healed: 0, revived: false, usesRestored: false };
   if (!item || !m) { out.reason = 'Nothing to use.'; return out; }
+  // Battle-only items work on the combatant, not on the Mythling: applyItemEffects
+  // cannot see a battle's debuffs, so it refuses them instead of wasting the item.
+  if (item.cleanse) { out.reason = `${item.name} only works in battle — on a Mythling that is debuffed.`; return out; }
   const wantsHp = !!(item.heal || item.healFull || item.revive);
   const wantsUses = !!(item.restoreUses || item.restoreAllUses);
   if (!wantsHp && !wantsUses) { out.reason = `${item.name || 'That item'} cannot be used on a Mythling.`; return out; }

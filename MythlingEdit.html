@@ -647,7 +647,7 @@ textarea.bad, input.bad { outline: 1px solid #ef4444; }
 
 <script>
 /* MYTHLING EDIT v1.0.0 — standalone offline editor for Mythlings: Wildbound.
-   Built 2026-09-28T20:23:39.556Z from tools/mythling-edit (18 modules + game data snapshot of 15 game modules). No network access, no build step, no dependencies. */
+   Built 2026-09-28T20:59:07.082Z from tools/mythling-edit (18 modules + game data snapshot of 15 game modules). No network access, no build step, no dependencies. */
 'use strict';
 // ---- GameSnapshot (generated from the game's data + art modules; read-only copy) ----
 const GameSnapshot = (function () {
@@ -826,6 +826,36 @@ const STARTER_LEVEL = 5;
 const PARTY_MAX = 6;
 const STORAGE_MAX = 200;
 
+/**
+ * How many Mythlings you can carry at once. You start on Bag 1 (20) and buy
+ * bigger bags from the region shops; each shop only carries up to a certain
+ * tier, so the biggest bags are spread across the later maps rather than all
+ * sitting in the first shop. Capacity counts your party AND your storage.
+ */
+const BAG_TIERS = [
+  { tier: 1, name: 'Bag 1', capacity: 20,  price: 0 },        // the one you start with
+  { tier: 2, name: 'Bag 2', capacity: 30,  price: 2500 },
+  { tier: 3, name: 'Bag 3', capacity: 40,  price: 9000 },
+  { tier: 4, name: 'Bag 4', capacity: 50,  price: 25000 },
+  { tier: 5, name: 'Bag 5', capacity: 60,  price: 60000 },
+  { tier: 6, name: 'Bag 6', capacity: 70,  price: 130000 },
+  { tier: 7, name: 'Bag 7', capacity: 80,  price: 260000 },
+  { tier: 8, name: 'Bag 8', capacity: 90,  price: 500000 },
+  { tier: 9, name: 'Bag 9', capacity: 100, price: 900000 },
+];
+const BAG_MAX_TIER = BAG_TIERS.length;
+function bagTier(tier) { return BAG_TIERS[Math.max(0, Math.min(BAG_TIERS.length - 1, (Number(tier) || 1) - 1))]; }
+function bagCapacity(tier) { return bagTier(tier).capacity; }
+/** The cheapest bag that can hold `count` Mythlings — used when migrating older saves. */
+function bagTierFor(count) { return (BAG_TIERS.find((b) => b.capacity >= count) || BAG_TIERS[BAG_TIERS.length - 1]).tier; }
+
+/**
+ * Shops refill their shelves this often, so nothing can be farmed by standing
+ * at the counter: cheap staples come back in bulk, the top-tier balls and the
+ * best food arrive rarely and often not at all.
+ */
+const SHOP_RESTOCK_MS = 5 * 60 * 1000;
+
 const ULTIMATE_UNLOCK_LEVEL = 10;
 const EVOLUTION_LEVELS = [1, 20, 60, 80];
 /** Evolution stages the CURRENT build allows. Index into species.evolutions. */
@@ -972,7 +1002,7 @@ const DEFAULT_SETTINGS = {
   confirmImportantActions: true,
 };
 
-return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, STARTER_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, SKILL_POWER_SCALE, ULTIMATE_POWER_SCALE, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP, DEFAULT_SETTINGS };
+return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, STARTER_LEVEL, PARTY_MAX, STORAGE_MAX, BAG_TIERS, BAG_MAX_TIER, bagTier, bagCapacity, bagTierFor, SHOP_RESTOCK_MS, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, SKILL_POWER_SCALE, ULTIMATE_POWER_SCALE, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP, DEFAULT_SETTINGS };
 })();
 __m["src/data/elements.js"] = (function () {
 // Element definitions & effectiveness chart (data-driven, extensible).
@@ -1458,10 +1488,11 @@ const ITEMS = {
   advanced_ball: { id: 'advanced_ball', name: 'Advanced Ball', category: 'balls',   price: 550,  catchMult: 1.50, desc: 'Crafted with coast crystal. Notably more reliable.' },
   absolute_ball: { id: 'absolute_ball', name: 'Absolute Ball', category: 'balls',   price: 1100, catchMult: 1.80, desc: 'An ember-forged ball for stubborn Mythlings.' },
   // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
-  god_ball:      { id: 'god_ball',      name: 'God Ball',      category: 'balls',   price: 12000, catchMult: 99, guaranteed: true, desc: 'The supreme binding sphere. Never fails — a guaranteed capture.' },
+  // `forceRarity` fixes the rarity of what you catch, on top of `guaranteed`.
+  god_ball:      { id: 'god_ball',      name: 'God Ball',      category: 'balls',   price: 120000, catchMult: 99, guaranteed: true, forceRarity: 'SSS+', desc: 'The supreme binding sphere. Never fails, and the Mythling always emerges SSS+.' },
   // `forceMutation` turns the caught Mythling into that mutation, every time.
-  shiny_ball:    { id: 'shiny_ball',    name: 'Shiny Ball',    category: 'balls',   price: 60000, catchMult: 99, guaranteed: true, forceMutation: 'shiny',    desc: 'Forged from starlight. Guaranteed capture, and the Mythling always emerges SHINY.' },
-  dark_ball:     { id: 'dark_ball',     name: 'Dark Ball',     category: 'balls',   price: 90000, catchMult: 99, guaranteed: true, forceMutation: 'darkness', desc: 'Cut from an eclipse. Guaranteed capture, and the Mythling always emerges as a DARKNESS mutation.' },
+  shiny_ball:    { id: 'shiny_ball',    name: 'Shiny Ball',    category: 'balls',   price: 800000, catchMult: 99, guaranteed: true, forceRarity: 'SSS+', forceMutation: 'shiny',    desc: 'Forged from starlight. Guaranteed capture, always SSS+, always SHINY. Priced so that buying a second one is an achievement.' },
+  dark_ball:     { id: 'dark_ball',     name: 'Dark Ball',     category: 'balls',   price: 950000, catchMult: 99, guaranteed: true, forceRarity: 'SSS+', forceMutation: 'darkness', desc: 'Cut from an eclipse. Guaranteed capture, always SSS+, always DARKNESS. The rarest thing money can buy.' },
 
   potion:         { id: 'potion',         name: 'Potion',         category: 'healing', price: 150,  heal: 60,   desc: 'Restores 60 HP to one Mythling.' },
   greater_potion: { id: 'greater_potion', name: 'Greater Potion', category: 'healing', price: 380,  heal: 160,  desc: 'Restores 160 HP to one Mythling.' },
@@ -1475,27 +1506,29 @@ const ITEMS = {
 
   // ---- TONICS: re-roll a Mythling's personality traits (used from its profile) ----
   mood_tonic:   { id: 'mood_tonic',   name: 'Mood Tonic',   category: 'tonics', price: 2500, rerollMood: true,     desc: 'Re-rolls a Mythling\'s Mood into a different one. Use it from the Mythling\'s profile.' },
+  // Battle only: debuffs live on the battle combatant, not on the Mythling.
+  cleanse_tonic: { id: 'cleanse_tonic', name: 'Cleanse Tonic', category: 'healing', price: 2200, cleanse: true, desc: 'Washes every debuff off one Mythling. Battle only — nothing to cleanse outside a fight.' },
   temper_tonic: { id: 'temper_tonic', name: 'Temper Tonic', category: 'tonics', price: 2500, rerollRational: true, desc: 'Re-rolls a Mythling\'s Rational (+10 / -10 trait) into a different one. Use it from the Mythling\'s profile.' },
 
   // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
   sweet_berry:  { id: 'sweet_berry',  name: 'Sweet Berry',  category: 'food', price: 90,   exp: 40,   desc: 'A sugary forest berry. Feeding it grants 40 EXP.' },
-  honey_nut:    { id: 'honey_nut',    name: 'Honey Nut',    category: 'food', price: 240,  exp: 130,  desc: 'A sticky, energy-packed nut. Grants 130 EXP.' },
-  river_jerky:  { id: 'river_jerky',  name: 'River Jerky',  category: 'food', price: 620,  exp: 400,  desc: 'Salt-cured coast fish. Grants 400 EXP.' },
-  ember_roast:  { id: 'ember_roast',  name: 'Ember Roast',  category: 'food', price: 1400, exp: 1000, desc: 'Slow-roasted over volcanic vents. Grants 1000 EXP.' },
-  mythic_feast: { id: 'mythic_feast', name: 'Mythic Feast', category: 'food', price: 3200, exp: 2600, desc: 'A legendary banquet for one. Grants 2600 EXP.' },
+  honey_nut:    { id: 'honey_nut',    name: 'Honey Nut',    category: 'food', price: 420,  exp: 130,  desc: 'A sticky, energy-packed nut. Grants 130 EXP.' },
+  river_jerky:  { id: 'river_jerky',  name: 'River Jerky',  category: 'food', price: 1900,  exp: 400,  desc: 'Salt-cured coast fish. Grants 400 EXP.' },
+  ember_roast:  { id: 'ember_roast',  name: 'Ember Roast',  category: 'food', price: 6000, exp: 1000, desc: 'Slow-roasted over volcanic vents. Grants 1000 EXP.' },
+  mythic_feast: { id: 'mythic_feast', name: 'Mythic Feast', category: 'food', price: 20800, exp: 2600, desc: 'A legendary banquet for one. Grants 2600 EXP.' },
   // High-level training food: a level past Lv.30 costs thousands of EXP and a
   // level near the cap over 16,000, so the ladder keeps climbing. Feeding a
   // stack at once never wastes food — the game caps it at the level cap.
-  crunchy_root:       { id: 'crunchy_root',       name: 'Crunchy Root',       category: 'food', price: 160,   exp: 80,     desc: 'A crisp forest root. Grants 80 EXP.' },
-  moon_melon:         { id: 'moon_melon',         name: 'Moon Melon',         category: 'food', price: 430,   exp: 250,    desc: 'Ripens only under moonlight. Grants 250 EXP.' },
-  glow_nectar:        { id: 'glow_nectar',        name: 'Glow Nectar',        category: 'food', price: 980,   exp: 650,    desc: 'Luminous nectar from coast blossoms. Grants 650 EXP.' },
-  coral_cake:         { id: 'coral_cake',         name: 'Coral Cake',         category: 'food', price: 2400,  exp: 1800,   desc: 'A dense, sweet cake baked by port cooks. Grants 1,800 EXP.' },
-  tide_pudding:       { id: 'tide_pudding',       name: 'Tide Pudding',       category: 'food', price: 4800,  exp: 4000,   desc: 'Wobbles like the sea it came from. Grants 4,000 EXP.' },
-  storm_eel_stew:     { id: 'storm_eel_stew',     name: 'Storm Eel Stew',     category: 'food', price: 8600,  exp: 8000,   desc: 'Crackles with leftover lightning. Grants 8,000 EXP.' },
-  dragonfruit_flambe: { id: 'dragonfruit_flambe', name: 'Dragonfruit Flambé', category: 'food', price: 14800, exp: 15000,  desc: 'Set alight over a volcanic vent. Grants 15,000 EXP.' },
-  phoenix_pepper:     { id: 'phoenix_pepper',     name: 'Phoenix Pepper',     category: 'food', price: 27000, exp: 30000,  desc: 'So hot it is said to bring the eater back to life. Grants 30,000 EXP.' },
-  titan_broth:        { id: 'titan_broth',        name: 'Titan Broth',        category: 'food', price: 50000, exp: 60000,  desc: 'Simmered for a hundred days in a caldera. Grants 60,000 EXP.' },
-  wildbound_ambrosia: { id: 'wildbound_ambrosia', name: 'Wildbound Ambrosia', category: 'food', price: 92000, exp: 120000, desc: 'The food of legends. Grants 120,000 EXP — several levels even near the cap.' },
+  crunchy_root:       { id: 'crunchy_root',       name: 'Crunchy Root',       category: 'food', price: 200,   exp: 80,     desc: 'A crisp forest root. Grants 80 EXP.' },
+  moon_melon:         { id: 'moon_melon',         name: 'Moon Melon',         category: 'food', price: 950,   exp: 250,    desc: 'Ripens only under moonlight. Grants 250 EXP.' },
+  glow_nectar:        { id: 'glow_nectar',        name: 'Glow Nectar',        category: 'food', price: 3400,   exp: 650,    desc: 'Luminous nectar from coast blossoms. Grants 650 EXP.' },
+  coral_cake:         { id: 'coral_cake',         name: 'Coral Cake',         category: 'food', price: 12600,  exp: 1800,   desc: 'A dense, sweet cake baked by port cooks. Grants 1,800 EXP.' },
+  tide_pudding:       { id: 'tide_pudding',       name: 'Tide Pudding',       category: 'food', price: 36000,  exp: 4000,   desc: 'Wobbles like the sea it came from. Grants 4,000 EXP.' },
+  storm_eel_stew:     { id: 'storm_eel_stew',     name: 'Storm Eel Stew',     category: 'food', price: 80000,  exp: 8000,   desc: 'Crackles with leftover lightning. Grants 8,000 EXP.' },
+  dragonfruit_flambe: { id: 'dragonfruit_flambe', name: 'Dragonfruit Flambé', category: 'food', price: 165000, exp: 15000,  desc: 'Set alight over a volcanic vent. Grants 15,000 EXP.' },
+  phoenix_pepper:     { id: 'phoenix_pepper',     name: 'Phoenix Pepper',     category: 'food', price: 360000, exp: 30000,  desc: 'So hot it is said to bring the eater back to life. Grants 30,000 EXP.' },
+  titan_broth:        { id: 'titan_broth',        name: 'Titan Broth',        category: 'food', price: 780000, exp: 60000,  desc: 'Simmered for a hundred days in a caldera. Grants 60,000 EXP.' },
+  wildbound_ambrosia: { id: 'wildbound_ambrosia', name: 'Wildbound Ambrosia', category: 'food', price: 1800000, exp: 120000, desc: 'The food of legends. Grants 120,000 EXP — several levels even near the cap.' },
 
   vale_charm:  { id: 'vale_charm',  name: 'Vale Charm',  category: 'key', desc: 'Proof that the Verdant Guardian was bested. Opens the Verdant Gate.' },
   coast_pass:  { id: 'coast_pass',  name: 'Coast Pass',  category: 'key', desc: 'Granted at Tidecrest Port. Opens the Emberwild Gate.' },
@@ -1533,6 +1566,34 @@ function getItem(id) {
   return ITEMS[id] || null;
 }
 
+/**
+ * Shop stock. Nothing is unlimited any more: a restock brings `max` of an item
+ * and only has a `chance` of including it at all, so the top-tier balls and the
+ * best food are genuinely rare — a shop will often have none.
+ * Staples come back in bulk; the expensive end does not.
+ */
+const STOCK_BANDS = [
+  { under: 600,      max: 20, chance: 1.0 },
+  { under: 2000,     max: 12, chance: 1.0 },
+  { under: 6000,     max: 8,  chance: 1.0 },
+  { under: 20000,    max: 5,  chance: 0.9 },
+  { under: 100000,   max: 3,  chance: 0.75 },
+  { under: 500000,   max: 2,  chance: 0.5 },
+  { under: Infinity, max: 1,  chance: 0.3 },
+];
+const STOCK_OVERRIDES = {
+  basic_ball: { max: 24 }, normal_ball: { max: 18 }, advanced_ball: { max: 12 }, absolute_ball: { max: 8 },
+  god_ball: { max: 1, chance: 0.5 }, shiny_ball: { max: 1, chance: 0.25 }, dark_ball: { max: 1, chance: 0.2 },
+};
+/** @returns {{max:number, chance:number}} how much of `id` a restock brings, and how likely it is to bring any. */
+function shopStock(id) {
+  const it = ITEMS[id];
+  if (!it || !it.price) return { max: 0, chance: 0 };
+  const band = STOCK_BANDS.find((b) => it.price < b.under) || STOCK_BANDS[STOCK_BANDS.length - 1];
+  const over = STOCK_OVERRIDES[id] || {};
+  return { max: over.max ?? band.max, chance: over.chance ?? band.chance };
+}
+
 const STARTING_INVENTORY = {
   basic_ball: 8,
   normal_ball: 2,
@@ -1542,7 +1603,7 @@ const STARTING_INVENTORY = {
 
 const STARTING_WILDCOINS = 900;
 
-return { ITEMS, LEGACY_ITEMS, ITEM_CATEGORIES, FOOD_IDS, BALL_IDS, ballTier, LEGENDARY_MIN_BALL, canHoldLegendary, getItem, STARTING_INVENTORY, STARTING_WILDCOINS };
+return { ITEMS, LEGACY_ITEMS, ITEM_CATEGORIES, FOOD_IDS, BALL_IDS, ballTier, LEGENDARY_MIN_BALL, canHoldLegendary, getItem, shopStock, STARTING_INVENTORY, STARTING_WILDCOINS };
 })();
 __m["src/data/skills.js"] = (function () {
 const { ULTIMATE_POWER_SCALE } = __m["src/data/config.js"];
@@ -3332,7 +3393,8 @@ const MAPS = {
     buildings: [
       { id: 'vale_center', type: 'center', x: 250, y: 520, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'vale_shop',   type: 'shop',   x: 620, y: 530, w: 190, h: 150, name: 'Leafrest Supplies',
-        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'revive_herb', 'skill_tonic', 'sweet_berry', 'crunchy_root', 'honey_nut', 'moon_melon'] },
+        maxBagTier: 2,
+        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'cleanse_tonic', 'revive_herb', 'skill_tonic', 'sweet_berry', 'crunchy_root', 'honey_nut', 'moon_melon'] },
       { id: 'vale_house1', type: 'house',  x: 120, y: 900, w: 170, h: 130, name: 'Cottage' },
       { id: 'vale_house2', type: 'house',  x: 700, y: 950, w: 170, h: 130, name: 'Cottage' },
     ],
@@ -3423,7 +3485,8 @@ const MAPS = {
     buildings: [
       { id: 'coast_center', type: 'center', x: 300, y: 560, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'coast_shop',   type: 'shop',   x: 660, y: 570, w: 190, h: 150, name: 'Tidecrest Trading Post',
-        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'hyper_potion', 'revive_herb', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 3,
+        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'cleanse_tonic', 'hyper_potion', 'revive_herb', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
           'honey_nut', 'moon_melon', 'river_jerky', 'glow_nectar', 'ember_roast', 'coral_cake', 'tide_pudding'] },
       { id: 'coast_dock1',  type: 'dock',   x: 180, y: 250, w: 300, h: 110, name: 'Docks' },
       { id: 'coast_dock2',  type: 'dock',   x: 720, y: 250, w: 260, h: 110, name: 'Docks' },
@@ -3516,8 +3579,9 @@ const MAPS = {
       { id: 'ember_center', type: 'center', x: 280, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'ember_shop',   type: 'shop',   x: 640, y: 550, w: 190, h: 150, name: 'Emberwatch Quartermaster',
         // Region-3 stock only: the top-tier balls, restores and foods moved to the LAST map's shop.
+        maxBagTier: 4,
         stock: ['advanced_ball', 'absolute_ball',
-          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+          'greater_potion', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
           'river_jerky', 'ember_roast', 'mythic_feast', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'ember_tower',  type: 'tower',  x: 140, y: 1020, w: 160, h: 200, name: 'Watchtower' },
     ],
@@ -3618,7 +3682,8 @@ const MAPS = {
     buildings: [
       { id: 'crag_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'crag_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Crags Outfitter',
-        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 4,
+        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'crag_lodge',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Quarry Lodge' },
       { id: 'summit_watch',type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Summit Watch' },
@@ -3710,7 +3775,8 @@ const MAPS = {
     buildings: [
       { id: 'storm_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'storm_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Plateau Provisions',
-        stock: ['advanced_ball', 'absolute_ball', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 5,
+        stock: ['advanced_ball', 'absolute_ball', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_elixir', 'mood_tonic', 'temper_tonic',
           'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'storm_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Lightning Lodge' },
       { id: 'storm_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Storm Spire' },
@@ -3795,7 +3861,8 @@ const MAPS = {
     buildings: [
       { id: 'frost_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'frost_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Frostveil Trading Post',
-        stock: ['absolute_ball', 'god_ball', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 6,
+        stock: ['absolute_ball', 'god_ball', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper'] },
       { id: 'frost_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Snowbound Lodge' },
       { id: 'frost_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Aurora Watch' },
@@ -3880,7 +3947,8 @@ const MAPS = {
     buildings: [
       { id: 'iron_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'iron_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Ironhold Armoury',
-        stock: ['absolute_ball', 'god_ball', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 6,
+        stock: ['absolute_ball', 'god_ball', 'cleanse_tonic', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth'] },
       { id: 'iron_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Smelter Quarters' },
       { id: 'iron_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Forge Chimney' },
@@ -3965,7 +4033,8 @@ const MAPS = {
     buildings: [
       { id: 'mire_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'mire_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Fen Apothecary',
-        stock: ['absolute_ball', 'god_ball', 'shiny_ball', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 7,
+        stock: ['absolute_ball', 'god_ball', 'shiny_ball', 'cleanse_tonic', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
       { id: 'mire_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Stilt House' },
       { id: 'mire_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Witchlight Tower' },
@@ -4051,6 +4120,7 @@ const MAPS = {
       { id: 'spire_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'spire_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Spire Emporium',
         // everything except the champion-tier goods, which only the Colosseum stocks
+        maxBagTier: 8,
         stock: FULL_STOCK.filter((id) => !['god_ball', 'wildbound_ambrosia'].includes(id)) },
       { id: 'spire_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Seer Cell' },
       { id: 'spire_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'The Spire' },
@@ -4140,6 +4210,7 @@ const MAPS = {
     buildings: [
       { id: 'colo_center', type: 'center', x: 260, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'colo_shop',   type: 'shop',   x: 620, y: 550, w: 190, h: 150, name: "Champion's Supply",
+        maxBagTier: 9,
         stock: FULL_STOCK },
       { id: 'colo_gym',    type: 'house',  x: 300, y: 1000, w: 190, h: 140, name: 'Training Hall' },
       { id: 'colo_tower',  type: 'tower',  x: 3760, y: 300, w: 140, h: 220, name: 'The Grand Ring' },
@@ -7559,7 +7630,7 @@ return { drawChest, terrainColor, WorldRenderer, roundRect, circle, drawTrainerA
 })();
   } catch (e) { console.error('GameSnapshot failed to load:', e); return null; }
   return {
-    meta: {"builtAt":"2026-09-28T20:23:39.553Z","commit":"30b8589","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/data/chests.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.5.1"},
+    meta: {"builtAt":"2026-09-28T20:59:07.078Z","commit":"8458a5b","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/data/chests.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.5.1"},
     modules: __m,
     utils: __m['src/core/utils.js'], config: __m['src/data/config.js'], elements: __m['src/data/elements.js'], rarity: __m['src/data/rarity.js'],
     moods: __m['src/data/moods.js'], mutations: __m['src/data/mutations.js'], items: __m['src/data/items.js'], skills: __m['src/data/skills.js'],

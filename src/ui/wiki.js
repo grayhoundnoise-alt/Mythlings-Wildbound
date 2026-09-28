@@ -24,6 +24,7 @@ import { MAPS, MAP_ORDER } from '../data/maps.js';
 import { CHEST_TIERS, CHEST_TIER_IDS, CHEST_REROLL_MS } from '../data/chests.js';
 import { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier, weakTo } from '../data/elements.js';
 import {
+  BAG_TIERS, SHOP_RESTOCK_MS,
   LEVEL_CAP, ABSOLUTE_MAX_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL,
   EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, expToNextLevel, DEFEAT_COIN_PENALTY,
   COUNTER_MAX_PERCENT, COUNTER_MAX_DODGE, COUNTER_DODGE_SCALE, counterDodgePercent,
@@ -493,6 +494,11 @@ function skillsSection() {
 }
 
 function itemsSection() {
+  /** The regions whose shop lists this item. */
+  const sellersOf = (id) => MAP_ORDER
+    .filter((mapId) => (MAPS[mapId].buildings || []).some((b) => b.type === 'shop' && b.stock.includes(id)))
+    .map((mapId) => MAPS[mapId].displayName)
+    .join(', ') || 'not sold anywhere';
   const rowsFor = (catId) => Object.values(ITEMS).filter((i) => i.category === catId).map((i) => {
     let effect = i.desc;
     if (i.heal) effect += ` <span class="wiki-dim">(restores ${i.heal} HP)</span>`;
@@ -500,6 +506,7 @@ function itemsSection() {
     if (i.restoreUses) effect += ` <span class="wiki-dim">(+${i.restoreUses} uses to every limited skill)</span>`;
     if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
     if (i.healFull) effect += ' <span class="wiki-dim">(restores ALL HP)</span>';
+    if (i.cleanse) effect += ' <span class="wiki-dim">(washes off <b>every stat debuff</b> — battle only)</span>';
     if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp.toLocaleString()} EXP)</span>`;
     if (i.guaranteed) effect += ` <span class="wiki-dim">(<b>100%</b> catch — guaranteed${i.forceMutation ? `, always <b>${MUTATIONS[i.forceMutation].name}</b>` : ''})</span>`;
     else if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
@@ -511,18 +518,61 @@ function itemsSection() {
     ];
   });
   return [
-    h3('Bags & money', 'bag inventory wildcoins shop'),
-    para(`Wildcoins are earned from trainer battles and are spent in the shops of each region.
-      Your bag has no size limit in this version.`),
+    h3('Bags & money', 'bag inventory capacity wildcoins shop'),
+    para(`Wildcoins are earned from trainer battles and are spent in the shops of each region. What they buy is
+      <b>limited by your bag</b>: party and storage together can never hold more than your bag allows.`),
+    block([
+      h3('Your bag', 'bag capacity upgrade slots slots carry limit'),
+      para(`You start with <b>${BAG_TIERS[0].name}</b> — <b>${BAG_TIERS[0].capacity} Mythlings</b>, counting your party
+        <i>and</i> your storage. Bigger bags are bought from any shop, and each one is a permanent upgrade.
+        A shop only sells bags <b>bigger than the one you carry</b> and never beyond its own ceiling, so you can
+        upgrade from wherever you happen to be — up to the best bag that region stocks. The last bags of the ladder
+        are only sold deep into the world, and no single map sells the whole ladder, so a bag you are missing is
+        usually one or two regions away.`),
+      table(BAG_TIERS.map((b) => [
+        `<b>${b.name}</b>`,
+        `holds <b>${b.capacity}</b> Mythlings${b.price ? ` · <b>${b.price.toLocaleString()}</b> Wildcoins` : ' · yours from the start'}`,
+      ]), 'bag tiers bag 1 bag 2 capacity price'),
+      table(MAP_ORDER.map((id) => {
+        const shop = (MAPS[id].buildings || []).find((b) => b.type === 'shop');
+        return shop ? [MAPS[id].displayName, `sells bags up to <b>${BAG_TIERS[shop.maxBagTier - 1].name}</b>`] : null;
+      }), 'where to buy bags region shop'),
+      note(`A <b>full bag never costs you a ball</b>: a capture is refused before the ball is spent, and no Mythling is
+        ever deleted to make room. Release one from the Storage tab, or buy a bigger bag, and carry on.`),
+    ], 'bag capacity'),
     ...ITEM_CATEGORIES.map((c) => block([
       h3(c.name, c.id),
       table(rowsFor(c.id)),
     ], c.name)),
     note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP. You can feed a whole
       <b>stack at once</b> (−/+/MAX picker) and the game caps the amount at what it takes to reach Lv.${LEVEL_CAP},
-      so no food is ever wasted. The <b>God Ball</b> is the supreme regular ball — a guaranteed catch — and the
-      <b>Shiny Ball</b> / <b>Dark Ball</b> go one step further: guaranteed catch <i>and</i> a guaranteed Shiny / Darkness
-      mutation. They are sold only at the Crags Outfitter in Stonehollow Crags, and they are priced like it.`),
+      so no food is ever wasted. It also gets steadily <b>worse value per EXP</b> the higher you climb: the cheap
+      berries are the efficient everyday food, while <b>${ITEMS.wildbound_ambrosia.name}</b>
+      (${ITEMS.wildbound_ambrosia.price.toLocaleString()} Wildcoins) is endgame money for endgame levelling — buying
+      two is meant to hurt.`),
+    block([
+      h3('Shops, stock & restocking', 'shop restock stock shelf out of stock five minutes'),
+      para(`A shop shelf is <b>finite</b>. Staples arrive by the dozen; the further up the price ladder an item sits,
+        the fewer it stocks and the likelier it is not there at all — the very best goods are a roll of the dice every
+        time. Buying draws the shelf down, an empty row reads <b>SOLD OUT</b>, and the whole shelf is refilled
+        every <b>${SHOP_RESTOCK_MS / 60000} minutes of play</b> (a live countdown sits above the goods).`),
+      table([
+        ['Price band', 'Typical shelf'],
+        ...[
+          ['Cheap staples (under 600)', 'about 20 — always in'],
+          ['Mid shelf (600 – 20,000)', 'about 12 down to 5'],
+          ['Serious spends (20,000 – 100,000)', 'about 3, sometimes none'],
+          ['Endgame (100,000+)', 'one or two at most, often none'],
+        ].map(([label, n]) => [label, n]),
+      ], 'stock bands quantity'),
+    ], 'shop stock restock'),
+    note(`The <b>God Ball</b> is a guaranteed catch that also arrives at the top rarity tier, <b>SSS+</b>. The
+      <b>Shiny Ball</b> and <b>Dark Ball</b> go one step further — guaranteed catch, guaranteed SSS+, <i>and</i> a
+      guaranteed Shiny / Darkness mutation. All three are priced so that owning a second one is an achievement
+      (${ITEMS.god_ball.price.toLocaleString()} / ${ITEMS.shiny_ball.price.toLocaleString()} /
+      ${ITEMS.dark_ball.price.toLocaleString()} Wildcoins), and they are only ever listed in the late regions:
+      ${'God Ball — ' + sellersOf('god_ball')}. ${'Shiny Ball — ' + sellersOf('shiny_ball')}.
+      ${'Dark Ball — ' + sellersOf('dark_ball')}.`),
   ];
 }
 
@@ -558,10 +608,19 @@ function worldSection() {
   out.push(h3('Buildings', 'center shop heal healpoint'));
   out.push(bullets([
     '<b>Mythling Center</b> — free, instant healing: HP, skill uses and status restored. Your last used Center is where you wake up after a wipe.',
-    '<b>Shops</b> — buy balls, healing items and food with Wildcoins.',
+    '<b>Shops</b> — buy balls, healing items, food and <b>bigger bags</b> with Wildcoins. Shelves are limited: staples arrive in bulk, the rarest goods may be missing, and everything is refilled every <b>5 minutes of play</b>.',
     '<b>Gates</b> — sealed until you defeat that region’s Guardian and earn its key item.',
   ]));
   out.push(note('Healing at a Center restores HP and skill uses and resets Ultimate Charge to 0 — it never touches your EXP.'));
+  out.push(block([
+    h3('Bags on the road', 'bag capacity upgrade buy shop slots'),
+    para(`Bag ${BAG_TIERS[0].tier} (${BAG_TIERS[0].capacity} Mythlings) is yours from the start and every shop along the way sells
+      something bigger, up to ${BAG_TIERS[BAG_TIERS.length - 1].name} (${BAG_TIERS[BAG_TIERS.length - 1].capacity}). Each region caps out at its
+      own tier — ${MAP_ORDER.map((id) => {
+        const shop = (MAPS[id].buildings || []).find((b) => b.type === 'shop');
+        return shop ? `${MAPS[id].displayName}: ${BAG_TIERS[shop.maxBagTier - 1].name}` : null;
+      }).filter(Boolean).join(' · ')} — so a bag is often found a region or two ahead of where you run out of room.`),
+  ], 'bag capacity'));
   out.push(h3('Treasure chests', 'chest treasure bronze silver emerald ultra gold loot'));
   out.push(para(`Chests are scattered through the wild areas of every map. A map holds at most <b>two Bronze</b> chests and
     <b>one</b> of each other tier at a time; an opened chest is gone, and the map rolls a fresh set of chests

@@ -9,6 +9,7 @@ import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE, effectTarget, isSupport
 import { elementMultiplier, effectivenessLabel, speciesElements } from '../data/elements.js';
 import { getItem } from '../data/items.js';
 import { getRarity } from '../data/rarity.js';
+import { STAT_SHORT } from '../data/moods.js';
 import {
   DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, COUNTER_MAX_PERCENT, expReward, LEVEL_CAP,
   counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT, coinReward, FUTURE_CONTENT_LIVE,
@@ -213,17 +214,53 @@ export class Battle {
   }
 
   /** Item usage is also available from this API mid-battle. */
+  /** Stats currently dragged down on `m`: the battle's negative buff stacks. */
+  debuffs(m) {
+    const cb = this.combatants.get(m?.uid);
+    if (!cb) return [];
+    return Object.entries(cb.buffs).filter(([, b]) => b.stacks < 0).map(([stat, b]) => ({ stat, stacks: b.stacks, total: b.total }));
+  }
+
+  /**
+   * Wipe every debuff off `m` (a Cleanse Tonic). Buffs are untouched — it lifts
+   * what the foe did to you, it does not strip what you did for yourself.
+   * @returns {string[]} the stat keys that were restored.
+   */
+  clearDebuffs(m) {
+    const cb = this.combatants.get(m?.uid);
+    const cleared = [];
+    if (!cb) return cleared;
+    for (const [stat, b] of Object.entries(cb.buffs)) {
+      if (b.stacks >= 0) continue;
+      cleared.push(stat);
+      delete cb.buffs[stat];
+    }
+    return cleared;
+  }
+
   useItem(itemId, targetUid) {
     const events = [];
     const item = getItem(itemId);
     if (!item) return { events, ok: false };
     const target = this.party.find((m) => m.uid === targetUid) || this.player;
+    const side = this.party.includes(target) ? 'player' : 'enemy';
+    // A Cleanse Tonic works on the combatant, not on the Mythling: debuffs live
+    // in the battle and die with it, so applyItemEffects cannot see them.
+    if (item.cleanse) {
+      const cleared = this.clearDebuffs(target);
+      if (!cleared.length) {
+        events.push({ type: 'log', text: `${displayName(target)} has no debuffs to cleanse.` });
+        return { events, ok: false };
+      }
+      events.push({ type: 'cleanse', side, uid: target.uid, stats: cleared });
+      events.push({ type: 'log', text: `${displayName(target)} was cleansed! (${cleared.map((k) => STAT_SHORT[k] || k.toUpperCase()).join(', ')})` });
+      return { events, ok: true };
+    }
     const res = applyItemEffects(item, target);
     if (!res.ok) {
       events.push({ type: 'log', text: res.reason || 'It had no effect.' });
       return { events, ok: false };
     }
-    const side = this.party.includes(target) ? 'player' : 'enemy';
     if (res.revived) {
       events.push({ type: 'heal', side, uid: target.uid, amount: target.currentHp, mythling: this.snapshot(target) });
       events.push({ type: 'log', text: `${displayName(target)} was revived!` });

@@ -480,6 +480,31 @@ select {
 }
 @keyframes floatUp { 0% { opacity: 0; transform: translateY(6px) scale(.8);} 20% { opacity:1; transform: translateY(-6px) scale(1.15);} 100% { opacity: 0; transform: translateY(-58px) scale(1);} }
 
+/* type sheet: SEE MORE */
+.tp-actions { display: flex; justify-content: center; margin-top: 12px; }
+.tp-toggle { font-size: .72rem; padding: 6px 14px; }
+.tp-more { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10px; }
+.tp-stats { display: flex; flex-direction: column; gap: 7px; }
+.tp-stat { display: grid; grid-template-columns: 88px auto 46px; gap: 8px; align-items: baseline; font-size: .84rem; }
+.tp-stat .tp-sname { color: var(--muted); }
+.tp-stat .tp-sval { font-weight: 900; font-size: .92rem; }
+.tp-stat .tp-sdelta { font-weight: 800; font-size: .78rem; text-align: right; color: var(--muted); }
+.tp-stat .tp-sdelta.up { color: #6ee87f; }
+.tp-stat .tp-sdelta.down { color: #ff7b7b; }
+.tp-stat .tp-why { grid-column: 1 / -1; font-size: .7rem; color: var(--muted); line-height: 1.25; }
+.tp-stat .tp-why b.up { color: #6ee87f; }
+.tp-stat .tp-why b.down { color: #ff7b7b; }
+
+/* ---------- Shops ---------- */
+.shop-head { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 6px; font-size: .78rem; font-weight: 800; letter-spacing: .06em; color: var(--muted); }
+.shop-timer { font-weight: 700; letter-spacing: .02em; color: #9fb3c9; }
+.shop-bags { border: 1px solid rgba(242,199,97,.28); border-radius: 12px; padding: 10px 12px; background: rgba(242,199,97,.06); }
+.shop-baghead { display: flex; align-items: baseline; gap: 10px; font-weight: 900; letter-spacing: .04em; }
+.shop-baghead .dim { font-weight: 600; font-size: .8rem; color: var(--muted); }
+.ir-stock { font-size: .72rem; font-weight: 700; color: #9fd8a0; margin-top: 2px; }
+.ir-stock.out { color: #ff9aa2; }
+.item-row.sold-out { opacity: .5; }
+
 /* ---------- Menus (party / bag / etc.) ---------- */
 .menu-screen { width: min(1120px, 96vw); height: min(760px, 92vh); display: flex; overflow: hidden; }
 .menu-tabs { width: 210px; padding: 18px 12px; display: flex; flex-direction: column; gap: 6px; background: rgba(6,12,22,0.55); border-right: 2px solid rgba(242,199,97,0.25); }
@@ -511,14 +536,15 @@ select {
 .detail-art { border-radius: 16px; background: radial-gradient(circle at 50% 60%, rgba(90,140,190,.35), rgba(8,14,24,.7)); padding: 10px; }
 .detail-art canvas { width: 100%; height: 230px; display: block; }
 .stat-rows { display: flex; flex-direction: column; gap: 6px; }
-.stat-row { display: grid; grid-template-columns: 150px 1fr 64px; align-items: center; gap: 10px; font-size: .9rem; }
+.stat-row { display: grid; grid-template-columns: 112px 1fr 92px; align-items: center; gap: 8px; font-size: .9rem; }
 .stat-row .sbar { height: 9px; border-radius: 5px; background: rgba(0,0,0,.45); overflow: hidden; }
 .stat-row .sbar > i { display: block; height: 100%; background: linear-gradient(90deg, #7fd8ff, #3fa9f5); }
-.stat-row b { text-align: right; display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
+/* "33 (+15)" on one line — the value and its bonus sit side by side */
+.stat-row b { text-align: right; display: inline-flex; flex-direction: row; align-items: baseline; justify-content: flex-end; gap: 4px; line-height: 1.05; white-space: nowrap; }
 .stat-row.up b { color: var(--ok); }
 .stat-row.down b { color: var(--danger); }
 /* the net Mood + Rational change, e.g. (+15) / (+5) / (-7) */
-.stat-row .stat-net { font-size: .68rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.stat-row .stat-net { font-size: .72rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
 .stat-row .stat-net.up { color: var(--ok); }
 .stat-row .stat-net.down { color: var(--danger); }
 
@@ -1074,7 +1100,7 @@ h3 .name-el { vertical-align: middle; }
 .cc-info:active { transform: scale(.96); }
 
 /* the panel it opens */
-.type-panel { min-width: min(520px, 82vw); }
+.type-panel { min-width: min(520px, 82vw); max-height: 62vh; overflow-y: auto; overscroll-behavior: contain; }
 .type-panel .tp-head {
   margin: 14px 0 6px; font-size: .68rem; letter-spacing: .16em;
   color: #9fb3c9; text-transform: uppercase;

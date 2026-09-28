@@ -488,6 +488,31 @@ select {
 }
 @keyframes floatUp { 0% { opacity: 0; transform: translateY(6px) scale(.8);} 20% { opacity:1; transform: translateY(-6px) scale(1.15);} 100% { opacity: 0; transform: translateY(-58px) scale(1);} }
 
+/* type sheet: SEE MORE */
+.tp-actions { display: flex; justify-content: center; margin-top: 12px; }
+.tp-toggle { font-size: .72rem; padding: 6px 14px; }
+.tp-more { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10px; }
+.tp-stats { display: flex; flex-direction: column; gap: 7px; }
+.tp-stat { display: grid; grid-template-columns: 88px auto 46px; gap: 8px; align-items: baseline; font-size: .84rem; }
+.tp-stat .tp-sname { color: var(--muted); }
+.tp-stat .tp-sval { font-weight: 900; font-size: .92rem; }
+.tp-stat .tp-sdelta { font-weight: 800; font-size: .78rem; text-align: right; color: var(--muted); }
+.tp-stat .tp-sdelta.up { color: #6ee87f; }
+.tp-stat .tp-sdelta.down { color: #ff7b7b; }
+.tp-stat .tp-why { grid-column: 1 / -1; font-size: .7rem; color: var(--muted); line-height: 1.25; }
+.tp-stat .tp-why b.up { color: #6ee87f; }
+.tp-stat .tp-why b.down { color: #ff7b7b; }
+
+/* ---------- Shops ---------- */
+.shop-head { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 6px; font-size: .78rem; font-weight: 800; letter-spacing: .06em; color: var(--muted); }
+.shop-timer { font-weight: 700; letter-spacing: .02em; color: #9fb3c9; }
+.shop-bags { border: 1px solid rgba(242,199,97,.28); border-radius: 12px; padding: 10px 12px; background: rgba(242,199,97,.06); }
+.shop-baghead { display: flex; align-items: baseline; gap: 10px; font-weight: 900; letter-spacing: .04em; }
+.shop-baghead .dim { font-weight: 600; font-size: .8rem; color: var(--muted); }
+.ir-stock { font-size: .72rem; font-weight: 700; color: #9fd8a0; margin-top: 2px; }
+.ir-stock.out { color: #ff9aa2; }
+.item-row.sold-out { opacity: .5; }
+
 /* ---------- Menus (party / bag / etc.) ---------- */
 .menu-screen { width: min(1120px, 96vw); height: min(760px, 92vh); display: flex; overflow: hidden; }
 .menu-tabs { width: 210px; padding: 18px 12px; display: flex; flex-direction: column; gap: 6px; background: rgba(6,12,22,0.55); border-right: 2px solid rgba(242,199,97,0.25); }
@@ -519,14 +544,15 @@ select {
 .detail-art { border-radius: 16px; background: radial-gradient(circle at 50% 60%, rgba(90,140,190,.35), rgba(8,14,24,.7)); padding: 10px; }
 .detail-art canvas { width: 100%; height: 230px; display: block; }
 .stat-rows { display: flex; flex-direction: column; gap: 6px; }
-.stat-row { display: grid; grid-template-columns: 150px 1fr 64px; align-items: center; gap: 10px; font-size: .9rem; }
+.stat-row { display: grid; grid-template-columns: 112px 1fr 92px; align-items: center; gap: 8px; font-size: .9rem; }
 .stat-row .sbar { height: 9px; border-radius: 5px; background: rgba(0,0,0,.45); overflow: hidden; }
 .stat-row .sbar > i { display: block; height: 100%; background: linear-gradient(90deg, #7fd8ff, #3fa9f5); }
-.stat-row b { text-align: right; display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
+/* "33 (+15)" on one line — the value and its bonus sit side by side */
+.stat-row b { text-align: right; display: inline-flex; flex-direction: row; align-items: baseline; justify-content: flex-end; gap: 4px; line-height: 1.05; white-space: nowrap; }
 .stat-row.up b { color: var(--ok); }
 .stat-row.down b { color: var(--danger); }
 /* the net Mood + Rational change, e.g. (+15) / (+5) / (-7) */
-.stat-row .stat-net { font-size: .68rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.stat-row .stat-net { font-size: .72rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
 .stat-row .stat-net.up { color: var(--ok); }
 .stat-row .stat-net.down { color: var(--danger); }
 
@@ -1082,7 +1108,7 @@ h3 .name-el { vertical-align: middle; }
 .cc-info:active { transform: scale(.96); }
 
 /* the panel it opens */
-.type-panel { min-width: min(520px, 82vw); }
+.type-panel { min-width: min(520px, 82vw); max-height: 62vh; overflow-y: auto; overscroll-behavior: contain; }
 .type-panel .tp-head {
   margin: 14px 0 6px; font-size: .68rem; letter-spacing: .16em;
   color: #9fb3c9; text-transform: uppercase;
@@ -1165,6 +1191,29 @@ h3 .name-el { vertical-align: middle; }
   var STARTER_LEVEL = 5;
   var PARTY_MAX = 6;
   var STORAGE_MAX = 200;
+  var BAG_TIERS = [
+    { tier: 1, name: "Bag 1", capacity: 20, price: 0 },
+    // the one you start with
+    { tier: 2, name: "Bag 2", capacity: 30, price: 2500 },
+    { tier: 3, name: "Bag 3", capacity: 40, price: 9e3 },
+    { tier: 4, name: "Bag 4", capacity: 50, price: 25e3 },
+    { tier: 5, name: "Bag 5", capacity: 60, price: 6e4 },
+    { tier: 6, name: "Bag 6", capacity: 70, price: 13e4 },
+    { tier: 7, name: "Bag 7", capacity: 80, price: 26e4 },
+    { tier: 8, name: "Bag 8", capacity: 90, price: 5e5 },
+    { tier: 9, name: "Bag 9", capacity: 100, price: 9e5 }
+  ];
+  var BAG_MAX_TIER = BAG_TIERS.length;
+  function bagTier(tier) {
+    return BAG_TIERS[Math.max(0, Math.min(BAG_TIERS.length - 1, (Number(tier) || 1) - 1))];
+  }
+  function bagCapacity(tier) {
+    return bagTier(tier).capacity;
+  }
+  function bagTierFor(count) {
+    return (BAG_TIERS.find((b) => b.capacity >= count) || BAG_TIERS[BAG_TIERS.length - 1]).tier;
+  }
+  var SHOP_RESTOCK_MS = 5 * 60 * 1e3;
   var ULTIMATE_UNLOCK_LEVEL = 10;
   var EVOLUTION_LEVELS = [1, 20, 60, 80];
   var MAX_UNLOCKED_EVOLUTION_STAGE = 3;
@@ -1252,10 +1301,11 @@ h3 .name-el { vertical-align: middle; }
     advanced_ball: { id: "advanced_ball", name: "Advanced Ball", category: "balls", price: 550, catchMult: 1.5, desc: "Crafted with coast crystal. Notably more reliable." },
     absolute_ball: { id: "absolute_ball", name: "Absolute Ball", category: "balls", price: 1100, catchMult: 1.8, desc: "An ember-forged ball for stubborn Mythlings." },
     // `guaranteed` bypasses the capture formula entirely: a 100% catch, every time.
-    god_ball: { id: "god_ball", name: "God Ball", category: "balls", price: 12e3, catchMult: 99, guaranteed: true, desc: "The supreme binding sphere. Never fails \u2014 a guaranteed capture." },
+    // `forceRarity` fixes the rarity of what you catch, on top of `guaranteed`.
+    god_ball: { id: "god_ball", name: "God Ball", category: "balls", price: 12e4, catchMult: 99, guaranteed: true, forceRarity: "SSS+", desc: "The supreme binding sphere. Never fails, and the Mythling always emerges SSS+." },
     // `forceMutation` turns the caught Mythling into that mutation, every time.
-    shiny_ball: { id: "shiny_ball", name: "Shiny Ball", category: "balls", price: 6e4, catchMult: 99, guaranteed: true, forceMutation: "shiny", desc: "Forged from starlight. Guaranteed capture, and the Mythling always emerges SHINY." },
-    dark_ball: { id: "dark_ball", name: "Dark Ball", category: "balls", price: 9e4, catchMult: 99, guaranteed: true, forceMutation: "darkness", desc: "Cut from an eclipse. Guaranteed capture, and the Mythling always emerges as a DARKNESS mutation." },
+    shiny_ball: { id: "shiny_ball", name: "Shiny Ball", category: "balls", price: 8e5, catchMult: 99, guaranteed: true, forceRarity: "SSS+", forceMutation: "shiny", desc: "Forged from starlight. Guaranteed capture, always SSS+, always SHINY. Priced so that buying a second one is an achievement." },
+    dark_ball: { id: "dark_ball", name: "Dark Ball", category: "balls", price: 95e4, catchMult: 99, guaranteed: true, forceRarity: "SSS+", forceMutation: "darkness", desc: "Cut from an eclipse. Guaranteed capture, always SSS+, always DARKNESS. The rarest thing money can buy." },
     potion: { id: "potion", name: "Potion", category: "healing", price: 150, heal: 60, desc: "Restores 60 HP to one Mythling." },
     greater_potion: { id: "greater_potion", name: "Greater Potion", category: "healing", price: 380, heal: 160, desc: "Restores 160 HP to one Mythling." },
     hyper_potion: { id: "hyper_potion", name: "Hyper Potion", category: "healing", price: 800, heal: 400, desc: "Restores 400 HP to one Mythling." },
@@ -1267,26 +1317,28 @@ h3 .name-el { vertical-align: middle; }
     full_restore: { id: "full_restore", name: "Full Restore", category: "healing", price: 3200, healFull: true, restoreAllUses: true, desc: "Fully restores HP AND every skill's uses. Cannot revive." },
     // ---- TONICS: re-roll a Mythling's personality traits (used from its profile) ----
     mood_tonic: { id: "mood_tonic", name: "Mood Tonic", category: "tonics", price: 2500, rerollMood: true, desc: "Re-rolls a Mythling's Mood into a different one. Use it from the Mythling's profile." },
+    // Battle only: debuffs live on the battle combatant, not on the Mythling.
+    cleanse_tonic: { id: "cleanse_tonic", name: "Cleanse Tonic", category: "healing", price: 2200, cleanse: true, desc: "Washes every debuff off one Mythling. Battle only \u2014 nothing to cleanse outside a fight." },
     temper_tonic: { id: "temper_tonic", name: "Temper Tonic", category: "tonics", price: 2500, rerollRational: true, desc: "Re-rolls a Mythling's Rational (+10 / -10 trait) into a different one. Use it from the Mythling's profile." },
     // ---- FOOD: feed a Mythling to train it faster (grants EXP directly) ----
     sweet_berry: { id: "sweet_berry", name: "Sweet Berry", category: "food", price: 90, exp: 40, desc: "A sugary forest berry. Feeding it grants 40 EXP." },
-    honey_nut: { id: "honey_nut", name: "Honey Nut", category: "food", price: 240, exp: 130, desc: "A sticky, energy-packed nut. Grants 130 EXP." },
-    river_jerky: { id: "river_jerky", name: "River Jerky", category: "food", price: 620, exp: 400, desc: "Salt-cured coast fish. Grants 400 EXP." },
-    ember_roast: { id: "ember_roast", name: "Ember Roast", category: "food", price: 1400, exp: 1e3, desc: "Slow-roasted over volcanic vents. Grants 1000 EXP." },
-    mythic_feast: { id: "mythic_feast", name: "Mythic Feast", category: "food", price: 3200, exp: 2600, desc: "A legendary banquet for one. Grants 2600 EXP." },
+    honey_nut: { id: "honey_nut", name: "Honey Nut", category: "food", price: 420, exp: 130, desc: "A sticky, energy-packed nut. Grants 130 EXP." },
+    river_jerky: { id: "river_jerky", name: "River Jerky", category: "food", price: 1900, exp: 400, desc: "Salt-cured coast fish. Grants 400 EXP." },
+    ember_roast: { id: "ember_roast", name: "Ember Roast", category: "food", price: 6e3, exp: 1e3, desc: "Slow-roasted over volcanic vents. Grants 1000 EXP." },
+    mythic_feast: { id: "mythic_feast", name: "Mythic Feast", category: "food", price: 20800, exp: 2600, desc: "A legendary banquet for one. Grants 2600 EXP." },
     // High-level training food: a level past Lv.30 costs thousands of EXP and a
     // level near the cap over 16,000, so the ladder keeps climbing. Feeding a
     // stack at once never wastes food — the game caps it at the level cap.
-    crunchy_root: { id: "crunchy_root", name: "Crunchy Root", category: "food", price: 160, exp: 80, desc: "A crisp forest root. Grants 80 EXP." },
-    moon_melon: { id: "moon_melon", name: "Moon Melon", category: "food", price: 430, exp: 250, desc: "Ripens only under moonlight. Grants 250 EXP." },
-    glow_nectar: { id: "glow_nectar", name: "Glow Nectar", category: "food", price: 980, exp: 650, desc: "Luminous nectar from coast blossoms. Grants 650 EXP." },
-    coral_cake: { id: "coral_cake", name: "Coral Cake", category: "food", price: 2400, exp: 1800, desc: "A dense, sweet cake baked by port cooks. Grants 1,800 EXP." },
-    tide_pudding: { id: "tide_pudding", name: "Tide Pudding", category: "food", price: 4800, exp: 4e3, desc: "Wobbles like the sea it came from. Grants 4,000 EXP." },
-    storm_eel_stew: { id: "storm_eel_stew", name: "Storm Eel Stew", category: "food", price: 8600, exp: 8e3, desc: "Crackles with leftover lightning. Grants 8,000 EXP." },
-    dragonfruit_flambe: { id: "dragonfruit_flambe", name: "Dragonfruit Flamb\xE9", category: "food", price: 14800, exp: 15e3, desc: "Set alight over a volcanic vent. Grants 15,000 EXP." },
-    phoenix_pepper: { id: "phoenix_pepper", name: "Phoenix Pepper", category: "food", price: 27e3, exp: 3e4, desc: "So hot it is said to bring the eater back to life. Grants 30,000 EXP." },
-    titan_broth: { id: "titan_broth", name: "Titan Broth", category: "food", price: 5e4, exp: 6e4, desc: "Simmered for a hundred days in a caldera. Grants 60,000 EXP." },
-    wildbound_ambrosia: { id: "wildbound_ambrosia", name: "Wildbound Ambrosia", category: "food", price: 92e3, exp: 12e4, desc: "The food of legends. Grants 120,000 EXP \u2014 several levels even near the cap." },
+    crunchy_root: { id: "crunchy_root", name: "Crunchy Root", category: "food", price: 200, exp: 80, desc: "A crisp forest root. Grants 80 EXP." },
+    moon_melon: { id: "moon_melon", name: "Moon Melon", category: "food", price: 950, exp: 250, desc: "Ripens only under moonlight. Grants 250 EXP." },
+    glow_nectar: { id: "glow_nectar", name: "Glow Nectar", category: "food", price: 3400, exp: 650, desc: "Luminous nectar from coast blossoms. Grants 650 EXP." },
+    coral_cake: { id: "coral_cake", name: "Coral Cake", category: "food", price: 12600, exp: 1800, desc: "A dense, sweet cake baked by port cooks. Grants 1,800 EXP." },
+    tide_pudding: { id: "tide_pudding", name: "Tide Pudding", category: "food", price: 36e3, exp: 4e3, desc: "Wobbles like the sea it came from. Grants 4,000 EXP." },
+    storm_eel_stew: { id: "storm_eel_stew", name: "Storm Eel Stew", category: "food", price: 8e4, exp: 8e3, desc: "Crackles with leftover lightning. Grants 8,000 EXP." },
+    dragonfruit_flambe: { id: "dragonfruit_flambe", name: "Dragonfruit Flamb\xE9", category: "food", price: 165e3, exp: 15e3, desc: "Set alight over a volcanic vent. Grants 15,000 EXP." },
+    phoenix_pepper: { id: "phoenix_pepper", name: "Phoenix Pepper", category: "food", price: 36e4, exp: 3e4, desc: "So hot it is said to bring the eater back to life. Grants 30,000 EXP." },
+    titan_broth: { id: "titan_broth", name: "Titan Broth", category: "food", price: 78e4, exp: 6e4, desc: "Simmered for a hundred days in a caldera. Grants 60,000 EXP." },
+    wildbound_ambrosia: { id: "wildbound_ambrosia", name: "Wildbound Ambrosia", category: "food", price: 18e5, exp: 12e4, desc: "The food of legends. Grants 120,000 EXP \u2014 several levels even near the cap." },
     vale_charm: { id: "vale_charm", name: "Vale Charm", category: "key", desc: "Proof that the Verdant Guardian was bested. Opens the Verdant Gate." },
     coast_pass: { id: "coast_pass", name: "Coast Pass", category: "key", desc: "Granted at Tidecrest Port. Opens the Emberwild Gate." },
     ember_sigil: { id: "ember_sigil", name: "Ember Sigil", category: "key", desc: "Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags." },
@@ -1317,6 +1369,31 @@ h3 .name-el { vertical-align: middle; }
   }
   function getItem(id) {
     return ITEMS[id] || null;
+  }
+  var STOCK_BANDS = [
+    { under: 600, max: 20, chance: 1 },
+    { under: 2e3, max: 12, chance: 1 },
+    { under: 6e3, max: 8, chance: 1 },
+    { under: 2e4, max: 5, chance: 0.9 },
+    { under: 1e5, max: 3, chance: 0.75 },
+    { under: 5e5, max: 2, chance: 0.5 },
+    { under: Infinity, max: 1, chance: 0.3 }
+  ];
+  var STOCK_OVERRIDES = {
+    basic_ball: { max: 24 },
+    normal_ball: { max: 18 },
+    advanced_ball: { max: 12 },
+    absolute_ball: { max: 8 },
+    god_ball: { max: 1, chance: 0.5 },
+    shiny_ball: { max: 1, chance: 0.25 },
+    dark_ball: { max: 1, chance: 0.2 }
+  };
+  function shopStock(id) {
+    const it = ITEMS[id];
+    if (!it || !it.price) return { max: 0, chance: 0 };
+    const band = STOCK_BANDS.find((b) => it.price < b.under) || STOCK_BANDS[STOCK_BANDS.length - 1];
+    const over = STOCK_OVERRIDES[id] || {};
+    return { max: over.max ?? band.max, chance: over.chance ?? band.chance };
   }
   var STARTING_INVENTORY = {
     basic_ball: 8,
@@ -1362,7 +1439,8 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Leafrest Supplies",
-          stock: ["basic_ball", "normal_ball", "potion", "greater_potion", "revive_herb", "skill_tonic", "sweet_berry", "crunchy_root", "honey_nut", "moon_melon"]
+          maxBagTier: 2,
+          stock: ["basic_ball", "normal_ball", "potion", "greater_potion", "cleanse_tonic", "revive_herb", "skill_tonic", "sweet_berry", "crunchy_root", "honey_nut", "moon_melon"]
         },
         { id: "vale_house1", type: "house", x: 120, y: 900, w: 170, h: 130, name: "Cottage" },
         { id: "vale_house2", type: "house", x: 700, y: 950, w: 170, h: 130, name: "Cottage" }
@@ -1523,12 +1601,14 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Tidecrest Trading Post",
+          maxBagTier: 3,
           stock: [
             "basic_ball",
             "normal_ball",
             "advanced_ball",
             "potion",
             "greater_potion",
+            "cleanse_tonic",
             "hyper_potion",
             "revive_herb",
             "skill_tonic",
@@ -1697,10 +1777,12 @@ h3 .name-el { vertical-align: middle; }
           h: 150,
           name: "Emberwatch Quartermaster",
           // Region-3 stock only: the top-tier balls, restores and foods moved to the LAST map's shop.
+          maxBagTier: 4,
           stock: [
             "advanced_ball",
             "absolute_ball",
             "greater_potion",
+            "cleanse_tonic",
             "hyper_potion",
             "max_potion",
             "revive_herb",
@@ -1890,10 +1972,12 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Crags Outfitter",
+          maxBagTier: 4,
           stock: [
             "advanced_ball",
             "absolute_ball",
             "god_ball",
+            "cleanse_tonic",
             "hyper_potion",
             "max_potion",
             "max_revive",
@@ -2072,9 +2156,11 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Plateau Provisions",
+          maxBagTier: 5,
           stock: [
             "advanced_ball",
             "absolute_ball",
+            "cleanse_tonic",
             "hyper_potion",
             "max_potion",
             "revive_herb",
@@ -2246,9 +2332,11 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Frostveil Trading Post",
+          maxBagTier: 6,
           stock: [
             "absolute_ball",
             "god_ball",
+            "cleanse_tonic",
             "hyper_potion",
             "max_potion",
             "max_revive",
@@ -2420,9 +2508,11 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Ironhold Armoury",
+          maxBagTier: 6,
           stock: [
             "absolute_ball",
             "god_ball",
+            "cleanse_tonic",
             "max_potion",
             "max_revive",
             "skill_elixir",
@@ -2593,10 +2683,12 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Fen Apothecary",
+          maxBagTier: 7,
           stock: [
             "absolute_ball",
             "god_ball",
             "shiny_ball",
+            "cleanse_tonic",
             "max_potion",
             "max_revive",
             "skill_elixir",
@@ -2768,6 +2860,7 @@ h3 .name-el { vertical-align: middle; }
           h: 150,
           name: "Spire Emporium",
           // everything except the champion-tier goods, which only the Colosseum stocks
+          maxBagTier: 8,
           stock: FULL_STOCK.filter((id) => !["god_ball", "wildbound_ambrosia"].includes(id))
         },
         { id: "spire_house", type: "house", x: 300, y: 1e3, w: 180, h: 140, name: "Seer Cell" },
@@ -2932,6 +3025,7 @@ h3 .name-el { vertical-align: middle; }
           w: 190,
           h: 150,
           name: "Champion's Supply",
+          maxBagTier: 9,
           stock: FULL_STOCK
         },
         { id: "colo_gym", type: "house", x: 300, y: 1e3, w: 190, h: 140, name: "Training Hall" },
@@ -5695,6 +5789,24 @@ h3 .name-el { vertical-align: middle; }
     }
     return out;
   }
+  function statBreakdown(m) {
+    const sp = speciesOf(m);
+    const st = stageData(m);
+    const mag = rarityMagnitude(m.rarity);
+    const mods = moodModifiers(m.mood, mag);
+    const rat = rationalModifiers(m.rational, RATIONAL_AMOUNT);
+    const mutBonus = getMutation(m.mutation).statBonus || 0;
+    const stats = computeStats(m);
+    return STAT_KEYS.map((k) => ({
+      key: k,
+      total: stats[k],
+      grown: Math.floor(sp.baseStats[k] * (1 + STAT_GROWTH[k] * (m.level - 1)) * st.statMult),
+      mood: mods[k] || 0,
+      rational: rat[k] || 0,
+      mutation: mutBonus,
+      rarityMag: mag
+    }));
+  }
   function maxHp(m) {
     return computeStats(m).hp;
   }
@@ -5938,6 +6050,10 @@ h3 .name-el { vertical-align: middle; }
       out.reason = "Nothing to use.";
       return out;
     }
+    if (item.cleanse) {
+      out.reason = `${item.name} only works in battle \u2014 on a Mythling that is debuffed.`;
+      return out;
+    }
     const wantsHp = !!(item.heal || item.healFull || item.revive);
     const wantsUses = !!(item.restoreUses || item.restoreAllUses);
     if (!wantsHp && !wantsUses) {
@@ -6117,6 +6233,33 @@ h3 .name-el { vertical-align: middle; }
     list() {
       return GameState.storage;
     },
+    /** Bag capacity: your party AND your storage count against the bag you own. */
+    capacity() {
+      var _a;
+      return bagCapacity((_a = GameState.player) == null ? void 0 : _a.bagTier);
+    },
+    used() {
+      return GameState.party.length + GameState.storage.length;
+    },
+    remaining() {
+      return Math.max(0, this.capacity() - this.used());
+    },
+    isFull() {
+      return this.used() >= this.capacity();
+    },
+    bagTier() {
+      var _a;
+      return ((_a = GameState.player) == null ? void 0 : _a.bagTier) || 1;
+    },
+    /** Buy the next bag up. Returns false when it is unaffordable or already maxed. */
+    upgradeBag() {
+      const next = bagTier(GameState.player.bagTier + 1);
+      if (next.tier <= GameState.player.bagTier) return { ok: false, reason: "You already carry the biggest bag there is." };
+      if (!PlayerManager.spendCoins(next.price)) return { ok: false, reason: "Not enough Wildcoins!" };
+      GameState.player.bagTier = next.tier;
+      bus.emit("bag:changed");
+      return { ok: true, tier: next.tier, capacity: next.capacity };
+    },
     add(m) {
       GameState.storage.push(m);
       bus.emit("storage:changed");
@@ -6279,7 +6422,9 @@ h3 .name-el { vertical-align: middle; }
       facing: "down",
       starter: starterId,
       lastHealMap: "verdant_vale",
-      lastHealPoint: { ...MAPS.verdant_vale.spawn }
+      lastHealPoint: { ...MAPS.verdant_vale.spawn },
+      bagTier: 1
+      // Bag 1 — 20 Mythlings. Bigger bags are bought in the shops.
     };
     GameState.party = [];
     GameState.storage = [];
@@ -6292,7 +6437,8 @@ h3 .name-el { vertical-align: middle; }
       flags: {},
       npcProgress: {},
       chests: {},
-      chestStats: {}
+      chestStats: {},
+      shops: {}
     };
     GameState.meta = { playTime: 0, startedAt: Date.now(), gameVersion: GAME_VERSION, levelCap: LEVEL_CAP };
     GameState._sessionStart = Date.now();
@@ -6390,10 +6536,15 @@ h3 .name-el { vertical-align: middle; }
       facing: p.facing || "down",
       starter: p.starter ?? null,
       lastHealMap: getMap(p.lastHealMap) ? p.lastHealMap : mapId,
-      lastHealPoint: p.lastHealPoint || { ...MAPS[mapId].spawn }
+      lastHealPoint: p.lastHealPoint || { ...MAPS[mapId].spawn },
+      bagTier: Math.max(1, Math.floor(p.bagTier) || 1)
     };
     GameState.party = (data.party || []).map(migrateMythling).filter(Boolean).slice(0, PARTY_MAX);
     GameState.storage = (data.storage || []).map(migrateMythling).filter(Boolean);
+    GameState.player.bagTier = Math.max(
+      GameState.player.bagTier,
+      bagTierFor(GameState.party.length + GameState.storage.length)
+    );
     if (GameState.party.length === 0 && GameState.storage.length > 0) {
       GameState.party.push(GameState.storage.shift());
     }
@@ -7191,17 +7342,49 @@ h3 .name-el { vertical-align: middle; }
       }
     }
     /** Item usage is also available from this API mid-battle. */
+    /** Stats currently dragged down on `m`: the battle's negative buff stacks. */
+    debuffs(m) {
+      const cb = this.combatants.get(m == null ? void 0 : m.uid);
+      if (!cb) return [];
+      return Object.entries(cb.buffs).filter(([, b]) => b.stacks < 0).map(([stat, b]) => ({ stat, stacks: b.stacks, total: b.total }));
+    }
+    /**
+     * Wipe every debuff off `m` (a Cleanse Tonic). Buffs are untouched — it lifts
+     * what the foe did to you, it does not strip what you did for yourself.
+     * @returns {string[]} the stat keys that were restored.
+     */
+    clearDebuffs(m) {
+      const cb = this.combatants.get(m == null ? void 0 : m.uid);
+      const cleared = [];
+      if (!cb) return cleared;
+      for (const [stat, b] of Object.entries(cb.buffs)) {
+        if (b.stacks >= 0) continue;
+        cleared.push(stat);
+        delete cb.buffs[stat];
+      }
+      return cleared;
+    }
     useItem(itemId, targetUid) {
       const events = [];
       const item = getItem(itemId);
       if (!item) return { events, ok: false };
       const target = this.party.find((m) => m.uid === targetUid) || this.player;
+      const side = this.party.includes(target) ? "player" : "enemy";
+      if (item.cleanse) {
+        const cleared = this.clearDebuffs(target);
+        if (!cleared.length) {
+          events.push({ type: "log", text: `${displayName(target)} has no debuffs to cleanse.` });
+          return { events, ok: false };
+        }
+        events.push({ type: "cleanse", side, uid: target.uid, stats: cleared });
+        events.push({ type: "log", text: `${displayName(target)} was cleansed! (${cleared.map((k) => STAT_SHORT[k] || k.toUpperCase()).join(", ")})` });
+        return { events, ok: true };
+      }
       const res = applyItemEffects(item, target);
       if (!res.ok) {
         events.push({ type: "log", text: res.reason || "It had no effect." });
         return { events, ok: false };
       }
-      const side = this.party.includes(target) ? "player" : "enemy";
       if (res.revived) {
         events.push({ type: "heal", side, uid: target.uid, amount: target.currentHp, mythling: this.snapshot(target) });
         events.push({ type: "log", text: `${displayName(target)} was revived!` });
@@ -13794,6 +13977,15 @@ h3 .name-el { vertical-align: middle; }
       if (!this.canAttempt(target)) {
         return { ok: false, success: false, reason: "You must defeat the wild Mythling first!", chance: 0 };
       }
+      if (PartyManager.isFull() && StorageManager.isFull()) {
+        return {
+          ok: false,
+          success: false,
+          chance: 0,
+          bagFull: true,
+          reason: `Your bag is full (${StorageManager.used()}/${StorageManager.capacity()})! Release a Mythling, or buy a bigger bag from a shop.`
+        };
+      }
       if (!InventoryManager.has(ballId, 1)) {
         return { ok: false, success: false, reason: `You have no ${((_a = getItem(ballId)) == null ? void 0 : _a.name) || "balls"} left!`, chance: 0 };
       }
@@ -13816,6 +14008,7 @@ h3 .name-el { vertical-align: middle; }
       resetToLevelOne(caught);
       const ball = getItem(ballId);
       if (ball == null ? void 0 : ball.forceMutation) caught.mutation = combineMutations(caught.mutation, ball.forceMutation);
+      if (ball == null ? void 0 : ball.forceRarity) caught.rarity = ball.forceRarity;
       CollectionManager.markCaught(caught.speciesId, caught.mutation, caught.stage);
       return { ok: true, success: true, chance, mythling: caught, destination: "pending" };
     },
@@ -16928,6 +17121,47 @@ h3 .name-el { vertical-align: middle; }
       body.appendChild(list(prof.weakTo, "Nothing \u2014 no element hits it for extra."));
       body.appendChild(el("h3", { class: "tp-head", text: "RESISTS" }));
       body.appendChild(list(prof.resists, "Nothing \u2014 no element is resisted."));
+      const rows = statBreakdown(m);
+      const moodName = getMood(m.mood).name;
+      const rat = getRational(m.rational);
+      const ratName = (rat == null ? void 0 : rat.name) || "\u2014";
+      const mut = getMutation(m.mutation);
+      const detail = el("div", { class: "tp-stats" });
+      for (const r of rows) {
+        const net = r.mood + r.rational + r.mutation;
+        const parts = [`Lv.${m.level} &amp; stage ${r.grown}`];
+        if (r.mood) parts.push(`Mood ${moodName} <b class="up">+${r.mood}</b>`);
+        if (r.rational > 0) parts.push(`Rational ${ratName} <b class="up">+${r.rational}</b>`);
+        if (r.rational < 0) parts.push(`Rational ${ratName} <b class="down">${r.rational}</b>`);
+        if (r.mutation) parts.push(`${mut.name} <b class="up">+${r.mutation}</b>`);
+        parts.push(`Rarity ${m.rarity} &middot; mood &times;${r.rarityMag}`);
+        detail.appendChild(el("div", { class: "tp-stat" }, [
+          el("span", { class: "tp-sname", text: STAT_LABELS[r.key] || r.key.toUpperCase() }),
+          el("b", { class: "tp-sval", text: String(r.total) }),
+          el("span", { class: `tp-sdelta ${net > 0 ? "up" : net < 0 ? "down" : ""}`, text: net ? `${net > 0 ? "+" : ""}${net}` : "\u2014" }),
+          el("div", { class: "tp-why", html: parts.join(" &middot; ") })
+        ]));
+      }
+      const more = el("div", { class: "tp-more" }, [
+        el("h3", { class: "tp-head", text: "CURRENT STATS" }),
+        el("p", {
+          class: "sub",
+          style: { margin: "0 0 8px" },
+          text: "The number the battle uses, then everything feeding it: level and stage growth, Mood (scaled by Rarity), the Rational\u2019s +10 / \u221210 and the mutation bonus."
+        }),
+        detail
+      ]);
+      more.hidden = true;
+      const toggle = button("SEE MORE", {
+        class: "tp-toggle",
+        onclick: () => {
+          more.hidden = !more.hidden;
+          toggle.textContent = more.hidden ? "SEE MORE" : "SEE LESS";
+          body.classList.toggle("expanded", !more.hidden);
+        }
+      });
+      body.appendChild(el("div", { class: "tp-actions" }, [toggle]));
+      body.appendChild(more);
       body.appendChild(el("p", {
         class: "sub",
         style: { marginTop: "10px" },
@@ -17241,7 +17475,7 @@ h3 .name-el { vertical-align: middle; }
       this.end(captured ? "captured" : "won");
     }
     async openItems() {
-      const usable = InventoryManager.all().filter((e) => e.item.category === "healing");
+      const usable = InventoryManager.all().filter((e) => e.item.category === "healing" || e.item.cleanse);
       if (!usable.length) {
         toast("No usable items!", "bad");
         return;
@@ -17257,19 +17491,23 @@ h3 .name-el { vertical-align: middle; }
           button("USE", { class: "small primary", onclick: () => closeModal(entry.id) })
         ]));
       });
-      const chosen = await modal({ title: "BAG \u2014 HEALING", body: list, buttons: [{ label: "CANCEL", value: false }], cancelValue: false });
+      const chosen = await modal({ title: "BAG \u2014 BATTLE ITEMS", body: list, buttons: [{ label: "CANCEL", value: false }], cancelValue: false });
       if (!chosen || typeof chosen !== "string") return;
       const item = getItem(chosen);
-      const target = await this.pickPartyMember("Use on which Mythling?", () => true, (m) => {
-        const dry2 = applyItemEffects(item, m, { dryRun: true });
-        return dry2.ok ? null : dry2.reason;
+      const useful = (m) => item.cleanse ? this.battle.debuffs(m).length > 0 : applyItemEffects(item, m, { dryRun: true }).ok;
+      const target = await this.pickPartyMember("Use on which Mythling?", useful, (m) => {
+        if (item.cleanse) return this.battle.debuffs(m).length ? null : "No debuffs to cleanse";
+        const dry = applyItemEffects(item, m, { dryRun: true });
+        return dry.ok ? null : dry.reason;
       });
       if (!target) return;
-      const dry = applyItemEffects(item, target, { dryRun: true });
-      if (!dry.ok) {
-        toast(dry.reason, "bad");
-        AudioManager.sfx("cancel");
-        return;
+      if (!item.cleanse) {
+        const dry = applyItemEffects(item, target, { dryRun: true });
+        if (!dry.ok) {
+          toast(dry.reason, "bad");
+          AudioManager.sfx("cancel");
+          return;
+        }
       }
       if (!InventoryManager.remove(chosen, 1)) {
         toast(`You have no ${item.name} left!`, "bad");
@@ -17492,6 +17730,15 @@ h3 .name-el { vertical-align: middle; }
             up: ev.type === "buff",
             element: speciesOf(this.battle[ev.side] || {}).element || "none"
           });
+          this.refreshCards();
+          await wait(420);
+          break;
+        }
+        case "cleanse": {
+          AudioManager.sfx("heal");
+          const v = this.view[ev.side];
+          if (v) for (const stat of ev.stats) delete v.buffs[stat];
+          this.floatNumber(ev.side, `\u2726 CLEANSED`, "#b6f09b", "buff");
           this.refreshCards();
           await wait(420);
           break;
@@ -18456,6 +18703,7 @@ h3 .name-el { vertical-align: middle; }
     ];
   }
   function itemsSection() {
+    const sellersOf = (id) => MAP_ORDER.filter((mapId) => (MAPS[mapId].buildings || []).some((b) => b.type === "shop" && b.stock.includes(id))).map((mapId) => MAPS[mapId].displayName).join(", ") || "not sold anywhere";
     const rowsFor = (catId) => Object.values(ITEMS).filter((i) => i.category === catId).map((i) => {
       let effect = i.desc;
       if (i.heal) effect += ` <span class="wiki-dim">(restores ${i.heal} HP)</span>`;
@@ -18463,6 +18711,7 @@ h3 .name-el { vertical-align: middle; }
       if (i.restoreUses) effect += ` <span class="wiki-dim">(+${i.restoreUses} uses to every limited skill)</span>`;
       if (i.restoreAllUses) effect += ' <span class="wiki-dim">(resets every limited skill to full uses)</span>';
       if (i.healFull) effect += ' <span class="wiki-dim">(restores ALL HP)</span>';
+      if (i.cleanse) effect += ' <span class="wiki-dim">(washes off <b>every stat debuff</b> \u2014 battle only)</span>';
       if (i.exp) effect += ` <span class="wiki-dim">(grants ${i.exp.toLocaleString()} EXP)</span>`;
       if (i.guaranteed) effect += ` <span class="wiki-dim">(<b>100%</b> catch \u2014 guaranteed${i.forceMutation ? `, always <b>${MUTATIONS[i.forceMutation].name}</b>` : ""})</span>`;
       else if (i.catchMult) effect += ` <span class="wiki-dim">(x${i.catchMult.toFixed(2)} catch)</span>`;
@@ -18474,18 +18723,61 @@ h3 .name-el { vertical-align: middle; }
       ];
     });
     return [
-      h3("Bags & money", "bag inventory wildcoins shop"),
-      para(`Wildcoins are earned from trainer battles and are spent in the shops of each region.
-      Your bag has no size limit in this version.`),
+      h3("Bags & money", "bag inventory capacity wildcoins shop"),
+      para(`Wildcoins are earned from trainer battles and are spent in the shops of each region. What they buy is
+      <b>limited by your bag</b>: party and storage together can never hold more than your bag allows.`),
+      block([
+        h3("Your bag", "bag capacity upgrade slots slots carry limit"),
+        para(`You start with <b>${BAG_TIERS[0].name}</b> \u2014 <b>${BAG_TIERS[0].capacity} Mythlings</b>, counting your party
+        <i>and</i> your storage. Bigger bags are bought from any shop, and each one is a permanent upgrade.
+        A shop only sells bags <b>bigger than the one you carry</b> and never beyond its own ceiling, so you can
+        upgrade from wherever you happen to be \u2014 up to the best bag that region stocks. The last bags of the ladder
+        are only sold deep into the world, and no single map sells the whole ladder, so a bag you are missing is
+        usually one or two regions away.`),
+        table(BAG_TIERS.map((b) => [
+          `<b>${b.name}</b>`,
+          `holds <b>${b.capacity}</b> Mythlings${b.price ? ` \xB7 <b>${b.price.toLocaleString()}</b> Wildcoins` : " \xB7 yours from the start"}`
+        ]), "bag tiers bag 1 bag 2 capacity price"),
+        table(MAP_ORDER.map((id) => {
+          const shop = (MAPS[id].buildings || []).find((b) => b.type === "shop");
+          return shop ? [MAPS[id].displayName, `sells bags up to <b>${BAG_TIERS[shop.maxBagTier - 1].name}</b>`] : null;
+        }), "where to buy bags region shop"),
+        note(`A <b>full bag never costs you a ball</b>: a capture is refused before the ball is spent, and no Mythling is
+        ever deleted to make room. Release one from the Storage tab, or buy a bigger bag, and carry on.`)
+      ], "bag capacity"),
       ...ITEM_CATEGORIES.map((c) => block([
         h3(c.name, c.id),
         table(rowsFor(c.id))
       ], c.name)),
       note(`<b>Food</b> is the fast way to train: feeding it converts straight into EXP. You can feed a whole
       <b>stack at once</b> (\u2212/+/MAX picker) and the game caps the amount at what it takes to reach Lv.${LEVEL_CAP},
-      so no food is ever wasted. The <b>God Ball</b> is the supreme regular ball \u2014 a guaranteed catch \u2014 and the
-      <b>Shiny Ball</b> / <b>Dark Ball</b> go one step further: guaranteed catch <i>and</i> a guaranteed Shiny / Darkness
-      mutation. They are sold only at the Crags Outfitter in Stonehollow Crags, and they are priced like it.`)
+      so no food is ever wasted. It also gets steadily <b>worse value per EXP</b> the higher you climb: the cheap
+      berries are the efficient everyday food, while <b>${ITEMS.wildbound_ambrosia.name}</b>
+      (${ITEMS.wildbound_ambrosia.price.toLocaleString()} Wildcoins) is endgame money for endgame levelling \u2014 buying
+      two is meant to hurt.`),
+      block([
+        h3("Shops, stock & restocking", "shop restock stock shelf out of stock five minutes"),
+        para(`A shop shelf is <b>finite</b>. Staples arrive by the dozen; the further up the price ladder an item sits,
+        the fewer it stocks and the likelier it is not there at all \u2014 the very best goods are a roll of the dice every
+        time. Buying draws the shelf down, an empty row reads <b>SOLD OUT</b>, and the whole shelf is refilled
+        every <b>${SHOP_RESTOCK_MS / 6e4} minutes of play</b> (a live countdown sits above the goods).`),
+        table([
+          ["Price band", "Typical shelf"],
+          ...[
+            ["Cheap staples (under 600)", "about 20 \u2014 always in"],
+            ["Mid shelf (600 \u2013 20,000)", "about 12 down to 5"],
+            ["Serious spends (20,000 \u2013 100,000)", "about 3, sometimes none"],
+            ["Endgame (100,000+)", "one or two at most, often none"]
+          ].map(([label, n]) => [label, n])
+        ], "stock bands quantity")
+      ], "shop stock restock"),
+      note(`The <b>God Ball</b> is a guaranteed catch that also arrives at the top rarity tier, <b>SSS+</b>. The
+      <b>Shiny Ball</b> and <b>Dark Ball</b> go one step further \u2014 guaranteed catch, guaranteed SSS+, <i>and</i> a
+      guaranteed Shiny / Darkness mutation. All three are priced so that owning a second one is an achievement
+      (${ITEMS.god_ball.price.toLocaleString()} / ${ITEMS.shiny_ball.price.toLocaleString()} /
+      ${ITEMS.dark_ball.price.toLocaleString()} Wildcoins), and they are only ever listed in the late regions:
+      ${"God Ball \u2014 " + sellersOf("god_ball")}. ${"Shiny Ball \u2014 " + sellersOf("shiny_ball")}.
+      ${"Dark Ball \u2014 " + sellersOf("dark_ball")}.`)
     ];
   }
   function worldSection() {
@@ -18527,10 +18819,19 @@ h3 .name-el { vertical-align: middle; }
     out.push(h3("Buildings", "center shop heal healpoint"));
     out.push(bullets([
       "<b>Mythling Center</b> \u2014 free, instant healing: HP, skill uses and status restored. Your last used Center is where you wake up after a wipe.",
-      "<b>Shops</b> \u2014 buy balls, healing items and food with Wildcoins.",
+      "<b>Shops</b> \u2014 buy balls, healing items, food and <b>bigger bags</b> with Wildcoins. Shelves are limited: staples arrive in bulk, the rarest goods may be missing, and everything is refilled every <b>5 minutes of play</b>.",
       "<b>Gates</b> \u2014 sealed until you defeat that region\u2019s Guardian and earn its key item."
     ]));
     out.push(note("Healing at a Center restores HP and skill uses and resets Ultimate Charge to 0 \u2014 it never touches your EXP."));
+    out.push(block([
+      h3("Bags on the road", "bag capacity upgrade buy shop slots"),
+      para(`Bag ${BAG_TIERS[0].tier} (${BAG_TIERS[0].capacity} Mythlings) is yours from the start and every shop along the way sells
+      something bigger, up to ${BAG_TIERS[BAG_TIERS.length - 1].name} (${BAG_TIERS[BAG_TIERS.length - 1].capacity}). Each region caps out at its
+      own tier \u2014 ${MAP_ORDER.map((id) => {
+        const shop = (MAPS[id].buildings || []).find((b) => b.type === "shop");
+        return shop ? `${MAPS[id].displayName}: ${BAG_TIERS[shop.maxBagTier - 1].name}` : null;
+      }).filter(Boolean).join(" \xB7 ")} \u2014 so a bag is often found a region or two ahead of where you run out of room.`)
+    ], "bag capacity"));
     out.push(h3("Treasure chests", "chest treasure bronze silver emerald ultra gold loot"));
     out.push(para(`Chests are scattered through the wild areas of every map. A map holds at most <b>two Bronze</b> chests and
     <b>one</b> of each other tier at a time; an opened chest is gone, and the map rolls a fresh set of chests
@@ -19194,7 +19495,12 @@ h3 .name-el { vertical-align: middle; }
     }
     // ---------------------------------------------------- STORAGE
     renderStorage(root) {
-      this.setTitle(`Mythling Storage  (${StorageManager.list().length})`);
+      this.setTitle(`Mythling Storage  (${StorageManager.used()}/${StorageManager.capacity()})`);
+      root.appendChild(el("div", { class: "row", style: { gap: "8px", marginBottom: "10px", flexWrap: "wrap" } }, [
+        el("span", { class: "chip", text: `BAG ${StorageManager.bagTier()}` }),
+        el("span", { class: "sub", text: `${StorageManager.used()} of ${StorageManager.capacity()} Mythlings carried` }),
+        StorageManager.isFull() ? el("span", { class: "sub", style: { color: "#ff9aa2" }, text: "Full \u2014 release one, or buy a bigger bag from a shop." }) : null
+      ]));
       const f = this.storageFilters;
       const filters = el("div", { class: "filters" }, [
         el("input", { type: "text", placeholder: "Search\u2026", style: { width: "160px", fontSize: ".9rem", letterSpacing: "normal", textTransform: "none" }, oninput: (e) => {
@@ -19960,6 +20266,77 @@ h3 .name-el { vertical-align: middle; }
   </g>
 </svg>`;
 
+  // src/systems/ShopManager.js
+  var ShopManager = {
+    /**
+     * What `building` has on the shelf right now: `{ itemId: qty }`.
+     * Rolls a fresh set the first time the shop is opened and again every
+     * SHOP_RESTOCK_MS of play time.
+     */
+    stock(building) {
+      if (!building) return {};
+      GameState.world.shops = GameState.world.shops || {};
+      const now = PlayerManager.playTime();
+      const cur = GameState.world.shops[building.id];
+      if (cur && now - (cur.at || 0) < SHOP_RESTOCK_MS) return cur.stock;
+      return this.restock(building);
+    },
+    /** Roll a fresh shelf for one shop (called automatically when the timer runs out). */
+    restock(building) {
+      GameState.world.shops = GameState.world.shops || {};
+      const stock = {};
+      for (const id of building.stock || []) {
+        const { max, chance } = shopStock(id);
+        if (!max) continue;
+        if (chance < 1 && Math.random() > chance) continue;
+        stock[id] = max;
+      }
+      GameState.world.shops[building.id] = { at: PlayerManager.playTime(), stock };
+      bus.emit("shop:restock");
+      return stock;
+    },
+    /** How many of one item this shop currently has. */
+    qty(building, id) {
+      return this.stock(building)[id] || 0;
+    },
+    /** Milliseconds until this shop's shelves change (0 when they already need to). */
+    msUntilRestock(building) {
+      if (!building) return 0;
+      const cur = (GameState.world.shops || {})[building.id];
+      if (!cur) return 0;
+      return Math.max(0, SHOP_RESTOCK_MS - (PlayerManager.playTime() - (cur.at || 0)));
+    },
+    /**
+     * Buy `qty` of `id`. Checks coins, shelf stock and (for a bag) eligibility
+     * in one place so the UI cannot get out of step with the rules.
+     * @returns {{ok:boolean, reason?:string, paid?:number}}
+     */
+    buy(building, id, qty = 1) {
+      const item = getItem(id);
+      if (!item) return { ok: false, reason: "Unknown item." };
+      const n = Math.max(1, Math.floor(qty) || 1);
+      const shelf = this.stock(building);
+      const have = shelf[id] || 0;
+      if (!getItem(id).price) return { ok: false, reason: `${item.name} is not for sale.` };
+      if (have <= 0) return { ok: false, reason: `${item.name} is out of stock \u2014 the shelves refill on their own.` };
+      const count = Math.min(n, have);
+      const total = item.price * count;
+      if (GameState.player.wildcoins < total) return { ok: false, reason: "Not enough Wildcoins!" };
+      if (!PlayerManager.spendCoins(total)) return { ok: false, reason: "Not enough Wildcoins!" };
+      shelf[id] = have - count;
+      InventoryManager.add(id, count);
+      bus.emit("shop:purchase");
+      return { ok: true, paid: total, count, left: shelf[id] };
+    },
+    /** "3:07" for the restock countdown. */
+    formatCountdown(ms) {
+      const total = Math.ceil((ms || 0) / 1e3);
+      const m = Math.floor(total / 60);
+      const sec = total % 60;
+      return `${m}:${String(sec).padStart(2, "0")}`;
+    }
+  };
+
   // src/ui/screens.js
   function mainMenuScreen({ onNewGame, onLoad, onSettings, onExit }) {
     const entries = [
@@ -20262,24 +20639,93 @@ h3 .name-el { vertical-align: middle; }
     Screens.replace(node, "settings", onBack);
   }
   function shopScreen(building, { onClose }) {
+    const stock = ShopManager.stock(building);
+    let clock = null;
+    const countdown = () => {
+      const ms = ShopManager.msUntilRestock(building);
+      const label = el("span", { class: "shop-timer", text: ms > 0 ? `Restocks in ${ShopManager.formatCountdown(ms)}` : "Shelves are being refilled\u2026" });
+      if (ms > 0) {
+        clock = setInterval(() => {
+          const left = ShopManager.msUntilRestock(building);
+          if (left > 0) {
+            label.textContent = `Restocks in ${ShopManager.formatCountdown(left)}`;
+            return;
+          }
+          label.textContent = "Shelves are being refilled\u2026 leave and come back!";
+          clearInterval(clock);
+          clock = null;
+        }, 1e3);
+      }
+      return label;
+    };
+    const bagSection = () => {
+      const wrap = el("div", { class: "shop-bags" });
+      const tier = StorageManager.bagTier();
+      const here = building.maxBagTier || 1;
+      wrap.appendChild(el("div", { class: "shop-baghead" }, [
+        el("span", { text: `BAG ${tier}` }),
+        el("span", { class: "dim", text: `${StorageManager.used()} / ${StorageManager.capacity()} Mythlings` })
+      ]));
+      const options = BAG_TIERS.filter((b) => b.tier > tier && b.tier <= here);
+      if (!options.length) {
+        wrap.appendChild(el("p", {
+          class: "sub",
+          style: { margin: "6px 0 0" },
+          text: here <= tier ? "This shop has no bigger bag. The next one is sold deeper into the world." : "You already own the biggest bag sold here."
+        }));
+        return wrap;
+      }
+      for (const b of options) {
+        const next = b.tier === tier + 1;
+        const afford = GameState.player.wildcoins >= b.price;
+        wrap.appendChild(el("div", { class: `item-row${next ? "" : " sold-out"}` }, [
+          el("div", { class: "ir-main" }, [
+            el("div", { class: "ir-name", text: `${b.name} \u2014 ${b.capacity} Mythlings` }),
+            el("div", { class: "ir-desc", text: next ? `Carry ${b.capacity - bagTier(b.tier - 1).capacity} more than your current bag.` : `Buy ${BAG_TIERS[b.tier - 2].name} first.` })
+          ]),
+          el("div", { class: "ir-qty price" }, [icon("coin", "gold"), el("span", { text: coins(b.price) })]),
+          button("BUY", {
+            class: "small primary",
+            disabled: !next || !afford,
+            onclick: async () => {
+              const ok = await confirmDialog("BIGGER BAG", `Buy <b>${b.name}</b> for <b>${coins(b.price)} Wildcoins</b>? You will be able to carry <b>${b.capacity}</b> Mythlings.`, "BUY", "CANCEL");
+              if (!ok) return;
+              const res = StorageManager.upgradeBag();
+              if (!res.ok) {
+                toast(res.reason, "bad");
+                AudioManager.sfx("cancel");
+                return;
+              }
+              AudioManager.sfx("coin");
+              toast(`${b.name} bought \u2014 you can now carry ${res.capacity} Mythlings`, "ok");
+              refresh();
+            }
+          })
+        ]));
+      }
+      return wrap;
+    };
     const render = () => {
       const rows = el("div", {});
       for (const id of building.stock) {
         const item = getItem(id);
+        if (!item || !item.price) continue;
+        const left = stock[id] || 0;
         let qty = 1;
         const totalLabel = el("div", { class: "ir-qty price" }, [icon("coin", "gold"), el("span", { text: coins(item.price) })]);
         const qtyLabel = el("b", { text: "1" });
         const setQty = (n) => {
-          qty = Math.max(1, Math.min(99, n));
+          qty = Math.max(1, Math.min(left || 1, n));
           qtyLabel.textContent = String(qty);
           totalLabel.lastChild.textContent = coins(item.price * qty);
         };
-        rows.appendChild(el("div", { class: "item-row" }, [
+        rows.appendChild(el("div", { class: `item-row${left ? "" : " sold-out"}` }, [
           item.category === "balls" ? ballCanvas(item.id, 30, "item-ico ball-icon") : icon(item.category === "food" ? "food" : item.category === "key" ? "key" : "heal", "item-ico"),
           el("div", { class: "ir-main" }, [
             el("div", { class: "ir-name", text: item.name }),
             el("div", { class: "ir-desc", text: item.desc }),
-            el("div", { class: "ir-desc", text: `Owned: ${InventoryManager.count(id)}` })
+            el("div", { class: "ir-desc", text: `Owned: ${InventoryManager.count(id)}` }),
+            el("div", { class: `ir-stock${left ? "" : " out"}`, text: left ? `In stock: ${left}` : "Out of stock" })
           ]),
           el("div", { class: "qty-ctl" }, [
             el("button", { html: iconSvg("minus"), title: "Less", onclick: () => setQty(qty - 1) }),
@@ -20287,9 +20733,14 @@ h3 .name-el { vertical-align: middle; }
             el("button", { html: iconSvg("plus"), title: "More", onclick: () => setQty(qty + 1) })
           ]),
           totalLabel,
-          button("BUY", {
+          button(left ? "BUY" : "SOLD OUT", {
             class: "small primary",
+            disabled: !left,
             onclick: async () => {
+              if (!left) {
+                toast(`${item.name} is out of stock.`, "bad");
+                return;
+              }
               const total = item.price * qty;
               if (GameState.player.wildcoins < total) {
                 toast("Not enough Wildcoins!", "bad");
@@ -20298,14 +20749,14 @@ h3 .name-el { vertical-align: middle; }
               }
               const ok = await confirmDialog("CONFIRM PURCHASE", `Buy <b>${qty}\xD7 ${item.name}</b> for <b>${coins(total)} Wildcoins</b>?`, "BUY", "CANCEL");
               if (!ok) return;
-              if (!PlayerManager.spendCoins(total)) {
-                toast("Not enough Wildcoins!", "bad");
+              const res = ShopManager.buy(building, id, qty);
+              if (!res.ok) {
+                toast(res.reason, "bad");
+                AudioManager.sfx("cancel");
                 return;
               }
-              InventoryManager.add(id, qty);
               AudioManager.sfx("coin");
-              toast(`Bought ${qty}\xD7 ${item.name}`, "ok");
-              bus.emit("shop:purchase");
+              toast(`Bought ${res.count}\xD7 ${item.name}`, "ok");
               refresh();
             }
           })
@@ -20315,19 +20766,36 @@ h3 .name-el { vertical-align: middle; }
     };
     let node;
     const refresh = () => {
+      if (clock) {
+        clearInterval(clock);
+        clock = null;
+      }
       const content = el("div", { class: "dialog panel screen-inner", style: { maxWidth: "860px" } }, [
-        panelHeader(building.name, onClose),
+        panelHeader(building.name, leave),
         el("p", { class: "sub coin-line" }, [
           el("span", { text: "Wildcoins:" }),
           icon("coin", "gold"),
           el("b", { style: { color: "#ffe08a" }, text: coins(GameState.player.wildcoins) })
         ]),
+        bagSection(),
+        el("div", { class: "shop-head" }, [
+          el("span", { text: "GOODS" }),
+          countdown()
+        ]),
         render(),
-        el("div", { class: "row end", style: { marginTop: "16px" } }, [button("LEAVE SHOP", { class: "primary", onclick: onClose, sfx: "cancel" })])
+        el("div", { class: "row end", style: { marginTop: "16px" } }, [button("LEAVE SHOP", { class: "primary", onclick: leave, sfx: "cancel" })])
       ]);
-      node = Screens.replace(content, "shop", onClose);
+      node = Screens.replace(content, "shop", leave);
     };
+    function leave() {
+      if (clock) {
+        clearInterval(clock);
+        clock = null;
+      }
+      onClose();
+    }
     refresh();
+    return node;
   }
   function centerScreen({ onHeal, onParty, onStorage, onSave, onClose }) {
     const party = el("div", { class: "grid-cards" });

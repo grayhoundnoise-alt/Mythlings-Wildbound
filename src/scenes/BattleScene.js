@@ -4,14 +4,15 @@ import { Battle, BattleType, BattlePhase, previewDamage } from '../systems/Battl
 import { CaptureManager } from '../systems/CaptureManager.js';
 import { InventoryManager, PartyManager, GameState, CollectionManager, bus } from '../systems/GameState.js';
 import {
-  displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, ultimateMove,
+  displayName, speciesOf, computeStats, statBreakdown, maxHp, hpPercent, isFainted, ultimateMove,
   ultimateUnlocked, equippedSkill, equippedSkills, usesLeft, basicAttack, applyItemEffects,
   MAX_EQUIPPED_SKILLS,
 } from '../core/mythling.js';
 import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
-import { STAT_SHORT, getMood } from '../data/moods.js';
+import { STAT_SHORT, STAT_LABELS, getMood, getRational } from '../data/moods.js';
 import { ELEMENTS, ELEMENT_ORDER, speciesElements, attackMatchup, typeProfile } from '../data/elements.js';
 import { BALL_IDS, getItem } from '../data/items.js';
+import { getMutation } from '../data/mutations.js';
 import { drawMythling, prewarm } from '../render/creatures.js';
 import { SkillVFX } from '../render/vfx/SkillVFX.js';
 import { paletteFor } from '../data/skillVfx.js';
@@ -377,6 +378,46 @@ export class BattleScene {
     body.appendChild(list(prof.weakTo, 'Nothing — no element hits it for extra.'));
     body.appendChild(el('h3', { class: 'tp-head', text: 'RESISTS' }));
     body.appendChild(list(prof.resists, 'Nothing — no element is resisted.'));
+
+    // ---- SEE MORE: this Mythling's current stats and where every point comes from ----
+    const rows = statBreakdown(m);
+    const moodName = getMood(m.mood).name;
+    const rat = getRational(m.rational);
+    const ratName = rat?.name || '—';
+    const mut = getMutation(m.mutation);
+    const detail = el('div', { class: 'tp-stats' });
+    for (const r of rows) {
+      const net = r.mood + r.rational + r.mutation;
+      const parts = [`Lv.${m.level} &amp; stage ${r.grown}`];
+      if (r.mood) parts.push(`Mood ${moodName} <b class="up">+${r.mood}</b>`);
+      if (r.rational > 0) parts.push(`Rational ${ratName} <b class="up">+${r.rational}</b>`);
+      if (r.rational < 0) parts.push(`Rational ${ratName} <b class="down">${r.rational}</b>`);
+      if (r.mutation) parts.push(`${mut.name} <b class="up">+${r.mutation}</b>`);
+      parts.push(`Rarity ${m.rarity} &middot; mood &times;${r.rarityMag}`);
+      detail.appendChild(el('div', { class: 'tp-stat' }, [
+        el('span', { class: 'tp-sname', text: STAT_LABELS[r.key] || r.key.toUpperCase() }),
+        el('b', { class: 'tp-sval', text: String(r.total) }),
+        el('span', { class: `tp-sdelta ${net > 0 ? 'up' : net < 0 ? 'down' : ''}`, text: net ? `${net > 0 ? '+' : ''}${net}` : '—' }),
+        el('div', { class: 'tp-why', html: parts.join(' &middot; ') }),
+      ]));
+    }
+    const more = el('div', { class: 'tp-more' }, [
+      el('h3', { class: 'tp-head', text: 'CURRENT STATS' }),
+      el('p', { class: 'sub', style: { margin: '0 0 8px' },
+        text: 'The number the battle uses, then everything feeding it: level and stage growth, Mood (scaled by Rarity), the Rational’s +10 / −10 and the mutation bonus.' }),
+      detail,
+    ]);
+    more.hidden = true;
+    const toggle = button('SEE MORE', {
+      class: 'tp-toggle',
+      onclick: () => {
+        more.hidden = !more.hidden;
+        toggle.textContent = more.hidden ? 'SEE MORE' : 'SEE LESS';
+        body.classList.toggle('expanded', !more.hidden);
+      },
+    });
+    body.appendChild(el('div', { class: 'tp-actions' }, [toggle]));
+    body.appendChild(more);
     body.appendChild(el('p', { class: 'sub', style: { marginTop: '10px' },
       text: 'Weak against = elements that hit this one harder. Resists = elements it shrugs off: those attacks land for less.' }));
     if (mine.length > 1) {
@@ -722,7 +763,7 @@ export class BattleScene {
   }
 
   async openItems() {
-    const usable = InventoryManager.all().filter((e) => e.item.category === 'healing');
+    const usable = InventoryManager.all().filter((e) => e.item.category === 'healing' || e.item.cleanse);
     if (!usable.length) { toast('No usable items!', 'bad'); return; }
     const list = el('div', {});
     usable.forEach((entry) => {
@@ -735,18 +776,24 @@ export class BattleScene {
         button('USE', { class: 'small primary', onclick: () => closeModal(entry.id) }),
       ]));
     });
-    const chosen = await modal({ title: 'BAG — HEALING', body: list, buttons: [{ label: 'CANCEL', value: false }], cancelValue: false });
+    const chosen = await modal({ title: 'BAG — BATTLE ITEMS', body: list, buttons: [{ label: 'CANCEL', value: false }], cancelValue: false });
     if (!chosen || typeof chosen !== 'string') return;
     const item = getItem(chosen);
+    // A cleanser is judged against the BATTLE (debuffs live there), everything
+    // else against the Mythling itself.
+    const useful = (m) => (item.cleanse ? this.battle.debuffs(m).length > 0 : applyItemEffects(item, m, { dryRun: true }).ok);
     // pick target — the note says up front whether the item would do anything
-    const target = await this.pickPartyMember('Use on which Mythling?', () => true, (m) => {
+    const target = await this.pickPartyMember('Use on which Mythling?', useful, (m) => {
+      if (item.cleanse) return this.battle.debuffs(m).length ? null : 'No debuffs to cleanse';
       const dry = applyItemEffects(item, m, { dryRun: true });
       return dry.ok ? null : dry.reason;
     });
     if (!target) return;
     // Never consume an item that would do nothing (full HP, not fainted, ...).
-    const dry = applyItemEffects(item, target, { dryRun: true });
-    if (!dry.ok) { toast(dry.reason, 'bad'); AudioManager.sfx('cancel'); return; }
+    if (!item.cleanse) {
+      const dry = applyItemEffects(item, target, { dryRun: true });
+      if (!dry.ok) { toast(dry.reason, 'bad'); AudioManager.sfx('cancel'); return; }
+    }
     if (!InventoryManager.remove(chosen, 1)) { toast(`You have no ${item.name} left!`, 'bad'); return; }
     this.doAction({ type: 'item', itemId: chosen, targetUid: target.uid });
   }
@@ -952,6 +999,15 @@ export class BattleScene {
           stat: ev.stat, up: ev.type === 'buff',
           element: speciesOf(this.battle[ev.side] || {}).element || 'none',
         });
+        this.refreshCards();
+        await wait(420);
+        break;
+      }
+      case 'cleanse': {
+        AudioManager.sfx('heal');
+        const v = this.view[ev.side];
+        if (v) for (const stat of ev.stats) delete v.buffs[stat];
+        this.floatNumber(ev.side, `\u2726 CLEANSED`, '#b6f09b', 'buff');
         this.refreshCards();
         await wait(420);
         break;

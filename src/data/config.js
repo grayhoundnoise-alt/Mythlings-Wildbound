@@ -18,6 +18,36 @@ export const STARTER_LEVEL = 5;
 export const PARTY_MAX = 6;
 export const STORAGE_MAX = 200;
 
+/**
+ * How many Mythlings you can carry at once. You start on Bag 1 (20) and buy
+ * bigger bags from the region shops; each shop only carries up to a certain
+ * tier, so the biggest bags are spread across the later maps rather than all
+ * sitting in the first shop. Capacity counts your party AND your storage.
+ */
+export const BAG_TIERS = [
+  { tier: 1, name: 'Bag 1', capacity: 20,  price: 0 },        // the one you start with
+  { tier: 2, name: 'Bag 2', capacity: 30,  price: 2500 },
+  { tier: 3, name: 'Bag 3', capacity: 40,  price: 9000 },
+  { tier: 4, name: 'Bag 4', capacity: 50,  price: 25000 },
+  { tier: 5, name: 'Bag 5', capacity: 60,  price: 60000 },
+  { tier: 6, name: 'Bag 6', capacity: 70,  price: 130000 },
+  { tier: 7, name: 'Bag 7', capacity: 80,  price: 260000 },
+  { tier: 8, name: 'Bag 8', capacity: 90,  price: 500000 },
+  { tier: 9, name: 'Bag 9', capacity: 100, price: 900000 },
+];
+export const BAG_MAX_TIER = BAG_TIERS.length;
+export function bagTier(tier) { return BAG_TIERS[Math.max(0, Math.min(BAG_TIERS.length - 1, (Number(tier) || 1) - 1))]; }
+export function bagCapacity(tier) { return bagTier(tier).capacity; }
+/** The cheapest bag that can hold `count` Mythlings — used when migrating older saves. */
+export function bagTierFor(count) { return (BAG_TIERS.find((b) => b.capacity >= count) || BAG_TIERS[BAG_TIERS.length - 1]).tier; }
+
+/**
+ * Shops refill their shelves this often, so nothing can be farmed by standing
+ * at the counter: cheap staples come back in bulk, the top-tier balls and the
+ * best food arrive rarely and often not at all.
+ */
+export const SHOP_RESTOCK_MS = 5 * 60 * 1000;
+
 export const ULTIMATE_UNLOCK_LEVEL = 10;
 export const EVOLUTION_LEVELS = [1, 20, 60, 80];
 /** Evolution stages the CURRENT build allows. Index into species.evolutions. */

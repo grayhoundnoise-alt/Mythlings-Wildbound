@@ -35,7 +35,8 @@ export const MAPS = {
     buildings: [
       { id: 'vale_center', type: 'center', x: 250, y: 520, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'vale_shop',   type: 'shop',   x: 620, y: 530, w: 190, h: 150, name: 'Leafrest Supplies',
-        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'revive_herb', 'skill_tonic', 'sweet_berry', 'crunchy_root', 'honey_nut', 'moon_melon'] },
+        maxBagTier: 2,
+        stock: ['basic_ball', 'normal_ball', 'potion', 'greater_potion', 'cleanse_tonic', 'revive_herb', 'skill_tonic', 'sweet_berry', 'crunchy_root', 'honey_nut', 'moon_melon'] },
       { id: 'vale_house1', type: 'house',  x: 120, y: 900, w: 170, h: 130, name: 'Cottage' },
       { id: 'vale_house2', type: 'house',  x: 700, y: 950, w: 170, h: 130, name: 'Cottage' },
     ],
@@ -126,7 +127,8 @@ export const MAPS = {
     buildings: [
       { id: 'coast_center', type: 'center', x: 300, y: 560, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'coast_shop',   type: 'shop',   x: 660, y: 570, w: 190, h: 150, name: 'Tidecrest Trading Post',
-        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'hyper_potion', 'revive_herb', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 3,
+        stock: ['basic_ball', 'normal_ball', 'advanced_ball', 'potion', 'greater_potion', 'cleanse_tonic', 'hyper_potion', 'revive_herb', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
           'honey_nut', 'moon_melon', 'river_jerky', 'glow_nectar', 'ember_roast', 'coral_cake', 'tide_pudding'] },
       { id: 'coast_dock1',  type: 'dock',   x: 180, y: 250, w: 300, h: 110, name: 'Docks' },
       { id: 'coast_dock2',  type: 'dock',   x: 720, y: 250, w: 260, h: 110, name: 'Docks' },
@@ -219,8 +221,9 @@ export const MAPS = {
       { id: 'ember_center', type: 'center', x: 280, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'ember_shop',   type: 'shop',   x: 640, y: 550, w: 190, h: 150, name: 'Emberwatch Quartermaster',
         // Region-3 stock only: the top-tier balls, restores and foods moved to the LAST map's shop.
+        maxBagTier: 4,
         stock: ['advanced_ball', 'absolute_ball',
-          'greater_potion', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+          'greater_potion', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_tonic', 'skill_elixir', 'mood_tonic', 'temper_tonic',
           'river_jerky', 'ember_roast', 'mythic_feast', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'ember_tower',  type: 'tower',  x: 140, y: 1020, w: 160, h: 200, name: 'Watchtower' },
     ],
@@ -321,7 +324,8 @@ export const MAPS = {
     buildings: [
       { id: 'crag_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'crag_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Crags Outfitter',
-        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 4,
+        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'crag_lodge',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Quarry Lodge' },
       { id: 'summit_watch',type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Summit Watch' },
@@ -413,7 +417,8 @@ export const MAPS = {
     buildings: [
       { id: 'storm_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'storm_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Plateau Provisions',
-        stock: ['advanced_ball', 'absolute_ball', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 5,
+        stock: ['advanced_ball', 'absolute_ball', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_elixir', 'mood_tonic', 'temper_tonic',
           'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'storm_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Lightning Lodge' },
       { id: 'storm_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Storm Spire' },
@@ -498,7 +503,8 @@ export const MAPS = {
     buildings: [
       { id: 'frost_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'frost_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Frostveil Trading Post',
-        stock: ['absolute_ball', 'god_ball', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 6,
+        stock: ['absolute_ball', 'god_ball', 'cleanse_tonic', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper'] },
       { id: 'frost_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Snowbound Lodge' },
       { id: 'frost_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Aurora Watch' },
@@ -583,7 +589,8 @@ export const MAPS = {
     buildings: [
       { id: 'iron_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'iron_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Ironhold Armoury',
-        stock: ['absolute_ball', 'god_ball', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 6,
+        stock: ['absolute_ball', 'god_ball', 'cleanse_tonic', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth'] },
       { id: 'iron_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Smelter Quarters' },
       { id: 'iron_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Forge Chimney' },
@@ -668,7 +675,8 @@ export const MAPS = {
     buildings: [
       { id: 'mire_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'mire_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Fen Apothecary',
-        stock: ['absolute_ball', 'god_ball', 'shiny_ball', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+        maxBagTier: 7,
+        stock: ['absolute_ball', 'god_ball', 'shiny_ball', 'cleanse_tonic', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
           'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
       { id: 'mire_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Stilt House' },
       { id: 'mire_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Witchlight Tower' },
@@ -754,6 +762,7 @@ export const MAPS = {
       { id: 'spire_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'spire_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Spire Emporium',
         // everything except the champion-tier goods, which only the Colosseum stocks
+        maxBagTier: 8,
         stock: FULL_STOCK.filter((id) => !['god_ball', 'wildbound_ambrosia'].includes(id)) },
       { id: 'spire_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Seer Cell' },
       { id: 'spire_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'The Spire' },
@@ -843,6 +852,7 @@ export const MAPS = {
     buildings: [
       { id: 'colo_center', type: 'center', x: 260, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'colo_shop',   type: 'shop',   x: 620, y: 550, w: 190, h: 150, name: "Champion's Supply",
+        maxBagTier: 9,
         stock: FULL_STOCK },
       { id: 'colo_gym',    type: 'house',  x: 300, y: 1000, w: 190, h: 140, name: 'Training Hall' },
       { id: 'colo_tower',  type: 'tower',  x: 3760, y: 300, w: 140, h: 220, name: 'The Grand Ring' },

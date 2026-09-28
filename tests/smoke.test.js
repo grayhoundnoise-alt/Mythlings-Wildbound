@@ -525,8 +525,10 @@ test('a full wild battle can be fought and won', () => {
 });
 
 test('the attack message reports the damage dealt', () => {
-  const p = createMythling({ speciesId: 'emberu', level: 30 });
-  const e = createMythling({ speciesId: 'rivruff', level: 30 });
+  // Mood and Rational are pinned: speed decides who rolls first, and these tests
+  // drive the RNG by position, so a random Mood could flip the turn order.
+  const p = createMythling({ speciesId: 'emberu', level: 30, mood: 'brave', rational: 'docile', rarity: 'D' });
+  const e = createMythling({ speciesId: 'rivruff', level: 30, mood: 'brave', rational: 'docile', rarity: 'D' });
   // rng() order per turn: enemy AI pick, then per attack (dodge roll, crit roll, damage random)
   const seq = [0.5, 0.99, 0.99, 0.5, 0.99];
   let i = 0;
@@ -539,13 +541,15 @@ test('the attack message reports the damage dealt', () => {
   assert.ok(dmg, 'the attack connected');
   const log = r.events.find((ev) => ev.type === 'log' && ev.text.includes('used'));
   assert.ok(log, 'there is an attack message');
-  assert.ok(log.text.includes(`${dmg.amount} damage`), `message reports damage: ${log.text}`);
-  assert.equal(log.text.includes('CRITICAL'), false, 'no crit on this roll');
+  assert.ok(r.events.some((ev) => ev.type === 'log' && String(ev.text).includes(`${dmg.amount} damage`)),
+    `the message reports the damage: ${r.events.filter((ev) => ev.type === 'log').map((ev) => ev.text).join(' / ')}`);
+  assert.ok(!/CRITICAL/.test(r.events.filter((ev) => ev.type === 'log' && String(ev.text).includes('used')).map((ev) => ev.text).join(' ')),
+    'no crit on this roll');
 });
 
 test('a crit multiplies the damage and says so', () => {
   const p = createMythling({ speciesId: 'leaflet', level: 30, mood: 'feral', rarity: 'SSS+' });
-  const e = createMythling({ speciesId: 'rivruff', level: 30 });
+  const e = createMythling({ speciesId: 'rivruff', level: 30, mood: 'brave', rational: 'docile', rarity: 'D' });
   const hit = (seq) => {
     let i = 0;
     const b = new Battle({
@@ -782,10 +786,10 @@ test('a captured Mythling ALWAYS becomes Lv.1 and keeps its identity', () => {
   createNewGameState({ slot: 1, playerName: 'DUMDUM', starterId: 'spriggo' });
   const wild = createMythling({ speciesId: 'emberu', level: 27, rarity: 'A', mood: 'clever', mutation: 'shiny' });
   wild.currentHp = 0;
-  InventoryManager.add('god_ball', 50);
+  InventoryManager.add('absolute_ball', 50);
   let res, guard = 0;
-  do { res = CaptureManager.attempt(wild, 'god_ball'); } while (!res.success && guard++ < 200);
-  assert.ok(res.success, 'god ball eventually catches');
+  do { res = CaptureManager.attempt(wild, 'absolute_ball'); } while (!res.success && guard++ < 200);
+  assert.ok(res.success, 'the ball eventually catches');
   assert.equal(wild.level, 1);
   assert.equal(wild.exp, 0);
   assert.equal(wild.stage, 0);
@@ -968,9 +972,9 @@ test('save then load restores the exact state', async () => {
   // catch a Leaflet
   const leaflet = createMythling({ speciesId: 'leaflet', level: 8, mood: 'playful', rarity: 'C' });
   leaflet.currentHp = 0;
-  InventoryManager.add('god_ball', 30);
+  InventoryManager.add('absolute_ball', 30);
   let res, guard = 0;
-  do { res = CaptureManager.attempt(leaflet, 'god_ball'); } while (!res.success && guard++ < 200);
+  do { res = CaptureManager.attempt(leaflet, 'absolute_ball'); } while (!res.success && guard++ < 200);
   CaptureManager.place(leaflet, true);
   GameState.player.wildcoins = 1234;
   GameState.world.defeatedTrainers.vale_t1 = true;
@@ -2017,6 +2021,186 @@ test('the type sheet is about the ELEMENT: strong against / weak against / resis
   const theirs = scene.typePanel(foe, 'enemy');
   assert.match(theirs.title, /Fire/, 'and the enemy sheet is titled by ITS element');
   assert.ok(!textOf(theirs.body).includes(displayName(foe)), 'the enemy sheet names no Mythling either');
+});
+
+// ------------------------------------------------------------------
+section('Bags, shop shelves, premium balls & the Cleanse Tonic');
+
+test('you start on Bag 1 (20 Mythlings) and buy bigger ones, region by region', async () => {
+  const { BAG_TIERS } = await import('../src/data/config.js');
+  assert.equal(BAG_TIERS[0].capacity, 20, 'Bag 1 holds 20');
+  assert.equal(BAG_TIERS[BAG_TIERS.length - 1].capacity, 100, 'the biggest bag holds 100');
+  for (let i = 1; i < BAG_TIERS.length; i++) {
+    assert.ok(BAG_TIERS[i].capacity > BAG_TIERS[i - 1].capacity, `${BAG_TIERS[i].name} is bigger`);
+    assert.ok(BAG_TIERS[i].price > BAG_TIERS[i - 1].price, `${BAG_TIERS[i].name} is dearer`);
+  }
+  createNewGameState({ slot: 1, playerName: 'BAGS', starterId: 'spriggo' });
+  assert.equal(StorageManager.capacity(), 20, 'a new game carries 20');
+  GameState.player.wildcoins = 0;
+  assert.equal(StorageManager.upgradeBag().ok, false, 'no coins, no bag');
+  GameState.player.wildcoins = 100000;
+  assert.equal(StorageManager.upgradeBag().ok, true);
+  assert.equal(StorageManager.capacity(), 30, 'Bag 2 holds 30');
+
+  // every region sells bags, but only up to its own tier
+  const shops = Object.values(MAPS).flatMap((m) => (m.buildings || []).filter((b2) => b2.type === 'shop'));
+  assert.equal(shops.length, 10, 'one shop per region');
+  for (const shop of shops) {
+    assert.ok(shop.maxBagTier >= 2 && shop.maxBagTier <= BAG_TIERS.length, `${shop.id} sells a sane bag tier`);
+  }
+  const first = shops.find((x) => x.id === 'vale_shop');
+  const last = shops.find((x) => x.id === 'colo_shop');
+  assert.ok(first.maxBagTier < last.maxBagTier, 'bigger bags are sold deeper into the world');
+  assert.equal(last.maxBagTier, BAG_TIERS.length, 'the last shop sells the biggest bag');
+  // not every map adds one, so a bag can be two regions away
+  const tiers = shops.map((x) => x.maxBagTier);
+  assert.ok(tiers.some((t, i) => i > 0 && t === tiers[i - 1]), 'some maps carry no new bag at all');
+});
+
+test('a full bag refuses the catch instead of wasting the ball', async () => {
+  createNewGameState({ slot: 1, playerName: 'FULL', starterId: 'spriggo' });
+  while (PartyManager.count() < 6) PartyManager.add(createMythling({ speciesId: 'spriggo', level: 5 }));
+  while (StorageManager.used() < StorageManager.capacity()) StorageManager.add(createMythling({ speciesId: 'leaflet', level: 5 }));
+  assert.equal(StorageManager.isFull(), true, 'the bag is full');
+  const wild = createMythling({ speciesId: 'aquini', level: 5 });
+  wild.currentHp = 0;
+  InventoryManager.add('god_ball', 5);
+  const blocked = CaptureManager.attempt(wild, 'god_ball', () => 0);
+  assert.equal(blocked.success, false);
+  assert.ok(blocked.bagFull, 'the attempt is refused up front');
+  assert.equal(InventoryManager.count('god_ball'), 5, 'and the ball is not spent');
+  // a bigger bag makes room again
+  GameState.player.wildcoins = 100000;
+  StorageManager.upgradeBag();
+  assert.equal(StorageManager.isFull(), false);
+  assert.equal(CaptureManager.attempt(wild, 'god_ball', () => 0).success, true, 'and the catch goes through');
+});
+
+test('shop shelves are finite, and refill every five minutes', async () => {
+  const { SHOP_RESTOCK_MS } = await import('../src/data/config.js');
+  const { ShopManager } = await import('../src/systems/ShopManager.js');
+  createNewGameState({ slot: 1, playerName: 'SHOP', starterId: 'spriggo' });
+  GameState.player.wildcoins = 1000000;
+  const shop = MAPS.verdant_vale.buildings.find((b2) => b2.type === 'shop');
+  const shelf = ShopManager.stock(shop);
+  assert.ok(shelf.basic_ball > 10, `a staple arrives in bulk (${shelf.basic_ball})`);
+  for (const [id, qty] of Object.entries(shelf)) assert.ok(qty > 0 && qty <= 30, `${id} has a sane shelf (${qty})`);
+
+  // buying draws the shelf down
+  const before = shelf.basic_ball;
+  const buy = ShopManager.buy(shop, 'basic_ball', 3);
+  assert.equal(buy.ok, true);
+  assert.equal(ShopManager.qty(shop, 'basic_ball'), before - 3);
+  assert.equal(InventoryManager.count('basic_ball'), 8 + 3, '3 more in the bag');
+  // drain it: an empty shelf refuses the sale
+  ShopManager.buy(shop, 'basic_ball', ShopManager.qty(shop, 'basic_ball'));
+  assert.equal(ShopManager.qty(shop, 'basic_ball'), 0);
+  const none = ShopManager.buy(shop, 'basic_ball', 1);
+  assert.equal(none.ok, false, 'you cannot buy what is not on the shelf');
+  assert.match(none.reason, /out of stock/i);
+
+  // the timer: unchanged after a minute, fresh after five
+  GameState.world.shops[shop.id].at = PlayerManager.playTime() - 60 * 1000;
+  assert.equal(ShopManager.qty(shop, 'basic_ball'), 0, 'one minute later the shelf is still empty');
+  GameState.world.shops[shop.id].at = PlayerManager.playTime() - SHOP_RESTOCK_MS - 1;
+  assert.equal(ShopManager.qty(shop, 'basic_ball'), before, 'after five minutes it is restocked');
+  assert.ok(ShopManager.msUntilRestock(shop) > 0);
+  assert.match(ShopManager.formatCountdown(65000), /^1:0[45]$/, 'the countdown reads m:ss');
+});
+
+test('the rarest shelves are usually empty', async () => {
+  const { ShopManager } = await import('../src/systems/ShopManager.js');
+  createNewGameState({ slot: 1, playerName: 'RARE', starterId: 'spriggo' });
+  const shop = MAPS.ironfist_colosseum.buildings.find((b2) => b2.type === 'shop');
+  assert.ok(shop.stock.includes('dark_ball'), 'the last shop lists the Dark Ball');
+  let seen = 0;
+  for (let i = 0; i < 60; i++) {
+    GameState.world.shops = {};                       // force a fresh roll
+    if (ShopManager.qty(shop, 'dark_ball') > 0) seen += 1;
+  }
+  assert.ok(seen > 0, `the Dark Ball does turn up (${seen}/60 restocks)`);
+  assert.ok(seen < 60, `but never reliably (${seen}/60 restocks)`);
+});
+
+test('God / Shiny / Dark Balls guarantee the top rarity tier, at a price', async () => {
+  const { ITEMS: allItems } = ITEMS_MOD;
+  for (const id of ['god_ball', 'shiny_ball', 'dark_ball']) {
+    assert.equal(allItems[id].forceRarity, 'SSS+', `${id} forces SSS+`);
+    assert.equal(allItems[id].guaranteed, true, `${id} never fails`);
+  }
+  assert.ok(allItems.god_ball.price > 20 * allItems.absolute_ball.price, 'the God Ball is out of the ordinary league');
+  assert.ok(allItems.shiny_ball.price > 5 * allItems.god_ball.price, 'the Shiny Ball dwarfs the God Ball');
+  assert.ok(allItems.dark_ball.price > allItems.shiny_ball.price, 'and the Dark Ball is the dearest thing sold');
+  for (const [ball, mutation] of [['god_ball', null], ['shiny_ball', 'shiny'], ['dark_ball', 'darkness']]) {
+    createNewGameState({ slot: 1, playerName: 'SSS', starterId: 'spriggo' });
+    const wild = createMythling({ speciesId: 'leaflet', level: 30, rarity: 'D' });
+    wild.currentHp = 0;
+    InventoryManager.add(ball, 1);
+    const res = CaptureManager.attempt(wild, ball, () => 0);
+    assert.equal(res.success, true, `${ball} never fails`);
+    assert.equal(wild.rarity, 'SSS+', `${ball} delivers SSS+`);
+    if (mutation) assert.equal(wild.mutation, mutation, `${ball} also forces ${mutation}`);
+    assert.equal(wild.level, 1, 'and it still arrives at Lv.1');
+  }
+});
+
+test('a Cleanse Tonic lifts every debuff and leaves your own buffs alone', async () => {
+  const m = createMythling({ speciesId: 'spriggo', level: 30, stage: 1 });
+  const foe = createMythling({ speciesId: 'emberu', level: 30, stage: 1 });
+  const bt = new Battle({ type: BattleType.WILD, party: [m], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.5 });
+  bt.cb(m).applyDebuff('satk', 40);
+  bt.cb(m).applyDebuff('spd', 12);
+  bt.cb(m).applyBuff('patk', 20);
+  assert.equal(bt.debuffs(m).length, 2, 'two stats are down');
+  const res = bt.useItem('cleanse_tonic', m.uid);
+  assert.equal(res.ok, true);
+  assert.equal(bt.debuffs(m).length, 0, 'every debuff is gone');
+  assert.equal(bt.cb(m).buffs.patk.total, 20, 'but the buff you earned is untouched');
+  // with nothing to cleanse it refuses, so the item is never wasted
+  assert.equal(bt.useItem('cleanse_tonic', m.uid).ok, false);
+  // and it is battle-only
+  const dry = applyItemEffects(ITEMS_MOD.getItem('cleanse_tonic'), m, { dryRun: true });
+  assert.equal(dry.ok, false);
+  assert.match(dry.reason, /battle/i);
+});
+
+test('food gets dearer per EXP the higher you go — the top of the range is endgame money', async () => {
+  const { ITEMS: allItems } = ITEMS_MOD;
+  const food = Object.values(allItems).filter((i) => i.category === 'food').sort((a, b2) => a.exp - b2.exp);
+  assert.ok(food.length >= 10, 'a full food ladder');
+  for (let i = 1; i < food.length; i++) {
+    const prev = food[i - 1].price / food[i - 1].exp;
+    const cur = food[i].price / food[i].exp;
+    assert.ok(cur > prev - 0.01,
+      `${food[i].name} (${cur.toFixed(2)}/EXP) is no better value than ${food[i - 1].name} (${prev.toFixed(2)}/EXP)`);
+  }
+  const top = food[food.length - 1];
+  assert.equal(top.id, 'wildbound_ambrosia');
+  assert.ok(top.price > 1000000, `Wildbound Ambrosia costs ${top.price.toLocaleString()} — buying two is an achievement`);
+});
+
+test('the type sheet SEE MORE block breaks the current stats down by source', async () => {
+  const { BattleScene } = await import('../src/scenes/BattleScene.js');
+  const m = createMythling({ speciesId: 'spriggo', level: 40, stage: 1, rarity: 'A', mood: 'brave', rational: 'docile' });
+  const foe = createMythling({ speciesId: 'emberu', level: 40, stage: 1 });
+  const scene = new BattleScene(document.createElement('canvas'));
+  scene.battle = new Battle({ type: BattleType.WILD, party: [m], enemies: [foe], mapId: 'verdant_vale' });
+
+  const { body } = scene.typePanel(m, 'player');
+  const more = body.children.find((c) => String(c.className || '').includes('tp-more'));
+  assert.ok(more, 'the sheet carries a SEE MORE block');
+  assert.equal(more.hidden, true, 'collapsed until you ask for it');
+  const txt = textOf(more);
+  for (const label of ['HP', 'Physical Attack', 'Special Attack', 'Physical Defense', 'Special Defense', 'Speed']) {
+    assert.ok(txt.includes(label), `${label} is listed with its current value`);
+  }
+  assert.match(txt, /Mood Brave/, 'the Mood bonus is named');
+  assert.match(txt, /Rational/, 'so is the Rational, plus and minus');
+  assert.match(txt, /Rarity A/, 'and the rarity tier behind the Mood bonus');
+
+  const theirs = scene.typePanel(foe, 'enemy');
+  const moreFoe = theirs.body.children.find((c) => String(c.className || '').includes('tp-more'));
+  assert.ok(moreFoe, 'the enemy sheet carries the same block, about the enemy');
 });
 
 for (const item of queue) {

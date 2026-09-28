@@ -1,6 +1,6 @@
 // Central mutable game state + Player/Party/Storage/Inventory/Collection managers.
 // Serialisation is validated & migrated on load so old saves never break.
-import { GAME_VERSION, PARTY_MAX, LEVEL_CAP, STARTER_RARITY, STARTER_LEVEL } from '../data/config.js';
+import { GAME_VERSION, PARTY_MAX, LEVEL_CAP, STARTER_RARITY, STARTER_LEVEL, bagCapacity, bagTier, bagTierFor } from '../data/config.js';
 import { mutationParts } from '../data/mutations.js';
 import { STARTING_INVENTORY, STARTING_WILDCOINS, getItem, LEGACY_ITEMS } from '../data/items.js';
 import { normalizeMoodId, getRational, rollRational } from '../data/moods.js';
@@ -126,6 +126,21 @@ export const PartyManager = {
 // -------------------------------------------------- Storage
 export const StorageManager = {
   list() { return GameState.storage; },
+  /** Bag capacity: your party AND your storage count against the bag you own. */
+  capacity() { return bagCapacity(GameState.player?.bagTier); },
+  used() { return GameState.party.length + GameState.storage.length; },
+  remaining() { return Math.max(0, this.capacity() - this.used()); },
+  isFull() { return this.used() >= this.capacity(); },
+  bagTier() { return GameState.player?.bagTier || 1; },
+  /** Buy the next bag up. Returns false when it is unaffordable or already maxed. */
+  upgradeBag() {
+    const next = bagTier(GameState.player.bagTier + 1);
+    if (next.tier <= GameState.player.bagTier) return { ok: false, reason: 'You already carry the biggest bag there is.' };
+    if (!PlayerManager.spendCoins(next.price)) return { ok: false, reason: 'Not enough Wildcoins!' };
+    GameState.player.bagTier = next.tier;
+    bus.emit('bag:changed');
+    return { ok: true, tier: next.tier, capacity: next.capacity };
+  },
   add(m) { GameState.storage.push(m); bus.emit('storage:changed'); return true; },
   remove(uid) {
     const i = GameState.storage.findIndex((m) => m.uid === uid);
@@ -266,6 +281,7 @@ export function createNewGameState({ slot, playerName, starterId, settings }) {
     starter: starterId,
     lastHealMap: 'verdant_vale',
     lastHealPoint: { ...MAPS.verdant_vale.spawn },
+    bagTier: 1,                       // Bag 1 — 20 Mythlings. Bigger bags are bought in the shops.
   };
   GameState.party = [];
   GameState.storage = [];
@@ -279,6 +295,7 @@ export function createNewGameState({ slot, playerName, starterId, settings }) {
     npcProgress: {},
     chests: {},
     chestStats: {},
+    shops: {},
   };
   GameState.meta = { playTime: 0, startedAt: Date.now(), gameVersion: GAME_VERSION, levelCap: LEVEL_CAP };
   GameState._sessionStart = Date.now();
@@ -387,10 +404,18 @@ export function deserialize(data) {
     starter: p.starter ?? null,
     lastHealMap: getMap(p.lastHealMap) ? p.lastHealMap : mapId,
     lastHealPoint: p.lastHealPoint || { ...MAPS[mapId].spawn },
+    bagTier: Math.max(1, Math.floor(p.bagTier) || 1),
   };
 
   GameState.party = (data.party || []).map(migrateMythling).filter(Boolean).slice(0, PARTY_MAX);
   GameState.storage = (data.storage || []).map(migrateMythling).filter(Boolean);
+
+  // A save from before bags existed gets the cheapest bag that actually holds
+  // what it is carrying — capacity is never used to delete anyone.
+  GameState.player.bagTier = Math.max(
+    GameState.player.bagTier,
+    bagTierFor(GameState.party.length + GameState.storage.length),
+  );
 
   // Safety: a save must always have at least one Mythling to continue.
   if (GameState.party.length === 0 && GameState.storage.length > 0) {

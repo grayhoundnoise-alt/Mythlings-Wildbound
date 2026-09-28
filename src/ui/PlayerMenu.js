@@ -406,7 +406,15 @@ export class PlayerMenu {
 
   // ---------------------------------------------------- STORAGE
   renderStorage(root) {
-    this.setTitle(`Mythling Storage  (${StorageManager.list().length})`);
+    // The bag is the real limit now: party AND storage both count against it.
+    this.setTitle(`Mythling Storage  (${StorageManager.used()}/${StorageManager.capacity()})`);
+    root.appendChild(el('div', { class: 'row', style: { gap: '8px', marginBottom: '10px', flexWrap: 'wrap' } }, [
+      el('span', { class: 'chip', text: `BAG ${StorageManager.bagTier()}` }),
+      el('span', { class: 'sub', text: `${StorageManager.used()} of ${StorageManager.capacity()} Mythlings carried` }),
+      StorageManager.isFull()
+        ? el('span', { class: 'sub', style: { color: '#ff9aa2' }, text: 'Full — release one, or buy a bigger bag from a shop.' })
+        : null,
+    ]));
     const f = this.storageFilters;
     const filters = el('div', { class: 'filters' }, [
       el('input', { type: 'text', placeholder: 'Search…', style: { width: '160px', fontSize: '.9rem', letterSpacing: 'normal', textTransform: 'none' }, oninput: (e) => { f.query = e.target.value; this.renderStorageList(); } }),

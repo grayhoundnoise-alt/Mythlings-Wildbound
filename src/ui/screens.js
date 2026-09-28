@@ -12,8 +12,9 @@ import { SPECIES, STARTER_IDS, getSpecies } from '../data/species.js';
 import { MOODS } from '../data/moods.js';
 import { STAT_SHORT } from '../data/moods.js';
 import { getItem } from '../data/items.js';
-import { GAME_VERSION, LEVEL_CAP, STARTER_RARITY } from '../data/config.js';
-import { GameState, InventoryManager, PlayerManager, PartyManager, bus } from '../systems/GameState.js';
+import { GAME_VERSION, LEVEL_CAP, STARTER_RARITY, BAG_TIERS, bagTier } from '../data/config.js';
+import { GameState, InventoryManager, PlayerManager, PartyManager, StorageManager, bus } from '../systems/GameState.js';
+import { ShopManager } from '../systems/ShopManager.js';
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
 import { drawMythling } from '../render/creatures.js';
 import { AudioManager } from '../systems/AudioManager.js';
@@ -285,24 +286,90 @@ export function settingsScreen({ onBack }) {
 
 // ------------------------------------------------------------------ SHOP
 export function shopScreen(building, { onClose }) {
+  const stock = ShopManager.stock(building);          // rolls a fresh shelf when the timer has run out
+  let clock = null;
+
+  /** Live restock countdown; cleared the moment the shop closes, by any route. */
+  const countdown = () => {
+    const ms = ShopManager.msUntilRestock(building);
+    const label = el('span', { class: 'shop-timer', text: ms > 0 ? `Restocks in ${ShopManager.formatCountdown(ms)}` : 'Shelves are being refilled…' });
+    if (ms > 0) {
+      clock = setInterval(() => {
+        const left = ShopManager.msUntilRestock(building);
+        if (left > 0) { label.textContent = `Restocks in ${ShopManager.formatCountdown(left)}`; return; }
+        label.textContent = 'Shelves are being refilled… leave and come back!';
+        clearInterval(clock); clock = null;
+      }, 1000);
+    }
+    return label;
+  };
+
+  /** Bag upgrades: this shop sells up to `maxBagTier`, and only bags bigger than yours. */
+  const bagSection = () => {
+    const wrap = el('div', { class: 'shop-bags' });
+    const tier = StorageManager.bagTier();
+    const here = building.maxBagTier || 1;
+    wrap.appendChild(el('div', { class: 'shop-baghead' }, [
+      el('span', { text: `BAG ${tier}` }),
+      el('span', { class: 'dim', text: `${StorageManager.used()} / ${StorageManager.capacity()} Mythlings` }),
+    ]));
+    const options = BAG_TIERS.filter((b) => b.tier > tier && b.tier <= here);
+    if (!options.length) {
+      wrap.appendChild(el('p', { class: 'sub', style: { margin: '6px 0 0' },
+        text: here <= tier
+          ? 'This shop has no bigger bag. The next one is sold deeper into the world.'
+          : 'You already own the biggest bag sold here.' }));
+      return wrap;
+    }
+    for (const b of options) {
+      const next = b.tier === tier + 1;              // bags are bought in order, one tier at a time
+      const afford = GameState.player.wildcoins >= b.price;
+      wrap.appendChild(el('div', { class: `item-row${next ? '' : ' sold-out'}` }, [
+        el('div', { class: 'ir-main' }, [
+          el('div', { class: 'ir-name', text: `${b.name} — ${b.capacity} Mythlings` }),
+          el('div', { class: 'ir-desc', text: next
+            ? `Carry ${b.capacity - bagTier(b.tier - 1).capacity} more than your current bag.`
+            : `Buy ${BAG_TIERS[b.tier - 2].name} first.` }),
+        ]),
+        el('div', { class: 'ir-qty price' }, [icon('coin', 'gold'), el('span', { text: coins(b.price) })]),
+        button('BUY', {
+          class: 'small primary', disabled: !next || !afford,
+          onclick: async () => {
+            const ok = await confirmDialog('BIGGER BAG', `Buy <b>${b.name}</b> for <b>${coins(b.price)} Wildcoins</b>? You will be able to carry <b>${b.capacity}</b> Mythlings.`, 'BUY', 'CANCEL');
+            if (!ok) return;
+            const res = StorageManager.upgradeBag();
+            if (!res.ok) { toast(res.reason, 'bad'); AudioManager.sfx('cancel'); return; }
+            AudioManager.sfx('coin');
+            toast(`${b.name} bought — you can now carry ${res.capacity} Mythlings`, 'ok');
+            refresh();
+          },
+        }),
+      ]));
+    }
+    return wrap;
+  };
+
   const render = () => {
     const rows = el('div', {});
     for (const id of building.stock) {
       const item = getItem(id);
+      if (!item || !item.price) continue;
+      const left = stock[id] || 0;
       let qty = 1;
       const totalLabel = el('div', { class: 'ir-qty price' }, [icon('coin', 'gold'), el('span', { text: coins(item.price) })]);
       const qtyLabel = el('b', { text: '1' });
       const setQty = (n) => {
-        qty = Math.max(1, Math.min(99, n));
+        qty = Math.max(1, Math.min(left || 1, n));
         qtyLabel.textContent = String(qty);
         totalLabel.lastChild.textContent = coins(item.price * qty);
       };
-      rows.appendChild(el('div', { class: 'item-row' }, [
+      rows.appendChild(el('div', { class: `item-row${left ? '' : ' sold-out'}` }, [
         item.category === 'balls' ? ballCanvas(item.id, 30, 'item-ico ball-icon') : icon(item.category === 'food' ? 'food' : item.category === 'key' ? 'key' : 'heal', 'item-ico'),
         el('div', { class: 'ir-main' }, [
           el('div', { class: 'ir-name', text: item.name }),
           el('div', { class: 'ir-desc', text: item.desc }),
           el('div', { class: 'ir-desc', text: `Owned: ${InventoryManager.count(id)}` }),
+          el('div', { class: `ir-stock${left ? '' : ' out'}`, text: left ? `In stock: ${left}` : 'Out of stock' }),
         ]),
         el('div', { class: 'qty-ctl' }, [
           el('button', { html: iconSvg('minus'), title: 'Less', onclick: () => setQty(qty - 1) }),
@@ -310,18 +377,18 @@ export function shopScreen(building, { onClose }) {
           el('button', { html: iconSvg('plus'), title: 'More', onclick: () => setQty(qty + 1) }),
         ]),
         totalLabel,
-        button('BUY', {
-          class: 'small primary',
+        button(left ? 'BUY' : 'SOLD OUT', {
+          class: 'small primary', disabled: !left,
           onclick: async () => {
+            if (!left) { toast(`${item.name} is out of stock.`, 'bad'); return; }
             const total = item.price * qty;
             if (GameState.player.wildcoins < total) { toast('Not enough Wildcoins!', 'bad'); AudioManager.sfx('cancel'); return; }
             const ok = await confirmDialog('CONFIRM PURCHASE', `Buy <b>${qty}× ${item.name}</b> for <b>${coins(total)} Wildcoins</b>?`, 'BUY', 'CANCEL');
             if (!ok) return;
-            if (!PlayerManager.spendCoins(total)) { toast('Not enough Wildcoins!', 'bad'); return; }
-            InventoryManager.add(id, qty);
+            const res = ShopManager.buy(building, id, qty);
+            if (!res.ok) { toast(res.reason, 'bad'); AudioManager.sfx('cancel'); return; }
             AudioManager.sfx('coin');
-            toast(`Bought ${qty}× ${item.name}`, 'ok');
-            bus.emit('shop:purchase');
+            toast(`Bought ${res.count}× ${item.name}`, 'ok');
             refresh();
           },
         }),
@@ -332,21 +399,32 @@ export function shopScreen(building, { onClose }) {
 
   let node;
   const refresh = () => {
+    if (clock) { clearInterval(clock); clock = null; }   // one countdown at a time, however often we re-render
     const content = el('div', { class: 'dialog panel screen-inner', style: { maxWidth: '860px' } }, [
-      panelHeader(building.name, onClose),
+      panelHeader(building.name, leave),
       el('p', { class: 'sub coin-line' }, [
         el('span', { text: 'Wildcoins:' }), icon('coin', 'gold'),
         el('b', { style: { color: '#ffe08a' }, text: coins(GameState.player.wildcoins) }),
       ]),
+      bagSection(),
+      el('div', { class: 'shop-head' }, [
+        el('span', { text: 'GOODS' }),
+        countdown(),
+      ]),
       render(),
-      el('div', { class: 'row end', style: { marginTop: '16px' } }, [button('LEAVE SHOP', { class: 'primary', onclick: onClose, sfx: 'cancel' })]),
+      el('div', { class: 'row end', style: { marginTop: '16px' } }, [button('LEAVE SHOP', { class: 'primary', onclick: leave, sfx: 'cancel' })]),
     ]);
-    node = Screens.replace(content, 'shop', onClose);
+    node = Screens.replace(content, 'shop', leave);
   };
-  refresh();
-}
 
-// ------------------------------------------------------------------ MYTHLING CENTER
+  function leave() {
+    if (clock) { clearInterval(clock); clock = null; }
+    onClose();
+  }
+
+  refresh();
+  return node;
+}
 export function centerScreen({ onHeal, onParty, onStorage, onSave, onClose }) {
   const party = el('div', { class: 'grid-cards' });
   for (const m of PartyManager.list()) {

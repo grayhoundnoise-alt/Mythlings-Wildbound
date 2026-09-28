@@ -28,6 +28,12 @@ export const CaptureManager = {
     if (!this.canAttempt(target)) {
       return { ok: false, success: false, reason: 'You must defeat the wild Mythling first!', chance: 0 };
     }
+    // A full bag must never cost you a ball: check before anything is spent.
+    // (Catches go to the party while it has room, so only a full party + full bag blocks it.)
+    if (PartyManager.isFull() && StorageManager.isFull()) {
+      return { ok: false, success: false, chance: 0, bagFull: true,
+        reason: `Your bag is full (${StorageManager.used()}/${StorageManager.capacity()})! Release a Mythling, or buy a bigger bag from a shop.` };
+    }
     if (!InventoryManager.has(ballId, 1)) {
       return { ok: false, success: false, reason: `You have no ${getItem(ballId)?.name || 'balls'} left!`, chance: 0 };
     }
@@ -58,6 +64,9 @@ export const CaptureManager = {
     // it comes out Shiny Darkness, carrying both auras and both stat bonuses.
     const ball = getItem(ballId);
     if (ball?.forceMutation) caught.mutation = combineMutations(caught.mutation, ball.forceMutation);
+    // God / Shiny / Dark Balls also lock in the top rarity tier: whatever comes
+    // out was paid for at SSS+, never a lucky or unlucky roll.
+    if (ball?.forceRarity) caught.rarity = ball.forceRarity;
 
     CollectionManager.markCaught(caught.speciesId, caught.mutation, caught.stage);
 
