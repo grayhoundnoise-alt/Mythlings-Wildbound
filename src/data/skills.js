@@ -1,3 +1,4 @@
+import { ULTIMATE_POWER_SCALE } from './config.js';
 // DESIGN RULE: a regular Buff skill raises exactly ONE stat and a regular Debuff
 // skill lowers exactly ONE enemy stat. `effects` is an array, and the ELITE
 // support skills (Lv.60 / Lv.80, few uses) and the support Ultimates use two
@@ -495,7 +496,8 @@ export function resolveUltimate(ultId, tierIndex) {
     kind: ult.kind || 'damage',
     damageType: ult.damageType,
     element: ult.element,
-    power: tier.power || 0,
+    power: Math.round((tier.power || 0) * ULTIMATE_POWER_SCALE),
+    listedPower: tier.power || 0,
     effects: tier.effects || null,
     selfBuff: tier.selfBuff || null,
     foeDebuff: tier.foeDebuff || null,

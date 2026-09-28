@@ -14,7 +14,7 @@ import {
   MOODS, MOOD_IDS, STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO,
   STAT_BAR_MAX, formatStat, RATIONALS, RATIONAL_IDS, RATIONAL_STATS,
 } from '../data/moods.js';
-import { RATIONAL_AMOUNT, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE } from '../data/config.js';
+import { RATIONAL_AMOUNT, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, ULTIMATE_POWER_SCALE } from '../data/config.js';
 import { CollectionManager } from '../systems/GameState.js';
 import { RARITIES, RARITY_ORDER } from '../data/rarity.js';
 import { MUTATIONS, MUTATION_IDS } from '../data/mutations.js';
@@ -291,6 +291,7 @@ function battleSection() {
       '<b>OFF</b> is P.ATK and <b>DEF</b> is P.DEF for Physical skills; S.ATK / S.DEF for Special skills and Ultimates.',
       `<b>levelFactor</b> grows ${(DAMAGE_LEVEL_SCALE * 100).toFixed(1)}% per level above Lv.1 (it used to be 8.5% — at Lv.100 two equal Mythlings one-shot each other and speed decided everything; a neutral Special now takes about seven hits, a super-effective Ultimate two or three).`,
       `<b>stageFactor</b> adds ${(DAMAGE_STAGE_SCALE * 100).toFixed(0)}% per evolution stage on top of the stats the stage already multiplies.`,
+      `<b>Ultimates</b> use ${Math.round(ULTIMATE_POWER_SCALE * 100)}% of their tier power (the Power shown everywhere is already that number): strong — about four hits to KO an equal foe, two or three when super effective — but never a one-shot, not even on a crit. HP also grows a little faster than attack with level, so fights get longer at high level, not shorter.`,
       '<b>elementMultiplier</b> multiplies once per defender element: a Poison/Psychic Mythling hit by Fire takes 1.5 × 0.75 = <b>x1.125</b>; hit by Psychic it takes 1.5 × 1.0 = <b>x1.5</b>.',
       'Every hit deals at least <b>1</b> damage.',
       'The battle log now reports the exact damage of every attack.',
@@ -462,7 +463,7 @@ function skillsSection() {
         + `<br><span class="wiki-learn">${i === 0 ? 'Base tier' : `Tier${t.suffix}`} · evolution stage ${i + 1}</span>`,
       (isSupportUltimate(u)
         ? `<b>${u.kind === 'support' ? 'Support Ultimate' : ''}</b> · ${ELEMENTS[u.element].name} · <b>${(t.effects || []).map((e) => `${e.target === 'foe' ? 'foe ' : ''}${STAT_SHORT[e.stat]} ${e.target === 'foe' ? '-' : '+'}${e.amount}`).join(', ')}</b> · never misses, no damage`
-        : `Power <b>${t.power}</b> · ${ELEMENTS[u.element].name} · ${u.damageType === 'physical' ? 'Physical' : 'Special'}`)
+        : `Power <b>${Math.round(t.power * ULTIMATE_POWER_SCALE)}</b> · ${ELEMENTS[u.element].name} · ${u.damageType === 'physical' ? 'Physical' : 'Special'}`)
         + `${t.selfBuff ? ` · also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(', ')} on self` : ''}`
         + `<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`,
     ]), 'ultimate tier power level'),

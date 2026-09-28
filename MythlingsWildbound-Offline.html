@@ -1096,10 +1096,12 @@ h3 .name-el { vertical-align: middle; }
   var CRIT_MAX_MULT = 75;
   var DAMAGE_RANDOM_MIN = 0.85;
   var DAMAGE_RANDOM_MAX = 1;
-  var DAMAGE_LEVEL_SCALE = 0.035;
+  var DAMAGE_LEVEL_SCALE = 0.03;
   var DAMAGE_STAGE_SCALE = 0.08;
+  var ULTIMATE_POWER_SCALE = 0.7;
   var STAT_GROWTH = {
-    hp: 0.085,
+    // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.
+    hp: 0.105,
     patk: 0.075,
     satk: 0.075,
     pdef: 0.07,
@@ -1364,7 +1366,8 @@ h3 .name-el { vertical-align: middle; }
           intro: "None pass the Verdant Gate untested. Show me your bond!",
           defeat: "The Vale accepts you. Take the Vale Charm \u2014 the gate is open.",
           reward: { coins: 700, items: { vale_charm: 1, normal_ball: 3 } },
-          team: [{ species: "leaflet", level: 18, rarity: "C" }, { species: "spriggo", level: 20, rarity: "B", mood: "brave" }]
+          // every guardian fields one Mythling from the NEXT region, so a mono-element counter-team is never a free win
+          team: [{ species: "leaflet", level: 18, rarity: "C" }, { species: "aquini", level: 19, rarity: "C", mood: "clever" }, { species: "spriggo", level: 20, rarity: "B", mood: "brave" }]
         }
       ],
       encounterZones: [
@@ -1534,6 +1537,7 @@ h3 .name-el { vertical-align: middle; }
           team: [
             { species: "aquini", level: 27, rarity: "B" },
             { species: "rivruff", level: 29, rarity: "B", mood: "sturdy" },
+            { species: "emberu", level: 28, rarity: "C", mood: "brave" },
             { species: "aquini", level: 30, rarity: "A", mood: "clever" }
           ]
         }
@@ -1717,6 +1721,7 @@ h3 .name-el { vertical-align: middle; }
             { species: "emberu", level: 38, rarity: "B", mood: "sturdy" },
             { species: "rivruff", level: 39, rarity: "A", mood: "sturdy" },
             { species: "spriggo", level: 39, rarity: "A", mood: "brave" },
+            { species: "pebbleshell", level: 38, rarity: "B", mood: "guarded" },
             { species: "emberu", level: 40, rarity: "S", mood: "brave" }
           ]
         }
@@ -1902,6 +1907,7 @@ h3 .name-el { vertical-align: middle; }
             { species: "rubblekin", level: 45, rarity: "A", mood: "sturdy" },
             { species: "shalecrawl", level: 46, rarity: "A", mood: "swift" },
             { species: "quartzling", level: 47, rarity: "S", mood: "clever" },
+            { species: "voltkit", level: 46, rarity: "A", mood: "swift" },
             { species: "gravelhog", level: 48, rarity: "S", mood: "brave" }
           ]
         }
@@ -2077,7 +2083,7 @@ h3 .name-el { vertical-align: middle; }
           intro: "I have stood in the eye of every storm this plateau ever made. Stand in mine.",
           defeat: "The storm passes. Take the Storm Sigil \u2014 the Frost Gate is open to you.",
           reward: { coins: 9e3, items: { storm_sigil: 1, god_ball: 2, shiny_ball: 1 } },
-          team: [{ species: "coilstone", level: 53, rarity: "A", mood: "sturdy" }, { species: "staticat", level: 54, rarity: "A", mood: "clever" }, { species: "zapwing", level: 55, rarity: "S", mood: "swift" }, { species: "boltpup", level: 56, rarity: "S", mood: "brave" }]
+          team: [{ species: "coilstone", level: 53, rarity: "A", mood: "sturdy" }, { species: "staticat", level: 54, rarity: "A", mood: "clever" }, { species: "zapwing", level: 55, rarity: "S", mood: "swift" }, { species: "frostpup", level: 54, rarity: "A", mood: "fierce" }, { species: "boltpup", level: 56, rarity: "S", mood: "brave" }]
         }
       ],
       encounterZones: [
@@ -2251,7 +2257,7 @@ h3 .name-el { vertical-align: middle; }
           intro: "The aurora chose me to hold this summit. It has not chosen you. Yet.",
           defeat: "The lights approve. Take the Frost Sigil \u2014 the Iron Gate answers to it.",
           reward: { coins: 11e3, items: { frost_sigil: 1, god_ball: 2, shiny_ball: 1 } },
-          team: [{ species: "icecarap", level: 61, rarity: "A", mood: "lazy" }, { species: "snowkit", level: 62, rarity: "A", mood: "calm" }, { species: "flurrywing", level: 63, rarity: "S", mood: "swift" }, { species: "frostling", level: 64, rarity: "S", mood: "stubborn" }]
+          team: [{ species: "icecarap", level: 61, rarity: "A", mood: "lazy" }, { species: "snowkit", level: 62, rarity: "A", mood: "calm" }, { species: "flurrywing", level: 63, rarity: "S", mood: "swift" }, { species: "ironbug", level: 62, rarity: "A", mood: "guarded" }, { species: "frostling", level: 64, rarity: "S", mood: "stubborn" }]
         }
       ],
       encounterZones: [
@@ -2424,7 +2430,7 @@ h3 .name-el { vertical-align: middle; }
           intro: "I forged this gate myself. Nothing has ever bent it. Try.",
           defeat: "It bends. Take the Iron Sigil \u2014 the Mire Gate is yours.",
           reward: { coins: 13e3, items: { iron_sigil: 1, god_ball: 2, dark_ball: 1 } },
-          team: [{ species: "ironbug", level: 69, rarity: "A", mood: "guarded" }, { species: "cogfox", level: 70, rarity: "A", mood: "keen" }, { species: "chromeling", level: 71, rarity: "S", mood: "clever" }, { species: "ironhog", level: 72, rarity: "S", mood: "brave" }]
+          team: [{ species: "ironbug", level: 69, rarity: "A", mood: "guarded" }, { species: "cogfox", level: 70, rarity: "A", mood: "keen" }, { species: "chromeling", level: 71, rarity: "S", mood: "clever" }, { species: "venoviper", level: 70, rarity: "A", mood: "clever" }, { species: "ironhog", level: 72, rarity: "S", mood: "brave" }]
         }
       ],
       encounterZones: [
@@ -2598,7 +2604,7 @@ h3 .name-el { vertical-align: middle; }
           intro: "Every trainer who reached me left something behind in the fen. What will you leave?",
           defeat: "Nothing, it seems. Take the Mire Sigil \u2014 the Spire Gate opens for you.",
           reward: { coins: 15e3, items: { mire_sigil: 1, god_ball: 2, dark_ball: 1 } },
-          team: [{ species: "mirenewt", level: 77, rarity: "A", mood: "hardy" }, { species: "venobat", level: 78, rarity: "A", mood: "playful" }, { species: "venoviper", level: 79, rarity: "S", mood: "clever" }, { species: "boghound", level: 80, rarity: "S", mood: "fierce" }]
+          team: [{ species: "mirenewt", level: 77, rarity: "A", mood: "hardy" }, { species: "venobat", level: 78, rarity: "A", mood: "playful" }, { species: "venoviper", level: 79, rarity: "S", mood: "clever" }, { species: "psykit", level: 78, rarity: "A", mood: "clever" }, { species: "boghound", level: 80, rarity: "S", mood: "fierce" }]
         }
       ],
       encounterZones: [
@@ -2759,7 +2765,7 @@ h3 .name-el { vertical-align: middle; }
           intro: "I have seen every way this fight can end. Show me the one I missed.",
           defeat: "You found it. The Spire yields \u2014 Wildbound is yours to roam, until the world grows again.",
           reward: { coins: 25e3, items: { astral_crest: 1, god_ball: 3, shiny_ball: 1, dark_ball: 1 } },
-          team: [{ species: "mindram", level: 87, rarity: "A", mood: "guarded" }, { species: "psykit", level: 88, rarity: "A", mood: "clever" }, { species: "dreamwisp", level: 88, rarity: "S", mood: "mystic" }, { species: "omenwing", level: 89, rarity: "S", mood: "vigilant" }, { species: "mystfox", level: 90, rarity: "S", mood: "focused" }]
+          team: [{ species: "mindram", level: 87, rarity: "A", mood: "guarded" }, { species: "psykit", level: 88, rarity: "A", mood: "clever" }, { species: "dreamwisp", level: 88, rarity: "S", mood: "mystic" }, { species: "omenwing", level: 89, rarity: "S", mood: "vigilant" }, { species: "boghound", level: 88, rarity: "A", mood: "fierce" }, { species: "mystfox", level: 90, rarity: "S", mood: "focused" }]
         }
       ],
       encounterZones: [
@@ -3280,7 +3286,8 @@ h3 .name-el { vertical-align: middle; }
       kind: ult.kind || "damage",
       damageType: ult.damageType,
       element: ult.element,
-      power: tier.power || 0,
+      power: Math.round((tier.power || 0) * ULTIMATE_POWER_SCALE),
+      listedPower: tier.power || 0,
       effects: tier.effects || null,
       selfBuff: tier.selfBuff || null,
       foeDebuff: tier.foeDebuff || null,
@@ -17610,6 +17617,7 @@ h3 .name-el { vertical-align: middle; }
         "<b>OFF</b> is P.ATK and <b>DEF</b> is P.DEF for Physical skills; S.ATK / S.DEF for Special skills and Ultimates.",
         `<b>levelFactor</b> grows ${(DAMAGE_LEVEL_SCALE * 100).toFixed(1)}% per level above Lv.1 (it used to be 8.5% \u2014 at Lv.100 two equal Mythlings one-shot each other and speed decided everything; a neutral Special now takes about seven hits, a super-effective Ultimate two or three).`,
         `<b>stageFactor</b> adds ${(DAMAGE_STAGE_SCALE * 100).toFixed(0)}% per evolution stage on top of the stats the stage already multiplies.`,
+        `<b>Ultimates</b> use ${Math.round(ULTIMATE_POWER_SCALE * 100)}% of their tier power (the Power shown everywhere is already that number): strong \u2014 about four hits to KO an equal foe, two or three when super effective \u2014 but never a one-shot, not even on a crit. HP also grows a little faster than attack with level, so fights get longer at high level, not shorter.`,
         "<b>elementMultiplier</b> multiplies once per defender element: a Poison/Psychic Mythling hit by Fire takes 1.5 \xD7 0.75 = <b>x1.125</b>; hit by Psychic it takes 1.5 \xD7 1.0 = <b>x1.5</b>.",
         "Every hit deals at least <b>1</b> damage.",
         "The battle log now reports the exact damage of every attack."
@@ -17763,7 +17771,7 @@ h3 .name-el { vertical-align: middle; }
       h3("Ultimates \u2014 by unlock level and power", "ultimate charge tier"),
       table(ultRows.map(({ u, t, i }) => [
         `<span class="wiki-learn">Lv.${t.unlockLevel}</span> <b>${u.baseName}${t.suffix}</b>${t.future ? ' <span class="wiki-dim">(late game)</span>' : ""}<br><span class="wiki-learn">${i === 0 ? "Base tier" : `Tier${t.suffix}`} \xB7 evolution stage ${i + 1}</span>`,
-        (isSupportUltimate(u) ? `<b>${u.kind === "support" ? "Support Ultimate" : ""}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 <b>${(t.effects || []).map((e) => `${e.target === "foe" ? "foe " : ""}${STAT_SHORT[e.stat]} ${e.target === "foe" ? "-" : "+"}${e.amount}`).join(", ")}</b> \xB7 never misses, no damage` : `Power <b>${t.power}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 ${u.damageType === "physical" ? "Physical" : "Special"}`) + `${t.selfBuff ? ` \xB7 also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(", ")} on self` : ""}<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`
+        (isSupportUltimate(u) ? `<b>${u.kind === "support" ? "Support Ultimate" : ""}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 <b>${(t.effects || []).map((e) => `${e.target === "foe" ? "foe " : ""}${STAT_SHORT[e.stat]} ${e.target === "foe" ? "-" : "+"}${e.amount}`).join(", ")}</b> \xB7 never misses, no damage` : `Power <b>${Math.round(t.power * ULTIMATE_POWER_SCALE)}</b> \xB7 ${ELEMENTS[u.element].name} \xB7 ${u.damageType === "physical" ? "Physical" : "Special"}`) + `${t.selfBuff ? ` \xB7 also ${t.selfBuff.map((e) => `${STAT_SHORT[e.stat]} +${e.amount}`).join(", ")} on self` : ""}<br><span class="wiki-dim">${u.desc}</span><br><span class="wiki-dim">Used by: ${ultOwners(u.id)}</span>`
       ]), "ultimate tier power level"),
       note(`An Ultimate needs <b>${ULTIMATE_MAX_CHARGE}/${ULTIMATE_MAX_CHARGE}</b> charge. Charge comes only from
       successful Normal and Special attacks. The tier matches the evolution stage (Base \u2192 I \u2192 II \u2192 III).

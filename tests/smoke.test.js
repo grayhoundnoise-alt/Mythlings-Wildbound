@@ -473,7 +473,27 @@ test('skill uses refill at the start of every battle, and a max-damage crit stil
   assert.ok(hit, 'the attack landed');
   assert.ok(hit.crit, 'the hit was a crit');
   assert.ok(hit.amount < before, `a super-effective crit deals ${hit.amount} of ${before} HP — big, not a one-shot`);
-  assert.ok(hit.amount > before * 0.25, 'but it is still clearly impactful');
+  assert.ok(hit.amount > before * 0.15, `but it is still clearly impactful (${Math.round(hit.amount / before * 100)}% of the bar)`);
+});
+
+test('Ultimates are strong but never a one-shot: a super-effective CRIT Ultimate leaves an equal foe standing', async () => {
+  const { ULTIMATE_POWER_SCALE } = await import('../src/data/config.js');
+  assert.ok(ULTIMATE_POWER_SCALE <= 0.75, 'ultimate power is scaled down');
+  const a = createMythling({ speciesId: 'emberu', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brutal', rational: 'mystic' });   // Fire vs Nature: super effective
+  const d = createMythling({ speciesId: 'spriggo', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brave', rational: 'docile' });
+  a.ultCharge = 8;
+  const seq = [0.5, 0.99, 0.0, 0.99, 0.5, 0.99, 0.0, 0.99]; let i = 0;   // dodge no, crit YES, max roll
+  const bt = new Battle({ type: BattleType.WILD, party: [a], enemies: [d], mapId: 'emberwild', rng: () => seq[i++] ?? 0.99 });
+  const before = d.currentHp;
+  const { events } = bt.act({ type: 'ultimate' });
+  const hit = events.find((e) => e.type === 'damage' && e.side === 'enemy' && e.isUltimate);
+  assert.ok(hit && hit.crit, 'a critical Ultimate landed');
+  assert.ok(hit.amount < before, `SE crit Ultimate: ${hit.amount} of ${before} HP — huge, not a delete`);
+  assert.ok(hit.amount > before * 0.4, 'and it clearly hurts');
+  // the Power shown in menus is the effective one
+  const { ultimateMove } = await import('../src/core/mythling.js');
+  const u = ultimateMove(a);
+  assert.equal(u.power, Math.round(u.listedPower * ULTIMATE_POWER_SCALE));
 });
 
 test('a full wild battle can be fought and won', () => {

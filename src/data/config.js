@@ -47,15 +47,22 @@ export const DAMAGE_RANDOM_MAX = 1.0;
  * Damage scaling on top of the stat ratio. Attack and Defense already grow with level
  * and evolution stage, so these stay gentle: the old 0.085/level × full stage multiplier
  * let two Lv.100 Mythlings one-shot each other and made "who moves first" the whole
- * fight. At Lv.100 / stage 4 the factor is now ~5.5 instead of ~20.7 — a neutral Special
- * takes about seven hits to KO an equal foe, a super-effective one about five, and even
+ * fight. At Lv.100 / stage 4 the factor is now ~5 instead of ~20.7 — a neutral Special
+ * takes about six hits to KO an equal foe, a super-effective one about four, and even
  * a super-effective Ultimate needs two or three.
  */
-export const DAMAGE_LEVEL_SCALE = 0.035;
+export const DAMAGE_LEVEL_SCALE = 0.03;
 export const DAMAGE_STAGE_SCALE = 0.08;
+/**
+ * Ultimates are strong, not a delete button: their listed tier power is scaled by this before
+ * anything else. With it, a neutral Ultimate takes ~4 hits to KO an equal foe, a super-effective
+ * one ~2.7, and even a super-effective CRIT Ultimate cannot one-shot an equal, full-HP foe.
+ */
+export const ULTIMATE_POWER_SCALE = 0.7;
 
 export const STAT_GROWTH = {
-  hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
+  // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.
+  hp: 0.105, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
   crit: 0.006, critMult: 0.004,
 };
 

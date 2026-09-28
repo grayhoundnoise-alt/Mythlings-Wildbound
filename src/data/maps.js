@@ -78,7 +78,8 @@ export const MAPS = {
         intro: 'None pass the Verdant Gate untested. Show me your bond!',
         defeat: 'The Vale accepts you. Take the Vale Charm — the gate is open.',
         reward: { coins: 700, items: { vale_charm: 1, normal_ball: 3 } },
-        team: [{ species: 'leaflet', level: 18, rarity: 'C' }, { species: 'spriggo', level: 20, rarity: 'B', mood: 'brave' }] },
+        // every guardian fields one Mythling from the NEXT region, so a mono-element counter-team is never a free win
+        team: [{ species: 'leaflet', level: 18, rarity: 'C' }, { species: 'aquini', level: 19, rarity: 'C', mood: 'clever' }, { species: 'spriggo', level: 20, rarity: 'B', mood: 'brave' }] },
     ],
     encounterZones: [
       { id: 'vz1', rect: [1040, 150, 820, 1000], levelRange: [1, 8], density: 5,
@@ -167,6 +168,7 @@ export const MAPS = {
         team: [
           { species: 'aquini', level: 27, rarity: 'B' },
           { species: 'rivruff', level: 29, rarity: 'B', mood: 'sturdy' },
+          { species: 'emberu', level: 28, rarity: 'C', mood: 'brave' },
           { species: 'aquini', level: 30, rarity: 'A', mood: 'clever' },
         ] },
     ],
@@ -264,6 +266,7 @@ export const MAPS = {
           { species: 'emberu', level: 38, rarity: 'B', mood: 'sturdy' },
           { species: 'rivruff', level: 39, rarity: 'A', mood: 'sturdy' },
           { species: 'spriggo', level: 39, rarity: 'A', mood: 'brave' },
+          { species: 'pebbleshell', level: 38, rarity: 'B', mood: 'guarded' },
           { species: 'emberu', level: 40, rarity: 'S', mood: 'brave' },
         ] },
     ],
@@ -360,6 +363,7 @@ export const MAPS = {
           { species: 'rubblekin', level: 45, rarity: 'A', mood: 'sturdy' },
           { species: 'shalecrawl', level: 46, rarity: 'A', mood: 'swift' },
           { species: 'quartzling', level: 47, rarity: 'S', mood: 'clever' },
+          { species: 'voltkit', level: 46, rarity: 'A', mood: 'swift' },
           { species: 'gravelhog', level: 48, rarity: 'S', mood: 'brave' },
         ] },
     ],
@@ -446,7 +450,7 @@ export const MAPS = {
         intro: 'I have stood in the eye of every storm this plateau ever made. Stand in mine.',
         defeat: 'The storm passes. Take the Storm Sigil — the Frost Gate is open to you.',
         reward: { coins: 9000, items: { storm_sigil: 1, god_ball: 2, shiny_ball: 1 } },
-        team: [{ species: 'coilstone', level: 53, rarity: 'A', mood: 'sturdy' }, { species: 'staticat', level: 54, rarity: 'A', mood: 'clever' }, { species: 'zapwing', level: 55, rarity: 'S', mood: 'swift' }, { species: 'boltpup', level: 56, rarity: 'S', mood: 'brave' }] },
+        team: [{ species: 'coilstone', level: 53, rarity: 'A', mood: 'sturdy' }, { species: 'staticat', level: 54, rarity: 'A', mood: 'clever' }, { species: 'zapwing', level: 55, rarity: 'S', mood: 'swift' }, { species: 'frostpup', level: 54, rarity: 'A', mood: 'fierce' }, { species: 'boltpup', level: 56, rarity: 'S', mood: 'brave' }] },
     ],
     encounterZones: [
       { id: 'sz1', rect: [1040, 120, 820, 960], levelRange: [46, 49], density: 6,
@@ -531,7 +535,7 @@ export const MAPS = {
         intro: 'The aurora chose me to hold this summit. It has not chosen you. Yet.',
         defeat: 'The lights approve. Take the Frost Sigil — the Iron Gate answers to it.',
         reward: { coins: 11000, items: { frost_sigil: 1, god_ball: 2, shiny_ball: 1 } },
-        team: [{ species: 'icecarap', level: 61, rarity: 'A', mood: 'lazy' }, { species: 'snowkit', level: 62, rarity: 'A', mood: 'calm' }, { species: 'flurrywing', level: 63, rarity: 'S', mood: 'swift' }, { species: 'frostling', level: 64, rarity: 'S', mood: 'stubborn' }] },
+        team: [{ species: 'icecarap', level: 61, rarity: 'A', mood: 'lazy' }, { species: 'snowkit', level: 62, rarity: 'A', mood: 'calm' }, { species: 'flurrywing', level: 63, rarity: 'S', mood: 'swift' }, { species: 'ironbug', level: 62, rarity: 'A', mood: 'guarded' }, { species: 'frostling', level: 64, rarity: 'S', mood: 'stubborn' }] },
     ],
     encounterZones: [
       { id: 'fz1', rect: [1040, 120, 820, 960], levelRange: [54, 57], density: 6,
@@ -616,7 +620,7 @@ export const MAPS = {
         intro: 'I forged this gate myself. Nothing has ever bent it. Try.',
         defeat: 'It bends. Take the Iron Sigil — the Mire Gate is yours.',
         reward: { coins: 13000, items: { iron_sigil: 1, god_ball: 2, dark_ball: 1 } },
-        team: [{ species: 'ironbug', level: 69, rarity: 'A', mood: 'guarded' }, { species: 'cogfox', level: 70, rarity: 'A', mood: 'keen' }, { species: 'chromeling', level: 71, rarity: 'S', mood: 'clever' }, { species: 'ironhog', level: 72, rarity: 'S', mood: 'brave' }] },
+        team: [{ species: 'ironbug', level: 69, rarity: 'A', mood: 'guarded' }, { species: 'cogfox', level: 70, rarity: 'A', mood: 'keen' }, { species: 'chromeling', level: 71, rarity: 'S', mood: 'clever' }, { species: 'venoviper', level: 70, rarity: 'A', mood: 'clever' }, { species: 'ironhog', level: 72, rarity: 'S', mood: 'brave' }] },
     ],
     encounterZones: [
       { id: 'iz1', rect: [1040, 120, 820, 960], levelRange: [62, 65], density: 6,
@@ -701,7 +705,7 @@ export const MAPS = {
         intro: 'Every trainer who reached me left something behind in the fen. What will you leave?',
         defeat: 'Nothing, it seems. Take the Mire Sigil — the Spire Gate opens for you.',
         reward: { coins: 15000, items: { mire_sigil: 1, god_ball: 2, dark_ball: 1 } },
-        team: [{ species: 'mirenewt', level: 77, rarity: 'A', mood: 'hardy' }, { species: 'venobat', level: 78, rarity: 'A', mood: 'playful' }, { species: 'venoviper', level: 79, rarity: 'S', mood: 'clever' }, { species: 'boghound', level: 80, rarity: 'S', mood: 'fierce' }] },
+        team: [{ species: 'mirenewt', level: 77, rarity: 'A', mood: 'hardy' }, { species: 'venobat', level: 78, rarity: 'A', mood: 'playful' }, { species: 'venoviper', level: 79, rarity: 'S', mood: 'clever' }, { species: 'psykit', level: 78, rarity: 'A', mood: 'clever' }, { species: 'boghound', level: 80, rarity: 'S', mood: 'fierce' }] },
     ],
     encounterZones: [
       { id: 'mz1', rect: [1040, 120, 820, 960], levelRange: [70, 73], density: 6,
@@ -785,7 +789,7 @@ export const MAPS = {
         intro: 'I have seen every way this fight can end. Show me the one I missed.',
         defeat: 'You found it. The Spire yields — Wildbound is yours to roam, until the world grows again.',
         reward: { coins: 25000, items: { astral_crest: 1, god_ball: 3, shiny_ball: 1, dark_ball: 1 } },
-        team: [{ species: 'mindram', level: 87, rarity: 'A', mood: 'guarded' }, { species: 'psykit', level: 88, rarity: 'A', mood: 'clever' }, { species: 'dreamwisp', level: 88, rarity: 'S', mood: 'mystic' }, { species: 'omenwing', level: 89, rarity: 'S', mood: 'vigilant' }, { species: 'mystfox', level: 90, rarity: 'S', mood: 'focused' }] },
+        team: [{ species: 'mindram', level: 87, rarity: 'A', mood: 'guarded' }, { species: 'psykit', level: 88, rarity: 'A', mood: 'clever' }, { species: 'dreamwisp', level: 88, rarity: 'S', mood: 'mystic' }, { species: 'omenwing', level: 89, rarity: 'S', mood: 'vigilant' }, { species: 'boghound', level: 88, rarity: 'A', mood: 'fierce' }, { species: 'mystfox', level: 90, rarity: 'S', mood: 'focused' }] },
     ],
     encounterZones: [
       { id: 'pz1', rect: [1040, 120, 820, 960], levelRange: [78, 81], density: 6,
