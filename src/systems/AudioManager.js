@@ -4,6 +4,13 @@ const THEMES = {
   vale:   { scale: [0, 2, 4, 7, 9, 12],   root: 329.63, tempo: 0.40, wave: 'triangle', pad: true,  bassEvery: 4, gain: 0.18 },
   coast:  { scale: [0, 2, 5, 7, 9, 12],   root: 261.63, tempo: 0.44, wave: 'sine',     pad: true,  bassEvery: 4, gain: 0.19 },
   ember:  { scale: [0, 3, 5, 7, 10, 12],  root: 220.00, tempo: 0.34, wave: 'sawtooth', pad: true,  bassEvery: 2, gain: 0.15 },
+  crags:  { scale: [0, 2, 3, 7, 8, 12],   root: 246.94, tempo: 0.50, wave: 'triangle', pad: true,  bassEvery: 2, gain: 0.17 },
+  storm:  { scale: [0, 2, 3, 5, 7, 10],   root: 233.08, tempo: 0.30, wave: 'square',   pad: true,  bassEvery: 2, gain: 0.14 },
+  frost:  { scale: [0, 2, 4, 7, 11, 12],  root: 392.00, tempo: 0.56, wave: 'sine',     pad: true,  bassEvery: 4, gain: 0.17 },
+  forge:  { scale: [0, 1, 5, 7, 8, 12],   root: 207.65, tempo: 0.36, wave: 'sawtooth', pad: true,  bassEvery: 2, gain: 0.15 },
+  mire:   { scale: [0, 3, 5, 6, 10, 12],  root: 220.00, tempo: 0.46, wave: 'triangle', pad: true,  bassEvery: 4, gain: 0.16 },
+  astral: { scale: [0, 2, 4, 6, 9, 11],   root: 329.63, tempo: 0.52, wave: 'sine',     pad: true,  bassEvery: 4, gain: 0.18 },
+  colosseum: { scale: [0, 2, 3, 7, 9, 10], root: 174.61, tempo: 0.26, wave: 'square', pad: true, bassEvery: 2, gain: 0.16 },
   town:   { scale: [0, 2, 4, 5, 7, 9],    root: 349.23, tempo: 0.42, wave: 'triangle', pad: false, bassEvery: 4, gain: 0.17 },
   battle: { scale: [0, 2, 3, 5, 7, 10],   root: 196.00, tempo: 0.22, wave: 'square',   pad: false, bassEvery: 2, gain: 0.13 },
   boss:   { scale: [0, 1, 3, 5, 7, 8],    root: 174.61, tempo: 0.20, wave: 'sawtooth', pad: false, bassEvery: 2, gain: 0.13 },
@@ -167,6 +174,12 @@ class AudioManagerImpl {
       case 'coin': this._note(1319, t, 0.06, 'square', 0.14); this._note(1760, t + 0.06, 0.12, 'square', 0.12); break;
       case 'encounter': this._sweep(200, 900, 0.35, 'square', 0.2); this._sweep(900, 200, 0.35, 'square', 0.15); break;
       case 'step': this._noise(0.05, 0.05, 500); break;
+      case 'crit':
+        this._noise(0.26, 0.36, 2200);
+        this._sweep(1200, 240, 0.3, 'square', 0.22);
+        this._note(1568, t + 0.04, 0.16, 'triangle', 0.16);
+        this._note(2093, t + 0.1, 0.14, 'triangle', 0.12);
+        break;
       default: break;
     }
   }

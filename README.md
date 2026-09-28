@@ -31,8 +31,38 @@ npm run build:offline   # regenerates MythlingsWildbound-Offline.html
 ```
 
 ```bash
-npm test             # 31 headless rule tests (levels, capture, evolution, save/load, maps…)
+npm test             # 111 headless rule tests (levels, crits, capture, evolution, save/load, maps, rig, VFX…)
 ```
+
+### MYTHLING EDIT — the standalone content editor (not part of the game)
+
+**`MythlingEdit.html`** is a separate, single-file, fully offline editor for creatures, parts, anchors,
+rigs, animations, skill VFX, props, NPCs, maps, collision, encounter zones and warps. Double-click it —
+no server, no build step, no external dependencies. It never touches the game: it reads and writes its
+own project JSON (`{ project, maps, mythlings, objects, animations, vfx, … }`, kept in IndexedDB with
+autosave and snapshots) and exports JSON / JavaScript (`registerMythling`, `registerMap`,
+`registerAnimation`, `registerVFX`, `registerObject`), PNG previews and a **COPY FOR ARENA AI**
+implementation package that you can paste into a chat to have the content wired into the game.
+
+**Game presets.** The build embeds a *read-only snapshot* of the game's data and art modules
+(`src/data/*`, `creatureArt.js`, `creatureRig.js`, `worldRenderer.js`). A new project therefore starts
+from the real content: the 9 maps (regions, water, bridges, buildings, landmarks, NPCs, trainers,
+encounter zones, connections and the procedurally generated props, all at their game coordinates), the
+55 Mythlings (the game's art layers as live, individually editable parts with anchors; the 12 game
+animations sampled into editable keyframes; stats, evolutions, skill unlocks, palette), every skill and
+skill-VFX descriptor. `PROJECT → Game Presets…` re-imports any of them, `HELP → About the Game Data
+Snapshot` lists what was embedded, and the EXPORT screen's **Game format** option writes the edited
+content back in the `maps.js` / `species.js` / `skills.js` / `skillVfx.js` schema (also included in the
+ARENA AI package). Importing presets copies data into the project — the game files are never modified.
+
+```bash
+node tools/build-editor.mjs                 # regenerates MythlingEdit.html (with the game data snapshot)
+node tools/build-editor.mjs --no-game       # variant without the snapshot (demo content only)
+node tools/build-editor.mjs --check         # validate only; --out=path writes elsewhere
+```
+
+Optional headless regression test for the editor (drives the built file in jsdom with a real canvas):
+`npm i --no-save jsdom @napi-rs/canvas` then `node tools/mythling-edit/test/game-presets.test.mjs`.
 
 ## Controls
 
@@ -41,8 +71,9 @@ npm test             # 31 headless rule tests (levels, capture, evolution, save/
 | `W A S D` / arrows | Move (hold `Shift` to run) |
 | `E` / `Enter` | Interact: NPCs, trainers, wild Mythlings, buildings, signs |
 | `Esc` | Player menu (also the ☰ button) |
-| `1` `2` `3` | Normal / Special / Buff skill in battle |
+| `1` `2` `3` | The three battle buttons — your equipped skills, in the order you equipped them |
 | `4` or `R` | Ultimate (when 8/8) |
+| `Del` | Cheat menu (adds Wildcoins) — available anywhere in the game |
 | Mouse / touch | Everything — the whole UI is clickable; a touch stick appears on touch devices |
 
 ---
@@ -51,18 +82,183 @@ npm test             # 31 headless rule tests (levels, capture, evolution, save/
 
 | | |
 |---|---|
-| **Mythlings** | 5 species — Spriggo, Aquini, Emberu, Rivruff, Leaflet |
-| **Regions** | 3 — Verdant Vale (Lv.1–10), Azure Coast (Lv.10–20), Emberwild (Lv.20–30) |
-| **Elements** | 🌿 Nature > 💧 Water > 🔥 Fire > 🌿 Nature (1.5× / 0.75× / 1.0×) |
-| **Level cap** | Lv.30 (EXP hard-stops; architecture supports raising it) |
-| **Evolution** | Lv.20 first evolution only. Lv.60 / Lv.80 stages exist in data but are **locked** |
-| **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades to tier " I" on evolution |
-| **Mutations** | Shiny ✧ and Darkness ☾ — cosmetic only, never a power boost |
-| **Systems** | Rarity, Mood, Skill Library, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Collection index, Save/Load/Autosave, Settings |
+| **Mythlings** | 55 species — 20 originals, 25 new lines across Electric / Ice / Metal / Poison / Psychic (5 each), **5 Fighting lines** (pure-Fighting Cubrawl plus dual-typed Ironpaw, Emberfist, Stormkick and Zenram), two other **dual-typed** lines (Poison/Psychic Mirewisp, Electric/Metal Sparkbug) and three **legendaries** (Aetherion, Venomyr, Basaltyr: one form, 2–3 elements, rare spawns, Absolute Ball or better). 14 procedural body plans, 4 visibly different stages per line |
+| **Regions** | 9 with **fixed level bands** — Verdant Vale 1–20, Azure Coast 15–30, Emberwild 28–40, Stonehollow Crags 38–48, Stormreach Plateau 46–56, Frostveil Tundra 54–64, Ironhold Foundry 62–72, Miremarsh Fen 70–80, Astral Spire 78–90. Wild levels never scale to your party and **trainer teams are fixed** at their written levels |
+| **Elements** | 10 — Nature, Water, Fire, Rock, Electric, Ice, Metal, Poison, Psychic, Fighting. Every element beats two or three and fears one to three; dual / triple types multiply every one of their elements (1.5× / 0.75× / 1.0×) |
+| **Battle** | Damage scaling reworked: no more Lv.100 coin-flip one-shots — a neutral Special takes ~7 hits, a super-effective Ultimate ~1.8. Crit is a lucky spike, not a coin flip: chance caps at 10 %, crit damage at +35 % |
+| **Damage you can read** | Every attack button prints the damage it will do to the Mythling across the arena **right now** — green when super effective, red when resisted, white when neutral — and it updates the moment a buff, a debuff or a switch changes it |
+| **Level cap** | Lv.100 — every evolution stage is reachable |
+| **Evolution** | Lv.20 / Lv.60 / Lv.80. The **Index only reveals a form once you have owned it**. Legendaries never evolve; their Ultimate tiers unlock by level |
+| **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades a tier per evolution. Support Ultimates buff the caster and/or debuff the foe with two effects per tier |
+| **Sleep** | A small chance (30–35 %) to put the foe to sleep for **2–4 turns** (1–3 for the light ones). A sleeping Mythling **loses its whole turn** — but you can still switch or use an item, and a **Cleanse Tonic** wakes it. Re-sleeping adds to the counter, **capped at 5 turns** |
+| **Seals** | Locks **the move the foe just used** for 1–2 turns. It cannot be pressed while sealed, so the Mythling falls back on its unlimited Normal attack instead of losing the turn. The unlimited attack can never be sealed, so you are never left with nothing to do |
+| **Cheats** | Press **DEL** any time for the cheat menu: instant Wildcoins, or **GIVE ALL MYTHLINGS (SSS+)** — one of every species at its **highest form, Lv.100, SSS+**, sent straight to Mythling Storage (only as many as your bag has room for; nothing is ever released to make space). Mythling Storage also has a **Release All** button |
+| **Weather** | Six **exclusive** skills (one per element, 42 power, 6 uses, 75 % chance) call down a weather that **changes the arena in real time and lasts for the rest of the battle** — until it ends, you run, or another weather replaces it. Skills that **match** the weather's element hit **×1.5 — for both sides**; a Mythling on the field that does not match takes **100 damage every turn (180 if it is weak to the weather)**, flat at every level |
+| **Mutations** | Shiny ✧ (+1 to every stat) and Darkness ☾ (+2), with their own colours and aura |
+| **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion, 0.15 % dodge per point, capped at 6 %), **CRIT** (capped at 25 %), **C.DMG** |
+| **Moods & Rationals** | Moods are purely positive: each raises **three** stats (25 unique trios, scaled by Rarity). Every Mythling also has a **Rational**: a fixed +10 / −10 on two stats. Mood Tonic / Temper Tonic re-roll them |
+| **Balls** | Basic · Normal · Advanced · Absolute · **God** (guaranteed) · **Shiny** / **Dark** (guaranteed catch **and** guaranteed mutation). Each region's shop sells its own tier; the **last region's shop carries the complete catalogue** |
+| **Treasure chests** | Bronze (max 2 per map) · Silver · Emerald · **Ultra Gold** (nearly impossible) scattered through the wild areas; coins always, balls / food from the rarer tiers, the best loot only from the best chests; a map re-rolls its chests after ~12 min of play |
+| **Camera** | Settings → **Camera Zoom** (×1.1 – ×1.8), or the mouse wheel / `+` `−` in the world |
+| **Systems** | Rarity, Skill Library, life-steal / Retaliate skills, Party (6), Storage, Inventory, Shops, Wildcoins, NPC trainers, Index & Collection grouped by type, Save/Load/Autosave, Settings, **Game Wiki** |
+
+### Battle & training rules (latest)
+
+* **RUN is absolute** — you can leave *any* battle, wild **or** trainer, at any moment, and it
+  always succeeds. The enemy gets no free hit; EXP already earned is kept; the trainer can be
+  challenged again later.
+* **Debuff skills** — every species learns three (Lv.1 opener, Lv.12 defence breaker, Lv.40 curse)
+  that lower one stat of the **foe**: P.ATK, S.ATK, P.DEF, S.DEF or Speed. They always land and
+  stack up to 30 times, like buffs. 21 new skills in `src/data/skills.js`.
+* **Skill Library without slot types** — a Mythling takes **3 skills** into battle, any mix of
+  Normal / Special / Buff / Debuff. **The order you equip them is the order of the battle buttons**
+  (first equipped = button 1 / key `1`). Old `{normal, special, buff}` saves migrate automatically.
+* **Starter = S rarity** — whichever partner you pick starts as an S-tier Mythling.
+* **Elemental Normal skills have limited uses** (30 / 25 / 20 by tier); only the element-less
+  starter attack (Bite / Scratch / Peck / Pebble Toss) is unlimited and is the fallback move.
+  Being element-less it is always neutral damage, so it never picks up a type advantage.
+* **God Ball** — 12,000 Wildcoins, **100 % catch**. **Shiny Ball** (60,000) and **Dark Ball**
+  (90,000) also force the Shiny / Darkness mutation; both are sold only in the Stonehollow Crags.
+  (The King Ball is gone — old saves convert it to God Balls.)
+* **Running out of uses** — limited-use skills stay limited, but a Mythling is never stuck: if every
+  equipped skill is out of uses it falls back on its unlimited element-less attack instead of losing
+  the turn. **Skill Tonic** (+8 uses) and **Skill Elixir** (a full reset) refill them from the bag.
+* **Release** — a Mythling in Storage can be released from its card. It is permanent, but the species
+  stays marked as seen in your Collection.
+
+* **Food for high levels** — 10 new foods up to *Wildbound Ambrosia* (120,000 EXP), plus Hyper /
+  Max Potion, Max Revive and Full Restore. Feed a **whole stack at once** (−/+/MAX); the amount is
+  capped at what it takes to reach the level cap so nothing is wasted.
+
+### Combat numbers
+
+* **Counter (evasion)** — every point of Counter is **0.5 % dodge**, capped at **18 %** (Counter itself
+  caps at 35). It used to be a full 1 % per point, which made attacks miss far too often.
+* **Type match-up indicator** — in battle each card shows a chip when the match-up is
+  actually for or against it (`YOUR ATTACKS · SUPER EFFECTIVE ×1.5`, `ITS ATTACKS · RESISTED ×0.75`);
+  an even match-up shows nothing. Party cards in the switch picker carry the same tag.
+* **The type sheet is about the element** — the icon button on either card opens a sheet titled
+  by the **element**, not the creature: `NATURE — TYPE MATCH-UP`, then **STRONG AGAINST**
+  (Water ×1.5, Rock ×1.5), **WEAK AGAINST** (Fire ×1.5, Ice ×1.5, Poison ×1.5) and **RESISTS**
+  (the attacks it shrugs off — those land for less). A `RIGHT NOW · Nature vs Fire` block gives
+  both directions against whatever is across the arena, and opening it from the enemy card is
+  about the enemy's element.
+* **Crits** — Crit Chance is the % chance an attack lands critically (hard cap **10 %**); Crit Damage is
+  the bonus damage on a crit (`+20 %` = a 1.2× hit, hard cap **+35 %**). Five moods feed them.
+* **Battle log** — every attack line now reports the exact damage:
+  `Emberu used Burning Fang! — 163 damage! CRITICAL HIT! (x2.15)`.
+* **Trainer teams** — the enemy card shows a pip strip and a `2/3 LEFT` counter, and shouts
+  `LAST MYTHLING!` when you are down to the trainer's final Mythling.
+* **The Ultimate is a finisher** — it used to be scaled to 70 % of its tier power, which left a
+  full-charge Ultimate hitting *softer* than the best Special, so saving up felt pointless. At
+  175 % every tier out-muscles the best Special in the game: a full charge takes about **two**
+  hits to KO an equal foe, and even a super-effective crit lands around three quarters of the bar.
+* **Regular skills hit a little harder** — Normal and Special moves carry an extra `×1.12`
+  (`SKILL_POWER_SCALE` in `src/data/config.js`) so the buttons you press every turn have weight.
+* **Element-less really means element-less** — Bite / Scratch / Peck / Pebble Toss used to borrow
+  the element of the Mythling using them, so a Fire Mythling's Bite counted as Fire. They are
+  neutral now, which is also why that button never turns red or green.
+* **Level ups** — a whole party levelling at once collapses into one entry per Mythling
+  (`Lv.12 → Lv.15`) in a scrollable summary.
+
+### Wildcoins from winning
+
+Defeating a **wild** Mythling drops Wildcoins: the reward scales with its level and EXP yield
+(`coinReward()` in `src/data/config.js`) and falls off when you are heavily over-levelled, so low
+areas cannot be farmed forever. Trainer battles still pay their own bounty — a defeated trainer
+Mythling never double-pays. Need coins right now? Press **`Del`** anywhere for the cheat menu
+(`+100`, `+1,000`, `+100,000`, `+1,000,000`).
+
+### Bags, shop shelves & premium balls
+
+**Your bag is the limit.** Party *and* storage together can never hold more than your bag allows.
+You start on **Bag 1** (20 Mythlings) and buy permanent upgrades from any shop:
+
+| Bag | Capacity | Price | | Bag | Capacity | Price |
+|---|---|---|---|---|---|---|
+| Bag 1 | 20 | — (start) | | Bag 6 | 70 | 130,000 |
+| Bag 2 | 30 | 2,500 | | Bag 7 | 80 | 260,000 |
+| Bag 3 | 40 | 9,000 | | Bag 8 | 90 | 500,000 |
+| Bag 4 | 50 | 25,000 | | Bag 9 | 100 | 900,000 |
+| Bag 5 | 60 | 60,000 | | | | |
+
+Every shop sells bags — but only ones **bigger than the bag you carry** and never past its own
+ceiling, so you can upgrade from wherever you are while the last bags still demand that you push
+deeper into the world (Verdant Vale stops at Bag 2; only the Ironfist Colosseum stocks Bag 9).
+A full bag **refuses the catch before the ball is spent** — capacity is never used to delete a
+Mythling from a save.
+
+**Shelves are finite.** Staples arrive by the dozen; the further up the price ladder an item sits,
+the fewer it stocks and the likelier it is missing entirely. An empty row reads `SOLD OUT`, and the
+whole shelf is refilled every **5 minutes of play** (live countdown above the goods).
+
+**Premium balls** — God (120,000) · Shiny (800,000) · Dark (950,000) — all guarantee the catch
+*and* land at **SSS+**, with the Shiny and Dark balls also forcing their mutation. They are priced
+so that owning a second one is an achievement, and late shops only list them occasionally.
+
+**Food** gets steadily worse value per EXP as it gets stronger (2.25 coins/EXP at the bottom →
+15 coins/EXP for Wildbound Ambrosia at 1,800,000), so early berries stay the efficient everyday
+food and the top of the ladder is endgame money.
+
+### Creature rig — Mythlings are puppets, not pictures
+
+Every Mythling is still drawn procedurally (this project ships **zero external art**), but the
+renderer is now a lightweight **2D puppet rig** instead of one monolithic drawing pass:
+
+```
+src/render/creatureArt.js    the artwork, authored as 8-12 animatable layers per species
+src/render/creatureRig.js    asset baking/cache, animation controller, compositor
+src/render/creatures.js      drawMythling() — the entry point every game system calls
+```
+
+* **8-12 transforms per creature** — `ROOT · BODY · HEAD · FRONT_LEG_L/R · BACK_LEG_L/R · TAIL`
+  plus `EAR_L/R` (Spriggo, Aquini, Rivruff), `WING_L/R` (Emberu, Leaflet) and Rivruff's water
+  `MANE`. Fur tufts, leaf veins, claws, scales, feathers and markings are **baked into the layer
+  they belong to** — no bone is ever spent on a detail.
+* **Layers are baked once** into cached offscreen canvases (`CreatureAssetLoader`, LRU-capped,
+  keyed by species | stage | mutation | size bucket) and re-composited with ~10 `drawImage` calls
+  per frame instead of hundreds of paths. Layers are authored so they read as **one seamless
+  creature** at rest — the split exists only so parts can move.
+* **`CreatureAnimationController`** drives 12 states — `idle, walk, run, battleIdle, normalAttack,
+  specialAttack, buff, ultimate, hit, faint, capture, evolve` — with simple easing and procedural
+  interpolation, no keyframe tables. Idle breathes and flicks an ear every few seconds instead of
+  shaking; attacks anticipate → strike → recover with squash & stretch; hits recoil without
+  distorting the model; faints lower and fade.
+* **The face stays live** (eyes, brows, mouth are drawn on top of the baked head), so expressions,
+  blinking and eye shape cost nothing to bake and can change at any time.
+* Shiny and Darkness reuse **the same rig** — palette + aura + particles only.
+
+### Skill VFX
+
+`src/render/vfx/SkillVFX.js` + `src/data/skillVfx.js` turn every skill into a data-driven
+sequence: **CAST → ATTACK MOTION → PROJECTILE → IMPACT → AFTERMATH → DAMAGE NUMBER**. Cast
+100-250 ms, travel 150-500 ms, impact 100-300 ms, aftermath 200-700 ms, ultimates 0.8-1.8 s.
+
+* Element identity is baked into the palettes and shapes: **nature** grows leaves, vines, petals,
+  roots and pollen; **water** throws droplets, splash arcs, ribbons, bubbles, foam and wave rings;
+  **fire** is alive with flame tongues, embers, smoke and sparks. No generic colour clouds.
+* Buffs read as a stat rising (`↑P.ATK` + upward energy), defensive buffs get a shield ring, speed
+  buffs get wind trails. Debuffs stay subtle and never cover the target.
+* Ultimates are cinematic — camera emphasis → charge → big sequence → impact → aftermath — and
+  `ocean_guard` is flagged `defensive` so it raises a barrier instead of looking like an attack.
+  A Mythling sitting on 8/8 charge keeps a soft elemental aura.
+* Camera: a nudge for normals, a small shake on special impacts, a controlled one for ultimates.
+  Never constant, never enough to lose track of the battle.
+* Performance: a pooled particle system (hard cap 340), cached gradients, zero per-frame
+  allocation, no DOM elements. A fireball is one glow + one core + one trail + ~20 sparks, not 500.
+
+### Game Wiki
+
+`SETTINGS → OPEN WIKI` (also on the title screen's Settings) opens a searchable reference built
+straight from `src/data/*`: getting started, all nine stats, every mood and rarity, mutations (including double Shiny+Darkness), the
+element chart, the full battle rules and damage formula, all fifty species with base stats and
+evolution lines, every skill and Ultimate, all items, the ten regions with their trainers, the EXP
+curve, controls and the roadmap. It is generated from the same data files the game runs on, so it
+can never drift out of date.
 
 ### The rule that never bends
 
-A wild **Emberu Lv.30** can be found in Emberwild. You must **defeat it first** (the Catch button is
+A wild **Emberu Lv.45** can be found in Emberwild. You must **defeat it first** (the Catch button is
 disabled while it lives), then capture it — and it joins you as **Emberu Lv.1**. Its species, Mood,
 Rarity and Mutation are preserved; its level, EXP, evolution stage and skills all restart.
 You raise every Mythling yourself.
@@ -77,11 +273,20 @@ Leafrest Town → Petal Path → Whisperwood → Verdant Gate      (Verdant Guar
 Tidecrest Port → Coralway → Moonlit River → Azure Caverns    (Cavern Guardian → Coast Pass)
         ↓
 Emberwatch Outpost → Ashen Trail → Cinder Forest → Molten Cavern → Volcanic Ruins
-                                                              (Flame Warden → Version Complete)
+                                                              (Flame Warden → Ember Sigil)
+        ↓
+Quarry Camp → Gravel Pass → Crystal Hollow → Shale Ridge → Titan Summit   (Stone Warden → Crag Seal)
+        ↓
+Stormreach Plateau (Storm Warden → Storm Sigil) → Frostveil Tundra (Frost Warden → Frost Sigil)
+        ↓
+Ironhold Foundry (Forge Warden → Iron Sigil) → Miremarsh Fen (Plague Warden → Mire Sigil)
+        ↓
+Astral Spire: Spire Base → Dream Garden → Mirror Lake → Void Steps → Astral Summit
+                                                              (Astral Warden → Version Complete)
 ```
 
-Gates are item-locked, so Emberwild can never be reached at Lv.1. After the Flame Warden the world
-stays fully open for collecting, mutation hunting and training to Lv.30.
+Gates are item-locked, so a region can never be reached under-levelled. After the Astral Warden the
+world stays fully open for collecting, mutation hunting, legendary hunting and training to Lv.100.
 
 ---
 
@@ -95,8 +300,10 @@ src/
     config.js              level cap, EXP curve, growth, damage constants
     species.js             the 5 Mythlings + full 4-stage evolution lines (Lv.60/80 marked future)
     skills.js              skills, buffs, debuff riders, Ultimates (base → I → II → III)
+    skillVfx.js            per-skill VFX data (element, category, cast/projectile/impact/aftermath)
     moods.js  rarity.js  mutations.js  elements.js  items.js
-    maps.js                3 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
+    config.js also owns the Counter->dodge curve and the crit caps
+    maps.js               10 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
   core/
     mythling.js            the Mythling model: stats, EXP/levels, evolution, skills, resetToLevelOne()
     utils.js               RNG, colour maths, event bus, helpers
@@ -109,13 +316,19 @@ src/
     SaveManager.js         IndexedDB with localStorage fallback — save/load/hasSave/deleteSlot/listSlots
     SettingsManager.js  AudioManager.js (procedural music + SFX, no copyrighted audio)
   render/
-    creatures.js           original procedural Mythling art (fox/feline/dragon/wolf/avian body plans),
-                           per-species faces with 7 expressions, evolution growth, mutation palettes
+    creatureArt.js         original procedural Mythling art (fox/feline/dragon/wolf/avian body plans),
+                           authored as 8-12 rig layers per species + per-species faces (7 expressions)
+    creatureRig.js         layer baking/LRU cache, animation controller, compositor, drawMythling()
+    creatures.js           the public entry point every game system imports
     worldRenderer.js       terrain, water, props, buildings, weather
+    vfx/
+      particles.js         pooled particle + effect system (rings, slashes, bursts, columns)
+      SkillVFX.js          data-driven skill sequences: cast → projectile → impact → aftermath
   scenes/
     MenuScene.js  OverworldScene.js  BattleScene.js
   ui/
     ui.js  styles.css  screens.js  PlayerMenu.js
+    wiki.js                 searchable in-game reference generated from src/data/*
     logo.js                SVG wordmark + element crest for the title screen
     icons.js               hand-built SVG icon set — the game ships zero emoji
 tests/smoke.test.js        headless rule tests

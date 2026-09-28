@@ -1,11 +1,15 @@
 // Central mutable game state + Player/Party/Storage/Inventory/Collection managers.
 // Serialisation is validated & migrated on load so old saves never break.
-import { GAME_VERSION, PARTY_MAX, LEVEL_CAP } from '../data/config.js';
-import { STARTING_INVENTORY, STARTING_WILDCOINS, getItem } from '../data/items.js';
+import { GAME_VERSION, PARTY_MAX, LEVEL_CAP, STARTER_RARITY, STARTER_LEVEL, bagCapacity, bagTier, bagTierFor } from '../data/config.js';
+import { mutationParts } from '../data/mutations.js';
+import { STARTING_INVENTORY, STARTING_WILDCOINS, getItem, LEGACY_ITEMS } from '../data/items.js';
+import { normalizeMoodId, getRational, rollRational } from '../data/moods.js';
 import { SPECIES_IDS, getSpecies } from '../data/species.js';
 import { MAPS, getMap } from '../data/maps.js';
+import { getSkill } from '../data/skills.js';
+import { CHEST_TIERS } from '../data/chests.js';
 import {
-  createMythling, restoreAll, refreshLibrary, autoEquip, displayName,
+  createMythling, restoreAll, refreshLibrary, autoEquip, normalizeEquipped, displayName,
   maxHp, computeStats, stageForLevel,
 } from '../core/mythling.js';
 import { clamp, EventBus, deepClone } from '../core/utils.js';
@@ -14,7 +18,9 @@ export const bus = new EventBus();
 
 function blankCollection() {
   const c = {};
-  for (const id of SPECIES_IDS) c[id] = { seen: false, caught: false, mutations: { shiny: false, darkness: false } };
+  // `forms` = evolution stages the player has actually OWNED (stage index -> true).
+  // The Index only reveals a form once it is owned; seeing a wild evolved Mythling is not enough.
+  for (const id of SPECIES_IDS) c[id] = { seen: false, caught: false, mutations: { shiny: false, darkness: false }, forms: {} };
   return c;
 }
 
@@ -85,6 +91,10 @@ export const PartyManager = {
   lead() { return GameState.party[0] || null; },
   firstHealthy() { return GameState.party.find((m) => m.currentHp > 0) || null; },
   allFainted() { return GameState.party.length > 0 && GameState.party.every((m) => m.currentHp <= 0); },
+  /** Highest level in the party — wild spawns and trainer teams keep pace with it. */
+  topLevel() {
+    return GameState.party.reduce((top, m) => Math.max(top, m.level || 1), 1);
+  },
   add(m) {
     if (this.isFull()) return false;
     GameState.party.push(m);
@@ -116,6 +126,21 @@ export const PartyManager = {
 // -------------------------------------------------- Storage
 export const StorageManager = {
   list() { return GameState.storage; },
+  /** Bag capacity: your party AND your storage count against the bag you own. */
+  capacity() { return bagCapacity(GameState.player?.bagTier); },
+  used() { return GameState.party.length + GameState.storage.length; },
+  remaining() { return Math.max(0, this.capacity() - this.used()); },
+  isFull() { return this.used() >= this.capacity(); },
+  bagTier() { return GameState.player?.bagTier || 1; },
+  /** Buy the next bag up. Returns false when it is unaffordable or already maxed. */
+  upgradeBag() {
+    const next = bagTier(GameState.player.bagTier + 1);
+    if (next.tier <= GameState.player.bagTier) return { ok: false, reason: 'You already carry the biggest bag there is.' };
+    if (!PlayerManager.spendCoins(next.price)) return { ok: false, reason: 'Not enough Wildcoins!' };
+    GameState.player.bagTier = next.tier;
+    bus.emit('bag:changed');
+    return { ok: true, tier: next.tier, capacity: next.capacity };
+  },
   add(m) { GameState.storage.push(m); bus.emit('storage:changed'); return true; },
   remove(uid) {
     const i = GameState.storage.findIndex((m) => m.uid === uid);
@@ -145,7 +170,8 @@ export const StorageManager = {
       if (species && m.speciesId !== species) return false;
       if (rarity && m.rarity !== rarity) return false;
       if (mood && m.mood !== mood) return false;
-      if (mutation && m.mutation !== mutation) return false;
+      // filtering by Shiny also finds Shiny Darkness, and the same for Darkness
+      if (mutation && m.mutation !== mutation && !mutationParts(m.mutation).includes(mutation)) return false;
       if (minLevel != null && m.level < minLevel) return false;
       if (maxLevel != null && m.level > maxLevel) return false;
       if (query) {
@@ -193,15 +219,30 @@ export const CollectionManager = {
     const e = GameState.collection[speciesId];
     if (!e) return;
     e.seen = true;
-    if (mutation !== 'none') e.mutations[mutation] = true;
+    // a combined mutation ticks every part it carries
+    for (const part of mutationParts(mutation)) e.mutations[part] = true;
     bus.emit('collection:changed');
   },
-  markCaught(speciesId, mutation = 'none') {
+  markCaught(speciesId, mutation = 'none', stage = 0) {
     const e = GameState.collection[speciesId];
     if (!e) return;
     e.seen = true; e.caught = true;
-    if (mutation !== 'none') e.mutations[mutation] = true;
+    for (const part of mutationParts(mutation)) e.mutations[part] = true;
+    this.markForm(speciesId, stage);
     bus.emit('collection:changed');
+  },
+  /** Record that a form (evolution stage) of a species is owned — and every stage below it. */
+  markForm(speciesId, stage = 0) {
+    const e = GameState.collection[speciesId];
+    if (!e) return;
+    e.forms = e.forms || {};
+    for (let st = 0; st <= (stage || 0); st++) e.forms[st] = true;
+    bus.emit('collection:changed');
+  },
+  /** True when the player has owned this evolution stage of the species. */
+  hasForm(speciesId, stage) {
+    const e = GameState.collection[speciesId];
+    return !!(e && e.forms && e.forms[stage]);
   },
   entry(id) { return GameState.collection[id]; },
   stats() {
@@ -240,6 +281,7 @@ export function createNewGameState({ slot, playerName, starterId, settings }) {
     starter: starterId,
     lastHealMap: 'verdant_vale',
     lastHealPoint: { ...MAPS.verdant_vale.spawn },
+    bagTier: 1,                       // Bag 1 — 20 Mythlings. Bigger bags are bought in the shops.
   };
   GameState.party = [];
   GameState.storage = [];
@@ -251,12 +293,16 @@ export function createNewGameState({ slot, playerName, starterId, settings }) {
     visitedMaps: { verdant_vale: true },
     flags: {},
     npcProgress: {},
+    chests: {},
+    chestStats: {},
+    shops: {},
   };
   GameState.meta = { playTime: 0, startedAt: Date.now(), gameVersion: GAME_VERSION, levelCap: LEVEL_CAP };
   GameState._sessionStart = Date.now();
   if (settings) GameState.settings = settings;
 
-  const starter = createMythling({ speciesId: starterId, level: 1, isStarter: true, originMap: 'verdant_vale' });
+  // The partner you begin with is always a top-tier (S rarity) Mythling.
+  const starter = createMythling({ speciesId: starterId, level: STARTER_LEVEL, isStarter: true, rarity: STARTER_RARITY, originMap: 'verdant_vale' });
   PartyManager.add(starter);
   CollectionManager.markCaught(starterId, starter.mutation);
   return starter;
@@ -297,24 +343,48 @@ function migrateMythling(raw) {
     exp: Math.max(0, raw.exp ?? 0),
     stage: raw.stage ?? 0,
     rarity: raw.rarity ?? getSpecies(raw.speciesId).defaultRarity,
-    mood: raw.mood ?? getSpecies(raw.speciesId).defaultMood,
+    mood: normalizeMoodId(raw.mood ?? getSpecies(raw.speciesId).defaultMood),   // old 3-up moods map onto the new single-stat ones
+    rational: getRational(raw.rational) ? raw.rational : rollRational(),         // migration: old saves had no Rational
     mutation: raw.mutation ?? 'none',          // migration: old saves had no mutation
     currentHp: raw.currentHp ?? null,   // null => restore to full below (old saves)
     ultCharge: clamp(raw.ultCharge ?? 0, 0, 8),
-    skills: { normal: null, special: null, buff: null, ...(raw.skills || {}) },
+    skills: normalizeEquipped(raw.skills),   // old saves stored {normal, special, buff}
     library: Array.isArray(raw.library) ? [...raw.library] : [],
     uses: { ...(raw.uses || {}) },
     meta: { caughtAt: null, caughtWith: null, caughtLevel: null, originMap: null, isStarter: false, ...(raw.meta || {}) },
   };
+  if (m.meta.caughtWith && LEGACY_ITEMS[m.meta.caughtWith]) m.meta.caughtWith = LEGACY_ITEMS[m.meta.caughtWith];
   // clamp stage to what this build allows for the stored level
   const maxStage = stageForLevel(m.speciesId, m.level);
   if (m.stage > maxStage) m.stage = maxStage;
   refreshLibrary(m);  // adds any skills introduced by a newer game version
-  autoEquip(m);
+  // skills whose use count changed in a newer version (e.g. elemental normals, once unlimited) start full
+  for (const id of m.library) {
+    const sk = getSkill(id);
+    if (sk && Number.isFinite(sk.uses) && m.uses[id] == null) m.uses[id] = sk.uses;
+  }
+  // drop equipped ids this Mythling cannot actually know (edited / corrupt saves)
+  m.skills = m.skills.filter((id) => m.library.includes(id));
+  // only auto-fill for saves that predate the loadout system: if the player
+  // chose to leave a button empty, that choice has to survive a reload
+  if (!raw.skills) autoEquip(m);
   const mx = maxHp(m);
   if (m.currentHp == null || !Number.isFinite(m.currentHp) || m.currentHp > mx) m.currentHp = mx;
   if (m.currentHp < 0) m.currentHp = 0;
   return m;
+}
+
+/** Keep only well-formed chest records from a save (tier must still exist). */
+function sanitizeChests(raw) {
+  const out = {};
+  for (const [mapId, entry] of Object.entries(raw || {})) {
+    if (!getMap(mapId) || !entry || typeof entry !== 'object') continue;
+    const list = (Array.isArray(entry.list) ? entry.list : [])
+      .filter((c) => c && typeof c.id === 'string' && CHEST_TIERS[c.tier] && Number.isFinite(c.x) && Number.isFinite(c.y))
+      .map((c) => ({ id: c.id, tier: c.tier, x: c.x, y: c.y }));
+    out[mapId] = { at: Math.max(0, Number(entry.at) || 0), list };
+  }
+  return out;
 }
 
 export function deserialize(data) {
@@ -334,22 +404,31 @@ export function deserialize(data) {
     starter: p.starter ?? null,
     lastHealMap: getMap(p.lastHealMap) ? p.lastHealMap : mapId,
     lastHealPoint: p.lastHealPoint || { ...MAPS[mapId].spawn },
+    bagTier: Math.max(1, Math.floor(p.bagTier) || 1),
   };
 
   GameState.party = (data.party || []).map(migrateMythling).filter(Boolean).slice(0, PARTY_MAX);
   GameState.storage = (data.storage || []).map(migrateMythling).filter(Boolean);
+
+  // A save from before bags existed gets the cheapest bag that actually holds
+  // what it is carrying — capacity is never used to delete anyone.
+  GameState.player.bagTier = Math.max(
+    GameState.player.bagTier,
+    bagTierFor(GameState.party.length + GameState.storage.length),
+  );
 
   // Safety: a save must always have at least one Mythling to continue.
   if (GameState.party.length === 0 && GameState.storage.length > 0) {
     GameState.party.push(GameState.storage.shift());
   }
   if (GameState.party.length === 0) {
-    GameState.party.push(createMythling({ speciesId: p.starter || 'spriggo', level: 1, isStarter: true }));
+    GameState.party.push(createMythling({ speciesId: p.starter || 'spriggo', level: STARTER_LEVEL, isStarter: true, rarity: STARTER_RARITY }));
   }
 
   const inv = {};
-  for (const [id, qty] of Object.entries(data.inventory || {})) {
-    if (getItem(id) && Number.isFinite(qty) && qty > 0) inv[id] = Math.floor(qty);
+  for (const [rawId, qty] of Object.entries(data.inventory || {})) {
+    const id = LEGACY_ITEMS[rawId] || rawId;   // e.g. the retired King Ball becomes a God Ball
+    if (getItem(id) && Number.isFinite(qty) && qty > 0) inv[id] = (inv[id] || 0) + Math.floor(qty);
   }
   GameState.inventory = Object.keys(inv).length ? inv : { ...STARTING_INVENTORY };
 
@@ -359,9 +438,18 @@ export function deserialize(data) {
     col[id] = {
       seen: !!e.seen, caught: !!e.caught,
       mutations: { shiny: !!e?.mutations?.shiny, darkness: !!e?.mutations?.darkness },
+      forms: { ...(e.forms || {}) },
     };
   }
   GameState.collection = col;
+  // Saves that predate the forms record: everything the player owns right now
+  // (and every stage below it) counts as an owned form.
+  for (const m of [...GameState.party, ...GameState.storage]) {
+    const e = col[m.speciesId];
+    if (!e) continue;
+    e.caught = true; e.seen = true;
+    for (let st = 0; st <= (m.stage || 0); st++) e.forms[st] = true;
+  }
 
   const w = data.world || {};
   GameState.world = {
@@ -370,6 +458,8 @@ export function deserialize(data) {
     visitedMaps: { verdant_vale: true, ...(w.visitedMaps || {}) },
     flags: { ...(w.flags || {}) },
     npcProgress: { ...(w.npcProgress || {}) },
+    chests: sanitizeChests(w.chests),
+    chestStats: { ...(w.chestStats || {}) },
   };
 
   GameState.meta = {

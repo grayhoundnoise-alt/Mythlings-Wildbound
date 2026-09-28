@@ -7,6 +7,12 @@
   --nature: #4fc76a;
   --water: #3fa9f5;
   --fire: #ff7a3d;
+  --rock: #b99a6b;
+  --electric: #f4d03f;
+  --ice: #8fdcff;
+  --metal: #a9b4c2;
+  --poison: #b06fe0;
+  --psychic: #ff6fb5;
   --text: #eaf3ff;
   --muted: #9fb3c9;
   --danger: #ff6b6b;
@@ -296,10 +302,17 @@ select {
 .chip.nature { background: rgba(79,199,106,.22); border-color: var(--nature); color: #b9ffd0; }
 .chip.water  { background: rgba(63,169,245,.22); border-color: var(--water);  color: #bfe9ff; }
 .chip.fire   { background: rgba(255,122,61,.22); border-color: var(--fire);   color: #ffd8bd; }
+.chip.rock   { background: rgba(185,154,107,.24); border-color: var(--rock);   color: #f0e2c6; }
+.chip.electric { background: rgba(244,208,63,.22); border-color: var(--electric); color: #fff3b8; }
+.chip.ice      { background: rgba(143,220,255,.22); border-color: var(--ice);      color: #e6fbff; }
+.chip.metal    { background: rgba(169,180,194,.22); border-color: var(--metal);    color: #eef2f7; }
+.chip.poison   { background: rgba(176,111,224,.22); border-color: var(--poison);   color: #eddcff; }
+.chip.psychic  { background: rgba(255,111,181,.22); border-color: var(--psychic);  color: #ffe0ef; }
 .chip.rarity { color: #fff; }
 .chip.shiny  { background: rgba(255,230,128,.2); border-color: #ffe680; color: #fff6cf; }
 .chip.darkness { background: rgba(176,124,255,.2); border-color: #b07cff; color: #e9dcff; }
 .chip.max { background: rgba(242,199,97,.25); border-color: var(--gold); color: #fff0c4; }
+.chip.legendary { background: linear-gradient(90deg, rgba(255,215,90,.3), rgba(255,111,181,.3)); border-color: #ffd76a; color: #fff4d0; }
 
 /* ---------- HUD ---------- */
 .hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
@@ -315,7 +328,7 @@ select {
   background: rgba(10,18,30,0.75); border: 1.5px solid rgba(255,255,255,0.14);
   text-align: center; font-size: .72rem; backdrop-filter: blur(4px);
 }
-.party-chip canvas { width: 100%; height: 44px; display: block; }
+.party-chip canvas { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
 .party-chip .pc-name { font-weight: 800; font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .party-chip .pc-lv { color: var(--muted); font-size: .68rem; }
 .party-chip.fainted { filter: grayscale(1) brightness(.6); }
@@ -401,7 +414,8 @@ select {
 }
 .combatant-card.player { bottom: 210px; right: 18px; }
 .cc-top { display: flex; align-items: center; gap: 8px; }
-.cc-name { font-weight: 900; letter-spacing: .04em; font-size: 1.02rem; }
+.cc-name { font-weight: 900; letter-spacing: .04em; font-size: 1.02rem; display: inline-flex; align-items: center; gap: 6px; }
+.cc-name .ico { width: 1em; height: 1em; }
 .cc-lv { color: var(--gold); font-weight: 800; margin-left: auto; font-size: .95rem; }
 .cc-hp-text { font-size: .78rem; color: var(--muted); text-align: right; }
 .ult-track { display: flex; gap: 3px; margin-top: 6px; align-items: center; }
@@ -431,9 +445,30 @@ select {
 .battle-actions .btn { padding: 13px 8px; font-size: .95rem; }
 .action-btn { position: relative; text-align: center; }
 .action-btn small { display: block; font-weight: 600; font-size: .7rem; color: #a9c0d6; margin-top: 3px; letter-spacing: .02em; }
+/* live damage readout: green = super effective, red = resisted, plain = neutral */
+.ab-dmg { font-size: .84rem; font-weight: 900; letter-spacing: 0; }
+.ab-dmg.strong { color: #6ee87f; text-shadow: 0 0 9px rgba(110,232,127,.45); }
+.ab-dmg.weak { color: #ff7b7b; text-shadow: 0 0 9px rgba(255,123,123,.4); }
+.ab-dmg.even { color: #eaf2fb; }
+.ab-x { margin-left: 4px; font-size: .68rem; font-weight: 800; opacity: .72; }
+/* the READY ultimate is a gold button with dark text — darken the readout to match */
+.action-btn.ultimate.ready .ab-dmg.strong { color: #0d6b20; text-shadow: none; }
+.action-btn.ultimate.ready .ab-dmg.weak { color: #961616; text-shadow: none; }
+.action-btn.ultimate.ready .ab-dmg.even { color: #241804; }
+.action-btn.ultimate.ready .ab-x { color: #5a4310; }
 .action-btn.normal { border-color: #9fb3c9; }
 .action-btn.special { border-color: #7fd8ff; }
 .action-btn.buff { border-color: #b6f09b; }
+.action-btn.debuff { border-color: #ff9aa2; }
+.action-btn.empty { opacity: .55; border-style: dashed; }
+/* the 1 / 2 / 3 badge: battle buttons, Skill Library loadout and detail panel */
+.slot-badge {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; flex: none;
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28);
+  font-size: .72rem; font-weight: 900; color: #fff; letter-spacing: 0;
+}
+.slot-badge.dim { opacity: .4; }
+.slot-badge.gold { background: rgba(242,199,97,.22); border-color: var(--gold); color: var(--gold); }
 .action-btn.ultimate { border-color: #ffd76a; }
 .action-btn.ultimate.ready { background: linear-gradient(180deg, #d8a23e, #a5701c); color: #241804; animation: pulseGlow 1.1s infinite; }
 @keyframes pulseGlow { 0%,100% { box-shadow: 0 5px 0 rgba(0,0,0,.35), 0 0 12px rgba(255,200,90,.5);} 50% { box-shadow: 0 5px 0 rgba(0,0,0,.35), 0 0 28px rgba(255,200,90,.95);} }
@@ -444,6 +479,80 @@ select {
   text-shadow: 0 2px 0 rgba(0,0,0,.6); animation: floatUp 1.05s ease-out forwards;
 }
 @keyframes floatUp { 0% { opacity: 0; transform: translateY(6px) scale(.8);} 20% { opacity:1; transform: translateY(-6px) scale(1.15);} 100% { opacity: 0; transform: translateY(-58px) scale(1);} }
+
+/* type sheet: SEE MORE */
+.tp-actions { display: flex; justify-content: center; margin-top: 12px; }
+.tp-toggle { font-size: .72rem; padding: 6px 14px; }
+.tp-more { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10px; }
+.tp-stats { display: flex; flex-direction: column; gap: 7px; }
+.tp-stat { display: grid; grid-template-columns: 88px minmax(0, 1fr) 46px; gap: 8px; align-items: baseline; font-size: .84rem; }
+.tp-stat .tp-sname { color: var(--muted); }
+.tp-stat .tp-sval { font-weight: 900; font-size: .92rem; }
+.tp-stat .tp-sdelta { font-weight: 800; font-size: .78rem; text-align: right; color: var(--muted); }
+.tp-stat .tp-sdelta.up { color: #6ee87f; }
+.tp-stat .tp-sdelta.down { color: #ff7b7b; }
+.tp-stat .tp-why { grid-column: 1 / -1; font-size: .7rem; color: var(--muted); line-height: 1.25; }
+.tp-stat .tp-why b.up { color: #6ee87f; }
+.tp-stat .tp-why b.down { color: #ff7b7b; }
+
+/* ---------- Battle: weather, sleep & seals ---------- */
+.weather-badge {
+  position: absolute; top: 6px; right: 8px; z-index: 3;
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px;
+  font-size: .74rem; letter-spacing: .04em;
+  background: rgba(8, 14, 24, .78); border: 1px solid rgba(255, 255, 255, .22);
+  color: #eaf2ff; box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+  animation: weather-in .45s ease-out;
+}
+.weather-badge .wb-note { color: #9fb3c9; font-size: .68rem; }
+.weather-badge.fire { border-color: rgba(255, 122, 40, .7); }
+.weather-badge.water { border-color: rgba(63, 169, 245, .7); }
+.weather-badge.nature { border-color: rgba(79, 199, 106, .7); }
+.weather-badge.electric { border-color: rgba(244, 208, 63, .7); }
+.weather-badge.ice { border-color: rgba(143, 220, 255, .7); }
+.weather-badge.poison { border-color: rgba(176, 111, 224, .7); }
+@keyframes weather-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+.battle-banner {
+  position: absolute; left: 50%; top: 34%; transform: translateX(-50%);
+  z-index: 5; padding: 10px 26px; border-radius: 12px;
+  font-size: 1.5rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase;
+  background: rgba(6, 10, 18, .82); border: 2px solid rgba(255, 255, 255, .3);
+  color: #fff; text-shadow: 0 2px 10px rgba(0, 0, 0, .7);
+  animation: banner-in .32s cubic-bezier(.2, 1.5, .4, 1);
+  pointer-events: none;
+}
+.battle-banner.fire { border-color: #ff7a3d; color: #ffd6b8; }
+.battle-banner.water { border-color: #3fa9f5; color: #cfeaff; }
+.battle-banner.nature { border-color: #4fc76a; color: #d2ffd9; }
+.battle-banner.electric { border-color: #f4d03f; color: #fff6c8; }
+.battle-banner.ice { border-color: #8fdcff; color: #eafaff; }
+.battle-banner.poison { border-color: #b06fe0; color: #f0d8ff; }
+.battle-banner.out { opacity: 0; transform: translateX(-50%) scale(1.06); transition: all .45s ease-in; }
+@keyframes banner-in { from { opacity: 0; transform: translateX(-50%) scale(.7); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+
+.status-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; min-height: 20px; align-items: center; }
+.status-row.empty .status-none { font-size: .68rem; color: var(--muted); opacity: .65; }
+.status-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 800; letter-spacing: .03em;
+  border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .07);
+}
+.status-chip.sleep { color: #b0c4ff; border-color: rgba(176, 196, 255, .55); background: rgba(90, 110, 200, .18); animation: sleep-pulse 1.8s ease-in-out infinite; }
+.status-chip.sealed { color: #ffcf6f; border-color: rgba(255, 207, 111, .55); background: rgba(180, 130, 40, .18); }
+@keyframes sleep-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+.ab-sealed { color: #ffcf6f; font-weight: 800; }
+
+/* ---------- Shops ---------- */
+.shop-head { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 6px; font-size: .78rem; font-weight: 800; letter-spacing: .06em; color: var(--muted); }
+.shop-timer { font-weight: 700; letter-spacing: .02em; color: #9fb3c9; }
+.shop-bags { border: 1px solid rgba(242,199,97,.28); border-radius: 12px; padding: 10px 12px; background: rgba(242,199,97,.06); }
+.shop-baghead { display: flex; align-items: baseline; gap: 10px; font-weight: 900; letter-spacing: .04em; }
+.shop-baghead .dim { font-weight: 600; font-size: .8rem; color: var(--muted); }
+.ir-stock { font-size: .72rem; font-weight: 700; color: #9fd8a0; margin-top: 2px; }
+.ir-stock.out { color: #ff9aa2; }
+.item-row.sold-out { opacity: .5; }
 
 /* ---------- Menus (party / bag / etc.) ---------- */
 .menu-screen { width: min(1120px, 96vw); height: min(760px, 92vh); display: flex; overflow: hidden; }
@@ -467,7 +576,7 @@ select {
 .myth-card.selected { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,199,97,.3); }
 .myth-card canvas { width: 66px; height: 66px; flex: none; }
 .myth-card .mc-main { flex: 1; min-width: 0; }
-.myth-card .mc-name { font-weight: 800; font-size: .98rem; display: flex; gap: 6px; align-items: center; }
+.myth-card .mc-name { font-weight: 800; font-size: .98rem; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
 .myth-card .mc-sub { color: var(--muted); font-size: .78rem; margin: 2px 0 4px; }
 .myth-card.fainted { filter: grayscale(.85) brightness(.75); }
 
@@ -476,12 +585,17 @@ select {
 .detail-art { border-radius: 16px; background: radial-gradient(circle at 50% 60%, rgba(90,140,190,.35), rgba(8,14,24,.7)); padding: 10px; }
 .detail-art canvas { width: 100%; height: 230px; display: block; }
 .stat-rows { display: flex; flex-direction: column; gap: 6px; }
-.stat-row { display: grid; grid-template-columns: 150px 1fr 54px; align-items: center; gap: 10px; font-size: .9rem; }
+.stat-row { display: grid; grid-template-columns: 112px 1fr 92px; align-items: center; gap: 8px; font-size: .9rem; }
 .stat-row .sbar { height: 9px; border-radius: 5px; background: rgba(0,0,0,.45); overflow: hidden; }
 .stat-row .sbar > i { display: block; height: 100%; background: linear-gradient(90deg, #7fd8ff, #3fa9f5); }
-.stat-row b { text-align: right; }
+/* "33 (+15)" on one line — the value and its bonus sit side by side */
+.stat-row b { text-align: right; display: inline-flex; flex-direction: row; align-items: baseline; justify-content: flex-end; gap: 4px; line-height: 1.05; white-space: nowrap; }
 .stat-row.up b { color: var(--ok); }
 .stat-row.down b { color: var(--danger); }
+/* the net Mood + Rational change, e.g. (+15) / (+5) / (-7) */
+.stat-row .stat-net { font-size: .72rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+.stat-row .stat-net.up { color: var(--ok); }
+.stat-row .stat-net.down { color: var(--danger); }
 
 .skill-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
@@ -519,11 +633,57 @@ select {
 
 /* ---------- Evolution / cinematic overlays ---------- */
 .cinematic {
-  position: absolute; inset: 0; z-index: 70; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 18px;
+  position: absolute; inset: 0; z-index: 70; display: flex;
+  overflow-y: auto; overflow-x: hidden;
   background: radial-gradient(ellipse at center, rgba(20,40,70,.9), rgba(2,5,10,.98));
 }
-.cinematic canvas { width: min(460px, 82vw); height: min(460px, 52vh); }
+/* A single `margin:auto` child: centres the cinematic but still scrolls
+   instead of clipping when the content is taller than the window. */
+.cinematic-stage {
+  margin: auto; width: min(760px, 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 28px 18px;
+}
+/* skill learn-level line in the wiki */
+.wiki-learn { color: var(--gold); font-size: .78rem; letter-spacing: .04em; }
+
+/* ---------- Mythling Index: every species with all four forms ---------- */
+.index-list { display: flex; flex-direction: column; gap: 14px; }
+.index-card {
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(255,255,255,.04); border: 1.5px solid rgba(255,255,255,.1);
+}
+.index-card.locked { opacity: .75; }
+.index-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.index-head .role { color: var(--muted); font-size: .8rem; }
+.index-stages { display: flex; gap: 10px; flex-wrap: wrap; }
+.index-stage {
+  width: 108px; padding: 6px; text-align: center; border-radius: 10px;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.08);
+}
+.index-stage canvas { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block; }
+.index-stage .is-name { font-weight: 800; font-size: .78rem; margin-top: 4px; }
+.index-stage .is-lv { color: var(--muted); font-size: .7rem; }
+.index-stage .is-tag { color: var(--gold); font-size: .62rem; letter-spacing: .06em; margin-top: 2px; }
+.index-stage.locked { opacity: .5; }
+.index-blank {
+  width: 100%; aspect-ratio: 1 / 1; display: grid; place-items: center;
+  color: var(--muted); font-size: 2rem; background: rgba(255,255,255,.04); border-radius: 8px;
+}
+
+/* Square at every size: the canvas used to be stretched wide and short, which
+   squashed the Mythling. JS backs it at device resolution for sharpness. */
+.cinematic canvas {
+  display: block; width: min(460px, 82vw, 56vh); height: auto; aspect-ratio: 1 / 1;
+}
+/* Once the summary appears, give the text room instead of overflowing. The
+   Mythling stands at ~72% of the square, so the empty bottom band is cropped
+   (the JS backs the canvas at the same ratio): "Congratulations!" sits right
+   under the evolved Mythling instead of a hand's width below it. */
+.cinematic.done canvas { width: min(300px, 46vh, 60vw); aspect-ratio: 460 / 356; }
+.cinematic.done .cinematic-stage { gap: 10px; }
+.cinematic.done h2 { margin: 0; }
+.cinematic.done p { margin: 0; }
 .cinematic h2 { font-size: clamp(1.4rem,4vw,2.4rem); letter-spacing: .12em; color: var(--gold); text-align:center; text-shadow: 0 0 22px rgba(255,200,90,.6); }
 .cinematic p { color: #dce9f7; font-size: 1.05rem; text-align: center; max-width: 620px; }
 
@@ -532,6 +692,36 @@ select {
 
 .levelup-list { display: flex; flex-direction: column; gap: 4px; font-size: .95rem; }
 .levelup-list .gain { color: var(--ok); }
+/* Skill Library: EQUIP / UNEQUIP per skill, loadout strip on top */
+.skill-slots { display: flex; gap: 4px; flex: none; }
+.skill-slots .btn { min-width: 30px; padding: 5px 8px; }
+.loadout-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.loadout-slot {
+  padding: 10px 12px; border-radius: 12px; min-height: 92px;
+  background: rgba(255,255,255,.05); border: 1.5px dashed rgba(255,255,255,.18);
+}
+.loadout-slot.filled { border-style: solid; border-color: var(--gold); background: rgba(242,199,97,.08); }
+.loadout-slot.filled.special { border-color: #7fd8ff; }
+.loadout-slot.filled.buff { border-color: #b6f09b; }
+.loadout-slot.filled.debuff { border-color: #ff9aa2; }
+.loadout-slot .ls-head { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+.loadout-slot .ls-name .ico { width: 15px; height: 15px; vertical-align: -.15em; }
+.loadout-slot .ls-meta { color: var(--muted); font-size: .76rem; margin-top: 4px; }
+.loadout-slot.empty .ls-name { color: var(--muted); font-weight: 600; }
+.lib-level { color: var(--gold); font-size: .78rem; letter-spacing: .08em; font-weight: 800; margin: 12px 0 6px; }
+.cat-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; vertical-align: middle;
+  font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 800;
+  background: rgba(255,255,255,.1); color: #dce9f7;
+}
+.cat-tag.special { background: rgba(127,216,255,.18); color: #bfe9ff; }
+.cat-tag.buff { background: rgba(182,240,155,.18); color: #d9ffc7; }
+.cat-tag.debuff { background: rgba(255,154,162,.2); color: #ffc4c9; }
+/* feed-a-stack quantity picker */
+.qty-picker { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+.qty-picker .qty-value { min-width: 64px; text-align: center; font-size: 1.6rem; color: var(--gold); }
+.feed-preview { text-align: center; line-height: 1.5; }
+@media (max-width: 640px) { .loadout-strip { grid-template-columns: 1fr; } }
 
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -560,6 +750,12 @@ select {
 .ico.nature { color: #6fe08a; }
 .ico.water  { color: #6fc9ff; }
 .ico.fire   { color: #ff9a55; }
+.ico.rock   { color: #d9bd8c; }
+.ico.electric { color: #ffe066; }
+.ico.ice      { color: #a8e6ff; }
+.ico.metal    { color: #c9d3de; }
+.ico.poison   { color: #c99cff; }
+.ico.psychic  { color: #ff9ccc; }
 .ico-label { display: inline-flex; align-items: center; gap: 7px; justify-content: center; }
 .ico-wrap { display: inline-flex; }
 .item-ico { width: 22px; height: 22px; color: var(--gold); opacity: .85; }
@@ -568,6 +764,24 @@ select {
 .stat-row.down .ico { color: var(--danger); }
 .chip .ico { width: .9em; height: .9em; margin-right: 4px; }
 .chip.evolve { border-color: #ffd76a; color: #ffd76a; }
+/* icon-only EVOLVE badge: never pushes the name row out of the card */
+.chip.evolve.icon-only { padding: 3px 6px; background: rgba(255,215,106,.16); animation: evo-pulse 1.4s ease-in-out infinite; cursor: help; }
+.chip.evolve.icon-only svg { width: 14px; height: 14px; }
+/* portrait column on cards: the art with the EVOLVE badge tucked under it */
+.myth-card .mc-side { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: none; width: 66px; }
+.chip.evolve.mc-evolve { padding: 2px 7px; font-size: .62rem; letter-spacing: .05em; gap: 3px; background: rgba(255,215,106,.16); animation: evo-pulse 1.4s ease-in-out infinite; cursor: help; white-space: nowrap; }
+.chip.evolve.mc-evolve svg { width: 12px; height: 12px; }
+@keyframes evo-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,106,.45); } 50% { box-shadow: 0 0 0 5px rgba(255,215,106,0); } }
+
+/* ---------- ball art ---------- */
+.ball-icon { flex: none; display: inline-block; vertical-align: middle; }
+.item-ico.ball-icon { width: 30px; height: 30px; }
+.action-btn.ball-btn .ab-name { align-items: center; }
+.caught-ball-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.06); }
+.caught-ball-name { font-weight: 800; }
+.caught-line { display: flex; align-items: center; gap: 8px; }
+.wiki-ball { display: inline-flex; align-items: center; gap: 8px; }
+.wiki-ball small { color: var(--muted); font-weight: 600; }
 .coin-line { display: flex; align-items: center; gap: 6px; }
 .ir-qty.price { display: inline-flex; align-items: center; gap: 5px; }
 .locked-row { display: flex; align-items: center; gap: 6px; }
@@ -663,3 +877,303 @@ select {
 }
 /* HP drains smoothly so the drop lands with the hit rather than snapping */
 .combatant-card .bar > i { transition: width .34s cubic-bezier(.3,.8,.4,1); }
+
+/* =====================================================================
+   Modals: never taller than the screen, and the body scrolls.
+   ===================================================================== */
+.modal-layer { overflow: auto; align-items: flex-start; }
+.modal {
+  width: min(560px, 94vw); padding: 24px 26px;
+  max-height: 94vh; margin: auto;
+  display: flex; flex-direction: column;
+}
+.modal.wide { width: min(980px, 96vw); }
+.modal > .panel-head, .modal > .row.end { flex: none; }
+.modal-body { min-height: 0; }
+.modal-body.scroll-y { overflow: auto; max-height: min(62vh, 620px); padding-right: 6px; }
+
+/* ---------- Labelled bars (HP / EXP / ULT) ---------- */
+.bar-wrap { margin: 4px 0 2px; }
+.bar-label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.bar-value { color: #cfe0f2; letter-spacing: .04em; font-weight: 700; }
+.party-chip .pc-bar { display: flex; align-items: center; gap: 4px; }
+.party-chip .pc-tag {
+  font-size: .56rem; letter-spacing: .08em; font-weight: 800; color: var(--muted); flex: none;
+}
+.party-chip .pc-bar .bar { flex: 1; margin-top: 2px; }
+
+/* ---------- Battle: trainer team readout ---------- */
+.team-row {
+  display: flex; align-items: center; gap: 6px; margin: 4px 0 2px;
+  padding: 3px 6px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.team-row.last { border-color: #ffd76a; background: rgba(242, 199, 97, 0.16); }
+.team-name {
+  font-size: .62rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: #cfe0f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+}
+.team-pips { display: flex; gap: 3px; flex: 1; }
+.team-pip { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); }
+.team-pip.alive { background: linear-gradient(90deg, #ffd76a, #ff8a3d); box-shadow: 0 0 6px rgba(255, 170, 60, .6); }
+.team-pip.down { background: rgba(255, 255, 255, 0.1); }
+.team-count {
+  font-size: .6rem; font-weight: 800; letter-spacing: .08em; color: #ffe6a8; white-space: nowrap;
+}
+.team-row.last .team-count { color: #ffd76a; animation: blink 1s infinite; }
+
+/* ---------- Battle: damage numbers (size reads the weight of the hit) ---------- */
+.dmg-float.crit {
+  font-size: 2.1rem; color: #ffd76a !important;
+  text-shadow: 0 0 14px rgba(255, 200, 90, .9), 0 2px 0 rgba(0, 0, 0, .6);
+}
+.dmg-float.big {                       /* special attacks */
+  font-size: 1.95rem;
+  text-shadow: 0 0 10px rgba(0, 0, 0, .75), 0 2px 0 rgba(0, 0, 0, .6);
+}
+.dmg-float.ult {                       /* ultimate: emphasised, lingers a beat */
+  font-size: 2.5rem; letter-spacing: .04em;
+  text-shadow: 0 0 18px currentColor, 0 3px 0 rgba(0, 0, 0, .7);
+  animation: floatUp 1.45s ease-out forwards;
+}
+.dmg-float.buff { font-size: 1.35rem; letter-spacing: .06em; }
+
+/* ---------- Level-up summary (can be long: it scrolls) ---------- */
+.levelup-body { max-height: min(52vh, 460px); overflow: auto; padding-right: 6px; }
+.levelup-body h3 { margin: 0 0 6px; font-size: 1rem; color: var(--gold); letter-spacing: .06em; }
+.levelup-body h3:not(:first-child) { margin-top: 14px; }
+.levelup-body p { margin: 6px 0 0; }
+/* six across, then wrap onto a new row — a vertical column of nine stats was
+   far too tall for the evolution and level-up summaries */
+.levelup-list {
+  display: grid; grid-template-columns: repeat(6, auto);
+  justify-content: center; gap: 6px;
+}
+.levelup-list .gain {
+  padding: 3px 9px; border-radius: 999px; font-size: .78rem; font-weight: 800; letter-spacing: .04em;
+  background: rgba(110, 224, 140, .16); border: 1px solid rgba(134, 240, 160, .45); color: #d3ffdf;
+}
+.levelup-list .gain.down {
+  background: rgba(255, 140, 150, .16); border-color: rgba(255, 160, 168, .45); color: #ffdfe2;
+}
+
+/* =====================================================================
+   GAME WIKI
+   ===================================================================== */
+.wiki-screen {
+  width: min(1180px, 96vw); height: min(860px, 94vh);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.wiki-screen .panel-head.sticky { gap: 14px; }
+.wiki-main { flex: 1; display: flex; min-height: 0; }
+.wiki-nav {
+  width: 224px; flex: none; padding: 14px 12px; display: flex; flex-direction: column; gap: 5px;
+  background: rgba(6, 12, 22, 0.55); border-right: 2px solid rgba(242, 199, 97, 0.25); overflow: auto;
+}
+.wiki-tab {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 12px; border-radius: 10px; border: none; text-align: left; cursor: pointer;
+  background: transparent; color: #bfd3e8; font-weight: 700; font-size: .88rem; font-family: inherit;
+}
+.wiki-tab .ico { width: 16px; height: 16px; opacity: .85; }
+.wiki-tab:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.wiki-tab.active {
+  background: linear-gradient(90deg, rgba(242, 199, 97, .28), transparent);
+  color: var(--gold); box-shadow: inset 3px 0 0 var(--gold);
+}
+.wiki-nav-foot { margin-top: auto; padding-top: 10px; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.wiki-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.wiki-status { padding: 10px 24px 0; font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.wiki-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 24px 26px; }
+.wiki-h3 { margin: 20px 0 8px; font-size: 1.02rem; color: var(--gold); letter-spacing: .08em; text-transform: uppercase; }
+.wiki-h3:first-child { margin-top: 4px; }
+.wiki-p { margin: 0 0 10px; line-height: 1.6; color: #dce9f7; font-size: .92rem; }
+.wiki-table { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 14px; }
+.wiki-tr {
+  display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 12px;
+  padding: 8px 11px; border-radius: 9px; background: rgba(255, 255, 255, 0.05);
+  font-size: .87rem; line-height: 1.45;
+}
+.wiki-tr .wiki-td { min-width: 0; overflow-wrap: anywhere; }
+.wiki-tr .wiki-td.k { color: var(--gold); font-weight: 800; }
+.wiki-tr .wiki-td.v { color: #dce9f7; }
+.wiki-ul { margin: 0 0 14px; padding-left: 20px; line-height: 1.6; font-size: .9rem; color: #dce9f7; }
+.wiki-ul li { margin-bottom: 5px; }
+.wiki-note {
+  margin: 10px 0 14px; padding: 10px 14px; border-left: 3px solid var(--gold);
+  background: rgba(242, 199, 97, 0.1); border-radius: 0 10px 10px 0;
+  font-size: .88rem; line-height: 1.55; color: #f2e7cd;
+}
+.wiki-dim { color: var(--muted); font-size: .82rem; }
+/* the wiki borrows the battle readout's colours when it explains them */
+.wiki-good { color: #6ee87f; font-weight: 800; }
+.wiki-bad { color: #ff7b7b; font-weight: 800; }
+.wiki-hidden { display: none !important; }
+.wiki-card { border: 1.5px solid rgba(255, 255, 255, 0.12); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; background: rgba(255, 255, 255, 0.04); }
+.wiki-card-head { display: flex; gap: 14px; align-items: flex-start; }
+.wiki-portrait { width: 96px; height: 96px; flex: none; }
+.wiki-card-title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-weight: 800; font-size: 1.05rem; margin-bottom: 5px; }
+.wiki-elgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr)); gap: 6px; margin: 8px 0 14px; }
+.wiki-el { padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); font-size: .82rem; }
+.wiki-el.strong { background: rgba(110, 224, 140, 0.16); color: #c9ffd8; }
+.wiki-el.weak { background: rgba(255, 140, 150, 0.14); color: #ffd8dc; }
+.wiki-body code {
+  background: rgba(0, 0, 0, 0.4); padding: 2px 7px; border-radius: 6px;
+  font-size: .84em; color: #ffe9b8; word-break: break-word;
+}
+.wiki-body .good { color: var(--ok); }
+.wiki-body .bad { color: var(--danger); }
+input[type="text"].wiki-search {
+  width: 240px; padding: 9px 13px; font-size: .88rem; letter-spacing: normal; text-transform: none;
+  background: rgba(8, 16, 26, 0.9); border: 1.5px solid rgba(242, 199, 97, 0.4); border-radius: 10px;
+}
+
+@media (max-width: 900px) {
+  .wiki-nav { width: 58px; align-items: center; }
+  .wiki-tab span { display: none; }
+  .wiki-tab { justify-content: center; }
+  .wiki-nav-foot { display: none; }
+  .wiki-tr { grid-template-columns: 1fr; gap: 2px; }
+  .wiki-body, .wiki-status { padding-left: 14px; padding-right: 14px; }
+  input[type="text"].wiki-search { width: 150px; }
+  .wiki-card-head { flex-direction: column; }
+  .wiki-portrait { width: 78px; height: 78px; }
+}
+
+/* ---- portrait with an element badge (party / storage / collection cards) ---- */
+.portrait { position: relative; flex: none; }
+.portrait canvas { width: 100%; height: 100%; display: block; }
+.portrait .el-badge {
+  position: absolute; right: -4px; bottom: -4px; width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #142033; border: 2px solid rgba(255,255,255,.75); box-shadow: 0 2px 6px rgba(0,0,0,.45);
+}
+.portrait .el-badge .ico { width: 13px; height: 13px; }
+.portrait .el-badge.nature { background: var(--nature); color: #0f2a16; }
+.portrait .el-badge.water  { background: var(--water);  color: #0b2236; }
+.portrait .el-badge.fire   { background: var(--fire);   color: #3a1204; }
+.portrait .el-badge.rock   { background: var(--rock);   color: #2c2114; }
+.portrait .el-badge.electric { background: var(--electric); color: #3a2c00; }
+.portrait .el-badge.ice      { background: var(--ice);      color: #0f3446; }
+.portrait .el-badge.metal    { background: var(--metal);    color: #1f262e; }
+.portrait .el-badge.poison   { background: var(--poison);   color: #2a0f44; }
+.portrait .el-badge.psychic  { background: var(--psychic);  color: #46102c; }
+.myth-card .portrait { width: 66px; height: 66px; }
+
+/* ---- element icon in front of every Mythling name ---- */
+.name-el { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.name-el .ico { width: 1.05em; height: 1.05em; flex: none; filter: drop-shadow(0 0 3px rgba(0,0,0,.6)); }
+/* element-coloured glyphs in front of names (cards, profile, battle) — bright enough to read at a glance */
+.ico.el.nature   { color: #5fe37a; }
+.ico.el.water    { color: #5fc4ff; }
+.ico.el.fire     { color: #ff8a4a; }
+.ico.el.rock     { color: #e0bf7a; }
+.ico.el.electric { color: #ffe23a; }
+.ico.el.ice      { color: #a8ecff; }
+.ico.el.metal    { color: #d0dae6; }
+.ico.el.poison   { color: #cf8cff; }
+.ico.el.psychic  { color: #ff8ccb; }
+h3 .name-el { vertical-align: middle; }
+/* the Release button: plain text, light red */
+.btn.release, button.release { color: #ff9a9a; border-color: rgba(255,120,120,.45); background: rgba(255,90,90,.08); }
+.btn.release:hover, button.release:hover { background: rgba(255,90,90,.18); color: #ffb3b3; }
+
+/* ---- storage card actions: always side by side ---- */
+.myth-card .mc-actions { display: flex; gap: 6px; flex-wrap: nowrap; margin-top: 6px; }
+.myth-card .mc-actions .btn { flex: 1 1 0; min-width: 0; padding: 6px 8px; justify-content: center; white-space: nowrap; }
+.myth-card .mc-actions .btn .ico { width: 14px; height: 14px; }
+
+/* ---- Index / Collection grouped by element ---- */
+.element-group-head {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; padding: 8px 12px;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); font-size: .95rem; letter-spacing: .04em;
+}
+.element-group-head .ico { width: 18px; height: 18px; }
+.element-group-head .sub { margin: 0 0 0 auto; font-size: .8rem; }
+.element-group-head.nature { border-color: rgba(79,199,106,.45); }
+.element-group-head.water  { border-color: rgba(63,169,245,.45); }
+.element-group-head.fire   { border-color: rgba(255,122,61,.45); }
+.element-group-head.rock   { border-color: rgba(185,154,107,.5); }
+.element-group-head.electric { border-color: rgba(244,208,63,.45); }
+.element-group-head.ice      { border-color: rgba(143,220,255,.45); }
+.element-group-head.metal    { border-color: rgba(169,180,194,.45); }
+.element-group-head.poison   { border-color: rgba(176,111,224,.45); }
+.element-group-head.psychic  { border-color: rgba(255,111,181,.45); }
+.index-stage.locked .index-blank { display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.35); }
+.index-stage.locked .index-blank .ico { width: 30px; height: 30px; }
+.index-stage.locked .is-tag { color: #ff9aa2; }
+.col-card .portrait { width: 90px; height: 90px; margin: 0 auto; }
+.col-card .portrait canvas { width: 90px; height: 90px; }
+
+.wiki-lock { display: inline-block; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: #ff9aa2; border: 1px solid rgba(255,154,162,.5); border-radius: 6px; padding: 0 5px; margin-left: 4px; vertical-align: middle; }
+
+/* ---------- Battle: type match-up indicator ---------- */
+/* One chip per card, and only when the match-up actually matters. */
+.matchup-row { display: flex; gap: 6px; margin: 5px 0 2px; min-height: 0; }
+.matchup-row:empty { display: none; }
+.matchup-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: .64rem; font-weight: 800; letter-spacing: .08em; white-space: nowrap;
+  border: 1px solid transparent;
+  animation: buffPop .3s cubic-bezier(.2,.9,.3,1.5);
+}
+.matchup-chip .ico { width: 12px; height: 12px; }
+.matchup-chip .mu-who { opacity: .72; font-weight: 700; }
+.matchup-chip .mu-mult { padding: 0 5px; border-radius: 6px; background: rgba(0,0,0,.34); font-size: .6rem; }
+.matchup-chip.strong {
+  background: linear-gradient(180deg, rgba(110,224,140,.26), rgba(28,96,56,.36));
+  border-color: rgba(134,240,160,.6); color: #d8ffe4;
+  box-shadow: 0 0 12px rgba(110,224,140,.28);
+}
+.matchup-chip.weak {
+  background: linear-gradient(180deg, rgba(255,150,120,.24), rgba(110,40,30,.36));
+  border-color: rgba(255,170,140,.55); color: #ffe2d8;
+  box-shadow: 0 0 12px rgba(255,130,100,.22);
+}
+
+/* the little "what am I good against?" button on each combatant card */
+.cc-info {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; padding: 0; margin-left: 4px; flex: 0 0 auto;
+  border-radius: 7px; cursor: pointer;
+  border: 1px solid rgba(160,200,236,.34);
+  background: linear-gradient(180deg, rgba(90,140,190,.24), rgba(20,40,64,.34));
+  color: #bcd9f2; box-shadow: none;
+  transition: transform .14s ease, color .14s ease, border-color .14s ease, background .14s ease;
+}
+.cc-info .ico { width: 13px; height: 13px; }
+.cc-info:hover { transform: scale(1.12); color: #fff3c4; border-color: #f2c761; background: linear-gradient(180deg, rgba(242,199,97,.3), rgba(60,44,12,.4)); }
+.cc-info:active { transform: scale(.96); }
+
+/* the panel it opens */
+.type-panel {
+  min-width: min(520px, 82vw); max-width: 100%; max-height: 62vh;
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+}
+.type-panel .tp-head {
+  margin: 14px 0 6px; font-size: .68rem; letter-spacing: .16em;
+  color: #9fb3c9; text-transform: uppercase;
+}
+.type-panel .tp-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.type-panel .tp-mult { margin-left: 2px; opacity: .85; font-size: .72em; }
+.type-panel .tp-empty { color: #7f94a9; font-size: .84rem; font-style: italic; }
+.type-panel .tp-vs {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 11px; border-radius: 10px; margin-bottom: 5px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  font-size: .82rem;
+}
+.type-panel .tp-vs-label { flex: 1; color: #dce9f8; }
+.type-panel .tp-vs-word { font-weight: 800; letter-spacing: .08em; font-size: .7rem; }
+.type-panel .tp-vs-mult { font-weight: 800; padding: 1px 7px; border-radius: 7px; background: rgba(0,0,0,.3); }
+.type-panel .tp-vs.strong { border-color: rgba(134,240,160,.5); }
+.type-panel .tp-vs.strong .tp-vs-word { color: #8ef0a8; }
+.type-panel .tp-vs.weak { border-color: rgba(255,170,140,.5); }
+.type-panel .tp-vs.weak .tp-vs-word { color: #ffa88c; }
+.type-panel .tp-vs.even .tp-vs-word { color: #9fb3c9; }
+.matchup-chip.mini { margin-top: 5px; padding: 2px 7px; font-size: .58rem; gap: 4px; }
+.matchup-chip.mini .ico { width: 10px; height: 10px; }
