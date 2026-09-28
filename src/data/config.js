@@ -1,5 +1,5 @@
 // Global tunables for the current version.
-export const GAME_VERSION = '0.3.0';
+export const GAME_VERSION = '0.5.0';
 export const SAVE_PREFIX = 'mythlings_wildbound';
 export const SAVE_SLOT_COUNT = 3;
 
@@ -39,10 +39,20 @@ export const COUNTER_MAX_DODGE = 6;
  * Crit Damage is a BONUS percentage (0-200 => up to x3).
  */
 export const CRIT_MAX_PERCENT = 25;
-export const CRIT_MAX_MULT = 200;
+export const CRIT_MAX_MULT = 150;
 
 export const DAMAGE_RANDOM_MIN = 0.85;
 export const DAMAGE_RANDOM_MAX = 1.0;
+/**
+ * Damage scaling on top of the stat ratio. Attack and Defense already grow with level
+ * and evolution stage, so these stay gentle: the old 0.085/level × full stage multiplier
+ * let two Lv.100 Mythlings one-shot each other and made "who moves first" the whole
+ * fight. At Lv.100 / stage 4 the factor is now ~5.5 instead of ~20.7 — a neutral Special
+ * takes about seven hits to KO an equal foe, a super-effective one about five, and even
+ * a super-effective Ultimate needs two or three.
+ */
+export const DAMAGE_LEVEL_SCALE = 0.035;
+export const DAMAGE_STAGE_SCALE = 0.08;
 
 export const STAT_GROWTH = {
   hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,

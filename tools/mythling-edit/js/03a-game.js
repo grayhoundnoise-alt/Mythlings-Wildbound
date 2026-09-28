@@ -361,7 +361,11 @@ const Game = {
       art: Object.assign({ body: my.bodyType || my.game?.body || 'fox' }, my.palette || {}),
     };
     if (my.starter || (sp && 'starter' in sp)) entry.starter = !!my.starter;
-    return entry;
+    // fields the editor does not model (dual / triple types, legendary flags, home map ...) come through untouched
+    for (const k of Object.keys(sp)) if (!(k in entry)) entry[k] = deepClone(sp[k]);
+    // keep the game's key order so the export diffs cleanly against src/data/species.js
+    const ordered = {}; for (const k of Object.keys(sp)) if (k in entry) ordered[k] = entry[k]; for (const k of Object.keys(entry)) if (!(k in ordered)) ordered[k] = entry[k];
+    return ordered;
   },
 
   // =========================================================================== skills & vfx
@@ -385,12 +389,12 @@ const Game = {
     for (const id of [...Object.keys(S.skills.SKILLS), ...Object.keys(S.skills.ULTIMATES)]) { const s = this.importSkill(id); if (s) { project.skills[s.id] = s; n++; } }
     return n;
   },
-  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire', rock: 'Rock' }[el] || 'Universal'; },
+  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire', rock: 'Rock', electric: 'Electric', ice: 'Ice', metal: 'Metal', poison: 'Poison', psychic: 'Psychic' }[el] || 'Universal'; },
   /** Editable emitter VFX approximating a SKILL_VFX descriptor (cast → projectile → impact → aftermath) with the game's element palette. */
   importVfx(id) {
     const S = GameSnapshot; const d = S.skillVfx.SKILL_VFX[id]; if (!d) return null;
     const P = S.skillVfx.ELEMENT_VFX[d.element] || S.skillVfx.ELEMENT_VFX.none; const el = d.element || 'none'; const cat = d.category || 'special';
-    const scatter = el === 'nature' ? 'leaf' : el === 'water' ? 'splash' : el === 'fire' ? 'flame' : el === 'rock' ? 'shockwave' : 'spark';
+    const scatter = el === 'nature' ? 'leaf' : el === 'water' || el === 'poison' ? 'splash' : el === 'fire' ? 'flame' : el === 'rock' || el === 'metal' || el === 'ice' ? 'shockwave' : 'spark';
     const em = (type, o) => { const e = emitter(type, Object.assign({ color: P.mid, color2: P.core }, o)); for (const k of ['delay', 'duration', 'lifetime']) if (typeof e[k] === 'number') e[k] = round(e[k], 3); return e; };
     const emitters = []; let t = 0;
     const castDur = d.cast?.dur ?? 0.15;

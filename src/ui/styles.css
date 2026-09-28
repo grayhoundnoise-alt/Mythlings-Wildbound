@@ -8,6 +8,11 @@
   --water: #3fa9f5;
   --fire: #ff7a3d;
   --rock: #b99a6b;
+  --electric: #f4d03f;
+  --ice: #8fdcff;
+  --metal: #a9b4c2;
+  --poison: #b06fe0;
+  --psychic: #ff6fb5;
   --text: #eaf3ff;
   --muted: #9fb3c9;
   --danger: #ff6b6b;
@@ -298,10 +303,16 @@ select {
 .chip.water  { background: rgba(63,169,245,.22); border-color: var(--water);  color: #bfe9ff; }
 .chip.fire   { background: rgba(255,122,61,.22); border-color: var(--fire);   color: #ffd8bd; }
 .chip.rock   { background: rgba(185,154,107,.24); border-color: var(--rock);   color: #f0e2c6; }
+.chip.electric { background: rgba(244,208,63,.22); border-color: var(--electric); color: #fff3b8; }
+.chip.ice      { background: rgba(143,220,255,.22); border-color: var(--ice);      color: #e6fbff; }
+.chip.metal    { background: rgba(169,180,194,.22); border-color: var(--metal);    color: #eef2f7; }
+.chip.poison   { background: rgba(176,111,224,.22); border-color: var(--poison);   color: #eddcff; }
+.chip.psychic  { background: rgba(255,111,181,.22); border-color: var(--psychic);  color: #ffe0ef; }
 .chip.rarity { color: #fff; }
 .chip.shiny  { background: rgba(255,230,128,.2); border-color: #ffe680; color: #fff6cf; }
 .chip.darkness { background: rgba(176,124,255,.2); border-color: #b07cff; color: #e9dcff; }
 .chip.max { background: rgba(242,199,97,.25); border-color: var(--gold); color: #fff0c4; }
+.chip.legendary { background: linear-gradient(90deg, rgba(255,215,90,.3), rgba(255,111,181,.3)); border-color: #ffd76a; color: #fff4d0; }
 
 /* ---------- HUD ---------- */
 .hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
@@ -654,6 +665,11 @@ select {
 .ico.water  { color: #6fc9ff; }
 .ico.fire   { color: #ff9a55; }
 .ico.rock   { color: #d9bd8c; }
+.ico.electric { color: #ffe066; }
+.ico.ice      { color: #a8e6ff; }
+.ico.metal    { color: #c9d3de; }
+.ico.poison   { color: #c99cff; }
+.ico.psychic  { color: #ff9ccc; }
 .ico-label { display: inline-flex; align-items: center; gap: 7px; justify-content: center; }
 .ico-wrap { display: inline-flex; }
 .item-ico { width: 22px; height: 22px; color: var(--gold); opacity: .85; }
@@ -946,6 +962,11 @@ input[type="text"].wiki-search {
 .portrait .el-badge.water  { background: var(--water);  color: #0b2236; }
 .portrait .el-badge.fire   { background: var(--fire);   color: #3a1204; }
 .portrait .el-badge.rock   { background: var(--rock);   color: #2c2114; }
+.portrait .el-badge.electric { background: var(--electric); color: #3a2c00; }
+.portrait .el-badge.ice      { background: var(--ice);      color: #0f3446; }
+.portrait .el-badge.metal    { background: var(--metal);    color: #1f262e; }
+.portrait .el-badge.poison   { background: var(--poison);   color: #2a0f44; }
+.portrait .el-badge.psychic  { background: var(--psychic);  color: #46102c; }
 .myth-card .portrait { width: 66px; height: 66px; }
 
 /* ---- element icon in front of every Mythling name ---- */
@@ -972,6 +993,11 @@ h3 .name-el { vertical-align: middle; }
 .element-group-head.water  { border-color: rgba(63,169,245,.45); }
 .element-group-head.fire   { border-color: rgba(255,122,61,.45); }
 .element-group-head.rock   { border-color: rgba(185,154,107,.5); }
+.element-group-head.electric { border-color: rgba(244,208,63,.45); }
+.element-group-head.ice      { border-color: rgba(143,220,255,.45); }
+.element-group-head.metal    { border-color: rgba(169,180,194,.45); }
+.element-group-head.poison   { border-color: rgba(176,111,224,.45); }
+.element-group-head.psychic  { border-color: rgba(255,111,181,.45); }
 .index-stage.locked .index-blank { display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.35); }
 .index-stage.locked .index-blank .ico { width: 30px; height: 30px; }
 .index-stage.locked .is-tag { color: #ff9aa2; }

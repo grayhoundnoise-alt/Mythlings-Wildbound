@@ -6,12 +6,13 @@ import {
   addUltimateCharge, gainExp, hpPercent, applyItemEffects,
 } from '../core/mythling.js';
 import { getSkill, MAX_BUFF_STACKS, ULTIMATE_MAX_CHARGE, effectTarget, isSupportUltimate } from '../data/skills.js';
-import { elementMultiplier, effectivenessLabel } from '../data/elements.js';
+import { elementMultiplier, effectivenessLabel, speciesElements } from '../data/elements.js';
 import { getItem } from '../data/items.js';
 import { getRarity } from '../data/rarity.js';
 import {
   DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, COUNTER_MAX_PERCENT, expReward, LEVEL_CAP,
   counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT, coinReward, FUTURE_CONTENT_LIVE,
+  DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE,
 } from '../data/config.js';
 import { clamp, randInt } from '../core/utils.js';
 
@@ -251,6 +252,9 @@ export class Battle {
       if (ult.selfBuff) {
         for (const eff of ult.selfBuff) this._applyBuff(attacker, eff, events, atkSide);
       }
+      if (ult.foeDebuff && !isFainted(defender)) {
+        for (const eff of ult.foeDebuff) this._applyDebuff(defender, eff, events, defSide);
+      }
       return;
     }
 
@@ -392,10 +396,14 @@ export class Battle {
     const crit = this.rng() * 100 < critChance;
 
     const atkElement = move.element || speciesOf(attacker).element;
-    const mult = elementMultiplier(atkElement, speciesOf(defender).element);
+    // dual / triple-typed defenders weigh every one of their elements
+    const mult = elementMultiplier(atkElement, speciesElements(speciesOf(defender)));
     const rand = DAMAGE_RANDOM_MIN + this.rng() * (DAMAGE_RANDOM_MAX - DAMAGE_RANDOM_MIN);
-    const levelFactor = 1 + 0.085 * (attacker.level - 1);
-    const stageFactor = stageData(attacker).statMult;
+    // Attack and Defense already grow with level and evolution, so the extra level /
+    // stage factors are deliberately gentle: at Lv.100 a Special takes ~5-6 hits to KO
+    // an equal foe and even an Ultimate needs two or three — no more coin-flip one-shots.
+    const levelFactor = 1 + DAMAGE_LEVEL_SCALE * (attacker.level - 1);
+    const stageFactor = 1 + DAMAGE_STAGE_SCALE * (attacker.stage || 0);
 
     let dmg = Math.floor(((move.power * off) / Math.max(1, def)) * levelFactor * stageFactor * rand * mult);
     if (crit) dmg = Math.floor(dmg * (1 + critBonus / 100));

@@ -1,7 +1,7 @@
 // Small DOM toolkit + shared UI pieces (screens, dialogue, toasts, modals).
 import { AudioManager } from '../systems/AudioManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
-import { ELEMENTS } from '../data/elements.js';
+import { ELEMENTS, speciesElements } from '../data/elements.js';
 import { getRarity } from '../data/rarity.js';
 import { getMutation } from '../data/mutations.js';
 import { icon, iconSvg } from './icons.js';
@@ -249,8 +249,15 @@ export function fade(on) {
 
 // ---------------- chips ----------------
 export function elementChip(elementId) {
-  const e = ELEMENTS[elementId];
-  return el('span', { class: `chip ${elementId}` }, [icon(elementId), el('span', { text: e.name })]);
+  const e = ELEMENTS[elementId] || { name: elementId };
+  return el('span', { class: `chip ${elementId}` }, [icon(ELEMENTS[elementId]?.icon || 'spark'), el('span', { text: e.name })]);
+}
+
+/** One chip per element of a species (dual / triple types get two or three), plus a LEGENDARY chip. */
+export function elementChips(sp) {
+  const out = speciesElements(sp).map(elementChip);
+  if (sp?.legendary) out.push(el('span', { class: 'chip legendary', title: 'Legendary: one form, 2-3 elements, rare spawn, Absolute Ball or better to catch' }, [icon('ultimate'), el('span', { text: 'Legendary' })]));
+  return out;
 }
 
 export function rarityChip(rarityId) {

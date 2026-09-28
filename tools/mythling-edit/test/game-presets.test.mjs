@@ -58,12 +58,13 @@ await step('mythlings mirror the game art + sampled animations', async () => {
   for (const id of Object.keys(GS.species.SPECIES)) {
     const my = p.mythlings[id]; assert(my, 'missing ' + id);
     const art = GS.art.artFor(id); const parts = Object.values(my.rig.nodes).filter((n) => n.type === 'gamepart');
+    if (GS.species.SPECIES[id].legendary) assert(my.evolutions.length === 1 && (my.elements || GS.species.SPECIES[id].elements).length >= 2, 'legendary shape ' + id);
     assert(parts.length === art.parts.length, `${id} parts ${parts.length} vs ${art.parts.length}`);
     assert(my.animations.length === 12, 'anims ' + id);
     const anchors = Object.values(my.rig.nodes).filter((n) => n.type === 'anchor').map((n) => n.name);
     for (const req of ['Root', 'Head', 'Mouth', 'AttackOrigin', 'VFXOrigin', 'BodyCenter']) assert(anchors.includes(req), `${id} anchor ${req}`);
     assert(same(my.stats, GS.species.SPECIES[id].baseStats), 'stats ' + id);
-    assert(my.evolutions.length === 4, 'evolutions ' + id);
+    assert(my.evolutions.length === GS.species.SPECIES[id].evolutions.length, 'evolutions ' + id);
   }
   const sp = p.mythlings.spriggo; const walk = p.animations[sp.animations.find((a) => p.animations[a].name === 'Walk')];
   const legFL = walk.tracks[sp.parts.legFL]; assert(legFL && legFL.length >= 3, 'walk legFL keys');

@@ -24,7 +24,7 @@ import { ChestManager } from '../systems/ChestManager.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
 import { drawMythling } from '../render/creatures.js';
 import {
-  el, button, bar, hpClass, elementChip, rarityChip, mutationChip, toast, modal, closeModal, confirmDialog,
+  el, button, bar, hpClass, elementChip, elementChips, rarityChip, mutationChip, toast, modal, closeModal, confirmDialog,
   Screens, panelHeader, closeButton,
 } from './ui.js';
 import { icon, iconSvg, iconLabel } from './icons.js';
@@ -310,7 +310,7 @@ export class PlayerMenu {
       el('div', {}, [
         el('div', { class: 'detail-art' }, [mythCanvas(m, 240, true)]),
         el('div', { class: 'row', style: { gap: '6px', marginTop: '10px', justifyContent: 'center' } }, [
-          elementChip(sp.element), rarityChip(m.rarity),
+          ...elementChips(sp), rarityChip(m.rarity),
           el('span', { class: 'chip', title: 'Mood', text: getMood(m.mood).name }),
           el('span', { class: 'chip', title: 'Rational', text: rationalSummary(m.rational).name }),
           mutationChip(m.mutation),
@@ -779,7 +779,7 @@ export class PlayerMenu {
         const card = el('div', { class: `index-card ${known ? '' : 'locked'}` }, [
           el('div', { class: 'index-head' }, [
             el('b', { text: known ? sp.displayName : '???' }),
-            elementChip(sp.element),
+            ...elementChips(sp),
             el('span', { class: 'role', text: known ? sp.role : '???' }),
             el('span', { class: 'role', text: `· ${known ? sp.breed : '???'} · ${MAPS[sp.spawnMaps?.[0]]?.displayName || ''}` }),
           ]),
@@ -839,7 +839,7 @@ export class PlayerMenu {
       el('div', { class: 'row', style: { gap: '16px' } }, [
         mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 150, true),
         el('div', {}, [
-          el('div', { class: 'row', style: { gap: '6px' } }, [elementChip(sp.element), el('span', { class: 'chip', text: sp.breed }), el('span', { class: 'chip', text: sp.role })]),
+          el('div', { class: 'row', style: { gap: '6px' } }, [...elementChips(sp), el('span', { class: 'chip', text: sp.breed }), el('span', { class: 'chip', text: sp.role })]),
           el('p', { class: 'sub', text: sp.description }),
           el('div', { class: 'mc-sub', text: `Base stats — ${STAT_KEYS.map((k) => `${STAT_SHORT[k]} ${formatStat(k, sp.baseStats[k])}`).join(', ')}` }),
           el('div', { class: 'mc-sub', text: `Found in: ${sp.spawnMaps.map((mp) => MAPS[mp].displayName).join(', ')}` }),

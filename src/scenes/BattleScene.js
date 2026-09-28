@@ -17,7 +17,7 @@ import { SkillVFX } from '../render/vfx/SkillVFX.js';
 import { paletteFor } from '../data/skillVfx.js';
 import { roundRect } from '../render/worldRenderer.js';
 import { drawBall, ballCanvas, ballLook, BALL_ART } from '../render/balls.js';
-import { el, button, bar, hpClass, elementChip, mutationChip, rarityChip, toast, confirmDialog, modal, closeModal } from '../ui/ui.js';
+import { el, button, bar, hpClass, elementChip, elementChips, mutationChip, rarityChip, toast, confirmDialog, modal, closeModal } from '../ui/ui.js';
 import { icon, iconSvg, iconLabel } from '../ui/icons.js';
 import { buffSummary, isDamageSkill } from '../data/skills.js';
 import { AudioManager } from '../systems/AudioManager.js';
@@ -178,7 +178,7 @@ export class BattleScene {
     if (side === 'enemy' && this.battle.type === BattleType.TRAINER) rows.push(this.teamRow());
     rows.push(
       el('div', { class: 'row', style: { gap: '6px', margin: '4px 0' } }, [
-        elementChip(sp.element),
+        ...elementChips(sp),
         rarityChip(m.rarity),
         el('span', { class: 'chip', text: getMood(m.mood).name }),
       ]),
@@ -414,11 +414,12 @@ export class BattleScene {
     for (const ballId of BALL_IDS) {
       const qty = InventoryManager.count(ballId);
       const item = getItem(ballId);
+      const allowed = CaptureManager.ballAllowed(target, ballId);
       const chance = Math.round(CaptureManager.chanceFor(target, ballId) * 100);
-      const btn = button('', { class: 'action-btn ball-btn', disabled: qty <= 0, onclick: () => this.tryCapture(ballId) });
-      btn.title = `${item.name} — ${ballLook(ballId)} design. ${item.desc}`;
+      const btn = button('', { class: 'action-btn ball-btn', disabled: qty <= 0 || !allowed, onclick: () => this.tryCapture(ballId) });
+      btn.title = allowed ? `${item.name} — ${ballLook(ballId)} design. ${item.desc}` : `${item.name} cannot hold a LEGENDARY Mythling — Absolute Ball or better only.`;
       btn.appendChild(el('div', { class: 'ab-name' }, [ballCanvas(ballId, 26), el('span', { text: item.name })]));
-      btn.appendChild(el('small', { text: `x${qty} · ${chance}% catch` }));
+      btn.appendChild(el('small', { text: allowed ? `x${qty} · ${chance}% catch` : `x${qty} · too weak for a legendary` }));
       this.actions.appendChild(btn);
       if (qty > 0) any = true;
     }
@@ -494,7 +495,7 @@ export class BattleScene {
         el('p', { html: `<b>${displayName(caught)}</b> joined you at <b style="color:#ffd76a">Lv.1</b>!` }),
         el('p', { class: 'sub', html: `It was caught at Lv.${caught.meta.caughtLevel} — every captured Mythling restarts at Lv.1 and must be raised by you.` }),
         el('div', { class: 'row', style: { gap: '6px' } }, [
-          elementChip(speciesOf(caught).element),
+          ...elementChips(speciesOf(caught)),
           rarityChip(caught.rarity),
           el('span', { class: 'chip', text: caught.mood }),
           mutationChip(caught.mutation),
@@ -1155,6 +1156,11 @@ export class BattleScene {
       water:  { sky: ['#8fd8ff', '#d7f3ff'], ground: ['#f0e0b4', '#7fc4d8'], accent: '#3fa9f5' },
       fire:   { sky: ['#5a1f18', '#ff9a4a'], ground: ['#5b3c34', '#33211d'], accent: '#ff7a3d' },
       rock:   { sky: ['#3b3f4e', '#d8c7a4'], ground: ['#9a8f78', '#5e574c'], accent: '#7d7a72' },
+      electric: { sky: ['#2b2f4a', '#8fa3c8'], ground: ['#7c8c74', '#4a5266'], accent: '#f4d03f' },
+      ice:      { sky: ['#8fb6d8', '#eef7ff'], ground: ['#e6f0f8', '#a4cde8'], accent: '#8fdcff' },
+      metal:    { sky: ['#3a3d44', '#b8a89a'], ground: ['#7a7470', '#4d4848'], accent: '#a9b4c2' },
+      poison:   { sky: ['#2e3a2c', '#9fb08a'], ground: ['#6f8a5a', '#3c4a3c'], accent: '#b06fe0' },
+      psychic:  { sky: ['#1a1030', '#7a5ab8'], ground: ['#7f6aa8', '#403864'], accent: '#ff6fb5' },
     };
     const p = palettes[theme] || palettes.nature;
     const sky = ctx.createLinearGradient(0, 0, 0, H * 0.7);
@@ -1206,7 +1212,7 @@ export class BattleScene {
       const x = ((i * 137 + this.time * (10 + i % 7)) % (W + 60)) - 30;
       const y = (i * 91 + Math.sin(this.time + i) * 30) % H;
       ctx.globalAlpha = 0.3;
-      ctx.fillStyle = theme === 'fire' ? '#ffb46a' : theme === 'water' ? '#e6faff' : '#eaffc9';
+            ctx.fillStyle = ({ fire: '#ffb46a', water: '#e6faff', rock: '#e9dcc4', electric: '#fff6a8', ice: '#ffffff', metal: '#ffb347', poison: '#c07cff', psychic: '#ffc6e4' })[theme] || '#eaffc9';
       ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();

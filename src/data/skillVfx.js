@@ -22,6 +22,11 @@ export const ELEMENT_VFX = {
   water:  { core: '#f2fdff', mid: '#5cc0f5', deep: '#1a5c9e', glow: '#bfe9ff', dark: '#0d3557', spark: '#ffffff' },
   fire:   { core: '#fff3b0', mid: '#ff9a2e', deep: '#d8391a', glow: '#ffcf7a', dark: '#5a1405', spark: '#fff6d8' },
   rock:   { core: '#fff1cf', mid: '#c9a86e', deep: '#6e5a3c', glow: '#f0dcb0', dark: '#2e2418', spark: '#fff7e0' },
+  electric: { core: '#fffbd0', mid: '#f4d03f', deep: '#b8860b', glow: '#fff6a8', dark: '#4a3a08', spark: '#ffffff' },
+  ice:      { core: '#ffffff', mid: '#8fdcff', deep: '#3f8fc8', glow: '#e6fbff', dark: '#1d4664', spark: '#ffffff' },
+  metal:    { core: '#f4f7fa', mid: '#a9b4c2', deep: '#5c6878', glow: '#e8eef5', dark: '#262c34', spark: '#ffffff' },
+  poison:   { core: '#f2d8ff', mid: '#b06fe0', deep: '#6a2fa0', glow: '#e4c0ff', dark: '#2c1444', spark: '#c8ff8a' },
+  psychic:  { core: '#fff0f8', mid: '#ff6fb5', deep: '#b8307c', glow: '#ffc6e4', dark: '#4a1234', spark: '#ffffff' },
   none:   { core: '#ffffff', mid: '#d8e2f0', deep: '#7b8798', glow: '#ffffff', dark: '#2b3340', spark: '#ffffff' },
 };
 

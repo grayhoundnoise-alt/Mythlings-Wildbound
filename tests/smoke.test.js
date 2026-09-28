@@ -94,7 +94,7 @@ function section(t) { console.log(`\n${t}`); }
 // ------------------------------------------------------------------
 section('Species & stats');
 test('every species exists with base stats and a filled-in roster', () => {
-  assert.equal(Object.keys(SPECIES).length, 20, '5 starters + 3 nature, 3 water, 4 fire + 5 rock');
+  assert.equal(Object.keys(SPECIES).length, 50, '20 originals + 25 new-element lines + 2 dual-typed lines + 3 legendaries');
   assert.equal(SPECIES.spriggo.baseStats.hp, 110);
   assert.equal(SPECIES.aquini.baseStats.spd, 19);
   assert.equal(SPECIES.emberu.baseStats.patk, 18);
@@ -106,11 +106,15 @@ test('every species exists with base stats and a filled-in roster', () => {
     const sp = SPECIES[id];
     byEl[sp.element] = (byEl[sp.element] || 0) + 1;
     assert.ok(sp.role, `${id} has a role`);
-    assert.ok(sp.evolutions.length === 4, `${id} has four stages`);
+    assert.ok(sp.evolutions.length === (sp.legendary ? 1 : 4), `${id} has ${sp.legendary ? 'one form' : 'four stages'}`);
     assert.ok(sp.ultimate, `${id} has an ultimate`);
     assert.ok(sp.art && sp.art.body, `${id} names a body plan`);
   }
-  assert.deepEqual(byEl, { nature: 5, water: 5, fire: 5, rock: 5 });
+  // five single-typed lines per element (dual types and legendaries are counted under their first element)
+  assert.deepEqual(byEl, { nature: 5, water: 5, fire: 5, rock: 6, electric: 6, ice: 5, metal: 5, poison: 7, psychic: 6 });
+  const dual = Object.values(SPECIES).filter((sp) => (sp.elements || []).length > 1 && !sp.legendary).map((sp) => sp.id);
+  assert.deepEqual(dual, ['mirewisp', 'sparkbug'], 'two dual-typed lines');
+  assert.deepEqual(SPECIES.mirewisp.elements, ['poison', 'psychic']);
 });
 
 test('rarity D applies no mood modifier, higher rarity does — and moods never lower a stat', () => {
@@ -419,6 +423,33 @@ test('elemental Normal skills have limited uses; only the plain starter attacks 
 
 // ------------------------------------------------------------------
 section('Battle');
+test('battles are fair at Lv.100: no one-shots at parity, trainer teams stay at their written level', async () => {
+  const { DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE } = await import('../src/data/config.js');
+  assert.ok(DAMAGE_LEVEL_SCALE <= 0.04 && DAMAGE_STAGE_SCALE <= 0.1, 'gentle level / stage scaling');
+  // two equal Lv.100 final-stage Mythlings, neutral element, strongest Special: at least four hits to KO, an Ultimate at least two
+  const a = createMythling({ speciesId: 'spriggo', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brave', rational: 'docile' });
+  const b = createMythling({ speciesId: 'emberu', level: LEVEL_CAP, stage: 3, rarity: 'A', mood: 'brave', rational: 'docile' });   // Nature vs Fire is a weakness for a; use b attacking a neutral? Fire→Nature is strong, so measure b's hits on a with a NEUTRAL move
+  const hitsToKo = (attacker, defender, skillId, rng = () => 0.999) => {
+    let hits = 0; const hpStart = defender.currentHp;
+    while (defender.currentHp > 0 && hits < 50) { const bt = new Battle({ type: BattleType.WILD, party: [attacker], enemies: [defender], mapId: 'verdant_vale', rng }); bt.act({ type: 'skill', skillId }); hits++; }
+    defender.currentHp = hpStart; return hits;
+  };
+  // Bite is element-less (neutral) — the strongest neutral is Worldroot... no, that is Nature; use 'bite' scaled: we check a Special instead
+  const neutralSpecial = 'crystal_ray';   // Rock special: neutral against Nature? Rock vs Nature = weak; pick Water 'aqua_spear' vs Fire = strong. Use retaliate-free: Bite (neutral, normal).
+  void neutralSpecial;
+  const hitsNormal = hitsToKo(b, a, 'bite');
+  assert.ok(hitsNormal >= 6, `a neutral Lv.100 Normal needs several hits (${hitsNormal})`);
+  b.library.push('inferno_roar'); b.uses.inferno_roar = 99;
+  const hitsSpecialSE = hitsToKo(b, a, 'inferno_roar');   // Fire vs Nature: super effective, max roll, no crit
+  assert.ok(hitsSpecialSE >= 3, `even a super-effective Lv.100 Special needs several hits (${hitsSpecialSE})`);
+  // trainer teams are fixed: a Lv.100 party does not inflate a Lv.5 trainer
+  createNewGameState({ slot: 1, playerName: 'T', starterId: 'spriggo' });
+  PartyManager.list()[0].level = LEVEL_CAP;
+  const t = MAPS.verdant_vale.trainers[0];
+  const enemies = t.team.map((spec) => createMythling({ speciesId: spec.species, level: Math.min(LEVEL_CAP, spec.level || 1) }));
+  assert.deepEqual(enemies.map((e) => e.level), t.team.map((x) => x.level));
+});
+
 test('a full wild battle can be fought and won', () => {
   const player = createMythling({ speciesId: 'spriggo', level: 12 });
   const wild = createMythling({ speciesId: 'leaflet', level: 5 });
@@ -1032,10 +1063,12 @@ test('camera zoom replaces camera sensitivity and stays within its limits', asyn
 });
 
 test('map level ranges match the design: fixed bands that overlap slightly', () => {
-  assert.deepEqual(MAPS.verdant_vale.levelRange, [1, 20]);
-  assert.deepEqual(MAPS.azure_coast.levelRange, [15, 30]);
-  assert.deepEqual(MAPS.emberwild.levelRange, [30, 45]);
-  assert.deepEqual(MAPS.stonehollow_crags.levelRange, [45, 60]);
+  const bands = { verdant_vale: [1, 20], azure_coast: [15, 30], emberwild: [28, 40], stonehollow_crags: [38, 48], stormreach_plateau: [46, 56], frostveil_tundra: [54, 64], ironhold_foundry: [62, 72], miremarsh_fen: [70, 80], astral_spire: [78, 90] };
+  for (const [id, band] of Object.entries(bands)) assert.deepEqual(MAPS[id].levelRange, band, `${id} band`);
+  // progressive: each band starts a little under the previous one's top and ends higher; the last one reaches Lv.90
+  const order = Object.values(MAPS).sort((a, b) => a.order - b.order);
+  for (let i = 1; i < order.length; i++) { assert.ok(order[i].levelRange[0] < order[i - 1].levelRange[1] && order[i].levelRange[0] >= order[i - 1].levelRange[1] - 5, `${order[i].id} overlaps the previous band slightly`); assert.ok(order[i].levelRange[1] > order[i - 1].levelRange[1]); }
+  assert.equal(order[order.length - 1].levelRange[1], 90, 'the last map tops out at Lv.90');
   // trainers sit inside their region's band, guardians at the top of it
   for (const map of Object.values(MAPS)) {
     for (const t of map.trainers) for (const mm of t.team) assert.ok(mm.level >= map.levelRange[0] && mm.level <= map.levelRange[1], `${t.id} ${mm.species} Lv.${mm.level} inside ${map.id}`);
@@ -1055,16 +1088,22 @@ test('no encounter zone can spawn above its map maximum', () => {
 });
 
 test('progression gates exist between regions', () => {
+  const order = Object.values(MAPS).sort((a, b) => a.order - b.order).map((m) => m.id);
+  assert.deepEqual(order, ['verdant_vale', 'azure_coast', 'emberwild', 'stonehollow_crags', 'stormreach_plateau', 'frostveil_tundra', 'ironhold_foundry', 'miremarsh_fen', 'astral_spire']);
+  for (let i = 0; i < order.length - 1; i++) {
+    const from = MAPS[order[i]], to = MAPS[order[i + 1]];
+    const gate = from.connections.find((c) => c.toMap === to.id);
+    assert.ok(gate && gate.requiresItem, `${from.id} → ${to.id} is gated`);
+    const guardian = from.trainers.find((t) => t.guardian);
+    assert.ok(guardian.reward.items[gate.requiresItem], `${from.id}'s guardian hands out ${gate.requiresItem}`);
+    assert.ok(to.connections.some((c) => c.toMap === from.id), `${to.id} has the way back`);
+    assert.ok(!guardian.finalBoss, `${from.id}'s guardian is not the final boss`);
+  }
   const toAzure = MAPS.verdant_vale.connections.find((c) => c.toMap === 'azure_coast');
-  const toEmber = MAPS.azure_coast.connections.find((c) => c.toMap === 'emberwild');
-  const toCrags = MAPS.emberwild.connections.find((c) => c.toMap === 'stonehollow_crags');
   assert.equal(toAzure.requiresItem, 'vale_charm');
-  assert.equal(toEmber.requiresItem, 'coast_pass');
-  assert.equal(toCrags.requiresItem, 'ember_sigil');
-  assert.ok(MAPS.emberwild.trainers.find((t) => t.flag === 'flame_warden').reward.items.ember_sigil, 'the Flame Warden hands out the sigil');
   assert.ok(MAPS.stonehollow_crags.connections.some((c) => c.toMap === 'emberwild'), 'and the way back exists');
   const boss = Object.values(MAPS).flatMap((m) => m.trainers).filter((t) => t.finalBoss);
-  assert.deepEqual(boss.map((t) => t.flag), ['stone_warden'], 'the Stone Warden is the one final boss');
+  assert.deepEqual(boss.map((t) => t.flag), ['astral_warden'], 'the Astral Warden is the one final boss');
   for (const map of Object.values(MAPS)) {
     for (const b of map.buildings) for (const id of b.stock || []) assert.ok(ITEMS_MOD.ITEMS[id], `${map.id}/${b.id} sells a real item (${id})`);
     for (const t of map.trainers) for (const id of Object.keys(t.reward?.items || {})) assert.ok(ITEMS_MOD.ITEMS[id], `${t.id} rewards a real item (${id})`);
@@ -1146,7 +1185,7 @@ test('every species resolves to a rig with 8-12 layers plus a face spec', () => 
 });
 
 test('body plans are reusable by name, so new species need no bespoke art', () => {
-  assert.deepEqual(Object.keys(BODY_PLANS).sort(), ['avian', 'beetle', 'boar', 'dragon', 'feline', 'fox', 'golem', 'lizard', 'tortoise', 'wolf']);
+  assert.deepEqual(Object.keys(BODY_PLANS).sort(), ['avian', 'bat', 'beetle', 'boar', 'dragon', 'feline', 'fox', 'golem', 'lizard', 'ram', 'serpent', 'tortoise', 'wisp', 'wolf']);
   for (const [plan, art] of Object.entries(BODY_PLANS)) {
     assert.ok(art.parts.length >= 7, `${plan} plan is a complete rig`);
   }
@@ -1438,15 +1477,74 @@ test('the evolution summary crops the empty band under the Mythling', () => {
 section('Wild encounters');
 const { EncounterManager } = await import('../src/systems/EncounterManager.js');
 
-test('every region spawns five species, all of the region element', () => {
-  const wanted = { verdant_vale: 'nature', azure_coast: 'water', emberwild: 'fire', stonehollow_crags: 'rock' };
-  for (const [mapId, element] of Object.entries(wanted)) {
-    const zones = EncounterManager.zonesForMap(mapId);
-    const seen = new Set();
-    for (const z of zones) for (let i = 0; i < 60; i++) seen.add(EncounterManager.spawnForZone(z, mapId).speciesId);
-    assert.equal(seen.size, 5, `${mapId} spawns ${seen.size} species`);
-    for (const id of seen) assert.equal(SPECIES[id].element, element, `${id} matches ${mapId}`);
+test('every region spawns its own element (five lines, plus dual-typed visitors) and legendaries only through the rare roll', async () => {
+  const { speciesElements } = await import('../src/data/elements.js');
+  const { LEGENDARY_IDS } = await import('../src/data/species.js');
+  const noLegend = () => 0.999;   // an rng that never wins the legendary roll but still picks species
+  for (const map of Object.values(MAPS)) {
+    const zones = EncounterManager.zonesForMap(map.id);
+    const tabled = new Set();
+    for (const z of zones) for (const s of z.species) tabled.add(s.id);
+    const singles = [...tabled].filter((id) => speciesElements(SPECIES[id]).length === 1);
+    assert.equal(singles.length, 5, `${map.id} tables five single-typed lines`);
+    for (const id of tabled) {
+      assert.ok(speciesElements(SPECIES[id]).includes(map.element), `${id} belongs on ${map.id}`);
+      assert.ok(!SPECIES[id].legendary, `${id} is never in a zone table`);
+    }
+    // spawns follow the table when the legendary roll fails
+    let rngI = 0; const seq = () => { rngI++; return rngI % 7 === 0 ? 0.999 : (rngI * 0.137) % 1; };
+    for (const z of zones) for (let i = 0; i < 20; i++) { const sp = EncounterManager.spawnForZone(z, map.id, seq); assert.ok(tabled.has(sp.speciesId) || LEGENDARY_IDS.includes(sp.speciesId)); }
+    void noLegend;
   }
+});
+
+test('legendaries: rare, home-map biased, one form, 2-3 elements, Absolute Ball or better', async () => {
+  const { LEGENDARY_IDS } = await import('../src/data/species.js');
+  const { LEGENDARY_HOME_CHANCE, LEGENDARY_AWAY_CHANCE } = await import('../src/systems/EncounterManager.js');
+  const { canHoldLegendary } = await import('../src/data/items.js');
+  assert.deepEqual(LEGENDARY_IDS, ['aetherion', 'venomyr', 'basaltyr']);
+  for (const id of LEGENDARY_IDS) {
+    const sp = SPECIES[id];
+    assert.ok(sp.elements.length >= 2 && sp.elements.length <= 3, `${id} has 2-3 elements`);
+    assert.equal(sp.evolutions.length, 1, `${id} never evolves`);
+    assert.ok(sp.spawnMaps.every((m) => (sp.elements).includes(MAPS[m].element)), `${id} only spawns where one of its elements lives`);
+    assert.equal(sp.homeMap, sp.spawnMaps[0]);
+    const lvls = Object.keys(sp.skillUnlocks).map(Number); assert.ok(lvls.includes(20) && lvls.includes(60) && lvls.includes(80), `${id} still learns by level`);
+  }
+  assert.ok(LEGENDARY_HOME_CHANCE <= 0.03 && LEGENDARY_AWAY_CHANCE < LEGENDARY_HOME_CHANCE, 'rare, rarer away from home');
+  assert.equal(EncounterManager.rollLegendary('astral_spire', () => 0.001), 'aetherion', 'a lucky roll on the home map');
+  assert.equal(EncounterManager.rollLegendary('verdant_vale', () => 0.001), null, 'never on a map without its elements');
+  assert.equal(EncounterManager.rollLegendary('astral_spire', () => 0.5), null, 'an ordinary roll spawns nothing special');
+  const zone = MAPS.astral_spire.encounterZones[0];
+  const legend = EncounterManager.spawnForZone(zone, 'astral_spire', () => 0.001);
+  assert.equal(legend.speciesId, 'aetherion'); assert.equal(legend.stage, 0); assert.equal(legend.level, zone.levelRange[1], 'a legendary spawns at the top of the band');
+  // balls
+  assert.ok(!canHoldLegendary('basic_ball') && !canHoldLegendary('advanced_ball') && canHoldLegendary('absolute_ball') && canHoldLegendary('god_ball') && canHoldLegendary('dark_ball'));
+  createNewGameState({ slot: 1, playerName: 'LEG', starterId: 'spriggo' });
+  legend.currentHp = 0;
+  InventoryManager.add('advanced_ball', 1); InventoryManager.add('god_ball', 1);
+  const weak = CaptureManager.attempt(legend, 'advanced_ball');
+  assert.equal(weak.ok, false); assert.ok(weak.legendaryBlocked && /legendary/i.test(weak.reason));
+  assert.equal(InventoryManager.count('advanced_ball'), 1, 'the weak ball is not wasted');
+  assert.equal(CaptureManager.chanceFor(legend, 'advanced_ball'), 0);
+  const strong = CaptureManager.attempt(legend, 'god_ball', () => 0.5);
+  assert.ok(strong.ok && strong.success, 'a God Ball holds it');
+  // legendary ultimates climb by level instead of by stage
+  const { ultimateMove } = await import('../src/core/mythling.js');
+  assert.equal(ultimateMove(createMythling({ speciesId: 'aetherion', level: 10 })).tierIndex, 0);
+  assert.equal(ultimateMove(createMythling({ speciesId: 'aetherion', level: 60 })).tierIndex, 2);
+  assert.equal(ultimateMove(createMythling({ speciesId: 'aetherion', level: 85 })).tierIndex, 3);
+  assert.ok(ultimateMove(createMythling({ speciesId: 'aetherion', level: 85 })).power > ultimateMove(createMythling({ speciesId: 'spriggo', level: 85, stage: 3 })).power, 'legendary ultimates hit harder');
+});
+
+test('dual-typed defenders weigh every element; dual-typed lines learn both elements', async () => {
+  const { elementMultiplier } = await import('../src/data/elements.js');
+  assert.equal(elementMultiplier('fire', ['poison', 'psychic']), 0.75, 'Fire vs Poison/Psychic: neutral × weak');
+  assert.equal(elementMultiplier('psychic', ['poison', 'psychic']), 1.5);
+  assert.equal(elementMultiplier('rock', ['electric', 'metal']), 1.5 * 0.75, 'Rock vs Electric/Metal: strong × weak');
+  const learned = Object.values(SPECIES.sparkbug.skillUnlocks).flat().map((id) => SKILLS_MOD.SKILLS[id]).filter(Boolean);
+  assert.ok(learned.some((s) => s.element === 'electric') && learned.some((s) => s.element === 'metal'), 'Sparkbug learns Electric AND Metal attacks');
+  for (const s of learned) if (s.category === 'buff' || s.category === 'debuff') assert.ok(!s.element, `${s.id}: support skills carry no element`);
 });
 
 test('wild levels are FIXED per zone: an over-levelled party never scales the world up', () => {

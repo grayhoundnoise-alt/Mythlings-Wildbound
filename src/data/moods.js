@@ -30,12 +30,12 @@ export const STAT_INFO = {
   spd: 'Higher Speed acts first each turn — and helps you flee.',
   counter: 'Evasion. Each point is 0.15% dodge, capped at 6% — a miss is rare (Counter caps at 35).',
   crit: 'Chance to land a critical hit, in percent (caps at 25% — a crit stays special even at Lv.100).',
-  critMult: 'Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +200%).',
+  critMult: 'Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +150%).',
 };
 
 /** Reference used for the stat bars in the detail panel. */
 export const STAT_BAR_MAX = {
-  hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 25, critMult: 200,
+  hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 25, critMult: 150,
 };
 
 // Mood: a purely POSITIVE trait. Every Mood raises THREE stats and lowers nothing —

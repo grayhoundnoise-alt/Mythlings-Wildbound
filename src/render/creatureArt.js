@@ -1539,6 +1539,272 @@ export const SPECIES_ART = {
  * Palette, horns, wings and scale still come from the species itself, so two
  * species on the same plan still read as different Mythlings.
  */
+// =============================================================================
+// NEW-ELEMENT BODY PLANS — bat / serpent / wisp
+// -----------------------------------------------------------------------------
+// Used by the Stormreach → Astral Spire species (Electric, Ice, Metal, Poison,
+// Psychic). Stage changes: stage 1 grows crests and markings, stage 2 adds horns
+// / spines (ex.horns), stage 3 unfolds a second, larger wing or an aura (ex.wings).
+// =============================================================================
+
+/** Simple crystal shard used by the new plans (lit facet on the left). */
+function gem(ctx, x, y, h, w, angle, color, light) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+  poly(ctx, [[0, -h], [w * 0.5, 0], [-w * 0.5, 0]], color);
+  poly(ctx, [[0, -h], [w * 0.16, -h * 0.12], [-w * 0.14, -h * 0.06], [-w * 0.34, 0]], light);
+  ctx.restore();
+}
+
+// ---- BAT: a hovering cave bat with big ears and membrane wings ----------------
+function batWing(ctx, c, ex, g, flip) {
+  ctx.save(); if (flip) ctx.scale(-1, 1);
+  const L = 30 + g * 10, H = 16 + g * 5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(L * 0.35, -H * 1.1, L, -H * 0.55);
+  ctx.lineTo(L * 0.86, H * 0.05);
+  ctx.quadraticCurveTo(L * 0.7, -H * 0.25, L * 0.56, H * 0.3);
+  ctx.quadraticCurveTo(L * 0.42, -H * 0.05, L * 0.26, H * 0.5);
+  ctx.quadraticCurveTo(L * 0.12, H * 0.2, 0, H * 0.6);
+  ctx.closePath();
+  const wg = ctx.createLinearGradient(0, 0, L, 0); wg.addColorStop(0, c.primary); wg.addColorStop(1, c.secondary);
+  ctx.fillStyle = wg; ctx.fill();
+  ctx.strokeStyle = c.dark; ctx.lineWidth = 1;
+  for (const k of [0.3, 0.6, 0.86]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L * k, -H * (0.5 - k * 0.2) + H * 0.25 * (k > 0.5 ? 1 : 0)); ctx.stroke(); }
+  if (ex.wings) for (const k of [0.32, 0.6, 0.86]) gem(ctx, L * k, H * 0.3 - k * H * 0.3, 8 + g * 2, 4, Math.PI - 0.3 + k * 0.3, c.accent, '#ffffff');
+  else if (ex.stage >= 1) gem(ctx, L * 0.86, -H * 0.5, 6 + g * 2, 3.5, 0.9, c.accent, '#ffffff');
+  ctx.restore();
+}
+const BAT = {
+  skel: (ex) => {
+    const g = ex.grow;
+    const by = -50 - g * 8;
+    return { g, legLen: 8, legW: 2.4, hipX: -4, shoX: 6, bodyY: by, headX: 6 + g * 2, headY: by - 16 - g * 3, headS: 1 - g * 0.08 };
+  },
+  face: {
+    eyes: [{ x: 4.6, y: -1.2, r: 3.8, shape: 'round', color: 'eye', dark: '#150f1c' },
+           { x: -5.4, y: -1.2, r: 3.4, shape: 'round', color: 'eye', dark: '#150f1c' }],
+    brows: [{ x: 4.6, y: -6.8, w: 6.2 }, { x: -5.4, y: -6.8, w: 5.4, mirror: true }],
+    mouth: { x: 0.5, y: 5.4, w: 6, color: '#1d1524', fangs: 2 },
+  },
+  parts: [
+    { name: 'wingL', z: 0, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY - 4], box: [-44, -28, 48, 36],
+      draw(ctx, c, ex, r) { ctx.rotate(0.1); batWing(ctx, c, ex, r.g, true); } },
+    { name: 'tail', z: 0.5, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY + 10], box: [-8, -2, 12, 14],
+      draw(ctx, c) { poly(ctx, [[-3, 0], [3, 0], [0, 10]], c.secondary); } },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.hipX, r.bodyY + 11], box: [-5, -2, 10, 12],
+      draw(ctx, c, ex, r) { line(ctx, 0, 0, -1, r.legLen, c.dark, r.legW); line(ctx, -1, r.legLen, -4, r.legLen + 3, c.dark, 1.4); line(ctx, -1, r.legLen, 2, r.legLen + 3, c.dark, 1.4); } },
+    { name: 'legFR', z: 1, space: 'local', pivot: (r) => [r.shoX, r.bodyY + 11], box: [-5, -2, 10, 12],
+      draw(ctx, c, ex, r) { line(ctx, 0, 0, 1, r.legLen, c.dark, r.legW); line(ctx, 1, r.legLen, -2, r.legLen + 3, c.dark, 1.4); line(ctx, 1, r.legLen, 4, r.legLen + 3, c.dark, 1.4); } },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-18, -16, 36, 30],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, 0, r.bodyY, 12 + g * 3, 13 + g * 3, c.light, c.shadow);
+        ell(ctx, 1, r.bodyY + 3, 7.5 + g * 2, 8 + g * 2, c.belly);
+        furTufts(ctx, 0, r.bodyY, 12 + g * 3, 3.6, 5.8, 5, 3.5, c.secondary);
+        if (ex.stage >= 2) { gem(ctx, -8, r.bodyY - 10, 7 + g * 2, 4, -0.5, c.accent, '#ffffff'); gem(ctx, 8, r.bodyY - 10, 7 + g * 2, 4, 0.5, c.accent, '#ffffff'); }
+      } },
+    { name: 'wingR', z: 3, space: 'local', pivot: (r) => [r.shoX + 2, r.bodyY - 4], box: [-4, -28, 48, 36],
+      draw(ctx, c, ex, r) { ctx.rotate(-0.1); batWing(ctx, c, ex, r.g, false); } },
+    { name: 'earL', z: 3.5, space: 'local', pivot: (r) => [r.headX - 8, r.headY - 8], box: [-10, -20, 14, 22],
+      draw(ctx, c, ex, r) { poly(ctx, [[-2, 2], [-9, -14 - r.g * 4], [4, -2]], c.secondary); poly(ctx, [[-2, 1], [-6, -9 - r.g * 3], [2, -1]], c.belly); if (ex.horns) gem(ctx, -9, -14 - r.g * 4, 7, 3.5, -0.4, c.accent, '#ffffff'); } },
+    { name: 'earR', z: 5, space: 'local', pivot: (r) => [r.headX + 6, r.headY - 8], box: [-4, -20, 14, 22],
+      draw(ctx, c, ex, r) { poly(ctx, [[2, 2], [9, -14 - r.g * 4], [-4, -2]], c.primary); poly(ctx, [[2, 1], [6, -9 - r.g * 3], [-2, -1]], c.belly); if (ex.horns) gem(ctx, 9, -14 - r.g * 4, 7, 3.5, 0.4, c.accent, '#ffffff'); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -16, 32, 30],
+      draw(ctx, c, ex, r) {
+        volume(ctx, 0, 0, 12, 11, c.light, c.shadow);
+        ell(ctx, 1, 4.5, 5.5, 3.8, c.belly);
+        ell(ctx, 1, 2.6, 2.2, 1.4, c.dark);
+        if (ex.stage >= 3) gem(ctx, 0, -10, 9, 4.5, -0.05, c.accent, '#ffffff');
+      } },
+  ],
+};
+
+// ---- SERPENT: a coiled, hooded serpent that rears up; no legs, a long tail ----
+const SERPENT = {
+  skel: (ex) => {
+    const g = ex.grow;
+    return { g, legLen: 0, legW: 0, hipX: -14, shoX: 6, bodyY: -20 - g * 3, headX: 14 + g * 3, headY: -58 - g * 12, headS: 1 - g * 0.06 };
+  },
+  face: {
+    eyes: [{ x: 5.4, y: -1.8, r: 3.6, shape: 'sharp', color: 'eye' },
+           { x: -5.2, y: -1.8, r: 3.2, shape: 'sharp', color: 'eye' }],
+    brows: [{ x: 5.4, y: -7, w: 6.6 }, { x: -5.2, y: -7, w: 5.8, mirror: true }],
+    mouth: { x: 11, y: 5.8, w: 7, color: '#2a1a30', fangs: 2 },
+  },
+  parts: [
+    { // the coiled tail lies behind everything
+      name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 4, r.bodyY + 10], box: [-44, -26, 60, 36],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        ctx.lineCap = 'round';
+        for (const [w, col] of [[13 + g * 3, c.secondary], [9 + g * 2, c.primary], [4 + g, c.belly]]) {
+          ctx.strokeStyle = col; ctx.lineWidth = w;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-26 - g * 6, -4, -38 - g * 8, 12, -14, 10); ctx.bezierCurveTo(2, 8, 10, 2, 6 + g * 4, -6); ctx.stroke();
+        }
+        if (ex.stage >= 1) for (let i = 0; i < 3; i++) gem(ctx, -8 - i * 9, -3 - i * 2, 7 + g * 2, 4, -0.6 - i * 0.2, c.accent, '#ffffff');
+      } },
+    { // rearing body column (creature space)
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-26, -46, 52, 60],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        ctx.lineCap = 'round';
+        const w = 15 + g * 4;
+        ctx.strokeStyle = c.shadow; ctx.lineWidth = w + 3;
+        ctx.beginPath(); ctx.moveTo(r.hipX, r.bodyY + 8); ctx.quadraticCurveTo(-4, r.bodyY - 10, r.headX - 6, r.headY + 14); ctx.stroke();
+        ctx.strokeStyle = c.primary; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.moveTo(r.hipX, r.bodyY + 8); ctx.quadraticCurveTo(-4, r.bodyY - 10, r.headX - 6, r.headY + 14); ctx.stroke();
+        ctx.strokeStyle = c.belly; ctx.lineWidth = w * 0.45;
+        ctx.beginPath(); ctx.moveTo(r.hipX + 3, r.bodyY + 9); ctx.quadraticCurveTo(-1, r.bodyY - 8, r.headX - 3, r.headY + 14); ctx.stroke();
+        // belly plates
+        ctx.strokeStyle = c.bellyShade; ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) { const t = 0.15 + i * 0.14; const x = (1 - t) * (1 - t) * r.hipX + 2 * (1 - t) * t * -4 + t * t * (r.headX - 6); const y = (1 - t) * (1 - t) * (r.bodyY + 8) + 2 * (1 - t) * t * (r.bodyY - 10) + t * t * (r.headY + 14); ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 4, y); ctx.stroke(); }
+      } },
+    { name: 'legFL', z: 2.2, space: 'local', pivot: (r) => [r.headX - 14, r.headY + 22], box: [-8, -3, 14, 16],   // tiny vestigial claws
+      draw(ctx, c) { line(ctx, 0, 0, -3, 9, c.secondary, 3.2); line(ctx, -3, 9, -7, 11, c.dark, 1.6); line(ctx, -3, 9, 0, 12, c.dark, 1.6); } },
+    { name: 'legFR', z: 3.2, space: 'local', pivot: (r) => [r.headX - 2, r.headY + 24], box: [-6, -3, 14, 16],
+      draw(ctx, c) { line(ctx, 0, 0, 3, 9, c.primary, 3.2); line(ctx, 3, 9, 7, 11, c.dark, 1.6); line(ctx, 3, 9, 0, 12, c.dark, 1.6); } },
+    { name: 'earL', z: 3.4, space: 'local', pivot: (r) => [r.headX - 10, r.headY - 4], box: [-12, -10, 14, 16],   // side frills
+      draw(ctx, c, ex, r) { poly(ctx, [[0, 0], [-10 - r.g * 3, -6], [-8 - r.g * 2, 4]], c.secondary); poly(ctx, [[0, 0], [-6 - r.g * 2, -3], [-5 - r.g, 2]], c.accent); } },
+    { name: 'earR', z: 4.5, space: 'local', pivot: (r) => [r.headX + 8, r.headY - 4], box: [-2, -10, 14, 16],
+      draw(ctx, c, ex, r) { poly(ctx, [[0, 0], [10 + r.g * 3, -6], [8 + r.g * 2, 4]], c.primary); poly(ctx, [[0, 0], [6 + r.g * 2, -3], [5 + r.g, 2]], c.accent); } },
+    { // hood / mane flares with the stage
+      name: 'mane', z: 3.5, space: 'local', pivot: (r) => [r.headX - 4, r.headY + 6], box: [-24, -30, 44, 40],
+      draw(ctx, c, ex, r) {
+        const g = r.g, hw = 12 + g * 8 + (ex.wings ? 8 : 0), hh = 18 + g * 8 + (ex.wings ? 6 : 0);
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.quadraticCurveTo(-hw, -2, -hw * 0.6, -hh); ctx.quadraticCurveTo(0, -hh * 0.6, hw * 0.6, -hh); ctx.quadraticCurveTo(hw, -2, 0, 8); ctx.closePath();
+        const hg = ctx.createLinearGradient(0, -hh, 0, 8); hg.addColorStop(0, c.secondary); hg.addColorStop(1, c.primary); ctx.fillStyle = hg; ctx.fill();
+        ctx.strokeStyle = c.dark; ctx.lineWidth = 1.2; ctx.stroke();
+        ell(ctx, 0, -hh * 0.45, hw * 0.35, hh * 0.28, c.accent);
+        if (ex.horns) { gem(ctx, -hw * 0.55, -hh * 0.75, 9 + g * 3, 4.5, -0.5, c.accent, '#ffffff'); gem(ctx, hw * 0.55, -hh * 0.75, 9 + g * 3, 4.5, 0.5, c.accent, '#ffffff'); }
+      } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-18, -16, 36, 30],
+      draw(ctx, c, ex, r) {
+        volume(ctx, 0, 0, 12.5, 10, c.light, c.shadow);
+        ell(ctx, 8, 3, 7, 4.5, c.primary);
+        ell(ctx, 9, 4.5, 5.5, 3, c.belly);
+        ctx.strokeStyle = c.accent; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(14, 4); ctx.lineTo(19, 3); ctx.lineTo(17, 1); ctx.moveTo(19, 3); ctx.lineTo(18, 6); ctx.stroke();   // forked tongue
+        if (ex.stage >= 3) gem(ctx, 0, -9, 10, 5, -0.1, c.accent, '#ffffff');
+      } },
+  ],
+};
+
+// ---- WISP: a floating, glowing core wrapped in a mantle, with drifting tendrils ----
+const WISP = {
+  skel: (ex) => {
+    const g = ex.grow;
+    const by = -44 - g * 10;
+    return { g, legLen: 0, legW: 0, hipX: -6, shoX: 6, bodyY: by, headX: 0, headY: by - 8 - g * 2, headS: 1 };
+  },
+  face: {
+    eyes: [{ x: 5.2, y: -2.2, r: 4.2, shape: 'round', color: 'eye', dark: '#1a1230' },
+           { x: -5.2, y: -2.2, r: 4.2, shape: 'round', color: 'eye', dark: '#1a1230' }],
+    brows: [{ x: 5.2, y: -8.2, w: 6.6 }, { x: -5.2, y: -8.2, w: 6.6, mirror: true }],
+    mouth: { x: 0, y: 5, w: 5, color: '#2a1e40' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [0, r.bodyY + 14], box: [-22, -4, 44, 40],
+      draw(ctx, c, ex, r) {                                                    // drifting tendrils
+        const g = r.g; ctx.lineCap = 'round';
+        for (let i = -2; i <= 2; i++) { ctx.strokeStyle = i % 2 ? c.secondary : c.primary; ctx.lineWidth = 3 - Math.abs(i) * 0.5; ctx.beginPath(); ctx.moveTo(i * 5, 0); ctx.quadraticCurveTo(i * 9, 12 + g * 4, i * 4, 24 + g * 8 - Math.abs(i) * 4); ctx.stroke(); }
+      },
+      live(ctx, c, ex, r, t) { ctx.save(); ctx.globalAlpha *= 0.5; for (let i = 0; i < 3; i++) { const p = (t * 0.7 + i * 0.33) % 1; ell(ctx, Math.sin(t * 2 + i * 2) * 8, 26 + r.g * 8 - p * 30, 2 - p * 1.5, 2 - p * 1.5, c.accent); } ctx.restore(); } },
+    { name: 'wingL', z: 0.5, space: 'local', pivot: (r) => [-14, r.bodyY - 6], box: [-30, -30, 34, 40],
+      draw(ctx, c, ex, r) { if (!ex.wings) return; for (let i = 0; i < 3; i++) gem(ctx, -6 - i * 8, 6 - i * 10, 18 - i * 3, 8, -0.6 - i * 0.25, c.accent, '#ffffff'); } },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-24, -26, 48, 48],
+      draw(ctx, c, ex, r) {                                                    // mantle + glowing core
+        const g = r.g;
+        ctx.beginPath(); ctx.moveTo(0, r.bodyY - 20 - g * 5); ctx.quadraticCurveTo(22 + g * 5, r.bodyY - 6, 14 + g * 3, r.bodyY + 18 + g * 4); ctx.quadraticCurveTo(0, r.bodyY + 10, -14 - g * 3, r.bodyY + 18 + g * 4); ctx.quadraticCurveTo(-22 - g * 5, r.bodyY - 6, 0, r.bodyY - 20 - g * 5); ctx.closePath();
+        const mg = ctx.createLinearGradient(0, r.bodyY - 20, 0, r.bodyY + 18); mg.addColorStop(0, c.light); mg.addColorStop(1, c.shadow); ctx.fillStyle = mg; ctx.fill();
+        ctx.strokeStyle = c.dark; ctx.lineWidth = 1.2; ctx.stroke();
+        ell(ctx, 0, r.bodyY + 2, 9 + g * 2, 9 + g * 2, c.belly);
+        ell(ctx, 0, r.bodyY + 2, 5 + g, 5 + g, c.accent);
+        if (ex.stage >= 1) for (let i = -1; i <= 1; i++) gem(ctx, i * 9, r.bodyY - 14 - g * 3, 7 + g * 2, 4, i * 0.35, c.accent, '#ffffff');
+        if (ex.horns) { gem(ctx, -13 - g * 3, r.bodyY - 2, 10 + g * 3, 5, -1.1, c.secondary, c.light); gem(ctx, 13 + g * 3, r.bodyY - 2, 10 + g * 3, 5, 1.1, c.secondary, c.light); }
+      },
+      live(ctx, c, ex, r, t) { ctx.save(); ctx.globalAlpha *= 0.28 + 0.18 * Math.sin(t * 3); ctx.globalCompositeOperation = 'lighter'; ell(ctx, 0, r.bodyY + 2, 12 + r.g * 3, 12 + r.g * 3, c.accent); ctx.restore(); } },
+    { name: 'wingR', z: 3.5, space: 'local', pivot: (r) => [14, r.bodyY - 6], box: [-4, -30, 34, 40],
+      draw(ctx, c, ex, r) { if (!ex.wings) return; for (let i = 0; i < 3; i++) gem(ctx, 6 + i * 8, 6 - i * 10, 18 - i * 3, 8, 0.6 + i * 0.25, c.accent, '#ffffff'); } },
+    { name: 'legFL', z: 1.5, space: 'local', pivot: (r) => [-12, r.bodyY + 6], box: [-8, -2, 12, 22],   // tendril arms that sway like legs
+      draw(ctx, c) { ctx.strokeStyle = c.secondary; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-6, 8, -2, 18); ctx.stroke(); ell(ctx, -2, 18, 2.6, 2.6, c.accent); } },
+    { name: 'legFR', z: 3.6, space: 'local', pivot: (r) => [12, r.bodyY + 6], box: [-4, -2, 12, 22],
+      draw(ctx, c) { ctx.strokeStyle = c.primary; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(6, 8, 2, 18); ctx.stroke(); ell(ctx, 2, 18, 2.6, 2.6, c.accent); } },
+    { name: 'earL', z: 3.7, space: 'local', pivot: (r) => [r.headX - 12, r.headY - 8], box: [-8, -8, 12, 12],   // orbiting motes
+      draw(ctx, c) { ell(ctx, -3, -2, 3.2, 3.2, c.accent); ell(ctx, -3.8, -2.8, 1.2, 1.2, '#ffffff'); } },
+    { name: 'earR', z: 4.6, space: 'local', pivot: (r) => [r.headX + 12, r.headY - 8], box: [-4, -8, 12, 12],
+      draw(ctx, c) { ell(ctx, 3, -2, 3.2, 3.2, c.accent); ell(ctx, 2.2, -2.8, 1.2, 1.2, '#ffffff'); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -18, 32, 30],
+      draw(ctx, c, ex, r) {                                                    // the face floats on the mantle's crown
+        volume(ctx, 0, 0, 12, 10.5, c.light, c.shadow);
+        if (ex.stage >= 3) { ctx.save(); ctx.globalAlpha *= 0.7; ctx.strokeStyle = c.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, -14, 12, 3.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }  // halo
+      } },
+  ],
+};
+
+// ---- RAM: fleece quadruped with curling crystal horns (Psychic ram, the legendary elk) ----
+function ramHorn(ctx, c, size, flip, g) {
+  ctx.save(); if (flip) ctx.scale(-1, 1);
+  const s = size;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * 1.1, -s * 0.9, s * 0.6, -s * 1.5); ctx.quadraticCurveTo(s * 0.1, -s * 1.7, -s * 0.15, -s * 1.05); ctx.quadraticCurveTo(s * 0.5, -s * 1.1, s * 0.45, -s * 0.7); ctx.quadraticCurveTo(s * 0.35, -s * 0.25, 0, 0); ctx.closePath();
+  const hg = ctx.createLinearGradient(0, -s * 1.7, s, 0); hg.addColorStop(0, shadeColor(c.accent, 0.25)); hg.addColorStop(1, shadeColor(c.accent, -0.3));
+  ctx.fillStyle = hg; ctx.fill();
+  ctx.strokeStyle = shadeColor(c.accent, -0.45); ctx.lineWidth = 0.9; ctx.stroke();
+  if (g > 0.4) gem(ctx, s * 0.55, -s * 1.5, s * 0.55, s * 0.25, 0.25, c.accent, '#ffffff');
+  ctx.restore();
+}
+const RAM = {
+  skel: (ex) => skeleton(ex, { legLen: 22, legW: 4.6, bodyY: -35, headY: -60, headX: 20 }),
+  face: {
+    eyes: [{ x: 6.2, y: -2.4, r: 3.8, shape: 'almond', color: 'eye' },
+           { x: -5.8, y: -2.4, r: 3.4, shape: 'almond', color: 'eye' }],
+    brows: [{ x: 6.2, y: -7.6, w: 6.8 }, { x: -5.8, y: -7.6, w: 6, mirror: true }],
+    mouth: { x: 13, y: 8.2, w: 7, color: '#3a3038' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 12, r.bodyY + 2], box: [-12, -10, 14, 16],
+      draw(ctx, c) { ell(ctx, -5, 0, 6, 4.4, c.secondary); ell(ctx, -7, -1, 3.6, 2.6, c.belly); } },
+    { name: 'wingL', z: 0.3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY - 16 - r.g * 4], box: [-30, -30, 34, 38],
+      draw(ctx, c, ex) { if (!ex.wings) return; for (let i = 0; i < 4; i++) gem(ctx, -4 - i * 7, 4 - i * 7, 24 - i * 4, 7.5, -0.75 - i * 0.18, c.accent, '#ffffff'); } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 1, r.bodyY + 8], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.dark, -1.2, 2) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 3, r.bodyY + 8], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.dark, 1.2, 2) },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-32, -28, 62, 48],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, r.hipX + 2, r.bodyY, 16 + g * 4, 14 + g * 3, c.light, c.shadow);
+        volume(ctx, r.shoX, r.bodyY - 1, 15 + g * 3, 13 + g * 3, c.light, c.shadow);
+        ell(ctx, r.shoX - 2, r.bodyY + 5, 12 + g * 2, 8 + g, c.belly);
+        for (let i = 0; i < 6; i++) ell(ctx, r.hipX - 8 + i * 6, r.bodyY - 12 - g * 2 + Math.sin(i) * 1.5, 4.6 + g, 3.6 + g, i % 2 ? c.light : c.primary);
+      } },
+    { name: 'mane', z: 2.6, space: 'creature', pivot: (r) => [r.shoX, r.bodyY - 14], box: [-22, -26, 40, 30],
+      draw(ctx, c, ex, r) {
+        const g = r.g, n = 2 + ex.stage * 2;
+        for (let i = 0; i < n; i++) gem(ctx, r.shoX - 8 + i * 4.5, r.bodyY - 13 - g * 3 + (i % 2) * 2, 7 + g * 3 + (i % 3), 4, -0.3 + i * 0.12, c.accent, '#ffffff');
+      } },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY + 9], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.dark, -1.2, 2) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 8, r.bodyY + 9], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.dark, 1.2, 2) },
+    { name: 'wingR', z: 3.4, space: 'local', pivot: (r) => [r.shoX + 4, r.bodyY - 17 - r.g * 4], box: [-6, -30, 34, 38],
+      draw(ctx, c, ex) { if (!ex.wings) return; for (let i = 0; i < 4; i++) gem(ctx, 4 + i * 7, 4 - i * 7, 24 - i * 4, 7.5, 0.75 + i * 0.18, c.accent, '#ffffff'); } },
+    { name: 'earL', z: 3.6, space: 'local', pivot: (r) => [r.headX - 8, r.headY - 4], box: [-12, -8, 14, 12],
+      draw(ctx, c) { ell(ctx, -5, 1, 6.5, 3, shadeColor(c.primary, -0.08), -0.35); ell(ctx, -5, 1, 4, 1.7, c.belly, -0.35); } },
+    { name: 'earR', z: 5, space: 'local', pivot: (r) => [r.headX + 6, r.headY - 5], box: [-3, -8, 14, 12],
+      draw(ctx, c) { ell(ctx, 5, 1, 6.5, 3, c.primary, 0.35); ell(ctx, 5, 1, 4, 1.7, c.belly, 0.35); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-24, -34, 48, 48],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        const hs = ex.horns ? 8 + g * 5 : 0;
+        if (hs) { ramHorn(ctx, c, hs, true, g); ctx.save(); ctx.translate(8, -2); ramHorn(ctx, c, hs * 0.9, false, g); ctx.restore(); }
+        else { gem(ctx, -5, -10, 6, 4, -0.4, c.accent, '#ffffff'); gem(ctx, 5, -10, 6, 4, 0.4, c.accent, '#ffffff'); }
+        volume(ctx, 0, 0, 12.5, 11.5, c.light, c.shadow);
+        ell(ctx, 8, 4, 6.5, 5, c.belly);
+        for (let i = 0; i < 3; i++) ell(ctx, -6 + i * 4, -9, 3.4, 2.8, i % 2 ? c.light : c.primary);
+      } },
+  ],
+};
+
 export const BODY_PLANS = {
   fox: SPRIGGO,
   feline: AQUINI,
@@ -1551,6 +1817,11 @@ export const BODY_PLANS = {
   beetle: BEETLE,
   golem: GOLEM,
   lizard: LIZARD,
+  // New-element plans (Electric / Ice / Metal / Poison / Psychic lines)
+  bat: BAT,
+  serpent: SERPENT,
+  wisp: WISP,
+  ram: RAM,
 };
 
 export function artFor(speciesId) {

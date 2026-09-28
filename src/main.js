@@ -373,8 +373,13 @@ class Game {
         WorldManager.setFlag(`intro_${toMap}`);
         const lines = {
           azure_coast: ['Azure Coast — wild Mythlings here are Lv.15 to Lv.30.', 'Aquini and Rivruff live along these shores. Your Mythlings can evolve at Lv.20!'],
-          emberwild: ['Emberwild — wild Mythlings here are Lv.30 to Lv.45.', 'Emberu rules the ash. Remember: anything you catch still starts again at Lv.1.'],
-          stonehollow_crags: ['Stonehollow Crags — the strongest region of this version. Wild Mythlings are Lv.45 to Lv.60, and every one of them is Rock type.', 'Rock smothers Fire and crumbles under Water and Nature. The Stone Warden waits at the Titan Summit.'],
+          emberwild: ['Emberwild — wild Mythlings here are Lv.28 to Lv.40.', 'Emberu rules the ash. Remember: anything you catch still starts again at Lv.1.'],
+          stonehollow_crags: ['Stonehollow Crags — wild Mythlings are Lv.38 to Lv.48, and every one of them is Rock type.', 'Rock smothers Fire and crumbles under Water and Nature. The Stone Warden waits at the Titan Summit — and beyond her, the storm country.'],
+          stormreach_plateau: ['Stormreach Plateau — Electric country, Lv.46 to Lv.56.', 'Rock grounds lightning; Water and Metal conduct it. A legendary aurora elk is said to visit the peak.'],
+          frostveil_tundra: ['Frostveil Tundra — Ice country, Lv.54 to Lv.64.', 'Fire and Metal melt the locals; they freeze Nature and Electric solid.'],
+          ironhold_foundry: ['Ironhold Foundry — Metal country, Lv.62 to Lv.72.', 'Fire, Electric and Poison eat through steel. Something molten sleeps in the Forge Core.'],
+          miremarsh_fen: ['Miremarsh Fen — Poison country, Lv.70 to Lv.80.', 'Only Psychic purges venom. Half-Psychic wisps drift here from the Spire, and an iron wyrm sleeps under the sludge.'],
+          astral_spire: ['Astral Spire — the top of the world. Psychic country, Lv.78 to Lv.90.', 'Poison clouds the mind; nothing else touches it. The Astral Warden keeps the summit.'],
           verdant_vale: ['Verdant Vale — home turf. Wild Mythlings Lv.1 to Lv.20.'],
         }[toMap];
         if (lines) await Dialogue.show(lines, 'GUIDE');
@@ -417,12 +422,10 @@ class Game {
   startTrainerBattle(trainer) {
     const lead = PartyManager.firstHealthy();
     if (!lead) { toast('All your Mythlings have fainted!', 'bad'); this.handleWhiteout(); return; }
-    // Post-game: a trainer's team keeps pace with the party so rematches and
-    // late grinding stay worth doing on the way to Lv.100.
-    const teamTop = Math.max(...trainer.team.map((s) => s.level || 1));
-    const bump = Math.max(0, PartyManager.topLevel() - teamTop);
+    // Trainer teams are FIXED at the levels written in the map data. They never
+    // follow the party: a Lv.100 partner you ground for should feel like one.
     const enemies = trainer.team.map((spec) => createMythling({
-      speciesId: spec.species, level: Math.min(LEVEL_CAP, (spec.level || 1) + bump),
+      speciesId: spec.species, level: Math.min(LEVEL_CAP, spec.level || 1),
       rarity: spec.rarity || SPECIES[spec.species].defaultRarity,
       mood: spec.mood || SPECIES[spec.species].defaultMood,
       mutation: 'none',
@@ -664,8 +667,18 @@ class Game {
       if (!WorldManager.isTrainerDefeated('flame_warden')) return goal('Challenge the Flame Warden in the Volcanic Ruins');
       return goal('Travel east through the Emberwild Pass to Stonehollow Crags');
     }
-    if (mapId === 'stonehollow_crags') {
-      if (!WorldManager.isTrainerDefeated('stone_warden')) return goal('Climb to the Titan Summit and defeat the Stone Warden');
+    const chain = [
+      ['stonehollow_crags', 'stone_warden', 'Climb to the Titan Summit and defeat the Stone Warden', 'Travel east through the Storm Gate to Stormreach Plateau'],
+      ['stormreach_plateau', 'storm_warden', 'Defeat the Storm Warden on Stormeye Peak', 'Travel east through the Frost Gate to Frostveil Tundra'],
+      ['frostveil_tundra', 'frost_warden', 'Defeat the Frost Warden on the Aurora Summit', 'Travel east through the Iron Gate to Ironhold Foundry'],
+      ['ironhold_foundry', 'iron_warden', 'Defeat the Forge Warden in the Forge Core', 'Travel east through the Mire Gate to Miremarsh Fen'],
+      ['miremarsh_fen', 'mire_warden', 'Defeat the Plague Warden in Plague Hollow', 'Travel east through the Spire Gate to the Astral Spire'],
+      ['astral_spire', 'astral_warden', 'Climb to the Astral Summit and defeat the Astral Warden', null],
+    ];
+    for (const [id, flag, fight, travel] of chain) {
+      if (mapId !== id) continue;
+      if (!WorldManager.isTrainerDefeated(flag)) return goal(fight);
+      return travel ? goal(travel) : null;
     }
     return null;
   }

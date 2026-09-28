@@ -8,6 +8,7 @@ import {
   LEVEL_CAP, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, STAT_GROWTH,
   expToNextLevel, ULTIMATE_UNLOCK_LEVEL, COUNTER_MAX_PERCENT,
   CRIT_MAX_PERCENT, CRIT_MAX_MULT, RATIONAL_AMOUNT,
+  EVOLUTION_LEVELS,
 } from '../data/config.js';
 import { clamp, uid, choice } from './utils.js';
 
@@ -36,7 +37,8 @@ export function createMythling(opts = {}) {
   const rational = getRational(opts.rational) ? opts.rational : rollRational(rand);
 
   // Evolution stage: wild/trainer Mythlings appear at the stage matching their level.
-  const stage = opts.stage != null ? opts.stage : stageForLevel(speciesId, level);
+  // (Legendaries have a single form, so any requested stage collapses to 0.)
+  const stage = clamp(opts.stage != null ? opts.stage : stageForLevel(speciesId, level), 0, sp.evolutions.length - 1);
 
   const m = {
     uid: opts.uid || uid('myth'),
@@ -74,7 +76,7 @@ export function refreshLibrary(m) {
   const learned = skillsUnlockedAt(m.speciesId, m.level);
   // Evolution also grants its stage's skills even if the level table lags behind.
   const sp = getSpecies(m.speciesId);
-  for (let i = 0; i <= m.stage; i++) {
+  for (let i = 0; i <= Math.min(m.stage, sp.evolutions.length - 1); i++) {
     const lvlKey = sp.evolutions[i].level;
     (sp.skillUnlocks[lvlKey] || []).forEach((s) => learned.push(s));
   }
@@ -218,6 +220,14 @@ export function ultimateUnlocked(m) { return m.level >= ULTIMATE_UNLOCK_LEVEL; }
 
 /** Ultimate tier index derived from the evolution stage (0 => base, 1 => " I", ...). */
 export function ultimateTier(m) {
+  const sp = speciesOf(m);
+  // Legendaries never evolve: their Ultimate tiers unlock by LEVEL instead (the same
+  // Lv.20 / 60 / 80 thresholds at which other species evolve).
+  if (sp && sp.evolutions.length === 1) {
+    let tier = 0;
+    EVOLUTION_LEVELS.forEach((lv, i) => { if (i > 0 && m.level >= lv) tier = i; });
+    return clamp(tier, 0, MAX_UNLOCKED_EVOLUTION_STAGE);
+  }
   return clamp(m.stage, 0, MAX_UNLOCKED_EVOLUTION_STAGE);
 }
 

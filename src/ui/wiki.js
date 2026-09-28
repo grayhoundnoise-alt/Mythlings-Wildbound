@@ -4,7 +4,7 @@
 // screen's Settings). Content is generated straight from the data files,
 // so the Wiki can never drift away from the way the game actually works.
 // =====================================================================
-import { el, Screens, closeButton, elementChip } from './ui.js';
+import { el, Screens, closeButton, elementChip, elementChips } from './ui.js';
 import { icon } from './icons.js';
 import { drawMythling } from '../render/creatures.js';
 import { SPECIES, SPECIES_IDS, STARTER_IDS } from '../data/species.js';
@@ -14,7 +14,7 @@ import {
   MOODS, MOOD_IDS, STAT_KEYS, STAT_LABELS, STAT_SHORT, STAT_INFO,
   STAT_BAR_MAX, formatStat, RATIONALS, RATIONAL_IDS, RATIONAL_STATS,
 } from '../data/moods.js';
-import { RATIONAL_AMOUNT } from '../data/config.js';
+import { RATIONAL_AMOUNT, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE } from '../data/config.js';
 import { CollectionManager } from '../systems/GameState.js';
 import { RARITIES, RARITY_ORDER } from '../data/rarity.js';
 import { MUTATIONS, MUTATION_IDS } from '../data/mutations.js';
@@ -22,7 +22,7 @@ import { ITEMS, ITEM_CATEGORIES, BALL_IDS } from '../data/items.js';
 import { ballCanvas, ballLook } from '../render/balls.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
 import { CHEST_TIERS, CHEST_TIER_IDS, CHEST_REROLL_MS } from '../data/chests.js';
-import { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier } from '../data/elements.js';
+import { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier, weakTo } from '../data/elements.js';
 import {
   LEVEL_CAP, ABSOLUTE_MAX_LEVEL, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL,
   EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, expToNextLevel, DEFEAT_COIN_PENALTY,
@@ -158,7 +158,7 @@ function statsSection() {
     h3('Crit Chance & Crit Damage', 'crit critical chance multiplier damage'),
     table([
       ['CRIT — Crit Chance', `Percent chance that an attack lands critically. Caps at <b>${CRIT_MAX_PERCENT}%</b>.`],
-      ['C.DMG — Crit Damage', `Bonus damage on a critical hit. +50% means a crit deals <b>1.5x</b>. Caps at <b>+${CRIT_MAX_MULT}%</b> (x3).`],
+      ['C.DMG — Crit Damage', `Bonus damage on a critical hit. +50% means a crit deals <b>1.5x</b>. Caps at <b>+${CRIT_MAX_MULT}%</b> (x${(1 + CRIT_MAX_MULT / 100).toFixed(1)}).`],
       ['Base values', 'Every species starts around 4–10% crit chance and +40% to +65% crit damage.'],
       ['Growth', 'Crit Chance grows with level; Crit Damage grows with level and jumps with evolution.'],
       ['Moods', 'Feral, Savage, Precise, Brutal and Keen moods push crit chance and/or crit damage.'],
@@ -263,16 +263,21 @@ function elementsSection() {
     }
   }
   return [
-    h3('The element chart', 'element effectiveness chart nature water fire rock'),
-    para(`Attacks use the <b>element of the skill</b>. Hitting a weakness multiplies damage by
+    h3('The element chart', 'element effectiveness chart nature water fire rock electric ice metal poison psychic'),
+    para(`There are <b>${ids.length} elements</b>. Attacks use the <b>element of the skill</b>. Hitting a weakness multiplies damage by
       <b>x${EFFECTIVENESS.STRONG}</b>; hitting a resistance multiplies it by <b>x${EFFECTIVENESS.WEAK}</b>.
-      Same element vs same element is neutral. <b>Rock</b> (Stonehollow Crags) smothers Fire but is weak to
-      both Water and Nature — bring the right team up the mountain.`),
+      Same element vs same element is neutral. Every element is strong against two or three others and weak to one to three.`),
     bullets(ids.map((id) => {
       const beats = ids.filter((d) => elementMultiplier(id, d) > 1).map((d) => ELEMENTS[d].name);
-      return `<b style="color:${ELEMENTS[id].color}">${ELEMENTS[id].name}</b> is strong against ${beats.join(', ')}`;
+      const fears = weakTo(id).map((d) => ELEMENTS[d].name);
+      return `<b style="color:${ELEMENTS[id].color}">${ELEMENTS[id].name}</b> is strong against ${beats.join(', ')} · weak to ${fears.join(', ') || 'nothing'}`;
     })),
     block([grid], 'element chart table'),
+    h3('Dual and triple types', 'dual type two elements legendary triple multiplier'),
+    para(`A few Mythlings carry <b>two</b> elements (the Poison/Psychic <b>Mirewisp</b> line and the Electric/Metal <b>Sparkbug</b> line) and the
+      three <b>legendaries</b> carry two or three. They learn the attacks of <b>every</b> one of their elements, and when they are hit
+      every element weighs in: Fire against Poison/Psychic is 1.0 × 0.75 = <b>x0.75</b>; Rock against Electric/Metal is 1.5 × 0.75 = <b>x1.125</b>.
+      Dual types spawn on the map of either element and are most common on their home map.`),
   ];
 }
 
@@ -284,8 +289,9 @@ function battleSection() {
     para(`<code>damage = floor( (Power × OFF / DEF) × levelFactor × stageFactor × random(0.85–1.0) × elementMultiplier )</code>`),
     bullets([
       '<b>OFF</b> is P.ATK and <b>DEF</b> is P.DEF for Physical skills; S.ATK / S.DEF for Special skills and Ultimates.',
-      '<b>levelFactor</b> grows 8.5% per level above Lv.1.',
-      '<b>stageFactor</b> is the evolution stat multiplier (1.00 base, 1.34 evolved).',
+      `<b>levelFactor</b> grows ${(DAMAGE_LEVEL_SCALE * 100).toFixed(1)}% per level above Lv.1 (it used to be 8.5% — at Lv.100 two equal Mythlings one-shot each other and speed decided everything; a neutral Special now takes about seven hits, a super-effective Ultimate two or three).`,
+      `<b>stageFactor</b> adds ${(DAMAGE_STAGE_SCALE * 100).toFixed(0)}% per evolution stage on top of the stats the stage already multiplies.`,
+      '<b>elementMultiplier</b> multiplies once per defender element: a Poison/Psychic Mythling hit by Fire takes 1.5 × 0.75 = <b>x1.125</b>; hit by Psychic it takes 1.5 × 1.0 = <b>x1.5</b>.',
       'Every hit deals at least <b>1</b> damage.',
       'The battle log now reports the exact damage of every attack.',
     ], 'power off def level factor random'),
@@ -332,6 +338,12 @@ function speciesSection() {
     h3(`The ${SPECIES_IDS.length} species of this version`, 'species mythling dex list'),
     para(`Wild Mythlings are rolled with a random Mood, Rarity and mutation. Starters use their species
       default Mood and Rarity D. Open the <b>INDEX</b> tab in the menu to see every Mythling's four forms drawn side by side.`),
+    h3('Legendaries', 'legendary rare spawn aetherion venomyr basaltyr absolute ball'),
+    para(`Three <b>legendary</b> Mythlings — <b>Aetherion</b> (Psychic / Electric / Ice, home: Astral Spire), <b>Venomyr</b> (Poison / Metal,
+      home: Miremarsh Fen) and <b>Basaltyr</b> (Rock / Fire / Metal, home: Ironhold Foundry) — never sit in a spawn table. Any wild
+      spawn on a map of one of their elements has a tiny chance to be one of them (a few times likelier on the home map). They have
+      <b>one form</b> (no evolution), stronger stats, their own Ultimate that climbs its tiers by <b>level</b> (Lv.20 / 60 / 80), and
+      they slip out of anything weaker than an <b>Absolute Ball</b> — the weak ball is refused, not wasted.`),
   ];
   const order = [...ELEMENT_ORDER, ...Object.keys(ELEMENTS).filter((e) => !ELEMENT_ORDER.includes(e))];
   const grouped = order.flatMap((elId) => SPECIES_IDS.filter((id) => SPECIES[id].element === elId).map((id) => [elId, id]));
@@ -352,7 +364,7 @@ function speciesSection() {
         el('div', {}, [
           el('div', { class: 'wiki-card-title' }, [
             el('span', { text: sp.displayName }),
-            elementChip(sp.element),
+            ...elementChips(sp),
             el('span', { class: 'chip', text: sp.breed }),
             el('span', { class: 'chip', text: sp.role }),
             sp.starter ? el('span', { class: 'chip max', text: 'STARTER' }) : null,

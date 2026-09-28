@@ -19,6 +19,15 @@
 import { ParticleSystem } from './particles.js';
 import { vfxFor, paletteFor, BUFF_VFX } from '../../data/skillVfx.js';
 
+/** Particle silhouette by element: sparks for fire / electric / psychic, drops and bubbles for water and poison, shards for rock / ice / metal, leaves for nature. */
+function elementShape(element, waterShape = 'droplet') {
+  if (element === 'fire' || element === 'electric' || element === 'psychic') return 'spark';
+  if (element === 'water') return waterShape;
+  if (element === 'poison') return 'bubble';
+  if (element === 'rock' || element === 'ice' || element === 'metal') return 'shard';
+  return 'leaf';
+}
+
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -118,7 +127,7 @@ export class SkillVFXManager {
           x: at.x + Math.cos(a) * r, y: at.y - 10 + Math.sin(a) * r * 0.4,
           vx: -Math.cos(a) * 40, vy: -rand(60, 150), gravity: -30, drag: 0.6,
           size: rand(3, 7), sizeEnd: 0, life: rand(0.5, 0.9),
-          shape: def.element === 'fire' ? 'spark' : def.element === 'water' ? 'bubble' : def.element === 'rock' ? 'shard' : 'leaf',
+          shape: elementShape(def.element, 'bubble'),
           color: pal.core, color2: pal.deep, additive: def.element !== 'nature', rot: rand(0, TAU), rotSpeed: rand(-6, 6),
         });
       }
@@ -154,7 +163,7 @@ export class SkillVFXManager {
         vx: -Math.cos(a) * sp, vy: -Math.sin(a) * sp * 0.7,
         gravity: def.element === 'fire' ? -60 : 0, drag: 1.6,
         size: rand(2.5, 6), sizeEnd: 0, life: rand(0.26, 0.5),
-        shape: def.element === 'fire' ? 'spark' : def.element === 'water' ? 'droplet' : def.element === 'rock' ? 'shard' : 'leaf',
+        shape: elementShape(def.element, 'droplet'),
         color: i % 3 ? pal.mid : pal.core, color2: pal.deep,
         additive: def.element === 'fire', rot: rand(0, TAU), rotSpeed: rand(-8, 8),
       });
@@ -472,7 +481,7 @@ export class SkillVFXManager {
         x: at.x + Math.cos(a) * r, y: at.y - 20 + Math.sin(a) * r * 0.45,
         vx: -Math.cos(a) * 60, vy: -rand(90, 220), gravity: -40, drag: 0.7,
         size: rand(3, 8), sizeEnd: 0, life: rand(0.6, 1.1),
-        shape: def.element === 'fire' ? 'spark' : def.element === 'water' ? 'bubble' : def.element === 'rock' ? 'shard' : 'leaf',
+        shape: elementShape(def.element, 'bubble'),
         color: i % 3 ? pal.mid : pal.core, color2: pal.deep, additive: def.element === 'fire',
         rot: rand(0, TAU), rotSpeed: rand(-7, 7),
       });
@@ -607,7 +616,7 @@ export class SkillVFXManager {
         x: p.from.x, y: p.from.y,
         vx: (dx / L) * rand(-40, 60) + rand(-40, 40), vy: (dy / L) * rand(-40, 60) + rand(-40, 40),
         gravity: 0, drag: 2.4, size: rand(2.5, 6), sizeEnd: 0, life: rand(0.14, 0.3),
-        shape: p.tint === 'fire' ? 'spark' : p.tint === 'water' ? 'droplet' : p.tint === 'rock' ? 'shard' : 'leaf',
+        shape: elementShape(p.tint, 'droplet'),
         color: pal.mid, color2: pal.deep, additive: p.tint === 'fire', rot: rand(0, TAU), rotSpeed: rand(-8, 8),
       });
     }

@@ -706,7 +706,219 @@ export const SPECIES = {
   },
 };
 
+// =============================================================================
+// THE FIVE NEW ELEMENTS (Stormreach Plateau → Astral Spire): 25 species, two
+// dual-typed lines and three legendaries, built from compact specs so every line
+// shares the same balance rules:
+//   * roles set the base stats and which support skills a line learns (buffs and
+//     debuffs carry no element, so the neutral pool is shared),
+//   * the element pool (skills.js) supplies the elemental normals, the special
+//     ladder and the life-steal move,
+//   * evolutions follow the usual Lv.1 / 20 / 60 / 80 stages with growing art flags.
+// Dual-typed species learn BOTH elements' attacks. Legendaries have ONE stage,
+// two or three elements, stronger stats and unlock their skills purely by level.
+// =============================================================================
+import { ELEMENT_POOLS } from './skills.js';
+
+const ROLE_STATS = {
+  physical: { hp: 108, patk: 19, satk: 10, pdef: 14, sdef: 12, spd: 15, counter: 8,  crit: 8,  critMult: 46 },
+  special:  { hp: 96,  patk: 10, satk: 20, pdef: 11, sdef: 15, spd: 17, counter: 10, crit: 8,  critMult: 46 },
+  tank:     { hp: 130, patk: 14, satk: 11, pdef: 20, sdef: 17, spd: 7,  counter: 5,  crit: 4,  critMult: 40 },
+  fast:     { hp: 92,  patk: 17, satk: 14, pdef: 10, sdef: 11, spd: 22, counter: 12, crit: 10, critMult: 50 },
+  balanced: { hp: 110, patk: 15, satk: 15, pdef: 14, sdef: 14, spd: 14, counter: 8,  crit: 6,  critMult: 42 },
+};
+const ROLE_LABEL = { physical: 'Physical Attacker', special: 'Special Attacker', tank: 'Wall', fast: 'Fast Striker', balanced: 'Balanced' };
+// support skills by role: [Lv.1 buff, Lv.20 buff, Lv.60 buff, Lv.80 buff] / [Lv.1, Lv.12, Lv.40 debuffs] / Lv.80 elite
+const ROLE_SUPPORT = {
+  physical: { buffs: ['power_up', 'guard_up', 'haste', 'overpower'], debuffs: ['weaken', 'expose', 'cripple'],  elite: 'war_cry' },
+  special:  { buffs: ['mind_up', 'ward_up', 'haste', 'overmind'],    debuffs: ['daze', 'unnerve', 'hex'],       elite: 'arcane_surge' },
+  tank:     { buffs: ['guard_up', 'vitality', 'ward_up', 'fortify'], debuffs: ['weaken', 'unnerve', 'cripple'], elite: 'bulwark' },
+  fast:     { buffs: ['power_up', 'haste', 'mind_up', 'overpower'],  debuffs: ['hobble', 'expose', 'hex'],      elite: 'predator_focus' },
+  balanced: { buffs: ['mind_up', 'guard_up', 'haste', 'overmind'],   debuffs: ['weaken', 'unnerve', 'hex'],     elite: 'intimidate' },
+};
+const PLAIN_NORMAL = { fox: 'bite', feline: 'scratch', dragon: 'bite', wolf: 'bite', avian: 'peck', tortoise: 'pebble_toss', boar: 'bite', beetle: 'bite', golem: 'pebble_toss', lizard: 'bite', bat: 'bite', serpent: 'bite', wisp: 'scratch' };
+const ART_FLAGS = [{ scale: 1.00 }, { scale: 1.22 }, { scale: 1.42, horns: true }, { scale: 1.65, horns: true, wings: true }];
+const STAT_MULTS = [1.0, 1.34, 1.75, 2.2];
+
+/** Ladder for a role: physical roles hit with the physical specials, everything else with the special ones. */
+function ladderFor(role, pool) { return role === 'physical' || role === 'tank' || role === 'fast' ? pool.ph : pool.sp; }
+
+/** Build the unlock table of a (possibly dual-typed) line. */
+function unlocksFor(role, elements, plainNormal, extraLv1 = []) {
+  const sup = ROLE_SUPPORT[role];
+  const pools = elements.map((e) => ELEMENT_POOLS[e]).filter(Boolean);
+  const main = pools[0];
+  const second = pools[1] || null;
+  const lad = ladderFor(role, main);
+  const lad2 = second ? ladderFor(role === 'physical' ? 'special' : 'physical', second) : null;   // the second element hits with the other ladder
+  const t = {
+    1:  [plainNormal, lad[0][0], sup.buffs[0], sup.debuffs[0], ...extraLv1],
+    12: [sup.debuffs[1]],
+    20: [lad[1][0], sup.buffs[1], main.normals[0][0]],
+    40: [sup.debuffs[2]],
+    60: [lad[2][0], sup.buffs[2], main.normals[1][0], main.drain[0]],
+    80: [lad[3][0], sup.buffs[3], main.normals[2][0], sup.elite],
+  };
+  if (second && lad2) {
+    t[1].push(lad2[0][0]);
+    t[20].push(lad2[1][0], second.normals[0][0]);
+    t[60].push(lad2[2][0]);
+    t[80].push(lad2[3][0], second.normals[2][0]);
+  }
+  return t;
+}
+
+/**
+ * spec: { id, names[4], breed, body, role, element(s), ultimate, catchRate?, rarity?, mood?,
+ *         desc, palette{primary,secondary,belly,accent,eye,dark}, spawnMaps[] }
+ */
+function line(spec) {
+  const elements = spec.elements || [spec.element];
+  const stats = { ...ROLE_STATS[spec.role] };
+  for (const [k, v] of Object.entries(spec.tweak || {})) stats[k] += v;
+  const entry = {
+    id: spec.id, displayName: spec.names[0], breed: spec.breed,
+    element: elements[0], ...(elements.length > 1 ? { elements } : {}),
+    defaultRarity: spec.rarity || 'C', defaultMood: spec.mood || 'brave', role: ROLE_LABEL[spec.role],
+    catchRate: spec.catchRate ?? 0.48, expYield: spec.expYield ?? 74,
+    description: spec.desc, baseStats: stats, ultimate: spec.ultimate, spawnMaps: spec.spawnMaps,
+    evolutions: spec.names.map((name, i) => ({ stage: i, name, level: [1, 20, 60, 80][i], statMult: STAT_MULTS[i], ...(i >= 2 ? { future: true } : {}), art: { ...ART_FLAGS[i], ...(spec.hornsEarly && i === 1 ? { horns: true } : {}) } })),
+    skillUnlocks: unlocksFor(spec.role, elements, PLAIN_NORMAL[spec.body] || 'bite'),
+    art: { body: spec.body, ...spec.palette },
+  };
+  SPECIES[spec.id] = entry;
+}
+
+/** A legendary: one form, 2-3 elements, stronger stats, purely level-based skills. */
+function legend(spec) {
+  const base = { ...ROLE_STATS[spec.role] };
+  for (const k of Object.keys(base)) base[k] = Math.round(base[k] * (k === 'critMult' ? 1.1 : 1.28));
+  for (const [k, v] of Object.entries(spec.tweak || {})) base[k] += v;
+  const pools = spec.elements.map((e) => ELEMENT_POOLS[e] || null);
+  // legendaries learn the attacks of every one of their elements, by level
+  const t = { 1: [PLAIN_NORMAL[spec.body] || 'bite', ROLE_SUPPORT[spec.role].buffs[0], ROLE_SUPPORT[spec.role].debuffs[0]], 12: [ROLE_SUPPORT[spec.role].debuffs[1]], 20: [ROLE_SUPPORT[spec.role].buffs[1]], 40: [ROLE_SUPPORT[spec.role].debuffs[2]], 60: [ROLE_SUPPORT[spec.role].buffs[2]], 80: [ROLE_SUPPORT[spec.role].buffs[3], ROLE_SUPPORT[spec.role].elite, 'vengeance'] };
+  spec.elements.forEach((el, i) => {
+    const pool = pools[i];
+    if (!pool) { (spec.legacySkills?.[el] || []).forEach(([lv, id]) => (t[lv] = t[lv] || []).push(id)); return; }
+    const lad = (i === 0 ? ladderFor(spec.role, pool) : (spec.role === 'physical' ? pool.sp : pool.ph));
+    t[1].push(lad[0][0]); t[20].push(lad[1][0], pool.normals[0][0]); t[60].push(lad[2][0], pool.normals[1][0]); t[80].push(lad[3][0], pool.normals[2][0]);
+    if (i === 0) t[60].push(pool.drain[0]);
+  });
+  SPECIES[spec.id] = {
+    id: spec.id, displayName: spec.name, breed: spec.breed, element: spec.elements[0], elements: spec.elements, legendary: true,
+    defaultRarity: 'S', defaultMood: spec.mood || 'brave', role: `Legendary ${ROLE_LABEL[spec.role]}`,
+    catchRate: 0.12, expYield: 160, description: spec.desc, baseStats: base, ultimate: spec.ultimate, spawnMaps: spec.spawnMaps, homeMap: spec.spawnMaps[0],
+    evolutions: [{ stage: 0, name: spec.name, level: 1, statMult: 1.0, art: { scale: 1.45, horns: true, wings: true } }],
+    skillUnlocks: t,
+    art: { body: spec.body, ...spec.palette },
+  };
+}
+
+// ---- ELECTRIC — Stormreach Plateau ------------------------------------------
+line({ id: 'voltkit', names: ['Voltkit', 'Zapfox', 'Stormvulp', 'Thunderfox'], breed: 'Fox', body: 'fox', role: 'fast', element: 'electric', ultimate: 'gigavolt_charge', mood: 'swift', spawnMaps: ['stormreach_plateau'],
+  desc: 'A fox whose fur crackles with static. It naps on the highest rock it can find and wakes up humming.',
+  palette: { primary: '#f0c93c', secondary: '#b88a1a', belly: '#fff4c2', accent: '#7ee8ff', eye: '#4fd8ff', dark: '#4a3608' } });
+line({ id: 'staticat', names: ['Staticat', 'Voltclaw', 'Arcfeline', 'Tempestlynx'], breed: 'Feline', body: 'feline', role: 'special', element: 'electric', ultimate: 'thunder_crown', mood: 'clever', spawnMaps: ['stormreach_plateau'],
+  desc: 'A sleek cat that stores lightning in its ear-fins. Petting it is a mistake you make once.',
+  palette: { primary: '#5b6bd8', secondary: '#2e3a8a', belly: '#dfe6ff', accent: '#ffe85a', eye: '#fff0a0', dark: '#161c48' } });
+line({ id: 'boltpup', names: ['Boltpup', 'Voltwolf', 'Stormhowl', 'Thunderfang'], breed: 'Wolf', body: 'wolf', role: 'physical', element: 'electric', ultimate: 'gigavolt_charge', mood: 'brave', spawnMaps: ['stormreach_plateau'],
+  desc: 'A pack runner that howls thunder back at the sky. Its bite jolts before it bruises.',
+  palette: { primary: '#8a8fa8', secondary: '#4b5070', belly: '#e8eaf5', accent: '#ffd83a', eye: '#fff2a0', dark: '#22243a' } });
+line({ id: 'zapwing', names: ['Zapwing', 'Arcwing', 'Stormtalon', 'Skyvolt'], breed: 'Bird', body: 'avian', role: 'fast', element: 'electric', ultimate: 'thunder_crown', mood: 'focused', spawnMaps: ['stormreach_plateau'],
+  desc: 'A storm-petrel that rides the lightning down. Its feathers glow before a strike.',
+  palette: { primary: '#f7e27a', secondary: '#c49a2a', belly: '#fffbe0', accent: '#8fd8ff', eye: '#5fc8ff', dark: '#5a4210' } });
+line({ id: 'coilstone', names: ['Coilstone', 'Voltgolem', 'Dynamolith', 'Gigavolt'], breed: 'Golem', body: 'golem', role: 'tank', element: 'electric', ultimate: 'storm_mantle', mood: 'sturdy', spawnMaps: ['stormreach_plateau'],
+  desc: 'A golem wound with copper coils that hum in a storm. Lightning strikes it on purpose.',
+  palette: { primary: '#c47d3a', secondary: '#7a4a1c', belly: '#f2d7b0', accent: '#8ff0ff', eye: '#b8f8ff', dark: '#3a230c' } });
+// ---- ICE — Frostveil Tundra ---------------------------------------------------
+line({ id: 'frostpup', names: ['Frostpup', 'Snowfang', 'Glacierwolf', 'Frosthowl'], breed: 'Wolf', body: 'wolf', role: 'physical', element: 'ice', ultimate: 'glacier_fall', mood: 'fierce', spawnMaps: ['frostveil_tundra'],
+  desc: 'A white wolf whose breath freezes mid-air. It hunts in the blizzard nobody else can see through.',
+  palette: { primary: '#e8f4ff', secondary: '#9fc4e0', belly: '#ffffff', accent: '#7fd8ff', eye: '#4fb8ff', dark: '#3a5670' } });
+line({ id: 'snowkit', names: ['Snowkit', 'Frostlynx', 'Glacierlynx', 'Aurorlynx'], breed: 'Feline', body: 'feline', role: 'special', element: 'ice', ultimate: 'winter_crown', mood: 'calm', spawnMaps: ['frostveil_tundra'],
+  desc: 'A lynx with frost crystals for whiskers. It can sit in a snowdrift for a whole day, waiting.',
+  palette: { primary: '#bfe3ff', secondary: '#6ea8d8', belly: '#f4fbff', accent: '#ffffff', eye: '#a8ecff', dark: '#274a68' } });
+line({ id: 'icecarap', names: ['Icecarap', 'Glaceshell', 'Frostdome', 'Glacierdome'], breed: 'Tortoise', body: 'tortoise', role: 'tank', element: 'ice', ultimate: 'frozen_bastion', mood: 'lazy', spawnMaps: ['frostveil_tundra'],
+  desc: 'A tortoise whose shell is a slab of glacier ice. It has never once hurried.',
+  palette: { primary: '#9fd0ea', secondary: '#5f92b8', belly: '#e6f6ff', accent: '#ffffff', eye: '#cfeeff', dark: '#2a4f6a' } });
+line({ id: 'flurrywing', names: ['Flurrywing', 'Sleetwing', 'Blizzardwing', 'Aurorawing'], breed: 'Bird', body: 'avian', role: 'fast', element: 'ice', ultimate: 'winter_crown', mood: 'swift', spawnMaps: ['frostveil_tundra'],
+  desc: 'A snow-bunting that leaves frost on the wind. Its wings chime like icicles.',
+  palette: { primary: '#f2f8ff', secondary: '#b6cfe6', belly: '#ffffff', accent: '#8fe0ff', eye: '#5fc0ff', dark: '#405a72' } });
+line({ id: 'frostling', names: ['Frostling', 'Frostwyrm', 'Glacidrake', 'Absolutus'], breed: 'Dragon', body: 'dragon', role: 'balanced', element: 'ice', ultimate: 'glacier_fall', mood: 'stubborn', spawnMaps: ['frostveil_tundra'],
+  desc: 'A drake hatched in a glacier. Its flame is cold enough to shatter stone.',
+  palette: { primary: '#7fb8e6', secondary: '#3f6f9e', belly: '#e8f4ff', accent: '#c8f4ff', eye: '#eaffff', dark: '#1e3a55' } });
+// ---- METAL — Ironhold Foundry -------------------------------------------------
+line({ id: 'ironbug', names: ['Ironbug', 'Steelbeetle', 'Titanbeetle', 'Adamantrex'], breed: 'Beetle', body: 'beetle', role: 'tank', element: 'metal', ultimate: 'adamant_shell', mood: 'guarded', spawnMaps: ['ironhold_foundry'],
+  desc: 'A beetle plated in scrap iron. Smiths use its shed shells for shields.',
+  palette: { primary: '#8e97a6', secondary: '#4f5866', belly: '#d5dbe4', accent: '#ffb347', eye: '#ffd8a0', dark: '#23282f' } });
+line({ id: 'scrapling', names: ['Scrapling', 'Scrapgolem', 'Ironclad', 'Titanforge'], breed: 'Golem', body: 'golem', role: 'physical', element: 'metal', ultimate: 'iron_judgment', mood: 'sturdy', spawnMaps: ['ironhold_foundry'],
+  desc: 'A golem assembled from foundry scrap. Every fight adds a new plate.',
+  palette: { primary: '#a8adb8', secondary: '#5c6270', belly: '#e0e4ea', accent: '#ff8a3c', eye: '#ffc890', dark: '#2a2e36' } });
+line({ id: 'ironhog', names: ['Ironhog', 'Steeltusk', 'Alloyboar', 'Titanboar'], breed: 'Boar', body: 'boar', role: 'physical', element: 'metal', ultimate: 'iron_judgment', mood: 'brave', spawnMaps: ['ironhold_foundry'],
+  desc: 'A boar with tusks of tempered steel. It sharpens them on anvils.',
+  palette: { primary: '#7d8794', secondary: '#454c58', belly: '#cfd6df', accent: '#e6eef7', eye: '#ffe0a0', dark: '#1f242b' } });
+line({ id: 'chromeling', names: ['Chromeling', 'Chromegecko', 'Steelwyrm', 'Platinodon'], breed: 'Lizard', body: 'lizard', role: 'special', element: 'metal', ultimate: 'magnetic_storm', mood: 'clever', spawnMaps: ['ironhold_foundry'],
+  desc: 'A mirror-scaled lizard that reflects heat and insults alike.',
+  palette: { primary: '#c9d3de', secondary: '#7b8794', belly: '#f2f5f9', accent: '#6fd0ff', eye: '#a8ecff', dark: '#343c46' } });
+line({ id: 'cogfox', names: ['Cogfox', 'Gearfox', 'Clockfox', 'Chronofox'], breed: 'Fox', body: 'fox', role: 'fast', element: 'metal', ultimate: 'magnetic_storm', mood: 'keen', spawnMaps: ['ironhold_foundry'],
+  desc: 'A fox with gears for markings that tick faster when it is excited.',
+  palette: { primary: '#b8a27a', secondary: '#7a6746', belly: '#efe6d2', accent: '#8fd0ff', eye: '#c8f0ff', dark: '#3a2f1e' } });
+// ---- POISON — Miremarsh Fen ---------------------------------------------------
+line({ id: 'venoviper', names: ['Venoviper', 'Toxiviper', 'Plagueviper', 'Basiliskos'], breed: 'Serpent', body: 'serpent', role: 'special', element: 'poison', ultimate: 'plague_crown', mood: 'clever', spawnMaps: ['miremarsh_fen'],
+  desc: 'A hooded marsh viper. Its hood spreads wider with every stage — and so does its venom.',
+  palette: { primary: '#7e4fb8', secondary: '#4a2a78', belly: '#d9f5a8', accent: '#9cff5a', eye: '#d8ff8a', dark: '#26123f' } });
+line({ id: 'mirenewt', names: ['Mirenewt', 'Bognewt', 'Toxalamander', 'Plaguedon'], breed: 'Lizard', body: 'lizard', role: 'balanced', element: 'poison', ultimate: 'plague_crown', mood: 'hardy', spawnMaps: ['miremarsh_fen'],
+  desc: 'A newt that is very hard to swallow — for very good reasons.',
+  palette: { primary: '#6fa04a', secondary: '#3e6a2c', belly: '#e8f0a0', accent: '#c05cff', eye: '#f0c8ff', dark: '#1f3a18' } });
+line({ id: 'stingbug', names: ['Stingbug', 'Venomscarab', 'Plaguebeetle', 'Toxitan'], breed: 'Beetle', body: 'beetle', role: 'physical', element: 'poison', ultimate: 'venom_tyrant', mood: 'aggressive', spawnMaps: ['miremarsh_fen'],
+  desc: 'A scarab with a sting that drips. Nothing eats it twice.',
+  palette: { primary: '#5a3a7a', secondary: '#31204a', belly: '#b8f07a', accent: '#a6ff4a', eye: '#e8ffb0', dark: '#180e28' } });
+line({ id: 'venobat', names: ['Venobat', 'Gloomwing', 'Nightvenom', 'Dreadwing'], breed: 'Bat', body: 'bat', role: 'fast', element: 'poison', ultimate: 'venom_tyrant', mood: 'playful', spawnMaps: ['miremarsh_fen'],
+  desc: 'A fen bat that hunts by the smell of fear. Its bite numbs before it burns.',
+  palette: { primary: '#5c4a86', secondary: '#33294f', belly: '#c2b3e0', accent: '#8dff6a', eye: '#ccff9a', dark: '#1a1230' } });
+line({ id: 'boghound', names: ['Boghound', 'Mirewolf', 'Plaguefang', 'Blightwolf'], breed: 'Hound', body: 'wolf', role: 'physical', element: 'poison', ultimate: 'miasma_hex', mood: 'fierce', spawnMaps: ['miremarsh_fen'],
+  desc: 'A hound that drinks from the sludge and thrives on it.',
+  palette: { primary: '#4f6a4a', secondary: '#2e4230', belly: '#c9dcb0', accent: '#b26fff', eye: '#e2c8ff', dark: '#15211a' } });
+// ---- PSYCHIC — Astral Spire ---------------------------------------------------
+line({ id: 'psykit', names: ['Psykit', 'Mindcat', 'Astralynx', 'Oraclynx'], breed: 'Feline', body: 'feline', role: 'special', element: 'psychic', ultimate: 'astral_crown', mood: 'clever', spawnMaps: ['astral_spire'],
+  desc: 'A cat that answers questions you have not asked yet.',
+  palette: { primary: '#e88ab8', secondary: '#a8508a', belly: '#ffe6f2', accent: '#8fd8ff', eye: '#c8f4ff', dark: '#4a1e3a' } });
+line({ id: 'dreamwisp', names: ['Dreamwisp', 'Mindwisp', 'Astralwisp', 'Nebulon'], breed: 'Wisp', body: 'wisp', role: 'special', element: 'psychic', ultimate: 'astral_ward', mood: 'mystic', spawnMaps: ['astral_spire'],
+  desc: 'A drifting light that feeds on dreams and leaves better ones behind.',
+  palette: { primary: '#b58cff', secondary: '#6f4fc0', belly: '#f0e6ff', accent: '#ffd1f0', eye: '#ffffff', dark: '#2a1a50' } });
+line({ id: 'mystfox', names: ['Mystfox', 'Auraphox', 'Seerfox', 'Kitsunova'], breed: 'Fox', body: 'fox', role: 'fast', element: 'psychic', ultimate: 'mind_shatter', mood: 'focused', spawnMaps: ['astral_spire'],
+  desc: 'A fox that is always one step ahead, because it saw the step coming.',
+  palette: { primary: '#f0a6d8', secondary: '#b064a0', belly: '#fff0f8', accent: '#9ff0ff', eye: '#dcfbff', dark: '#4e2646' } });
+line({ id: 'omenwing', names: ['Omenwing', 'Seerwing', 'Astralwing', 'Cosmowl'], breed: 'Owl', body: 'avian', role: 'balanced', element: 'psychic', ultimate: 'astral_crown', mood: 'vigilant', spawnMaps: ['astral_spire'],
+  desc: 'An owl whose eyes show tomorrow. It rarely blinks.',
+  palette: { primary: '#8a7ac8', secondary: '#524490', belly: '#ece6ff', accent: '#ff9ad2', eye: '#ffe0f0', dark: '#221a48' } });
+line({ id: 'mindram', names: ['Mindram', 'Psyram', 'Astralram', 'Oraclorn'], breed: 'Ram', body: 'ram', role: 'tank', element: 'psychic', ultimate: 'mind_shatter', mood: 'guarded', spawnMaps: ['astral_spire'],
+  desc: 'A ram with horns of solid thought. Walls are a suggestion.',
+  palette: { primary: '#d8c8f0', secondary: '#9282c0', belly: '#f8f4ff', accent: '#ff7fc8', eye: '#ffc8e8', dark: '#3e3060' } });
+// ---- DUAL-TYPED lines: both elements' attacks, home map first, also found on the other ----
+line({ id: 'mirewisp', names: ['Mirewisp', 'Hexwisp', 'Miasmind', 'Phantasmire'], breed: 'Wisp', body: 'wisp', role: 'special', elements: ['poison', 'psychic'], ultimate: 'miasma_hex', mood: 'mystic', rarity: 'B', catchRate: 0.4, expYield: 88, spawnMaps: ['miremarsh_fen', 'astral_spire'],
+  desc: 'A marsh-light that whispers. Poison and Psychic at once: it withers the body and clouds the mind.',
+  palette: { primary: '#8c6fd0', secondary: '#4f3a90', belly: '#e0ffb8', accent: '#a8ff5a', eye: '#f4ffd8', dark: '#22163e' } });
+line({ id: 'sparkbug', names: ['Sparkbug', 'Voltsteel', 'Dynabeetle', 'Ferrovolt'], breed: 'Beetle', body: 'beetle', role: 'physical', elements: ['electric', 'metal'], ultimate: 'gigavolt_charge', mood: 'aggressive', rarity: 'B', catchRate: 0.4, expYield: 88, spawnMaps: ['ironhold_foundry', 'stormreach_plateau'],
+  desc: 'A steel beetle that stores the storm in its plating. Electric and Metal at once: it conducts as hard as it hits.',
+  palette: { primary: '#98a2b4', secondary: '#525c6e', belly: '#e2e8f0', accent: '#ffe23a', eye: '#fff5b0', dark: '#20262f' } });
+// ---- LEGENDARIES: one form, 2-3 elements, rare spawns, Absolute Ball or better only ----
+legend({ id: 'aetherion', name: 'Aetherion', breed: 'Celestial Elk', body: 'ram', role: 'special', elements: ['psychic', 'electric', 'ice'], ultimate: 'aurora_cataclysm', mood: 'mystic', spawnMaps: ['astral_spire', 'stormreach_plateau', 'frostveil_tundra'],
+  tweak: { spd: 4, satk: 4 },
+  desc: 'LEGENDARY. An elk of aurora light seen once a generation on the Spire. Psychic, Electric and Ice — the northern lights given antlers.',
+  palette: { primary: '#d8e8ff', secondary: '#8ab0e0', belly: '#ffffff', accent: '#7fffd4', eye: '#c8fff0', dark: '#2c4a70' } });
+legend({ id: 'venomyr', name: 'Venomyr', breed: 'Corroded Wyrm', body: 'serpent', role: 'physical', elements: ['poison', 'metal'], ultimate: 'plague_engine', mood: 'brutal', spawnMaps: ['miremarsh_fen', 'ironhold_foundry'],
+  tweak: { hp: 10, pdef: 3 },
+  desc: 'LEGENDARY. A serpent of rusted iron and living venom that sleeps under the fen. Poison and Metal — it corrodes whatever it cannot bite through.',
+  palette: { primary: '#5a7a58', secondary: '#33463a', belly: '#c8d8a8', accent: '#b0ff4a', eye: '#e8ff9a', dark: '#141f16' } });
+legend({ id: 'basaltyr', name: 'Basaltyr', breed: 'Molten Colossus', body: 'golem', role: 'tank', elements: ['rock', 'fire', 'metal'], ultimate: 'core_meltdown', mood: 'sturdy', spawnMaps: ['ironhold_foundry', 'emberwild', 'stonehollow_crags'],
+  tweak: { patk: 4, satk: 6 },
+  legacySkills: { rock: [[1, 'stone_shard'], [20, 'crag_lance'], [20, 'rock_jab'], [60, 'quartz_storm'], [80, 'core_beam'], [80, 'tectonic_slam']], fire: [[1, 'flame_rawr'], [20, 'burning_fang'], [20, 'ember_jab'], [60, 'inferno_roar'], [80, 'dragon_inferno'], [80, 'magma_slam']] },
+  desc: 'LEGENDARY. A colossus of cooled basalt with a molten iron heart, said to be the mountain\'s own forge. Rock, Fire and Metal.',
+  palette: { primary: '#4a4048', secondary: '#2a2428', belly: '#8a7f86', accent: '#ff7a2a', eye: '#ffc46a', dark: '#120e12' } });
+
 export const SPECIES_IDS = Object.keys(SPECIES);
+/** Legendary species ids (rare spawns, one form, 2-3 elements). */
+export const LEGENDARY_IDS = SPECIES_IDS.filter((id) => SPECIES[id].legendary);
 export const STARTER_IDS = SPECIES_IDS.filter((id) => SPECIES[id].starter);
 
 export function getSpecies(id) {

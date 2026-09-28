@@ -46,9 +46,9 @@ implementation package that you can paste into a chat to have the content wired 
 
 **Game presets.** The build embeds a *read-only snapshot* of the game's data and art modules
 (`src/data/*`, `creatureArt.js`, `creatureRig.js`, `worldRenderer.js`). A new project therefore starts
-from the real content: the 4 maps (regions, water, bridges, buildings, landmarks, NPCs, trainers,
+from the real content: the 9 maps (regions, water, bridges, buildings, landmarks, NPCs, trainers,
 encounter zones, connections and the procedurally generated props, all at their game coordinates), the
-20 Mythlings (the game's art layers as live, individually editable parts with anchors; the 12 game
+50 Mythlings (the game's art layers as live, individually editable parts with anchors; the 12 game
 animations sampled into editable keyframes; stats, evolutions, skill unlocks, palette), every skill and
 skill-VFX descriptor. `PROJECT → Game Presets…` re-imports any of them, `HELP → About the Game Data
 Snapshot` lists what was embedded, and the EXPORT screen's **Game format** option writes the edited
@@ -82,12 +82,13 @@ Optional headless regression test for the editor (drives the built file in jsdom
 
 | | |
 |---|---|
-| **Mythlings** | 20 species — 15 across Nature / Water / Fire plus 5 **Rock** lines (Pebbleshell, Gravelhog, Shalecrawl, Quartzling, Rubblekin) with their own tortoise / boar / lizard / beetle / golem body plans; every line has 4 visibly different evolution stages |
-| **Regions** | 4 with **fixed level bands** — Verdant Vale (Lv.1–20), Azure Coast (Lv.15–30), Emberwild (Lv.30–45), **Stonehollow Crags** (Lv.45–60). Wild levels never scale to your party: out-grow an area and move on |
-| **Elements** | 🌿 Nature > 💧 Water > 🔥 Fire > 🌿 Nature, plus 🪨 **Rock** (crushes Fire, crumbles to Water and Nature) — 1.5× / 0.75× / 1.0× |
+| **Mythlings** | 50 species — 20 originals plus 25 new lines across Electric / Ice / Metal / Poison / Psychic (5 each), two **dual-typed** lines (Poison/Psychic Mirewisp, Electric/Metal Sparkbug) and three **legendaries** (Aetherion, Venomyr, Basaltyr: one form, 2–3 elements, rare spawns, Absolute Ball or better). 14 procedural body plans, 4 visibly different stages per line |
+| **Regions** | 9 with **fixed level bands** — Verdant Vale 1–20, Azure Coast 15–30, Emberwild 28–40, Stonehollow Crags 38–48, Stormreach Plateau 46–56, Frostveil Tundra 54–64, Ironhold Foundry 62–72, Miremarsh Fen 70–80, Astral Spire 78–90. Wild levels never scale to your party and **trainer teams are fixed** at their written levels |
+| **Elements** | 9 — Nature, Water, Fire, Rock, Electric, Ice, Metal, Poison, Psychic. Every element beats two or three and fears one to three; dual / triple types multiply every one of their elements (1.5× / 0.75× / 1.0×) |
+| **Battle** | Damage scaling reworked: no more Lv.100 coin-flip one-shots — a neutral Special takes ~7 hits, a super-effective Ultimate 2–3. Crit damage caps at +150 % |
 | **Level cap** | Lv.100 — every evolution stage is reachable |
-| **Evolution** | Lv.20 / Lv.60 / Lv.80. The **Index only reveals a form once you have owned it** |
-| **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades a tier per evolution. New **support Ultimates** buff the caster and/or debuff the foe with two effects per tier |
+| **Evolution** | Lv.20 / Lv.60 / Lv.80. The **Index only reveals a form once you have owned it**. Legendaries never evolve; their Ultimate tiers unlock by level |
+| **Ultimate** | 8-charge system, unlocks at Lv.10, upgrades a tier per evolution. Support Ultimates buff the caster and/or debuff the foe with two effects per tier |
 | **Mutations** | Shiny ✧ (+1 to every stat) and Darkness ☾ (+2), with their own colours and aura |
 | **Stats** | 9: HP, P.ATK, S.ATK, P.DEF, S.DEF, SPD, **CNT** (evasion, 0.15 % dodge per point, capped at 6 %), **CRIT** (capped at 25 %), **C.DMG** |
 | **Moods & Rationals** | Moods are purely positive: each raises **three** stats (25 unique trios, scaled by Rarity). Every Mythling also has a **Rational**: a fixed +10 / −10 on two stats. Mood Tonic / Temper Tonic re-roll them |
@@ -189,8 +190,8 @@ sequence: **CAST → ATTACK MOTION → PROJECTILE → IMPACT → AFTERMATH → D
 
 `SETTINGS → OPEN WIKI` (also on the title screen's Settings) opens a searchable reference built
 straight from `src/data/*`: getting started, all nine stats, every mood and rarity, mutations, the
-element chart, the full battle rules and damage formula, all twenty species with base stats and
-evolution lines, every skill and Ultimate, all items, the four regions with their trainers, the EXP
+element chart, the full battle rules and damage formula, all fifty species with base stats and
+evolution lines, every skill and Ultimate, all items, the nine regions with their trainers, the EXP
 curve, controls and the roadmap. It is generated from the same data files the game runs on, so it
 can never drift out of date.
 
@@ -213,12 +214,18 @@ Tidecrest Port → Coralway → Moonlit River → Azure Caverns    (Cavern Guard
 Emberwatch Outpost → Ashen Trail → Cinder Forest → Molten Cavern → Volcanic Ruins
                                                               (Flame Warden → Ember Sigil)
         ↓
-Quarry Camp → Gravel Pass → Crystal Hollow → Shale Ridge → Titan Summit
-                                                              (Stone Warden → Version Complete)
+Quarry Camp → Gravel Pass → Crystal Hollow → Shale Ridge → Titan Summit   (Stone Warden → Crag Seal)
+        ↓
+Stormreach Plateau (Storm Warden → Storm Sigil) → Frostveil Tundra (Frost Warden → Frost Sigil)
+        ↓
+Ironhold Foundry (Forge Warden → Iron Sigil) → Miremarsh Fen (Plague Warden → Mire Sigil)
+        ↓
+Astral Spire: Spire Base → Dream Garden → Mirror Lake → Void Steps → Astral Summit
+                                                              (Astral Warden → Version Complete)
 ```
 
-Gates are item-locked, so a region can never be reached under-levelled. After the Stone Warden the
-world stays fully open for collecting, mutation hunting and training to Lv.100.
+Gates are item-locked, so a region can never be reached under-levelled. After the Astral Warden the
+world stays fully open for collecting, mutation hunting, legendary hunting and training to Lv.100.
 
 ---
 
@@ -235,7 +242,7 @@ src/
     skillVfx.js            per-skill VFX data (element, category, cast/projectile/impact/aftermath)
     moods.js  rarity.js  mutations.js  elements.js  items.js
     config.js also owns the Counter->dodge curve and the crit caps
-    maps.js                4 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
+    maps.js                9 regions: regions, water, buildings, NPCs, trainers, spawn tables, gates
   core/
     mythling.js            the Mythling model: stats, EXP/levels, evolution, skills, resetToLevelOne()
     utils.js               RNG, colour maths, event bus, helpers

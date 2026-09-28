@@ -647,7 +647,7 @@ textarea.bad, input.bad { outline: 1px solid #ef4444; }
 
 <script>
 /* MYTHLING EDIT v1.0.0 — standalone offline editor for Mythlings: Wildbound.
-   Built 2026-09-28T01:22:50.642Z from tools/mythling-edit (18 modules + game data snapshot of 15 game modules). No network access, no build step, no dependencies. */
+   Built 2026-09-28T02:14:11.772Z from tools/mythling-edit (18 modules + game data snapshot of 15 game modules). No network access, no build step, no dependencies. */
 'use strict';
 // ---- GameSnapshot (generated from the game's data + art modules; read-only copy) ----
 const GameSnapshot = (function () {
@@ -807,7 +807,7 @@ return { clamp, lerp, randInt, choice, weightedChoice, makeRng, rng, uid, coins,
 })();
 __m["src/data/config.js"] = (function () {
 // Global tunables for the current version.
-const GAME_VERSION = '0.3.0';
+const GAME_VERSION = '0.5.0';
 const SAVE_PREFIX = 'mythlings_wildbound';
 const SAVE_SLOT_COUNT = 3;
 
@@ -847,10 +847,20 @@ const COUNTER_MAX_DODGE = 6;
  * Crit Damage is a BONUS percentage (0-200 => up to x3).
  */
 const CRIT_MAX_PERCENT = 25;
-const CRIT_MAX_MULT = 200;
+const CRIT_MAX_MULT = 150;
 
 const DAMAGE_RANDOM_MIN = 0.85;
 const DAMAGE_RANDOM_MAX = 1.0;
+/**
+ * Damage scaling on top of the stat ratio. Attack and Defense already grow with level
+ * and evolution stage, so these stay gentle: the old 0.085/level × full stage multiplier
+ * let two Lv.100 Mythlings one-shot each other and made "who moves first" the whole
+ * fight. At Lv.100 / stage 4 the factor is now ~5.5 instead of ~20.7 — a neutral Special
+ * takes about seven hits to KO an equal foe, a super-effective one about five, and even
+ * a super-effective Ultimate needs two or three.
+ */
+const DAMAGE_LEVEL_SCALE = 0.035;
+const DAMAGE_STAGE_SCALE = 0.08;
 
 const STAT_GROWTH = {
   hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
@@ -934,21 +944,26 @@ const DEFAULT_SETTINGS = {
   confirmImportantActions: true,
 };
 
-return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP, DEFAULT_SETTINGS };
+return { GAME_VERSION, SAVE_PREFIX, SAVE_SLOT_COUNT, LEVEL_CAP, ABSOLUTE_MAX_LEVEL, STARTER_RARITY, PARTY_MAX, STORAGE_MAX, ULTIMATE_UNLOCK_LEVEL, EVOLUTION_LEVELS, MAX_UNLOCKED_EVOLUTION_STAGE, FUTURE_CONTENT_LIVE, COUNTER_MAX_PERCENT, COUNTER_DODGE_SCALE, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, CRIT_MAX_MULT, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, STAT_GROWTH, RATIONAL_AMOUNT, counterDodgePercent, expToNextLevel, totalExpForLevel, expReward, DEFEAT_COIN_PENALTY, coinReward, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP, DEFAULT_SETTINGS };
 })();
 __m["src/data/elements.js"] = (function () {
 // Element definitions & effectiveness chart (data-driven, extensible).
 // `icon` names an entry in src/ui/icons.js — the UI never uses emoji.
 const ELEMENTS = {
-  nature: { id: 'nature', name: 'Nature', icon: 'nature', color: '#4fc76a', glow: '#9cff9c' },
-  water:  { id: 'water',  name: 'Water',  icon: 'water', color: '#3fa9f5', glow: '#a5e6ff' },
-  fire:   { id: 'fire',   name: 'Fire',   icon: 'fire', color: '#ff7a3d', glow: '#ffd08a' },
-  rock:   { id: 'rock',   name: 'Rock',   icon: 'rock', color: '#b99a6b', glow: '#f0dcb0' },
+  nature:   { id: 'nature',   name: 'Nature',   icon: 'nature',   color: '#4fc76a', glow: '#9cff9c' },
+  water:    { id: 'water',    name: 'Water',    icon: 'water',    color: '#3fa9f5', glow: '#a5e6ff' },
+  fire:     { id: 'fire',     name: 'Fire',     icon: 'fire',     color: '#ff7a3d', glow: '#ffd08a' },
+  rock:     { id: 'rock',     name: 'Rock',     icon: 'rock',     color: '#b99a6b', glow: '#f0dcb0' },
+  electric: { id: 'electric', name: 'Electric', icon: 'electric', color: '#f4d03f', glow: '#fff6a8' },
+  ice:      { id: 'ice',      name: 'Ice',      icon: 'ice',      color: '#8fdcff', glow: '#e6fbff' },
+  metal:    { id: 'metal',    name: 'Metal',    icon: 'metal',    color: '#a9b4c2', glow: '#e8eef5' },
+  poison:   { id: 'poison',   name: 'Poison',   icon: 'poison',   color: '#b06fe0', glow: '#e4c0ff' },
+  psychic:  { id: 'psychic',  name: 'Psychic',  icon: 'psychic',  color: '#ff6fb5', glow: '#ffc6e4' },
   // Future elements can simply be appended here.
 };
 
 /** Display order used by the Index, the Collection and the Wiki (grouped by element). */
-const ELEMENT_ORDER = ['nature', 'water', 'fire', 'rock'];
+const ELEMENT_ORDER = ['nature', 'water', 'fire', 'rock', 'electric', 'ice', 'metal', 'poison', 'psychic'];
 
 const EFFECTIVENESS = {
   STRONG: 1.5,
@@ -956,27 +971,62 @@ const EFFECTIVENESS = {
   NEUTRAL: 1.0,
 };
 
-// attacker -> defender it is strong against
-// Rock smothers Fire, but water erodes it and roots crack it: strong against
-// one element, weak to two — so a Rock team is a real puzzle for the Fire party
-// most players bring out of Emberwild, and a Water or Nature party shines there.
+// attacker -> defenders it is strong against.
+//   Nature   roots crack Rock and drink Water.
+//   Water    drowns Fire and erodes Rock.
+//   Fire     burns Nature, melts Ice and Metal.
+//   Rock     smothers Fire and grounds Electric.
+//   Electric conducts through Water and Metal.
+//   Ice      freezes Nature and stills Electric.
+//   Metal    grinds Rock and shatters Ice.
+//   Poison   withers Nature, corrodes Metal and clouds the Psychic mind.
+//   Psychic  purges Poison and snuffs Fire.
+// Every element is strong against two or three others and weak to one to three.
 const STRONG_AGAINST = {
-  nature: ['water', 'rock'],
-  water: ['fire', 'rock'],
-  fire: ['nature'],
-  rock: ['fire'],
+  nature:   ['water', 'rock'],
+  water:    ['fire', 'rock'],
+  fire:     ['nature', 'ice', 'metal'],
+  rock:     ['fire', 'electric'],
+  electric: ['water', 'metal'],
+  ice:      ['nature', 'electric'],
+  metal:    ['rock', 'ice'],
+  poison:   ['nature', 'metal', 'psychic'],
+  psychic:  ['poison', 'fire'],
 };
 
 function elementMultiplier(attackElement, defenderElement) {
   if (!attackElement || !defenderElement) return EFFECTIVENESS.NEUTRAL;
+  // a dual / triple-typed defender: every one of its elements weighs in (1.5 × 0.75 = 1.125 ...)
+  if (Array.isArray(defenderElement)) {
+    let m = EFFECTIVENESS.NEUTRAL;
+    for (const d of defenderElement) m *= elementMultiplier(attackElement, d);
+    return Math.round(m * 1000) / 1000;
+  }
   if (attackElement === defenderElement) return EFFECTIVENESS.NEUTRAL;
   if ((STRONG_AGAINST[attackElement] || []).includes(defenderElement)) return EFFECTIVENESS.STRONG;
   if ((STRONG_AGAINST[defenderElement] || []).includes(attackElement)) return EFFECTIVENESS.WEAK;
   return EFFECTIVENESS.NEUTRAL;
 }
 
+/** Elements an element is strong against (for the Wiki and the professor). */
+function strongAgainst(id) { return [...(STRONG_AGAINST[id] || [])]; }
+/** Elements that are strong against `id` (its weaknesses). */
+function weakTo(id) { return Object.keys(STRONG_AGAINST).filter((a) => STRONG_AGAINST[a].includes(id)); }
+
+/**
+ * The element list of a species: `elements` for dual / triple types (legendaries,
+ * the Poison/Psychic and Electric/Metal lines), otherwise just `element`.
+ */
+function speciesElements(sp) {
+  if (!sp) return [];
+  if (Array.isArray(sp.elements) && sp.elements.length) return sp.elements;
+  return sp.element ? [sp.element] : [];
+}
+
 function effectivenessLabel(mult) {
+  if (mult > 2.0) return "It's devastatingly effective!";
   if (mult > 1.01) return "It's super effective!";
+  if (mult < 0.6) return "It barely scratches it...";
   if (mult < 0.99) return "It's not very effective...";
   return null;
 }
@@ -985,7 +1035,7 @@ function elementOf(id) {
   return ELEMENTS[id] || { id, name: id, icon: 'spark', color: '#bbb', glow: '#fff' };
 }
 
-return { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier, effectivenessLabel, elementOf };
+return { ELEMENTS, ELEMENT_ORDER, EFFECTIVENESS, elementMultiplier, strongAgainst, weakTo, speciesElements, effectivenessLabel, elementOf };
 })();
 __m["src/data/rarity.js"] = (function () {
 // Rarity is stored independently from species. It only scales the Mood bonus magnitude.
@@ -1060,12 +1110,12 @@ const STAT_INFO = {
   spd: 'Higher Speed acts first each turn — and helps you flee.',
   counter: 'Evasion. Each point is 0.15% dodge, capped at 6% — a miss is rare (Counter caps at 35).',
   crit: 'Chance to land a critical hit, in percent (caps at 25% — a crit stays special even at Lv.100).',
-  critMult: 'Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +200%).',
+  critMult: 'Bonus damage on a critical hit, in percent. +50% means a crit deals 1.5x (caps at +150%).',
 };
 
 /** Reference used for the stat bars in the detail panel. */
 const STAT_BAR_MAX = {
-  hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 25, critMult: 200,
+  hp: 600, patk: 90, satk: 90, pdef: 90, sdef: 90, spd: 90, counter: 35, crit: 25, critMult: 150,
 };
 
 // Mood: a purely POSITIVE trait. Every Mood raises THREE stats and lowers nothing —
@@ -1330,7 +1380,12 @@ const ITEMS = {
   vale_charm:  { id: 'vale_charm',  name: 'Vale Charm',  category: 'key', desc: 'Proof that the Verdant Guardian was bested. Opens the Verdant Gate.' },
   coast_pass:  { id: 'coast_pass',  name: 'Coast Pass',  category: 'key', desc: 'Granted at Tidecrest Port. Opens the Emberwild Gate.' },
   ember_sigil: { id: 'ember_sigil', name: 'Ember Sigil', category: 'key', desc: 'Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags.' },
-  crag_seal:   { id: 'crag_seal',   name: 'Crag Seal',   category: 'key', desc: 'Proof that the Stone Warden of Stonehollow Crags was bested.' },
+  crag_seal:   { id: 'crag_seal',   name: 'Crag Seal',   category: 'key', desc: 'Proof that the Stone Warden of Stonehollow Crags was bested. Opens the Storm Gate to Stormreach Plateau.' },
+  storm_sigil: { id: 'storm_sigil', name: 'Storm Sigil', category: 'key', desc: 'Awarded by the Storm Warden. Opens the Frost Gate to Frostveil Tundra.' },
+  frost_sigil: { id: 'frost_sigil', name: 'Frost Sigil', category: 'key', desc: 'Awarded by the Frost Warden. Opens the Iron Gate to Ironhold Foundry.' },
+  iron_sigil:  { id: 'iron_sigil',  name: 'Iron Sigil',  category: 'key', desc: 'Awarded by the Forge Warden. Opens the Mire Gate to Miremarsh Fen.' },
+  mire_sigil:  { id: 'mire_sigil',  name: 'Mire Sigil',  category: 'key', desc: 'Awarded by the Plague Warden. Opens the Spire Gate to the Astral Spire.' },
+  astral_crest:{ id: 'astral_crest',name: 'Astral Crest',category: 'key', desc: 'Awarded on the Astral Summit for completing the current build of Wildbound.' },
 };
 
 /** Item ids from earlier versions and what they became (applied when a save is loaded). */
@@ -1348,6 +1403,11 @@ const FOOD_IDS = Object.values(ITEMS).filter((i) => i.category === 'food').map((
 
 const BALL_IDS = Object.values(ITEMS).filter((i) => i.category === 'balls').map((i) => i.id);
 
+/** Ball tier = position in the catalogue (Basic 0 ... Dark 6). Legendaries need LEGENDARY_MIN_BALL_TIER or better. */
+function ballTier(id) { return BALL_IDS.indexOf(id); }
+const LEGENDARY_MIN_BALL = 'absolute_ball';
+function canHoldLegendary(ballId) { return ballTier(ballId) >= ballTier(LEGENDARY_MIN_BALL); }
+
 function getItem(id) {
   return ITEMS[id] || null;
 }
@@ -1361,7 +1421,7 @@ const STARTING_INVENTORY = {
 
 const STARTING_WILDCOINS = 900;
 
-return { ITEMS, LEGACY_ITEMS, ITEM_CATEGORIES, FOOD_IDS, BALL_IDS, getItem, STARTING_INVENTORY, STARTING_WILDCOINS };
+return { ITEMS, LEGACY_ITEMS, ITEM_CATEGORIES, FOOD_IDS, BALL_IDS, ballTier, LEGENDARY_MIN_BALL, canHoldLegendary, getItem, STARTING_INVENTORY, STARTING_WILDCOINS };
 })();
 __m["src/data/skills.js"] = (function () {
 // DESIGN RULE: a regular Buff skill raises exactly ONE stat and a regular Debuff
@@ -1537,7 +1597,89 @@ const SKILLS = {
   predator_focus:  { id: 'predator_focus',  name: 'Predator Focus',  category: 'buff',   effects: [{ stat: 'patk', amount: 7 }, { stat: 'pdef', amount: 6, target: 'foe' }], uses: 4, desc: 'Locks onto the prey. Raises your Physical Attack and lowers the foe\'s Physical Defense.', future: true },
   mind_break:      { id: 'mind_break',      name: 'Mind Break',      category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }, { stat: 'satk', amount: 6, target: 'self' }], uses: 4, desc: 'Cracks the foe\'s focus and feeds on it. Lowers the foe\'s Special Defense and raises your Special Attack.', future: true },
 
+
+  // ---------- ELEMENT-NEUTRAL support pool (used by the Stormreach → Astral Spire species) ----------
+  // Buffs and debuffs carry no element, so these are shared by every new line by role.
+  power_up:  { id: 'power_up',  name: 'Power Up',  category: 'buff', effects: [{ stat: 'patk', amount: 4 }], uses: 10, desc: 'Raises Physical Attack.' },
+  guard_up:  { id: 'guard_up',  name: 'Guard Up',  category: 'buff', effects: [{ stat: 'pdef', amount: 4 }], uses: 10, desc: 'Raises Physical Defense.' },
+  mind_up:   { id: 'mind_up',   name: 'Mind Up',   category: 'buff', effects: [{ stat: 'satk', amount: 4 }], uses: 10, desc: 'Raises Special Attack.' },
+  ward_up:   { id: 'ward_up',   name: 'Ward Up',   category: 'buff', effects: [{ stat: 'sdef', amount: 4 }], uses: 10, desc: 'Raises Special Defense.' },
+  haste:     { id: 'haste',     name: 'Haste',     category: 'buff', effects: [{ stat: 'spd', amount: 5 }], uses: 8,  desc: 'Raises Speed.' },
+  vitality:  { id: 'vitality',  name: 'Vitality',  category: 'buff', effects: [{ stat: 'hp', amount: 9 }], uses: 10, desc: 'Raises max HP.' },
+  overpower: { id: 'overpower', name: 'Overpower', category: 'buff', effects: [{ stat: 'patk', amount: 6 }], uses: 8,  desc: 'Raises Physical Attack sharply.', future: true },
+  overmind:  { id: 'overmind',  name: 'Overmind',  category: 'buff', effects: [{ stat: 'satk', amount: 6 }], uses: 8,  desc: 'Raises Special Attack sharply.', future: true },
+  fortify:   { id: 'fortify',   name: 'Fortify',   category: 'buff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'Raises Physical Defense sharply.', future: true },
+  weaken:    { id: 'weaken',    name: 'Weaken',    category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, desc: 'Lowers the foe\'s Physical Attack.' },
+  daze:      { id: 'daze',      name: 'Daze',      category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, desc: 'Lowers the foe\'s Special Attack.' },
+  hobble:    { id: 'hobble',    name: 'Hobble',    category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 12, desc: 'Lowers the foe\'s Speed.' },
+  expose:    { id: 'expose',    name: 'Expose',    category: 'debuff', effects: [{ stat: 'pdef', amount: 5 }], uses: 10, desc: 'Lowers the foe\'s Physical Defense.' },
+  unnerve:   { id: 'unnerve',   name: 'Unnerve',   category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, desc: 'Lowers the foe\'s Special Defense.' },
+  cripple:   { id: 'cripple',   name: 'Cripple',   category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'Lowers the foe\'s Physical Defense sharply.' },
+  hex:       { id: 'hex',       name: 'Hex',       category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'Lowers the foe\'s Special Defense sharply.' },
+
 };
+// =============================================================================
+// ELEMENT POOLS for Electric / Ice / Metal / Poison / Psychic — the same ladders
+// the first four elements use (same powers, uses and riders), re-skinned per
+// element. Generated here so every element stays identical in balance.
+//   normals:  jab 17 (30 uses) · smash 30 (25) · slam 41 (20)          [elemental → limited]
+//   specials: sp 16/27/41/55 and ph 15/28/40/54 (Lv.1 / 20 / 60 / 80), late tiers carry a rider
+//   drain:    22 power, heals 50% of the damage dealt
+// =============================================================================
+const NEW_ELEMENT_POOLS = {
+  electric: {
+    normals: [['spark_jab', 'Spark Jab', 'A crackling jab.'], ['volt_smash', 'Volt Smash', 'A blow that discharges on impact.'], ['thunder_slam', 'Thunder Slam', 'The whole sky comes down.']],
+    sp: [['static_shot', 'Static Shot', 'A snapping bolt of static.'], ['arc_lance', 'Arc Lance', 'A lance of arcing current.'], ['storm_surge', 'Storm Surge', 'A surge that may reduce the foe\'s Speed.', { stat: 'spd', amount: 3, chance: 0.35 }], ['thunderfall', 'Thunderfall', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 4, chance: 0.4 }]],
+    ph: [['volt_fang', 'Volt Fang', 'A bite that jolts.'], ['tesla_claw', 'Tesla Claw', 'Claws wreathed in current.'], ['lightning_dash', 'Lightning Dash', 'A charge faster than the eye.'], ['stormbreaker', 'Stormbreaker', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    drain: ['volt_leech', 'Volt Leech', 'Draws the foe\'s charge into itself. Heals 50% of the damage dealt.', 'special'],
+  },
+  ice: {
+    normals: [['frost_jab', 'Frost Jab', 'A jab that leaves rime behind.'], ['glacier_smash', 'Glacier Smash', 'A blow like calving ice.'], ['avalanche_slam', 'Avalanche Slam', 'A mountainside of snow comes down.']],
+    sp: [['ice_shard', 'Ice Shard', 'A splinter of hard ice.'], ['frost_lance', 'Frost Lance', 'A lance of frozen air.'], ['blizzard', 'Blizzard', 'May reduce the foe\'s Speed.', { stat: 'spd', amount: 3, chance: 0.35 }], ['absolute_zero', 'Absolute Zero', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    ph: [['icicle_fang', 'Icicle Fang', 'A bite of needle ice.'], ['frostbite_claw', 'Frostbite Claw', 'Claws that numb what they touch.'], ['glacial_charge', 'Glacial Charge', 'A charge with a glacier\'s weight.'], ['permafrost_crush', 'Permafrost Crush', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 4, chance: 0.4 }]],
+    drain: ['frost_siphon', 'Frost Siphon', 'Steals the foe\'s warmth. Heals 50% of the damage dealt.', 'special'],
+  },
+  metal: {
+    normals: [['iron_jab', 'Iron Jab', 'A jab hard as an anvil.'], ['steel_smash', 'Steel Smash', 'A hammer-blow of tempered steel.'], ['titanium_slam', 'Titanium Slam', 'An unbreakable mass comes down.']],
+    sp: [['shrapnel_shot', 'Shrapnel Shot', 'A spray of hot metal splinters.'], ['magnet_pulse', 'Magnet Pulse', 'A pulse that wrenches at the foe.'], ['forge_blast', 'Forge Blast', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 3, chance: 0.35 }], ['singularity_core', 'Singularity Core', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    ph: [['iron_fang', 'Iron Fang', 'A bite with iron teeth.'], ['steel_claw', 'Steel Claw', 'Claws of folded steel.'], ['piston_charge', 'Piston Charge', 'A charge driven like a piston.'], ['titan_press', 'Titan Press', 'May reduce the foe\'s Speed.', { stat: 'spd', amount: 4, chance: 0.4 }]],
+    drain: ['alloy_leech', 'Alloy Leech', 'Magnetises the foe\'s strength into its own plating. Heals 50% of the damage dealt.', 'physical'],
+  },
+  poison: {
+    normals: [['venom_jab', 'Venom Jab', 'A jab that leaves a sting.'], ['toxic_smash', 'Toxic Smash', 'A blow that splatters venom.'], ['plague_slam', 'Plague Slam', 'A crushing, festering impact.']],
+    sp: [['toxic_spit', 'Toxic Spit', 'A gob of burning venom.'], ['venom_lance', 'Venom Lance', 'A lance of concentrated toxin.'], ['plague_wave', 'Plague Wave', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 3, chance: 0.35 }], ['necrotic_burst', 'Necrotic Burst', 'May reduce the foe\'s Physical Attack.', { stat: 'patk', amount: 4, chance: 0.4 }]],
+    ph: [['venom_fang', 'Venom Fang', 'A bite that poisons.'], ['toxic_claw', 'Toxic Claw', 'Claws dripping with toxin.'], ['corrosive_charge', 'Corrosive Charge', 'A charge that eats through armour.'], ['blight_crush', 'Blight Crush', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    drain: ['venom_drain', 'Venom Drain', 'Drinks the foe\'s poisoned blood. Heals 50% of the damage dealt.', 'special'],
+  },
+  psychic: {
+    normals: [['psi_jab', 'Psi Jab', 'A jab of focused will.'], ['mind_smash', 'Mind Smash', 'A blow of pure thought.'], ['astral_slam', 'Astral Slam', 'The weight of a star, imagined.']],
+    sp: [['psi_bolt', 'Psi Bolt', 'A bolt of concentrated thought.'], ['mind_lance', 'Mind Lance', 'A lance aimed straight at the mind.'], ['astral_wave', 'Astral Wave', 'May reduce the foe\'s Special Attack.', { stat: 'satk', amount: 3, chance: 0.35 }], ['singularity', 'Singularity', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 4, chance: 0.4 }]],
+    ph: [['psi_fang', 'Psi Fang', 'A bite guided by foresight.'], ['telekinetic_claw', 'Telekinetic Claw', 'Claws that strike from a distance.'], ['astral_dash', 'Astral Dash', 'A dash through folded space.'], ['mind_crush', 'Mind Crush', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    drain: ['psi_siphon', 'Psi Siphon', 'Feeds on the foe\'s thoughts. Heals 50% of the damage dealt.', 'special'],
+  },
+};
+const NORMAL_LADDER = [[17, 30], [30, 25], [41, 20]];
+const SP_LADDER = [[16, 20, 1], [27, 18, 20], [41, 15, 60], [55, 12, 80]];
+const PH_LADDER = [[15, 20, 1], [28, 18, 20], [40, 15, 60], [54, 12, 80]];
+for (const [element, pool] of Object.entries(NEW_ELEMENT_POOLS)) {
+  pool.normals.forEach(([id, name, desc], i) => {
+    const [power, uses] = NORMAL_LADDER[i];
+    SKILLS[id] = { id, name, category: 'normal', damageType: 'physical', element, power, uses, desc: `${desc} ${uses} uses.` };
+  });
+  const special = (list, ladder, damageType) => list.forEach(([id, name, desc, rider], i) => {
+    const [power, uses, lv] = ladder[i];
+    SKILLS[id] = { id, name, category: 'special', damageType, element, power, uses, desc };
+    if (rider) SKILLS[id].debuff = rider;
+    if (lv >= 60) SKILLS[id].future = true;
+  });
+  special(pool.sp, SP_LADDER, 'special');
+  special(pool.ph, PH_LADDER, 'physical');
+  const [did, dname, ddesc, dtype] = pool.drain;
+  SKILLS[did] = { id: did, name: dname, category: 'special', damageType: dtype, element, power: 22, uses: 12, drain: 0.5, desc: ddesc };
+}
+/** The pools by element, for species.js (which builds its unlock tables from them). */
+const ELEMENT_POOLS = NEW_ELEMENT_POOLS;
+
 
 // ---------- Ultimates ----------
 // Tier index 0 = base (Lv.10), 1 = " I" (Lv.20), 2 = " II" (Lv.60, future), 3 = " III" (Lv.80, future)
@@ -1649,6 +1791,58 @@ const ULTIMATES = {
 
 };
 
+// ---------- Generated Ultimates for the five new elements ----------
+// Per element: one Physical and one Special damage Ultimate (same tiers as the
+// originals) and one SUPPORT Ultimate. Legendaries get their own, stronger tiers.
+const DMG_TIERS = (p0) => [
+  { suffix: '',    power: p0,      unlockLevel: 10 },
+  { suffix: ' I',  power: p0 + 16, unlockLevel: 20 },
+  { suffix: ' II', power: p0 + 40, unlockLevel: 60, future: true },
+  { suffix: ' III',power: p0 + 70, unlockLevel: 80, future: true },
+];
+const SUPPORT_TIERS = (a, b) => [8, 11, 15, 20].map((amt, i) => ({
+  suffix: ['', ' I', ' II', ' III'][i], unlockLevel: [10, 20, 60, 80][i], future: i >= 2 || undefined,
+  effects: [{ stat: a.stat, amount: amt, target: a.target }, { stat: b.stat, amount: Math.round(amt * 0.75), target: b.target }],
+}));
+const NEW_ULTIMATES = [
+  ['thunder_crown',    'Thunder Crown',    'electric', 'special',  34, 'A crown of lightning detonates over the foe.'],
+  ['gigavolt_charge',  'Gigavolt Charge',  'electric', 'physical', 36, 'A charge carrying a whole storm\'s current.'],
+  ['storm_mantle',     'Storm Mantle',     'electric', null, 0, 'Buff Ultimate: the caster wears the storm. Raises Speed AND Special Attack far beyond any buff skill.', { stat: 'spd', target: 'self' }, { stat: 'satk', target: 'self' }],
+  ['winter_crown',     'Winter Crown',     'ice', 'special',  34, 'A halo of killing frost closes on the foe.'],
+  ['glacier_fall',     'Glacier Fall',     'ice', 'physical', 36, 'A glacier\'s edge comes down on the foe.'],
+  ['frozen_bastion',   'Frozen Bastion',   'ice', null, 0, 'Buff Ultimate: armour of living ice. Raises BOTH Defenses by far more than any buff skill.', { stat: 'pdef', target: 'self' }, { stat: 'sdef', target: 'self' }],
+  ['magnetic_storm',   'Magnetic Storm',   'metal', 'special',  34, 'Every scrap of metal in the field turns into a weapon.'],
+  ['iron_judgment',    'Iron Judgment',    'metal', 'physical', 36, 'A single, colossal hammer-blow.'],
+  ['adamant_shell',    'Adamant Shell',    'metal', null, 0, 'Buff + Debuff Ultimate: the caster hardens while the foe is magnetised down. Raises your Physical Defense and lowers the foe\'s Speed.', { stat: 'pdef', target: 'self' }, { stat: 'spd', target: 'foe' }],
+  ['plague_crown',     'Plague Crown',     'poison', 'special',  34, 'A crown of miasma settles on the foe.'],
+  ['venom_tyrant',     'Venom Tyrant',     'poison', 'physical', 36, 'A single bite carrying every toxin the fen knows.'],
+  ['miasma_hex',       'Miasma Hex',       'poison', null, 0, 'Debuff Ultimate: a poison that eats will and wits alike. Lowers the foe\'s Physical Attack AND Special Defense.', { stat: 'patk', target: 'foe' }, { stat: 'sdef', target: 'foe' }],
+  ['astral_crown',     'Astral Crown',     'psychic', 'special',  34, 'The stars themselves are turned on the foe.'],
+  ['mind_shatter',     'Mind Shatter',     'psychic', 'physical', 36, 'A telekinetic blow that breaks bone and resolve.'],
+  ['astral_ward',      'Astral Ward',      'psychic', null, 0, 'Buff Ultimate: a mind made unassailable. Raises Special Defense AND Special Attack far beyond any buff skill.', { stat: 'sdef', target: 'self' }, { stat: 'satk', target: 'self' }],
+];
+for (const [id, baseName, element, damageType, p0, desc, a, b] of NEW_ULTIMATES) {
+  ULTIMATES[id] = damageType
+    ? { id, baseName, element, damageType, tiers: DMG_TIERS(p0), desc }
+    : { id, baseName, element, damageType: null, kind: 'support', tiers: SUPPORT_TIERS(a, b), desc };
+}
+// ---------- Legendary Ultimates: no evolution, so the tiers unlock by LEVEL (1 / 20 / 60 / 80) ----------
+const LEGEND_TIERS = (p0) => [
+  { suffix: '',    power: p0,      unlockLevel: 10 },
+  { suffix: ' I',  power: p0 + 18, unlockLevel: 20 },
+  { suffix: ' II', power: p0 + 44, unlockLevel: 60 },
+  { suffix: ' III',power: p0 + 78, unlockLevel: 80 },
+];
+ULTIMATES.aurora_cataclysm = { id: 'aurora_cataclysm', baseName: 'Aurora Cataclysm', element: 'psychic', damageType: 'special', legendary: true,
+  tiers: LEGEND_TIERS(46).map((t, i) => ({ ...t, selfBuff: [{ stat: 'satk', amount: 4 + i * 2 }] })),
+  desc: 'LEGENDARY — the aurora itself is torn down onto the foe, and the caster drinks its light (raises its Special Attack).' };
+ULTIMATES.plague_engine = { id: 'plague_engine', baseName: 'Plague Engine', element: 'poison', damageType: 'physical', legendary: true,
+  tiers: LEGEND_TIERS(46).map((t, i) => ({ ...t, foeDebuff: [{ stat: 'pdef', amount: 4 + i * 2 }] })),
+  desc: 'LEGENDARY — a corroded engine of venom and iron tears into the foe and eats its armour (lowers its Physical Defense).' };
+ULTIMATES.core_meltdown = { id: 'core_meltdown', baseName: 'Core Meltdown', element: 'fire', damageType: 'special', legendary: true,
+  tiers: LEGEND_TIERS(46).map((t, i) => ({ ...t, foeDebuff: [{ stat: 'sdef', amount: 4 + i * 2 }] })),
+  desc: 'LEGENDARY — the planet\'s molten heart erupts through the foe and softens it to slag (lowers its Special Defense).' };
+
 const ULTIMATE_MAX_CHARGE = 8;
 const MAX_BUFF_STACKS = 30;
 
@@ -1730,6 +1924,8 @@ function resolveUltimate(ultId, tierIndex) {
     power: tier.power || 0,
     effects: tier.effects || null,
     selfBuff: tier.selfBuff || null,
+    foeDebuff: tier.foeDebuff || null,
+    legendary: !!ult.legendary,
     desc: ult.desc,
     future: !!tier.future,
   };
@@ -1740,7 +1936,7 @@ function isSupportUltimate(u) {
   return !!u && (u.kind === 'support');
 }
 
-return { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, SKILL_CATEGORY_LABEL, SKILL_CATEGORY_ORDER, isDamageSkill, effectTarget, buffSummary, riderSummary, skillStrength, getSkill, getUltimate, resolveUltimate, isSupportUltimate };
+return { SKILLS, ELEMENT_POOLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, SKILL_CATEGORY_LABEL, SKILL_CATEGORY_ORDER, isDamageSkill, effectTarget, buffSummary, riderSummary, skillStrength, getSkill, getUltimate, resolveUltimate, isSupportUltimate };
 })();
 __m["src/data/skillVfx.js"] = (function () {
 // =============================================================================
@@ -1767,6 +1963,11 @@ const ELEMENT_VFX = {
   water:  { core: '#f2fdff', mid: '#5cc0f5', deep: '#1a5c9e', glow: '#bfe9ff', dark: '#0d3557', spark: '#ffffff' },
   fire:   { core: '#fff3b0', mid: '#ff9a2e', deep: '#d8391a', glow: '#ffcf7a', dark: '#5a1405', spark: '#fff6d8' },
   rock:   { core: '#fff1cf', mid: '#c9a86e', deep: '#6e5a3c', glow: '#f0dcb0', dark: '#2e2418', spark: '#fff7e0' },
+  electric: { core: '#fffbd0', mid: '#f4d03f', deep: '#b8860b', glow: '#fff6a8', dark: '#4a3a08', spark: '#ffffff' },
+  ice:      { core: '#ffffff', mid: '#8fdcff', deep: '#3f8fc8', glow: '#e6fbff', dark: '#1d4664', spark: '#ffffff' },
+  metal:    { core: '#f4f7fa', mid: '#a9b4c2', deep: '#5c6878', glow: '#e8eef5', dark: '#262c34', spark: '#ffffff' },
+  poison:   { core: '#f2d8ff', mid: '#b06fe0', deep: '#6a2fa0', glow: '#e4c0ff', dark: '#2c1444', spark: '#c8ff8a' },
+  psychic:  { core: '#fff0f8', mid: '#ff6fb5', deep: '#b8307c', glow: '#ffc6e4', dark: '#4a1234', spark: '#ffffff' },
   none:   { core: '#ffffff', mid: '#d8e2f0', deep: '#7b8798', glow: '#ffffff', dark: '#2b3340', spark: '#ffffff' },
 };
 
@@ -2677,7 +2878,219 @@ const SPECIES = {
   },
 };
 
+// =============================================================================
+// THE FIVE NEW ELEMENTS (Stormreach Plateau → Astral Spire): 25 species, two
+// dual-typed lines and three legendaries, built from compact specs so every line
+// shares the same balance rules:
+//   * roles set the base stats and which support skills a line learns (buffs and
+//     debuffs carry no element, so the neutral pool is shared),
+//   * the element pool (skills.js) supplies the elemental normals, the special
+//     ladder and the life-steal move,
+//   * evolutions follow the usual Lv.1 / 20 / 60 / 80 stages with growing art flags.
+// Dual-typed species learn BOTH elements' attacks. Legendaries have ONE stage,
+// two or three elements, stronger stats and unlock their skills purely by level.
+// =============================================================================
+const { ELEMENT_POOLS } = __m["src/data/skills.js"];
+
+const ROLE_STATS = {
+  physical: { hp: 108, patk: 19, satk: 10, pdef: 14, sdef: 12, spd: 15, counter: 8,  crit: 8,  critMult: 46 },
+  special:  { hp: 96,  patk: 10, satk: 20, pdef: 11, sdef: 15, spd: 17, counter: 10, crit: 8,  critMult: 46 },
+  tank:     { hp: 130, patk: 14, satk: 11, pdef: 20, sdef: 17, spd: 7,  counter: 5,  crit: 4,  critMult: 40 },
+  fast:     { hp: 92,  patk: 17, satk: 14, pdef: 10, sdef: 11, spd: 22, counter: 12, crit: 10, critMult: 50 },
+  balanced: { hp: 110, patk: 15, satk: 15, pdef: 14, sdef: 14, spd: 14, counter: 8,  crit: 6,  critMult: 42 },
+};
+const ROLE_LABEL = { physical: 'Physical Attacker', special: 'Special Attacker', tank: 'Wall', fast: 'Fast Striker', balanced: 'Balanced' };
+// support skills by role: [Lv.1 buff, Lv.20 buff, Lv.60 buff, Lv.80 buff] / [Lv.1, Lv.12, Lv.40 debuffs] / Lv.80 elite
+const ROLE_SUPPORT = {
+  physical: { buffs: ['power_up', 'guard_up', 'haste', 'overpower'], debuffs: ['weaken', 'expose', 'cripple'],  elite: 'war_cry' },
+  special:  { buffs: ['mind_up', 'ward_up', 'haste', 'overmind'],    debuffs: ['daze', 'unnerve', 'hex'],       elite: 'arcane_surge' },
+  tank:     { buffs: ['guard_up', 'vitality', 'ward_up', 'fortify'], debuffs: ['weaken', 'unnerve', 'cripple'], elite: 'bulwark' },
+  fast:     { buffs: ['power_up', 'haste', 'mind_up', 'overpower'],  debuffs: ['hobble', 'expose', 'hex'],      elite: 'predator_focus' },
+  balanced: { buffs: ['mind_up', 'guard_up', 'haste', 'overmind'],   debuffs: ['weaken', 'unnerve', 'hex'],     elite: 'intimidate' },
+};
+const PLAIN_NORMAL = { fox: 'bite', feline: 'scratch', dragon: 'bite', wolf: 'bite', avian: 'peck', tortoise: 'pebble_toss', boar: 'bite', beetle: 'bite', golem: 'pebble_toss', lizard: 'bite', bat: 'bite', serpent: 'bite', wisp: 'scratch' };
+const ART_FLAGS = [{ scale: 1.00 }, { scale: 1.22 }, { scale: 1.42, horns: true }, { scale: 1.65, horns: true, wings: true }];
+const STAT_MULTS = [1.0, 1.34, 1.75, 2.2];
+
+/** Ladder for a role: physical roles hit with the physical specials, everything else with the special ones. */
+function ladderFor(role, pool) { return role === 'physical' || role === 'tank' || role === 'fast' ? pool.ph : pool.sp; }
+
+/** Build the unlock table of a (possibly dual-typed) line. */
+function unlocksFor(role, elements, plainNormal, extraLv1 = []) {
+  const sup = ROLE_SUPPORT[role];
+  const pools = elements.map((e) => ELEMENT_POOLS[e]).filter(Boolean);
+  const main = pools[0];
+  const second = pools[1] || null;
+  const lad = ladderFor(role, main);
+  const lad2 = second ? ladderFor(role === 'physical' ? 'special' : 'physical', second) : null;   // the second element hits with the other ladder
+  const t = {
+    1:  [plainNormal, lad[0][0], sup.buffs[0], sup.debuffs[0], ...extraLv1],
+    12: [sup.debuffs[1]],
+    20: [lad[1][0], sup.buffs[1], main.normals[0][0]],
+    40: [sup.debuffs[2]],
+    60: [lad[2][0], sup.buffs[2], main.normals[1][0], main.drain[0]],
+    80: [lad[3][0], sup.buffs[3], main.normals[2][0], sup.elite],
+  };
+  if (second && lad2) {
+    t[1].push(lad2[0][0]);
+    t[20].push(lad2[1][0], second.normals[0][0]);
+    t[60].push(lad2[2][0]);
+    t[80].push(lad2[3][0], second.normals[2][0]);
+  }
+  return t;
+}
+
+/**
+ * spec: { id, names[4], breed, body, role, element(s), ultimate, catchRate?, rarity?, mood?,
+ *         desc, palette{primary,secondary,belly,accent,eye,dark}, spawnMaps[] }
+ */
+function line(spec) {
+  const elements = spec.elements || [spec.element];
+  const stats = { ...ROLE_STATS[spec.role] };
+  for (const [k, v] of Object.entries(spec.tweak || {})) stats[k] += v;
+  const entry = {
+    id: spec.id, displayName: spec.names[0], breed: spec.breed,
+    element: elements[0], ...(elements.length > 1 ? { elements } : {}),
+    defaultRarity: spec.rarity || 'C', defaultMood: spec.mood || 'brave', role: ROLE_LABEL[spec.role],
+    catchRate: spec.catchRate ?? 0.48, expYield: spec.expYield ?? 74,
+    description: spec.desc, baseStats: stats, ultimate: spec.ultimate, spawnMaps: spec.spawnMaps,
+    evolutions: spec.names.map((name, i) => ({ stage: i, name, level: [1, 20, 60, 80][i], statMult: STAT_MULTS[i], ...(i >= 2 ? { future: true } : {}), art: { ...ART_FLAGS[i], ...(spec.hornsEarly && i === 1 ? { horns: true } : {}) } })),
+    skillUnlocks: unlocksFor(spec.role, elements, PLAIN_NORMAL[spec.body] || 'bite'),
+    art: { body: spec.body, ...spec.palette },
+  };
+  SPECIES[spec.id] = entry;
+}
+
+/** A legendary: one form, 2-3 elements, stronger stats, purely level-based skills. */
+function legend(spec) {
+  const base = { ...ROLE_STATS[spec.role] };
+  for (const k of Object.keys(base)) base[k] = Math.round(base[k] * (k === 'critMult' ? 1.1 : 1.28));
+  for (const [k, v] of Object.entries(spec.tweak || {})) base[k] += v;
+  const pools = spec.elements.map((e) => ELEMENT_POOLS[e] || null);
+  // legendaries learn the attacks of every one of their elements, by level
+  const t = { 1: [PLAIN_NORMAL[spec.body] || 'bite', ROLE_SUPPORT[spec.role].buffs[0], ROLE_SUPPORT[spec.role].debuffs[0]], 12: [ROLE_SUPPORT[spec.role].debuffs[1]], 20: [ROLE_SUPPORT[spec.role].buffs[1]], 40: [ROLE_SUPPORT[spec.role].debuffs[2]], 60: [ROLE_SUPPORT[spec.role].buffs[2]], 80: [ROLE_SUPPORT[spec.role].buffs[3], ROLE_SUPPORT[spec.role].elite, 'vengeance'] };
+  spec.elements.forEach((el, i) => {
+    const pool = pools[i];
+    if (!pool) { (spec.legacySkills?.[el] || []).forEach(([lv, id]) => (t[lv] = t[lv] || []).push(id)); return; }
+    const lad = (i === 0 ? ladderFor(spec.role, pool) : (spec.role === 'physical' ? pool.sp : pool.ph));
+    t[1].push(lad[0][0]); t[20].push(lad[1][0], pool.normals[0][0]); t[60].push(lad[2][0], pool.normals[1][0]); t[80].push(lad[3][0], pool.normals[2][0]);
+    if (i === 0) t[60].push(pool.drain[0]);
+  });
+  SPECIES[spec.id] = {
+    id: spec.id, displayName: spec.name, breed: spec.breed, element: spec.elements[0], elements: spec.elements, legendary: true,
+    defaultRarity: 'S', defaultMood: spec.mood || 'brave', role: `Legendary ${ROLE_LABEL[spec.role]}`,
+    catchRate: 0.12, expYield: 160, description: spec.desc, baseStats: base, ultimate: spec.ultimate, spawnMaps: spec.spawnMaps, homeMap: spec.spawnMaps[0],
+    evolutions: [{ stage: 0, name: spec.name, level: 1, statMult: 1.0, art: { scale: 1.45, horns: true, wings: true } }],
+    skillUnlocks: t,
+    art: { body: spec.body, ...spec.palette },
+  };
+}
+
+// ---- ELECTRIC — Stormreach Plateau ------------------------------------------
+line({ id: 'voltkit', names: ['Voltkit', 'Zapfox', 'Stormvulp', 'Thunderfox'], breed: 'Fox', body: 'fox', role: 'fast', element: 'electric', ultimate: 'gigavolt_charge', mood: 'swift', spawnMaps: ['stormreach_plateau'],
+  desc: 'A fox whose fur crackles with static. It naps on the highest rock it can find and wakes up humming.',
+  palette: { primary: '#f0c93c', secondary: '#b88a1a', belly: '#fff4c2', accent: '#7ee8ff', eye: '#4fd8ff', dark: '#4a3608' } });
+line({ id: 'staticat', names: ['Staticat', 'Voltclaw', 'Arcfeline', 'Tempestlynx'], breed: 'Feline', body: 'feline', role: 'special', element: 'electric', ultimate: 'thunder_crown', mood: 'clever', spawnMaps: ['stormreach_plateau'],
+  desc: 'A sleek cat that stores lightning in its ear-fins. Petting it is a mistake you make once.',
+  palette: { primary: '#5b6bd8', secondary: '#2e3a8a', belly: '#dfe6ff', accent: '#ffe85a', eye: '#fff0a0', dark: '#161c48' } });
+line({ id: 'boltpup', names: ['Boltpup', 'Voltwolf', 'Stormhowl', 'Thunderfang'], breed: 'Wolf', body: 'wolf', role: 'physical', element: 'electric', ultimate: 'gigavolt_charge', mood: 'brave', spawnMaps: ['stormreach_plateau'],
+  desc: 'A pack runner that howls thunder back at the sky. Its bite jolts before it bruises.',
+  palette: { primary: '#8a8fa8', secondary: '#4b5070', belly: '#e8eaf5', accent: '#ffd83a', eye: '#fff2a0', dark: '#22243a' } });
+line({ id: 'zapwing', names: ['Zapwing', 'Arcwing', 'Stormtalon', 'Skyvolt'], breed: 'Bird', body: 'avian', role: 'fast', element: 'electric', ultimate: 'thunder_crown', mood: 'focused', spawnMaps: ['stormreach_plateau'],
+  desc: 'A storm-petrel that rides the lightning down. Its feathers glow before a strike.',
+  palette: { primary: '#f7e27a', secondary: '#c49a2a', belly: '#fffbe0', accent: '#8fd8ff', eye: '#5fc8ff', dark: '#5a4210' } });
+line({ id: 'coilstone', names: ['Coilstone', 'Voltgolem', 'Dynamolith', 'Gigavolt'], breed: 'Golem', body: 'golem', role: 'tank', element: 'electric', ultimate: 'storm_mantle', mood: 'sturdy', spawnMaps: ['stormreach_plateau'],
+  desc: 'A golem wound with copper coils that hum in a storm. Lightning strikes it on purpose.',
+  palette: { primary: '#c47d3a', secondary: '#7a4a1c', belly: '#f2d7b0', accent: '#8ff0ff', eye: '#b8f8ff', dark: '#3a230c' } });
+// ---- ICE — Frostveil Tundra ---------------------------------------------------
+line({ id: 'frostpup', names: ['Frostpup', 'Snowfang', 'Glacierwolf', 'Frosthowl'], breed: 'Wolf', body: 'wolf', role: 'physical', element: 'ice', ultimate: 'glacier_fall', mood: 'fierce', spawnMaps: ['frostveil_tundra'],
+  desc: 'A white wolf whose breath freezes mid-air. It hunts in the blizzard nobody else can see through.',
+  palette: { primary: '#e8f4ff', secondary: '#9fc4e0', belly: '#ffffff', accent: '#7fd8ff', eye: '#4fb8ff', dark: '#3a5670' } });
+line({ id: 'snowkit', names: ['Snowkit', 'Frostlynx', 'Glacierlynx', 'Aurorlynx'], breed: 'Feline', body: 'feline', role: 'special', element: 'ice', ultimate: 'winter_crown', mood: 'calm', spawnMaps: ['frostveil_tundra'],
+  desc: 'A lynx with frost crystals for whiskers. It can sit in a snowdrift for a whole day, waiting.',
+  palette: { primary: '#bfe3ff', secondary: '#6ea8d8', belly: '#f4fbff', accent: '#ffffff', eye: '#a8ecff', dark: '#274a68' } });
+line({ id: 'icecarap', names: ['Icecarap', 'Glaceshell', 'Frostdome', 'Glacierdome'], breed: 'Tortoise', body: 'tortoise', role: 'tank', element: 'ice', ultimate: 'frozen_bastion', mood: 'lazy', spawnMaps: ['frostveil_tundra'],
+  desc: 'A tortoise whose shell is a slab of glacier ice. It has never once hurried.',
+  palette: { primary: '#9fd0ea', secondary: '#5f92b8', belly: '#e6f6ff', accent: '#ffffff', eye: '#cfeeff', dark: '#2a4f6a' } });
+line({ id: 'flurrywing', names: ['Flurrywing', 'Sleetwing', 'Blizzardwing', 'Aurorawing'], breed: 'Bird', body: 'avian', role: 'fast', element: 'ice', ultimate: 'winter_crown', mood: 'swift', spawnMaps: ['frostveil_tundra'],
+  desc: 'A snow-bunting that leaves frost on the wind. Its wings chime like icicles.',
+  palette: { primary: '#f2f8ff', secondary: '#b6cfe6', belly: '#ffffff', accent: '#8fe0ff', eye: '#5fc0ff', dark: '#405a72' } });
+line({ id: 'frostling', names: ['Frostling', 'Frostwyrm', 'Glacidrake', 'Absolutus'], breed: 'Dragon', body: 'dragon', role: 'balanced', element: 'ice', ultimate: 'glacier_fall', mood: 'stubborn', spawnMaps: ['frostveil_tundra'],
+  desc: 'A drake hatched in a glacier. Its flame is cold enough to shatter stone.',
+  palette: { primary: '#7fb8e6', secondary: '#3f6f9e', belly: '#e8f4ff', accent: '#c8f4ff', eye: '#eaffff', dark: '#1e3a55' } });
+// ---- METAL — Ironhold Foundry -------------------------------------------------
+line({ id: 'ironbug', names: ['Ironbug', 'Steelbeetle', 'Titanbeetle', 'Adamantrex'], breed: 'Beetle', body: 'beetle', role: 'tank', element: 'metal', ultimate: 'adamant_shell', mood: 'guarded', spawnMaps: ['ironhold_foundry'],
+  desc: 'A beetle plated in scrap iron. Smiths use its shed shells for shields.',
+  palette: { primary: '#8e97a6', secondary: '#4f5866', belly: '#d5dbe4', accent: '#ffb347', eye: '#ffd8a0', dark: '#23282f' } });
+line({ id: 'scrapling', names: ['Scrapling', 'Scrapgolem', 'Ironclad', 'Titanforge'], breed: 'Golem', body: 'golem', role: 'physical', element: 'metal', ultimate: 'iron_judgment', mood: 'sturdy', spawnMaps: ['ironhold_foundry'],
+  desc: 'A golem assembled from foundry scrap. Every fight adds a new plate.',
+  palette: { primary: '#a8adb8', secondary: '#5c6270', belly: '#e0e4ea', accent: '#ff8a3c', eye: '#ffc890', dark: '#2a2e36' } });
+line({ id: 'ironhog', names: ['Ironhog', 'Steeltusk', 'Alloyboar', 'Titanboar'], breed: 'Boar', body: 'boar', role: 'physical', element: 'metal', ultimate: 'iron_judgment', mood: 'brave', spawnMaps: ['ironhold_foundry'],
+  desc: 'A boar with tusks of tempered steel. It sharpens them on anvils.',
+  palette: { primary: '#7d8794', secondary: '#454c58', belly: '#cfd6df', accent: '#e6eef7', eye: '#ffe0a0', dark: '#1f242b' } });
+line({ id: 'chromeling', names: ['Chromeling', 'Chromegecko', 'Steelwyrm', 'Platinodon'], breed: 'Lizard', body: 'lizard', role: 'special', element: 'metal', ultimate: 'magnetic_storm', mood: 'clever', spawnMaps: ['ironhold_foundry'],
+  desc: 'A mirror-scaled lizard that reflects heat and insults alike.',
+  palette: { primary: '#c9d3de', secondary: '#7b8794', belly: '#f2f5f9', accent: '#6fd0ff', eye: '#a8ecff', dark: '#343c46' } });
+line({ id: 'cogfox', names: ['Cogfox', 'Gearfox', 'Clockfox', 'Chronofox'], breed: 'Fox', body: 'fox', role: 'fast', element: 'metal', ultimate: 'magnetic_storm', mood: 'keen', spawnMaps: ['ironhold_foundry'],
+  desc: 'A fox with gears for markings that tick faster when it is excited.',
+  palette: { primary: '#b8a27a', secondary: '#7a6746', belly: '#efe6d2', accent: '#8fd0ff', eye: '#c8f0ff', dark: '#3a2f1e' } });
+// ---- POISON — Miremarsh Fen ---------------------------------------------------
+line({ id: 'venoviper', names: ['Venoviper', 'Toxiviper', 'Plagueviper', 'Basiliskos'], breed: 'Serpent', body: 'serpent', role: 'special', element: 'poison', ultimate: 'plague_crown', mood: 'clever', spawnMaps: ['miremarsh_fen'],
+  desc: 'A hooded marsh viper. Its hood spreads wider with every stage — and so does its venom.',
+  palette: { primary: '#7e4fb8', secondary: '#4a2a78', belly: '#d9f5a8', accent: '#9cff5a', eye: '#d8ff8a', dark: '#26123f' } });
+line({ id: 'mirenewt', names: ['Mirenewt', 'Bognewt', 'Toxalamander', 'Plaguedon'], breed: 'Lizard', body: 'lizard', role: 'balanced', element: 'poison', ultimate: 'plague_crown', mood: 'hardy', spawnMaps: ['miremarsh_fen'],
+  desc: 'A newt that is very hard to swallow — for very good reasons.',
+  palette: { primary: '#6fa04a', secondary: '#3e6a2c', belly: '#e8f0a0', accent: '#c05cff', eye: '#f0c8ff', dark: '#1f3a18' } });
+line({ id: 'stingbug', names: ['Stingbug', 'Venomscarab', 'Plaguebeetle', 'Toxitan'], breed: 'Beetle', body: 'beetle', role: 'physical', element: 'poison', ultimate: 'venom_tyrant', mood: 'aggressive', spawnMaps: ['miremarsh_fen'],
+  desc: 'A scarab with a sting that drips. Nothing eats it twice.',
+  palette: { primary: '#5a3a7a', secondary: '#31204a', belly: '#b8f07a', accent: '#a6ff4a', eye: '#e8ffb0', dark: '#180e28' } });
+line({ id: 'venobat', names: ['Venobat', 'Gloomwing', 'Nightvenom', 'Dreadwing'], breed: 'Bat', body: 'bat', role: 'fast', element: 'poison', ultimate: 'venom_tyrant', mood: 'playful', spawnMaps: ['miremarsh_fen'],
+  desc: 'A fen bat that hunts by the smell of fear. Its bite numbs before it burns.',
+  palette: { primary: '#5c4a86', secondary: '#33294f', belly: '#c2b3e0', accent: '#8dff6a', eye: '#ccff9a', dark: '#1a1230' } });
+line({ id: 'boghound', names: ['Boghound', 'Mirewolf', 'Plaguefang', 'Blightwolf'], breed: 'Hound', body: 'wolf', role: 'physical', element: 'poison', ultimate: 'miasma_hex', mood: 'fierce', spawnMaps: ['miremarsh_fen'],
+  desc: 'A hound that drinks from the sludge and thrives on it.',
+  palette: { primary: '#4f6a4a', secondary: '#2e4230', belly: '#c9dcb0', accent: '#b26fff', eye: '#e2c8ff', dark: '#15211a' } });
+// ---- PSYCHIC — Astral Spire ---------------------------------------------------
+line({ id: 'psykit', names: ['Psykit', 'Mindcat', 'Astralynx', 'Oraclynx'], breed: 'Feline', body: 'feline', role: 'special', element: 'psychic', ultimate: 'astral_crown', mood: 'clever', spawnMaps: ['astral_spire'],
+  desc: 'A cat that answers questions you have not asked yet.',
+  palette: { primary: '#e88ab8', secondary: '#a8508a', belly: '#ffe6f2', accent: '#8fd8ff', eye: '#c8f4ff', dark: '#4a1e3a' } });
+line({ id: 'dreamwisp', names: ['Dreamwisp', 'Mindwisp', 'Astralwisp', 'Nebulon'], breed: 'Wisp', body: 'wisp', role: 'special', element: 'psychic', ultimate: 'astral_ward', mood: 'mystic', spawnMaps: ['astral_spire'],
+  desc: 'A drifting light that feeds on dreams and leaves better ones behind.',
+  palette: { primary: '#b58cff', secondary: '#6f4fc0', belly: '#f0e6ff', accent: '#ffd1f0', eye: '#ffffff', dark: '#2a1a50' } });
+line({ id: 'mystfox', names: ['Mystfox', 'Auraphox', 'Seerfox', 'Kitsunova'], breed: 'Fox', body: 'fox', role: 'fast', element: 'psychic', ultimate: 'mind_shatter', mood: 'focused', spawnMaps: ['astral_spire'],
+  desc: 'A fox that is always one step ahead, because it saw the step coming.',
+  palette: { primary: '#f0a6d8', secondary: '#b064a0', belly: '#fff0f8', accent: '#9ff0ff', eye: '#dcfbff', dark: '#4e2646' } });
+line({ id: 'omenwing', names: ['Omenwing', 'Seerwing', 'Astralwing', 'Cosmowl'], breed: 'Owl', body: 'avian', role: 'balanced', element: 'psychic', ultimate: 'astral_crown', mood: 'vigilant', spawnMaps: ['astral_spire'],
+  desc: 'An owl whose eyes show tomorrow. It rarely blinks.',
+  palette: { primary: '#8a7ac8', secondary: '#524490', belly: '#ece6ff', accent: '#ff9ad2', eye: '#ffe0f0', dark: '#221a48' } });
+line({ id: 'mindram', names: ['Mindram', 'Psyram', 'Astralram', 'Oraclorn'], breed: 'Ram', body: 'ram', role: 'tank', element: 'psychic', ultimate: 'mind_shatter', mood: 'guarded', spawnMaps: ['astral_spire'],
+  desc: 'A ram with horns of solid thought. Walls are a suggestion.',
+  palette: { primary: '#d8c8f0', secondary: '#9282c0', belly: '#f8f4ff', accent: '#ff7fc8', eye: '#ffc8e8', dark: '#3e3060' } });
+// ---- DUAL-TYPED lines: both elements' attacks, home map first, also found on the other ----
+line({ id: 'mirewisp', names: ['Mirewisp', 'Hexwisp', 'Miasmind', 'Phantasmire'], breed: 'Wisp', body: 'wisp', role: 'special', elements: ['poison', 'psychic'], ultimate: 'miasma_hex', mood: 'mystic', rarity: 'B', catchRate: 0.4, expYield: 88, spawnMaps: ['miremarsh_fen', 'astral_spire'],
+  desc: 'A marsh-light that whispers. Poison and Psychic at once: it withers the body and clouds the mind.',
+  palette: { primary: '#8c6fd0', secondary: '#4f3a90', belly: '#e0ffb8', accent: '#a8ff5a', eye: '#f4ffd8', dark: '#22163e' } });
+line({ id: 'sparkbug', names: ['Sparkbug', 'Voltsteel', 'Dynabeetle', 'Ferrovolt'], breed: 'Beetle', body: 'beetle', role: 'physical', elements: ['electric', 'metal'], ultimate: 'gigavolt_charge', mood: 'aggressive', rarity: 'B', catchRate: 0.4, expYield: 88, spawnMaps: ['ironhold_foundry', 'stormreach_plateau'],
+  desc: 'A steel beetle that stores the storm in its plating. Electric and Metal at once: it conducts as hard as it hits.',
+  palette: { primary: '#98a2b4', secondary: '#525c6e', belly: '#e2e8f0', accent: '#ffe23a', eye: '#fff5b0', dark: '#20262f' } });
+// ---- LEGENDARIES: one form, 2-3 elements, rare spawns, Absolute Ball or better only ----
+legend({ id: 'aetherion', name: 'Aetherion', breed: 'Celestial Elk', body: 'ram', role: 'special', elements: ['psychic', 'electric', 'ice'], ultimate: 'aurora_cataclysm', mood: 'mystic', spawnMaps: ['astral_spire', 'stormreach_plateau', 'frostveil_tundra'],
+  tweak: { spd: 4, satk: 4 },
+  desc: 'LEGENDARY. An elk of aurora light seen once a generation on the Spire. Psychic, Electric and Ice — the northern lights given antlers.',
+  palette: { primary: '#d8e8ff', secondary: '#8ab0e0', belly: '#ffffff', accent: '#7fffd4', eye: '#c8fff0', dark: '#2c4a70' } });
+legend({ id: 'venomyr', name: 'Venomyr', breed: 'Corroded Wyrm', body: 'serpent', role: 'physical', elements: ['poison', 'metal'], ultimate: 'plague_engine', mood: 'brutal', spawnMaps: ['miremarsh_fen', 'ironhold_foundry'],
+  tweak: { hp: 10, pdef: 3 },
+  desc: 'LEGENDARY. A serpent of rusted iron and living venom that sleeps under the fen. Poison and Metal — it corrodes whatever it cannot bite through.',
+  palette: { primary: '#5a7a58', secondary: '#33463a', belly: '#c8d8a8', accent: '#b0ff4a', eye: '#e8ff9a', dark: '#141f16' } });
+legend({ id: 'basaltyr', name: 'Basaltyr', breed: 'Molten Colossus', body: 'golem', role: 'tank', elements: ['rock', 'fire', 'metal'], ultimate: 'core_meltdown', mood: 'sturdy', spawnMaps: ['ironhold_foundry', 'emberwild', 'stonehollow_crags'],
+  tweak: { patk: 4, satk: 6 },
+  legacySkills: { rock: [[1, 'stone_shard'], [20, 'crag_lance'], [20, 'rock_jab'], [60, 'quartz_storm'], [80, 'core_beam'], [80, 'tectonic_slam']], fire: [[1, 'flame_rawr'], [20, 'burning_fang'], [20, 'ember_jab'], [60, 'inferno_roar'], [80, 'dragon_inferno'], [80, 'magma_slam']] },
+  desc: 'LEGENDARY. A colossus of cooled basalt with a molten iron heart, said to be the mountain\'s own forge. Rock, Fire and Metal.',
+  palette: { primary: '#4a4048', secondary: '#2a2428', belly: '#8a7f86', accent: '#ff7a2a', eye: '#ffc46a', dark: '#120e12' } });
+
 const SPECIES_IDS = Object.keys(SPECIES);
+/** Legendary species ids (rare spawns, one form, 2-3 elements). */
+const LEGENDARY_IDS = SPECIES_IDS.filter((id) => SPECIES[id].legendary);
 const STARTER_IDS = SPECIES_IDS.filter((id) => SPECIES[id].starter);
 
 function getSpecies(id) {
@@ -2714,7 +3127,7 @@ function skillLearnLevel(speciesId, skillId) {
   return best;
 }
 
-return { SPECIES, SPECIES_IDS, STARTER_IDS, getSpecies, getEvolutionStage, skillsUnlockedAt, skillLearnLevel };
+return { SPECIES, SPECIES_IDS, LEGENDARY_IDS, STARTER_IDS, getSpecies, getEvolutionStage, skillsUnlockedAt, skillLearnLevel };
 })();
 __m["src/data/maps.js"] = (function () {
 // World data. Every map is described purely as data so Map 4, 5, 6... can be appended
@@ -2770,7 +3183,8 @@ const MAPS = {
       { id: 'prof_fern', type: 'guide', x: 480, y: 800, name: 'Professor Fern', color: '#7ad06a',
         dialogue: [
           'Welcome to Wildbound! I am Professor Fern.',
-          'Mythlings come in three elements: Nature beats Water, Water beats Fire, Fire beats Nature.',
+          'Mythlings come in NINE elements — Nature, Water, Fire, Rock, Electric, Ice, Metal, Poison and Psychic. Every element beats two or three others and fears one to three; the Wiki has the full chart.',
+          'Some rare Mythlings carry TWO elements at once, and the three legendaries carry two or three — every one of their elements counts when they are hit.',
           'You must DEFEAT a wild Mythling before you can catch it — a living one will never hold still.',
           'And remember: every Mythling you catch begins again at Lv.1. Their strength is what YOU raise.',
           'Mood and Rarity shape their stats. Rarity D adds nothing... but higher rarities amplify Mood a lot.',
@@ -2910,7 +3324,7 @@ const MAPS = {
     displayName: 'Emberwild',
     order: 2,
     element: 'fire',
-    levelRange: [30, 45],
+    levelRange: [28, 40],
     music: 'ember',
     visualTheme: 'fire',
     width: 4200,
@@ -2952,7 +3366,7 @@ const MAPS = {
       { id: 'warden_scout', type: 'guide', x: 500, y: 700, name: 'Scout Cinder', color: '#ff9a5a',
         dialogue: [
           'Emberwild is no place for a Lv.20 team, trainer. Wild Mythlings here run Lv.30 to Lv.45.',
-          'Catch a Lv.45 Emberu if you like — it will still join you at Lv.1. That is the law of the bond.',
+          'Catch a Lv.40 Emberu if you like — it will still join you at Lv.1. That is the law of the bond.',
           'The Flame Warden waits in the Volcanic Ruins. Come back when your team is near Lv.45 — beyond her lies the Emberwild Pass to the Crags.',
         ] },
       { id: 'ember_smith', type: 'villager', x: 830, y: 960, name: 'Forgehand Vull', color: '#ffb877',
@@ -2963,36 +3377,36 @@ const MAPS = {
         intro: 'You made it past the coast? The ash is less forgiving.',
         defeat: 'Hot-headed of me to challenge you.',
         reward: { coins: 900, items: { advanced_ball: 2 } },
-        team: [{ species: 'emberu', level: 33 }, { species: 'emberu', level: 34, mood: 'brave' }] },
+        team: [{ species: 'emberu', level: 30 }, { species: 'emberu', level: 31, mood: 'brave' }] },
       { id: 'ember_t2', name: 'Cinder Witch Vex', x: 2350, y: 1080, color: '#c9502f', flag: 'ember_t2',
         intro: 'The forest burns, yet it grows. Curious, no?',
         defeat: 'Embers scatter. So do I.',
         reward: { coins: 1200, items: { greater_potion: 3 } },
-        team: [{ species: 'emberu', level: 36, rarity: 'C' }, { species: 'spriggo', level: 36 }, { species: 'emberu', level: 37, rarity: 'C' }] },
+        team: [{ species: 'emberu', level: 33, rarity: 'C' }, { species: 'spriggo', level: 33 }, { species: 'emberu', level: 34, rarity: 'C' }] },
       { id: 'ember_t3', name: 'Magma Diver Rho', x: 3050, y: 700, color: '#ff6a4a', flag: 'ember_t3',
         intro: 'Molten Cavern rules: hit hard, hit first.',
         defeat: 'Fast. Very fast.',
         reward: { coins: 1500, items: { absolute_ball: 1 } },
-        team: [{ species: 'emberu', level: 39, rarity: 'B' }, { species: 'rivruff', level: 39 }, { species: 'emberu', level: 40, rarity: 'B', mood: 'sturdy' }] },
+        team: [{ species: 'emberu', level: 36, rarity: 'B' }, { species: 'rivruff', level: 36 }, { species: 'emberu', level: 37, rarity: 'B', mood: 'sturdy' }] },
       { id: 'flame_warden', name: 'Flame Warden Ignis', x: 3950, y: 900, color: '#ff4d2d', guardian: true, flag: 'flame_warden',
         intro: 'Beyond this pass the mountains themselves fight back. Prove you are ready for stone, trainer.',
         defeat: 'Magnificent. Take the Ember Sigil — the Emberwild Pass to Stonehollow Crags is open to you.',
         reward: { coins: 3000, items: { ember_sigil: 1, god_ball: 1, absolute_ball: 2 } },
         team: [
-          { species: 'emberu', level: 42, rarity: 'B', mood: 'sturdy' },
-          { species: 'rivruff', level: 43, rarity: 'A', mood: 'sturdy' },
-          { species: 'spriggo', level: 44, rarity: 'A', mood: 'brave' },
-          { species: 'emberu', level: 45, rarity: 'S', mood: 'brave' },
+          { species: 'emberu', level: 38, rarity: 'B', mood: 'sturdy' },
+          { species: 'rivruff', level: 39, rarity: 'A', mood: 'sturdy' },
+          { species: 'spriggo', level: 39, rarity: 'A', mood: 'brave' },
+          { species: 'emberu', level: 40, rarity: 'S', mood: 'brave' },
         ] },
     ],
     encounterZones: [
-      { id: 'ez1', rect: [1040, 250, 820, 850], levelRange: [30, 35], density: 6,
+      { id: 'ez1', rect: [1040, 250, 820, 850], levelRange: [28, 32], density: 6,
         species: [{ id: 'emberu', weight: 45 }, { id: 'emberlynx', weight: 20 }, { id: 'cinderhawk', weight: 15 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 5 }] },
-      { id: 'ez2', rect: [1930, 300, 730, 1050], levelRange: [34, 39], density: 6,
+      { id: 'ez2', rect: [1930, 300, 730, 1050], levelRange: [31, 35], density: 6,
         species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 20 }, { id: 'cinderhawk', weight: 20 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 5 }] },
-      { id: 'ez3', rect: [2740, 500, 620, 520], levelRange: [37, 42], density: 5,
+      { id: 'ez3', rect: [2740, 500, 620, 520], levelRange: [34, 38], density: 5,
         species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 15 }, { id: 'cinderhawk', weight: 15 }, { id: 'ashpup', weight: 20 }, { id: 'magmataur', weight: 10 }] },
-      { id: 'ez4', rect: [3440, 800, 700, 620], levelRange: [41, 45], density: 5,
+      { id: 'ez4', rect: [3440, 800, 700, 620], levelRange: [37, 40], density: 5,
         species: [{ id: 'emberu', weight: 40 }, { id: 'emberlynx', weight: 15 }, { id: 'cinderhawk', weight: 10 }, { id: 'ashpup', weight: 15 }, { id: 'magmataur', weight: 20 }] },
     ],
     connections: [
@@ -3013,7 +3427,7 @@ const MAPS = {
     displayName: 'Stonehollow Crags',
     order: 3,
     element: 'rock',
-    levelRange: [45, 60],
+    levelRange: [38, 48],
     music: 'crags',
     visualTheme: 'rock',
     width: 4400,
@@ -3036,9 +3450,8 @@ const MAPS = {
     buildings: [
       { id: 'crag_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
       { id: 'crag_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Crags Outfitter',
-        // The LAST map's shop carries the COMPLETE catalogue (every ball, restore, tonic and food).
-        // When a new region is added, the top of this list moves there and this one is trimmed.
-        stock: FULL_STOCK },
+        stock: ['advanced_ball', 'absolute_ball', 'god_ball', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+          'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
       { id: 'crag_lodge',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Quarry Lodge' },
       { id: 'summit_watch',type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Summit Watch' },
     ],
@@ -3053,47 +3466,471 @@ const MAPS = {
       { id: 'quarry_foreman', type: 'villager', x: 720, y: 860, name: 'Foreman Bram', color: '#b98b5a',
         dialogue: ['Welcome to the Crags, trainer. Everything up here is Rock type — fire barely scratches them.', 'Water and Nature Mythlings crack stone wide open. Bring the right team, or bring a lot of potions.'] },
       { id: 'crystal_hermit', type: 'guide', x: 2200, y: 480, name: 'Hermit Sela', color: '#8fb8c8',
-        dialogue: ['The crystals in this hollow remember everything. The Mythlings that live here drink light from them.', 'The Stone Warden guards the Titan Summit. She has never been beaten. Not once.'] },
+        dialogue: ['The crystals in this hollow remember everything. The Mythlings that live here drink light from them.', 'The Stone Warden guards the Titan Summit. She has never been beaten. Not once. Beyond her, they say, the plateau where the storms are born.'] },
     ],
     trainers: [
       { id: 'crag_t1', name: 'Quarry Hand Doric', x: 1320, y: 720, color: '#a08a6a', flag: 'crag_t1',
         intro: 'Heavy hitters only past this point. Let us see what you have got.',
         defeat: 'Ha! Solid. Keep climbing.',
         reward: { coins: 2200, items: { absolute_ball: 2 } },
-        team: [{ species: 'pebbleshell', level: 48 }, { species: 'gravelhog', level: 49 }] },
+        team: [{ species: 'pebbleshell', level: 40 }, { species: 'gravelhog', level: 41 }] },
       { id: 'crag_t2', name: 'Prospector Wren', x: 2320, y: 940, color: '#7fa0c0', flag: 'crag_t2',
         intro: 'I dig for crystals. My Mythlings dig for weaknesses.',
         defeat: 'Fine, fine — the hollow is yours to prospect.',
         reward: { coins: 2800, items: { max_potion: 2, mood_tonic: 1 } },
-        team: [{ species: 'quartzling', level: 51 }, { species: 'shalecrawl', level: 52 }, { species: 'rubblekin', level: 52, rarity: 'C' }] },
+        team: [{ species: 'quartzling', level: 43 }, { species: 'shalecrawl', level: 44 }, { species: 'rubblekin', level: 44, rarity: 'C' }] },
       { id: 'crag_t3', name: 'Ridge Runner Tamsin', x: 3220, y: 720, color: '#c08a6a', flag: 'crag_t3',
         intro: 'Nobody outruns me on the shale. Nobody out-hits my boars either.',
         defeat: 'Not bad, not bad. The summit is just ahead — good luck with HER.',
         reward: { coins: 3400, items: { god_ball: 1, temper_tonic: 1 } },
-        team: [{ species: 'gravelhog', level: 54, rarity: 'B' }, { species: 'quartzling', level: 55, rarity: 'B' }, { species: 'pebbleshell', level: 55, rarity: 'B', mood: 'guarded' }] },
-      { id: 'stone_warden', name: 'Stone Warden Halda', x: 4030, y: 820, color: '#8a7f6a', guardian: true, finalBoss: true, flag: 'stone_warden',
+        team: [{ species: 'gravelhog', level: 46, rarity: 'B' }, { species: 'quartzling', level: 47, rarity: 'B' }, { species: 'pebbleshell', level: 47, rarity: 'B', mood: 'guarded' }] },
+      { id: 'stone_warden', name: 'Stone Warden Halda', x: 4030, y: 820, color: '#8a7f6a', guardian: true, flag: 'stone_warden',
         intro: 'I am the mountain\'s answer to every trainer who climbed too high. Show me you belong up here.',
-        defeat: 'The mountain yields. Wildbound is yours to roam — until the world grows again.',
+        defeat: 'The mountain yields. Take the Crag Seal — the Storm Gate on the far side of the summit will open for you.',
         reward: { coins: 8000, items: { crag_seal: 1, god_ball: 2, shiny_ball: 1 } },
         team: [
-          { species: 'rubblekin', level: 57, rarity: 'A', mood: 'sturdy' },
-          { species: 'shalecrawl', level: 58, rarity: 'A', mood: 'swift' },
-          { species: 'quartzling', level: 59, rarity: 'S', mood: 'clever' },
-          { species: 'gravelhog', level: 60, rarity: 'S', mood: 'brave' },
+          { species: 'rubblekin', level: 45, rarity: 'A', mood: 'sturdy' },
+          { species: 'shalecrawl', level: 46, rarity: 'A', mood: 'swift' },
+          { species: 'quartzling', level: 47, rarity: 'S', mood: 'clever' },
+          { species: 'gravelhog', level: 48, rarity: 'S', mood: 'brave' },
         ] },
     ],
     encounterZones: [
-      { id: 'cz1', rect: [1040, 120, 820, 960], levelRange: [45, 50], density: 6,
+      { id: 'cz1', rect: [1040, 120, 820, 960], levelRange: [38, 41], density: 6,
         species: [{ id: 'pebbleshell', weight: 30 }, { id: 'gravelhog', weight: 30 }, { id: 'shalecrawl', weight: 20 }, { id: 'quartzling', weight: 10 }, { id: 'rubblekin', weight: 10 }] },
-      { id: 'cz2', rect: [1940, 200, 720, 1100], levelRange: [49, 54], density: 6,
+      { id: 'cz2', rect: [1940, 200, 720, 1100], levelRange: [40, 44], density: 6,
         species: [{ id: 'quartzling', weight: 30 }, { id: 'shalecrawl', weight: 25 }, { id: 'rubblekin', weight: 20 }, { id: 'pebbleshell', weight: 15 }, { id: 'gravelhog', weight: 10 }] },
-      { id: 'cz3', rect: [2740, 480, 720, 900], levelRange: [53, 58], density: 5,
+      { id: 'cz3', rect: [2740, 480, 720, 900], levelRange: [43, 46], density: 5,
         species: [{ id: 'gravelhog', weight: 25 }, { id: 'rubblekin', weight: 25 }, { id: 'pebbleshell', weight: 20 }, { id: 'quartzling', weight: 15 }, { id: 'shalecrawl', weight: 15 }] },
-      { id: 'cz4', rect: [3540, 560, 760, 480], levelRange: [56, 60], density: 5,
+      { id: 'cz4', rect: [3540, 560, 760, 480], levelRange: [45, 48], density: 5,
         species: [{ id: 'rubblekin', weight: 30 }, { id: 'quartzling', weight: 20 }, { id: 'gravelhog', weight: 20 }, { id: 'shalecrawl', weight: 15 }, { id: 'pebbleshell', weight: 15 }] },
     ],
     connections: [
       { id: 'back_ember', rect: [0, 600, 60, 320], toMap: 'emberwild', toPoint: { x: 4040, y: 780 }, label: 'To Emberwild' },
+      { id: 'to_storm', rect: [4340, 620, 60, 320], toMap: 'stormreach_plateau', toPoint: { x: 220, y: 880 },
+        requiresItem: 'crag_seal',
+        lockedText: 'The Storm Gate hums shut. Defeat the Stone Warden for the Crag Seal.',
+        label: 'To Stormreach Plateau' },
+    ],
+  },
+  stormreach_plateau: {
+    id: 'stormreach_plateau',
+    displayName: 'Stormreach Plateau',
+    order: 4,
+    element: 'electric',
+    levelRange: [46, 56],
+    music: 'storm',
+    visualTheme: 'electric',
+    width: 4400,
+    height: 1500,
+    spawn: { x: 220, y: 880 },
+    ambient: { sky: ['#2b2f4a', '#8fa3c8'], fog: 'rgba(180,200,255,0.12)' },
+    regions: [
+      { id: 'thunderhead_camp', name: 'Thunderhead Camp', rect: [0, 0, 1000, 1500], terrain: 'storm_camp' },
+      { id: 'static_fields', name: 'Static Fields', rect: [1000, 0, 900, 1500], terrain: 'static_field' },
+      { id: 'coil_rocks', name: 'Coil Rocks', rect: [1900, 0, 800, 1500], terrain: 'spire_rock' },
+      { id: 'charged_ruins', name: 'Charged Ruins', rect: [2700, 0, 800, 1500], terrain: 'charged_ruins' },
+      { id: 'stormeye_peak', name: 'Stormeye Peak', rect: [3500, 0, 900, 1500], terrain: 'storm_peak' },
+    ],
+    water: [
+      { x: 1120, y: 1160, w: 640, h: 200, kind: 'pond' },
+      { x: 2880, y: 240, w: 540, h: 170, kind: 'river' },
+      { x: 3680, y: 1090, w: 560, h: 220, kind: 'pond' },
+    ],
+    bridges: [{ x: 1380, y: 1120, w: 190, h: 280 }, { x: 3040, y: 200, w: 180, h: 250 }],
+    buildings: [
+      { id: 'storm_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
+      { id: 'storm_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Plateau Provisions',
+        stock: ['advanced_ball', 'absolute_ball', 'hyper_potion', 'max_potion', 'revive_herb', 'max_revive', 'skill_elixir', 'mood_tonic', 'temper_tonic',
+          'coral_cake', 'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe'] },
+      { id: 'storm_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Lightning Lodge' },
+      { id: 'storm_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Storm Spire' },
+    ],
+    landmarks: [
+      { id: 'storm_sign', type: 'sign', x: 520, y: 820, text: 'STORMREACH PLATEAU — Region 5. Wild Mythlings Lv.46–56. Every one of them is Electric.' },
+      { id: 'storm_ruin', type: 'ruin', x: 2960, y: 760 },
+      { id: 'storm_crystal', type: 'crystal', x: 2240, y: 700 },
+      { id: 'peak_ruin', type: 'ruin', x: 3720, y: 620 },
+    ],
+    npcs: [
+      { id: 'storm_keeper', type: 'guide', x: 720, y: 860, name: 'Keeper Ilva', color: '#e8d26a',
+        dialogue: ['Welcome to the plateau where storms are born. Rock grounds Electric — bring one and you will laugh at the lightning.', 'Metal and Water conduct it, though. Leave those at the Center.', 'Beyond the Stormeye Peak lies the tundra. Beat Warden Kest and the Frost Gate opens.'] },
+      { id: 'storm_kid', type: 'villager', x: 2200, y: 480, name: 'Sparkwright Neo', color: '#9fd8ff',
+        dialogue: ['Once in a blue moon an elk of pure aurora walks the peak. Aetherion, the old folk call it. Nobody has ever caught one — the balls just slide off. Unless they are Absolute or better.'] },
+    ],
+    trainers: [
+      { id: 'storm_t1', name: 'Lineman Faro', x: 1320, y: 720, color: '#d8c25a', flag: 'storm_t1',
+        intro: 'Hold onto something — my Zapfox bites like a live wire.',
+        defeat: 'Zap! Well, you took that better than I did.',
+        reward: { coins: 3000, items: { absolute_ball: 2 } },
+        team: [{ species: 'voltkit', level: 48 }, { species: 'staticat', level: 49 }] },
+      { id: 'storm_t2', name: 'Coil Warden Bex', x: 2320, y: 940, color: '#a0c0ff', flag: 'storm_t2',
+        intro: 'Everything on these rocks is charged. Including me.',
+        defeat: 'Discharged. Go on.',
+        reward: { coins: 3600, items: { max_potion: 2, mood_tonic: 1 } },
+        team: [{ species: 'boltpup', level: 51 }, { species: 'zapwing', level: 52 }, { species: 'coilstone', level: 52, rarity: 'C' }] },
+      { id: 'storm_t3', name: 'Ruin Watcher Sil', x: 3220, y: 720, color: '#7f8fd0', flag: 'storm_t3',
+        intro: 'The ruins remember a thousand storms. Let us add one.',
+        defeat: 'A storm indeed. The peak is yours.',
+        reward: { coins: 4200, items: { god_ball: 1, temper_tonic: 1 } },
+        team: [{ species: 'zapwing', level: 54, rarity: 'B' }, { species: 'coilstone', level: 55, rarity: 'B' }, { species: 'boltpup', level: 55, rarity: 'B', mood: 'fierce' }] },
+      { id: 'storm_warden', name: 'Storm Warden Kest', x: 4030, y: 820, color: '#f4d03f', guardian: true, flag: 'storm_warden',
+        intro: 'I have stood in the eye of every storm this plateau ever made. Stand in mine.',
+        defeat: 'The storm passes. Take the Storm Sigil — the Frost Gate is open to you.',
+        reward: { coins: 9000, items: { storm_sigil: 1, god_ball: 2, shiny_ball: 1 } },
+        team: [{ species: 'coilstone', level: 53, rarity: 'A', mood: 'sturdy' }, { species: 'staticat', level: 54, rarity: 'A', mood: 'clever' }, { species: 'zapwing', level: 55, rarity: 'S', mood: 'swift' }, { species: 'boltpup', level: 56, rarity: 'S', mood: 'brave' }] },
+    ],
+    encounterZones: [
+      { id: 'sz1', rect: [1040, 120, 820, 960], levelRange: [46, 49], density: 6,
+        species: [{ id: 'voltkit', weight: 30 }, { id: 'staticat', weight: 30 }, { id: 'boltpup', weight: 20 }, { id: 'zapwing', weight: 10 }, { id: 'coilstone', weight: 10 }, { id: 'sparkbug', weight: 2 }] },
+      { id: 'sz2', rect: [1940, 200, 720, 1100], levelRange: [48, 52], density: 6,
+        species: [{ id: 'zapwing', weight: 30 }, { id: 'boltpup', weight: 25 }, { id: 'coilstone', weight: 20 }, { id: 'voltkit', weight: 15 }, { id: 'staticat', weight: 10 }, { id: 'sparkbug', weight: 4 }] },
+      { id: 'sz3', rect: [2740, 480, 720, 900], levelRange: [51, 54], density: 5,
+        species: [{ id: 'staticat', weight: 25 }, { id: 'coilstone', weight: 25 }, { id: 'voltkit', weight: 20 }, { id: 'zapwing', weight: 15 }, { id: 'boltpup', weight: 15 }, { id: 'sparkbug', weight: 4 }] },
+      { id: 'sz4', rect: [3540, 560, 760, 480], levelRange: [53, 56], density: 5,
+        species: [{ id: 'coilstone', weight: 30 }, { id: 'zapwing', weight: 20 }, { id: 'staticat', weight: 20 }, { id: 'boltpup', weight: 15 }, { id: 'voltkit', weight: 15 }, { id: 'sparkbug', weight: 4 }] },
+    ],
+    connections: [
+      { id: 'back_crags', rect: [0, 600, 60, 320], toMap: 'stonehollow_crags', toPoint: { x: 4260, y: 780 }, label: 'To Stonehollow Crags' },
+      { id: 'to_frost', rect: [4340, 620, 60, 320], toMap: 'frostveil_tundra', toPoint: { x: 220, y: 880 },
+        requiresItem: 'storm_sigil',
+        lockedText: 'The Frost Gate is sealed in rime. Defeat the Storm Warden for the Storm Sigil.',
+        label: 'To Frostveil Tundra' },
+    ],
+  },
+  frostveil_tundra: {
+    id: 'frostveil_tundra',
+    displayName: 'Frostveil Tundra',
+    order: 5,
+    element: 'ice',
+    levelRange: [54, 64],
+    music: 'frost',
+    visualTheme: 'ice',
+    width: 4400,
+    height: 1500,
+    spawn: { x: 220, y: 880 },
+    ambient: { sky: ['#8fb6d8', '#eef7ff'], fog: 'rgba(220,240,255,0.16)' },
+    regions: [
+      { id: 'snowbound_camp', name: 'Snowbound Camp', rect: [0, 0, 1000, 1500], terrain: 'snow_camp' },
+      { id: 'white_fields', name: 'White Fields', rect: [1000, 0, 900, 1500], terrain: 'snowfield' },
+      { id: 'frost_wood', name: 'Frost Wood', rect: [1900, 0, 800, 1500], terrain: 'frost_wood' },
+      { id: 'glacier_shelf', name: 'Glacier Shelf', rect: [2700, 0, 800, 1500], terrain: 'glacier' },
+      { id: 'aurora_summit', name: 'Aurora Summit', rect: [3500, 0, 900, 1500], terrain: 'aurora_summit' },
+    ],
+    water: [
+      { x: 1120, y: 1160, w: 640, h: 200, kind: 'ice' },
+      { x: 2880, y: 240, w: 540, h: 170, kind: 'ice' },
+      { x: 3680, y: 1090, w: 560, h: 220, kind: 'ice' },
+    ],
+    bridges: [{ x: 1380, y: 1120, w: 190, h: 280 }, { x: 3040, y: 200, w: 180, h: 250 }],
+    buildings: [
+      { id: 'frost_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
+      { id: 'frost_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Frostveil Trading Post',
+        stock: ['absolute_ball', 'god_ball', 'hyper_potion', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+          'tide_pudding', 'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper'] },
+      { id: 'frost_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Snowbound Lodge' },
+      { id: 'frost_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Aurora Watch' },
+    ],
+    landmarks: [
+      { id: 'frost_sign', type: 'sign', x: 520, y: 820, text: 'FROSTVEIL TUNDRA — Region 6. Wild Mythlings Lv.54–64. Fire and Metal melt them; they freeze Nature and Electric.' },
+      { id: 'frost_crystal', type: 'crystal', x: 2260, y: 700 },
+      { id: 'frost_crystal2', type: 'crystal', x: 2520, y: 1120 },
+      { id: 'aurora_ruin', type: 'ruin', x: 3720, y: 620 },
+    ],
+    npcs: [
+      { id: 'frost_elder', type: 'guide', x: 720, y: 860, name: 'Elder Yrsa', color: '#cfe8ff',
+        dialogue: ['The tundra freezes the unprepared. Ice Mythlings shrug off Nature and Electric — but melt to Fire and shatter under Metal.', 'The Aurora Summit is where the sky comes down to touch the snow. Warden Halvor keeps it.'] },
+      { id: 'frost_kid', type: 'villager', x: 2200, y: 480, name: 'Snowdrift Pip', color: '#ffffff',
+        dialogue: ['I saw the aurora walk on legs once! Antlers of light! Then it was gone into the storm country.'] },
+    ],
+    trainers: [
+      { id: 'frost_t1', name: 'Trapper Odd', x: 1320, y: 720, color: '#9fc4e0', flag: 'frost_t1',
+        intro: 'Cold slows everything but my Frostpup.',
+        defeat: 'Brr — you are quicker than the frost.',
+        reward: { coins: 3800, items: { absolute_ball: 2 } },
+        team: [{ species: 'frostpup', level: 56 }, { species: 'snowkit', level: 57 }] },
+      { id: 'frost_t2', name: 'Glacier Guide Mira', x: 2320, y: 940, color: '#e6f4ff', flag: 'frost_t2',
+        intro: 'The ice is thinner than it looks. So is your team, I suspect.',
+        defeat: 'Thicker than I thought. Cross safely.',
+        reward: { coins: 4400, items: { max_potion: 2, mood_tonic: 1 } },
+        team: [{ species: 'icecarap', level: 59 }, { species: 'flurrywing', level: 60 }, { species: 'frostling', level: 60, rarity: 'C' }] },
+      { id: 'frost_t3', name: 'Summit Ranger Kol', x: 3220, y: 720, color: '#7fb8e6', flag: 'frost_t3',
+        intro: 'Above this line the air burns cold. Turn back or fight.',
+        defeat: 'Then climb. Halvor waits.',
+        reward: { coins: 5200, items: { god_ball: 1, temper_tonic: 1 } },
+        team: [{ species: 'frostling', level: 62, rarity: 'B' }, { species: 'icecarap', level: 63, rarity: 'B' }, { species: 'frostpup', level: 63, rarity: 'B', mood: 'fierce' }] },
+      { id: 'frost_warden', name: 'Frost Warden Halvor', x: 4030, y: 820, color: '#8fdcff', guardian: true, flag: 'frost_warden',
+        intro: 'The aurora chose me to hold this summit. It has not chosen you. Yet.',
+        defeat: 'The lights approve. Take the Frost Sigil — the Iron Gate answers to it.',
+        reward: { coins: 11000, items: { frost_sigil: 1, god_ball: 2, shiny_ball: 1 } },
+        team: [{ species: 'icecarap', level: 61, rarity: 'A', mood: 'lazy' }, { species: 'snowkit', level: 62, rarity: 'A', mood: 'calm' }, { species: 'flurrywing', level: 63, rarity: 'S', mood: 'swift' }, { species: 'frostling', level: 64, rarity: 'S', mood: 'stubborn' }] },
+    ],
+    encounterZones: [
+      { id: 'fz1', rect: [1040, 120, 820, 960], levelRange: [54, 57], density: 6,
+        species: [{ id: 'frostpup', weight: 30 }, { id: 'snowkit', weight: 30 }, { id: 'icecarap', weight: 20 }, { id: 'flurrywing', weight: 10 }, { id: 'frostling', weight: 10 }] },
+      { id: 'fz2', rect: [1940, 200, 720, 1100], levelRange: [56, 60], density: 6,
+        species: [{ id: 'flurrywing', weight: 30 }, { id: 'icecarap', weight: 25 }, { id: 'frostling', weight: 20 }, { id: 'frostpup', weight: 15 }, { id: 'snowkit', weight: 10 }] },
+      { id: 'fz3', rect: [2740, 480, 720, 900], levelRange: [59, 62], density: 5,
+        species: [{ id: 'snowkit', weight: 25 }, { id: 'frostling', weight: 25 }, { id: 'frostpup', weight: 20 }, { id: 'flurrywing', weight: 15 }, { id: 'icecarap', weight: 15 }] },
+      { id: 'fz4', rect: [3540, 560, 760, 480], levelRange: [61, 64], density: 5,
+        species: [{ id: 'frostling', weight: 30 }, { id: 'flurrywing', weight: 20 }, { id: 'snowkit', weight: 20 }, { id: 'icecarap', weight: 15 }, { id: 'frostpup', weight: 15 }] },
+    ],
+    connections: [
+      { id: 'back_storm', rect: [0, 600, 60, 320], toMap: 'stormreach_plateau', toPoint: { x: 4260, y: 780 }, label: 'To Stormreach Plateau' },
+      { id: 'to_iron', rect: [4340, 620, 60, 320], toMap: 'ironhold_foundry', toPoint: { x: 220, y: 880 },
+        requiresItem: 'frost_sigil',
+        lockedText: 'The Iron Gate is bolted. Defeat the Frost Warden for the Frost Sigil.',
+        label: 'To Ironhold Foundry' },
+    ],
+  },
+  ironhold_foundry: {
+    id: 'ironhold_foundry',
+    displayName: 'Ironhold Foundry',
+    order: 6,
+    element: 'metal',
+    levelRange: [62, 72],
+    music: 'forge',
+    visualTheme: 'metal',
+    width: 4400,
+    height: 1500,
+    spawn: { x: 220, y: 880 },
+    ambient: { sky: ['#3a3d44', '#b8a89a'], fog: 'rgba(200,190,180,0.14)' },
+    regions: [
+      { id: 'foundry_yard', name: 'Foundry Yard', rect: [0, 0, 1000, 1500], terrain: 'foundry_yard' },
+      { id: 'scrapfields', name: 'Scrapfields', rect: [1000, 0, 900, 1500], terrain: 'scrapfield' },
+      { id: 'ore_mines', name: 'Ore Mines', rect: [1900, 0, 800, 1500], terrain: 'ore_mine' },
+      { id: 'steelworks', name: 'Steelworks', rect: [2700, 0, 800, 1500], terrain: 'steelworks' },
+      { id: 'forge_core', name: 'Forge Core', rect: [3500, 0, 900, 1500], terrain: 'forge_core' },
+    ],
+    water: [
+      { x: 1120, y: 1160, w: 640, h: 200, kind: 'slag' },
+      { x: 2880, y: 240, w: 540, h: 170, kind: 'slag' },
+      { x: 3680, y: 1090, w: 560, h: 220, kind: 'slag' },
+    ],
+    bridges: [{ x: 1380, y: 1120, w: 190, h: 280 }, { x: 3040, y: 200, w: 180, h: 250 }],
+    buildings: [
+      { id: 'iron_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
+      { id: 'iron_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Ironhold Armoury',
+        stock: ['absolute_ball', 'god_ball', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+          'storm_eel_stew', 'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth'] },
+      { id: 'iron_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Smelter Quarters' },
+      { id: 'iron_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Forge Chimney' },
+    ],
+    landmarks: [
+      { id: 'iron_sign', type: 'sign', x: 520, y: 820, text: 'IRONHOLD FOUNDRY — Region 7. Wild Mythlings Lv.62–72. Metal grinds Rock and Ice; Fire, Electric and Poison eat through it.' },
+      { id: 'iron_ruin', type: 'ruin', x: 2260, y: 700 },
+      { id: 'iron_volcano', type: 'volcano', x: 3760, y: 300 },
+      { id: 'iron_ruin2', type: 'ruin', x: 3060, y: 760 },
+    ],
+    npcs: [
+      { id: 'iron_master', type: 'guide', x: 720, y: 860, name: 'Foundry Master Grann', color: '#c9c9d0',
+        dialogue: ['Everything here is forged, trainer — including the Mythlings. Metal shrugs off Rock and Ice, but Fire, Electric and Poison eat through it.', 'Deep in the Forge Core sleeps something older than the foundry. A colossus of basalt with a heart of iron. Do not wake it unless you can hold it — Absolute Balls or better.'] },
+      { id: 'iron_kid', type: 'villager', x: 2200, y: 480, name: 'Apprentice Tolly', color: '#ffb347',
+        dialogue: ['Some of the beetles here spark when you touch them — half storm, half steel. They wander in from the plateau.'] },
+    ],
+    trainers: [
+      { id: 'iron_t1', name: 'Scrap Baron Ugo', x: 1320, y: 720, color: '#8e97a6', flag: 'iron_t1',
+        intro: 'Everything in the scrapfields is mine. Including your loss.',
+        defeat: 'Scrap that. You win.',
+        reward: { coins: 4600, items: { absolute_ball: 2 } },
+        team: [{ species: 'ironbug', level: 64 }, { species: 'scrapling', level: 65 }] },
+      { id: 'iron_t2', name: 'Mine Chief Dalla', x: 2320, y: 940, color: '#c9a24a', flag: 'iron_t2',
+        intro: 'The ore mines give nothing for free. Neither do I.',
+        defeat: 'Paid in full. The steelworks are ahead.',
+        reward: { coins: 5400, items: { max_potion: 2, mood_tonic: 1 } },
+        team: [{ species: 'ironhog', level: 67 }, { species: 'chromeling', level: 68 }, { species: 'cogfox', level: 68, rarity: 'C' }] },
+      { id: 'iron_t3', name: 'Forge Captain Rhett', x: 3220, y: 720, color: '#ff8a3c', flag: 'iron_t3',
+        intro: 'Tempered in the core. Are you?',
+        defeat: 'Tempered enough. The Forge Warden waits.',
+        reward: { coins: 6200, items: { god_ball: 1, temper_tonic: 1 } },
+        team: [{ species: 'chromeling', level: 70, rarity: 'B' }, { species: 'ironhog', level: 71, rarity: 'B' }, { species: 'scrapling', level: 71, rarity: 'B', mood: 'sturdy' }] },
+      { id: 'iron_warden', name: 'Forge Warden Ostrin', x: 4030, y: 820, color: '#a9b4c2', guardian: true, flag: 'iron_warden',
+        intro: 'I forged this gate myself. Nothing has ever bent it. Try.',
+        defeat: 'It bends. Take the Iron Sigil — the Mire Gate is yours.',
+        reward: { coins: 13000, items: { iron_sigil: 1, god_ball: 2, dark_ball: 1 } },
+        team: [{ species: 'ironbug', level: 69, rarity: 'A', mood: 'guarded' }, { species: 'cogfox', level: 70, rarity: 'A', mood: 'keen' }, { species: 'chromeling', level: 71, rarity: 'S', mood: 'clever' }, { species: 'ironhog', level: 72, rarity: 'S', mood: 'brave' }] },
+    ],
+    encounterZones: [
+      { id: 'iz1', rect: [1040, 120, 820, 960], levelRange: [62, 65], density: 6,
+        species: [{ id: 'ironbug', weight: 30 }, { id: 'scrapling', weight: 30 }, { id: 'ironhog', weight: 20 }, { id: 'chromeling', weight: 10 }, { id: 'cogfox', weight: 10 }, { id: 'sparkbug', weight: 6 }] },
+      { id: 'iz2', rect: [1940, 200, 720, 1100], levelRange: [64, 68], density: 6,
+        species: [{ id: 'chromeling', weight: 30 }, { id: 'ironhog', weight: 25 }, { id: 'cogfox', weight: 20 }, { id: 'ironbug', weight: 15 }, { id: 'scrapling', weight: 10 }, { id: 'sparkbug', weight: 10 }] },
+      { id: 'iz3', rect: [2740, 480, 720, 900], levelRange: [67, 70], density: 5,
+        species: [{ id: 'scrapling', weight: 25 }, { id: 'cogfox', weight: 25 }, { id: 'ironbug', weight: 20 }, { id: 'chromeling', weight: 15 }, { id: 'ironhog', weight: 15 }, { id: 'sparkbug', weight: 10 }] },
+      { id: 'iz4', rect: [3540, 560, 760, 480], levelRange: [69, 72], density: 5,
+        species: [{ id: 'cogfox', weight: 30 }, { id: 'chromeling', weight: 20 }, { id: 'scrapling', weight: 20 }, { id: 'ironhog', weight: 15 }, { id: 'ironbug', weight: 15 }, { id: 'sparkbug', weight: 10 }] },
+    ],
+    connections: [
+      { id: 'back_frost', rect: [0, 600, 60, 320], toMap: 'frostveil_tundra', toPoint: { x: 4260, y: 780 }, label: 'To Frostveil Tundra' },
+      { id: 'to_mire', rect: [4340, 620, 60, 320], toMap: 'miremarsh_fen', toPoint: { x: 220, y: 880 },
+        requiresItem: 'iron_sigil',
+        lockedText: 'The Mire Gate is rusted shut. Defeat the Forge Warden for the Iron Sigil.',
+        label: 'To Miremarsh Fen' },
+    ],
+  },
+  miremarsh_fen: {
+    id: 'miremarsh_fen',
+    displayName: 'Miremarsh Fen',
+    order: 7,
+    element: 'poison',
+    levelRange: [70, 80],
+    music: 'mire',
+    visualTheme: 'poison',
+    width: 4400,
+    height: 1500,
+    spawn: { x: 220, y: 880 },
+    ambient: { sky: ['#2e3a2c', '#9fb08a'], fog: 'rgba(150,190,120,0.18)' },
+    regions: [
+      { id: 'fen_village', name: 'Fen Village', rect: [0, 0, 1000, 1500], terrain: 'fen_village' },
+      { id: 'the_bog', name: 'The Bog', rect: [1000, 0, 900, 1500], terrain: 'bog' },
+      { id: 'toxic_grove', name: 'Toxic Grove', rect: [1900, 0, 800, 1500], terrain: 'toxic_grove' },
+      { id: 'sludge_flats', name: 'Sludge Flats', rect: [2700, 0, 800, 1500], terrain: 'sludge_flat' },
+      { id: 'plague_hollow', name: 'Plague Hollow', rect: [3500, 0, 900, 1500], terrain: 'plague_hollow' },
+    ],
+    water: [
+      { x: 1120, y: 1160, w: 640, h: 200, kind: 'bog' },
+      { x: 2880, y: 240, w: 540, h: 170, kind: 'bog' },
+      { x: 3680, y: 1090, w: 560, h: 220, kind: 'bog' },
+    ],
+    bridges: [{ x: 1380, y: 1120, w: 190, h: 280 }, { x: 3040, y: 200, w: 180, h: 250 }],
+    buildings: [
+      { id: 'mire_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
+      { id: 'mire_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Fen Apothecary',
+        stock: ['absolute_ball', 'god_ball', 'shiny_ball', 'max_potion', 'max_revive', 'skill_elixir', 'full_restore', 'mood_tonic', 'temper_tonic',
+          'dragonfruit_flambe', 'phoenix_pepper', 'titan_broth', 'wildbound_ambrosia'] },
+      { id: 'mire_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Stilt House' },
+      { id: 'mire_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'Witchlight Tower' },
+    ],
+    landmarks: [
+      { id: 'mire_sign', type: 'sign', x: 520, y: 820, text: 'MIREMARSH FEN — Region 8. Wild Mythlings Lv.70–80. Poison withers Nature and Metal and clouds the Psychic mind; only Psychic purges it.' },
+      { id: 'mire_ruin', type: 'ruin', x: 2260, y: 700 },
+      { id: 'mire_crystal', type: 'crystal', x: 3060, y: 760 },
+      { id: 'hollow_ruin', type: 'ruin', x: 3720, y: 620 },
+    ],
+    npcs: [
+      { id: 'mire_witch', type: 'guide', x: 720, y: 860, name: 'Bog Witch Morra', color: '#b06fe0',
+        dialogue: ['Mind the water, dear — it is not water. Poison Mythlings wither Nature and Metal and cloud Psychic minds; only a Psychic can purge them.', 'Something coils under the sludge flats. Iron scales, venom breath. The old wyrm Venomyr. It only wakes for the strong.'] },
+      { id: 'mire_kid', type: 'villager', x: 2200, y: 480, name: 'Marsh Boy Ebb', color: '#9cff5a',
+        dialogue: ['The wisps here whisper things. Some of them are half in your head already — Poison AND Psychic, mum says.'] },
+    ],
+    trainers: [
+      { id: 'mire_t1', name: 'Bog Runner Tash', x: 1320, y: 720, color: '#7e4fb8', flag: 'mire_t1',
+        intro: 'The bog eats slow things. Are you slow?',
+        defeat: 'Not slow at all. Onward.',
+        reward: { coins: 5600, items: { absolute_ball: 2 } },
+        team: [{ species: 'venoviper', level: 72 }, { species: 'mirenewt', level: 73 }] },
+      { id: 'mire_t2', name: 'Grove Keeper Wyn', x: 2320, y: 940, color: '#6fa04a', flag: 'mire_t2',
+        intro: 'Breathe shallow in my grove, trainer.',
+        defeat: 'Cough — well fought.',
+        reward: { coins: 6400, items: { max_potion: 2, mood_tonic: 1 } },
+        team: [{ species: 'stingbug', level: 75 }, { species: 'venobat', level: 76 }, { species: 'boghound', level: 76, rarity: 'C' }] },
+      { id: 'mire_t3', name: 'Sludge Baron Voss', x: 3220, y: 720, color: '#4f6a4a', flag: 'mire_t3',
+        intro: 'Everything sinks in the flats eventually.',
+        defeat: 'Not you, apparently. The hollow is ahead.',
+        reward: { coins: 7400, items: { god_ball: 1, temper_tonic: 1 } },
+        team: [{ species: 'boghound', level: 78, rarity: 'B' }, { species: 'venoviper', level: 79, rarity: 'B' }, { species: 'stingbug', level: 79, rarity: 'B', mood: 'aggressive' }] },
+      { id: 'mire_warden', name: 'Plague Warden Nyx', x: 4030, y: 820, color: '#8dff6a', guardian: true, flag: 'mire_warden',
+        intro: 'Every trainer who reached me left something behind in the fen. What will you leave?',
+        defeat: 'Nothing, it seems. Take the Mire Sigil — the Spire Gate opens for you.',
+        reward: { coins: 15000, items: { mire_sigil: 1, god_ball: 2, dark_ball: 1 } },
+        team: [{ species: 'mirenewt', level: 77, rarity: 'A', mood: 'hardy' }, { species: 'venobat', level: 78, rarity: 'A', mood: 'playful' }, { species: 'venoviper', level: 79, rarity: 'S', mood: 'clever' }, { species: 'boghound', level: 80, rarity: 'S', mood: 'fierce' }] },
+    ],
+    encounterZones: [
+      { id: 'mz1', rect: [1040, 120, 820, 960], levelRange: [70, 73], density: 6,
+        species: [{ id: 'venoviper', weight: 30 }, { id: 'mirenewt', weight: 30 }, { id: 'stingbug', weight: 20 }, { id: 'venobat', weight: 10 }, { id: 'boghound', weight: 10 }, { id: 'mirewisp', weight: 6 }] },
+      { id: 'mz2', rect: [1940, 200, 720, 1100], levelRange: [72, 76], density: 6,
+        species: [{ id: 'venobat', weight: 30 }, { id: 'stingbug', weight: 25 }, { id: 'boghound', weight: 20 }, { id: 'venoviper', weight: 15 }, { id: 'mirenewt', weight: 10 }, { id: 'mirewisp', weight: 10 }] },
+      { id: 'mz3', rect: [2740, 480, 720, 900], levelRange: [75, 78], density: 5,
+        species: [{ id: 'mirenewt', weight: 25 }, { id: 'boghound', weight: 25 }, { id: 'venoviper', weight: 20 }, { id: 'venobat', weight: 15 }, { id: 'stingbug', weight: 15 }, { id: 'mirewisp', weight: 10 }] },
+      { id: 'mz4', rect: [3540, 560, 760, 480], levelRange: [77, 80], density: 5,
+        species: [{ id: 'boghound', weight: 30 }, { id: 'venobat', weight: 20 }, { id: 'mirenewt', weight: 20 }, { id: 'stingbug', weight: 15 }, { id: 'venoviper', weight: 15 }, { id: 'mirewisp', weight: 10 }] },
+    ],
+    connections: [
+      { id: 'back_iron', rect: [0, 600, 60, 320], toMap: 'ironhold_foundry', toPoint: { x: 4260, y: 780 }, label: 'To Ironhold Foundry' },
+      { id: 'to_spire', rect: [4340, 620, 60, 320], toMap: 'astral_spire', toPoint: { x: 220, y: 880 },
+        requiresItem: 'mire_sigil',
+        lockedText: 'The Spire Gate is closed to unproven minds. Defeat the Plague Warden for the Mire Sigil.',
+        label: 'To the Astral Spire' },
+    ],
+  },
+  astral_spire: {
+    id: 'astral_spire',
+    displayName: 'Astral Spire',
+    order: 8,
+    element: 'psychic',
+    levelRange: [78, 90],
+    music: 'astral',
+    visualTheme: 'psychic',
+    width: 4400,
+    height: 1500,
+    spawn: { x: 220, y: 880 },
+    ambient: { sky: ['#1a1030', '#7a5ab8'], fog: 'rgba(200,160,255,0.14)' },
+    regions: [
+      { id: 'spire_base', name: 'Spire Base', rect: [0, 0, 1000, 1500], terrain: 'spire_base' },
+      { id: 'dream_garden', name: 'Dream Garden', rect: [1000, 0, 900, 1500], terrain: 'dream_garden' },
+      { id: 'mirror_lake', name: 'Mirror Lake', rect: [1900, 0, 800, 1500], terrain: 'mirror_lake' },
+      { id: 'void_steps', name: 'Void Steps', rect: [2700, 0, 800, 1500], terrain: 'void_steps' },
+      { id: 'astral_summit', name: 'Astral Summit', rect: [3500, 0, 900, 1500], terrain: 'astral_summit' },
+    ],
+    water: [
+      { x: 1120, y: 1160, w: 640, h: 200, kind: 'void' },
+      { x: 2880, y: 240, w: 540, h: 170, kind: 'void' },
+      { x: 3680, y: 1090, w: 560, h: 220, kind: 'void' },
+    ],
+    bridges: [{ x: 1380, y: 1120, w: 190, h: 280 }, { x: 3040, y: 200, w: 180, h: 250 }],
+    buildings: [
+      { id: 'spire_center', type: 'center', x: 270, y: 540, w: 210, h: 160, name: 'Mythling Center' },
+      { id: 'spire_shop',   type: 'shop',   x: 630, y: 550, w: 190, h: 150, name: 'Spire Emporium',
+        stock: FULL_STOCK },
+      { id: 'spire_house',  type: 'house',  x: 300, y: 1000, w: 180, h: 140, name: 'Seer Cell' },
+      { id: 'spire_tower',  type: 'tower',  x: 3900, y: 280, w: 130, h: 210, name: 'The Spire' },
+    ],
+    landmarks: [
+      { id: 'spire_sign', type: 'sign', x: 520, y: 820, text: 'ASTRAL SPIRE — Region 9, the top of the world. Wild Mythlings Lv.78–90. Psychic purges Poison and snuffs Fire; only Poison clouds it.' },
+      { id: 'spire_crystal', type: 'crystal', x: 2260, y: 700 },
+      { id: 'spire_crystal2', type: 'crystal', x: 2520, y: 1120 },
+      { id: 'summit_ruin2', type: 'ruin', x: 3720, y: 620 },
+    ],
+    npcs: [
+      { id: 'spire_oracle', type: 'guide', x: 720, y: 860, name: 'Oracle Vesna', color: '#ff6fb5',
+        dialogue: ['You climbed all nine regions to reach the Spire. The Mythlings here read intent — Psychic purges Poison and snuffs Fire, and only Poison clouds it.', 'The Astral Warden keeps the summit. Beat her and the current road ends — until the world grows again.'] },
+      { id: 'spire_kid', type: 'villager', x: 2200, y: 480, name: 'Dreamer Lio', color: '#c8f4ff',
+        dialogue: ['I dreamed of an elk made of aurora on the summit. When I woke, there were hoofprints of light. Aetherion is REAL.'] },
+    ],
+    trainers: [
+      { id: 'spire_t1', name: 'Acolyte Sen', x: 1320, y: 720, color: '#e88ab8', flag: 'spire_t1',
+        intro: 'The garden shows you what you fear. I hope it is losing.',
+        defeat: 'It was. Ascend.',
+        reward: { coins: 6800, items: { absolute_ball: 2 } },
+        team: [{ species: 'psykit', level: 80 }, { species: 'dreamwisp', level: 81 }] },
+      { id: 'spire_t2', name: 'Mirror Keeper Ione', x: 2320, y: 940, color: '#b58cff', flag: 'spire_t2',
+        intro: 'The lake reflects the trainer, not the team.',
+        defeat: 'A clear reflection. Go up.',
+        reward: { coins: 7800, items: { max_potion: 2, mood_tonic: 1 } },
+        team: [{ species: 'mystfox', level: 83 }, { species: 'omenwing', level: 84 }, { species: 'mindram', level: 84, rarity: 'C' }] },
+      { id: 'spire_t3', name: 'Void Walker Cass', x: 3220, y: 720, color: '#8a7ac8', flag: 'spire_t3',
+        intro: 'Every step here is a choice. Choose well.',
+        defeat: 'Well chosen. The Warden is above.',
+        reward: { coins: 9000, items: { god_ball: 1, temper_tonic: 1 } },
+        team: [{ species: 'omenwing', level: 86, rarity: 'B' }, { species: 'mindram', level: 87, rarity: 'B' }, { species: 'mystfox', level: 87, rarity: 'B', mood: 'focused' }] },
+      { id: 'astral_warden', name: 'Astral Warden Seraphine', x: 4030, y: 820, color: '#ffc6e4', guardian: true, finalBoss: true, flag: 'astral_warden',
+        intro: 'I have seen every way this fight can end. Show me the one I missed.',
+        defeat: 'You found it. The Spire yields — Wildbound is yours to roam, until the world grows again.',
+        reward: { coins: 25000, items: { astral_crest: 1, god_ball: 3, shiny_ball: 1, dark_ball: 1 } },
+        team: [{ species: 'mindram', level: 87, rarity: 'A', mood: 'guarded' }, { species: 'psykit', level: 88, rarity: 'A', mood: 'clever' }, { species: 'dreamwisp', level: 88, rarity: 'S', mood: 'mystic' }, { species: 'omenwing', level: 89, rarity: 'S', mood: 'vigilant' }, { species: 'mystfox', level: 90, rarity: 'S', mood: 'focused' }] },
+    ],
+    encounterZones: [
+      { id: 'pz1', rect: [1040, 120, 820, 960], levelRange: [78, 81], density: 6,
+        species: [{ id: 'psykit', weight: 30 }, { id: 'dreamwisp', weight: 30 }, { id: 'mystfox', weight: 20 }, { id: 'omenwing', weight: 10 }, { id: 'mindram', weight: 10 }, { id: 'mirewisp', weight: 2 }] },
+      { id: 'pz2', rect: [1940, 200, 720, 1100], levelRange: [81, 85], density: 6,
+        species: [{ id: 'omenwing', weight: 30 }, { id: 'mystfox', weight: 25 }, { id: 'mindram', weight: 20 }, { id: 'psykit', weight: 15 }, { id: 'dreamwisp', weight: 10 }, { id: 'mirewisp', weight: 4 }] },
+      { id: 'pz3', rect: [2740, 480, 720, 900], levelRange: [84, 88], density: 5,
+        species: [{ id: 'dreamwisp', weight: 25 }, { id: 'mindram', weight: 25 }, { id: 'psykit', weight: 20 }, { id: 'omenwing', weight: 15 }, { id: 'mystfox', weight: 15 }, { id: 'mirewisp', weight: 4 }] },
+      { id: 'pz4', rect: [3540, 560, 760, 480], levelRange: [87, 90], density: 5,
+        species: [{ id: 'mindram', weight: 30 }, { id: 'omenwing', weight: 20 }, { id: 'dreamwisp', weight: 20 }, { id: 'mystfox', weight: 15 }, { id: 'psykit', weight: 15 }, { id: 'mirewisp', weight: 4 }] },
+    ],
+    connections: [
+      { id: 'back_mire', rect: [0, 600, 60, 320], toMap: 'miremarsh_fen', toPoint: { x: 4260, y: 780 }, label: 'To Miremarsh Fen' },
     ],
   },
 };
@@ -4749,6 +5586,272 @@ const SPECIES_ART = {
  * Palette, horns, wings and scale still come from the species itself, so two
  * species on the same plan still read as different Mythlings.
  */
+// =============================================================================
+// NEW-ELEMENT BODY PLANS — bat / serpent / wisp
+// -----------------------------------------------------------------------------
+// Used by the Stormreach → Astral Spire species (Electric, Ice, Metal, Poison,
+// Psychic). Stage changes: stage 1 grows crests and markings, stage 2 adds horns
+// / spines (ex.horns), stage 3 unfolds a second, larger wing or an aura (ex.wings).
+// =============================================================================
+
+/** Simple crystal shard used by the new plans (lit facet on the left). */
+function gem(ctx, x, y, h, w, angle, color, light) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+  poly(ctx, [[0, -h], [w * 0.5, 0], [-w * 0.5, 0]], color);
+  poly(ctx, [[0, -h], [w * 0.16, -h * 0.12], [-w * 0.14, -h * 0.06], [-w * 0.34, 0]], light);
+  ctx.restore();
+}
+
+// ---- BAT: a hovering cave bat with big ears and membrane wings ----------------
+function batWing(ctx, c, ex, g, flip) {
+  ctx.save(); if (flip) ctx.scale(-1, 1);
+  const L = 30 + g * 10, H = 16 + g * 5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(L * 0.35, -H * 1.1, L, -H * 0.55);
+  ctx.lineTo(L * 0.86, H * 0.05);
+  ctx.quadraticCurveTo(L * 0.7, -H * 0.25, L * 0.56, H * 0.3);
+  ctx.quadraticCurveTo(L * 0.42, -H * 0.05, L * 0.26, H * 0.5);
+  ctx.quadraticCurveTo(L * 0.12, H * 0.2, 0, H * 0.6);
+  ctx.closePath();
+  const wg = ctx.createLinearGradient(0, 0, L, 0); wg.addColorStop(0, c.primary); wg.addColorStop(1, c.secondary);
+  ctx.fillStyle = wg; ctx.fill();
+  ctx.strokeStyle = c.dark; ctx.lineWidth = 1;
+  for (const k of [0.3, 0.6, 0.86]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L * k, -H * (0.5 - k * 0.2) + H * 0.25 * (k > 0.5 ? 1 : 0)); ctx.stroke(); }
+  if (ex.wings) for (const k of [0.32, 0.6, 0.86]) gem(ctx, L * k, H * 0.3 - k * H * 0.3, 8 + g * 2, 4, Math.PI - 0.3 + k * 0.3, c.accent, '#ffffff');
+  else if (ex.stage >= 1) gem(ctx, L * 0.86, -H * 0.5, 6 + g * 2, 3.5, 0.9, c.accent, '#ffffff');
+  ctx.restore();
+}
+const BAT = {
+  skel: (ex) => {
+    const g = ex.grow;
+    const by = -50 - g * 8;
+    return { g, legLen: 8, legW: 2.4, hipX: -4, shoX: 6, bodyY: by, headX: 6 + g * 2, headY: by - 16 - g * 3, headS: 1 - g * 0.08 };
+  },
+  face: {
+    eyes: [{ x: 4.6, y: -1.2, r: 3.8, shape: 'round', color: 'eye', dark: '#150f1c' },
+           { x: -5.4, y: -1.2, r: 3.4, shape: 'round', color: 'eye', dark: '#150f1c' }],
+    brows: [{ x: 4.6, y: -6.8, w: 6.2 }, { x: -5.4, y: -6.8, w: 5.4, mirror: true }],
+    mouth: { x: 0.5, y: 5.4, w: 6, color: '#1d1524', fangs: 2 },
+  },
+  parts: [
+    { name: 'wingL', z: 0, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY - 4], box: [-44, -28, 48, 36],
+      draw(ctx, c, ex, r) { ctx.rotate(0.1); batWing(ctx, c, ex, r.g, true); } },
+    { name: 'tail', z: 0.5, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY + 10], box: [-8, -2, 12, 14],
+      draw(ctx, c) { poly(ctx, [[-3, 0], [3, 0], [0, 10]], c.secondary); } },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.hipX, r.bodyY + 11], box: [-5, -2, 10, 12],
+      draw(ctx, c, ex, r) { line(ctx, 0, 0, -1, r.legLen, c.dark, r.legW); line(ctx, -1, r.legLen, -4, r.legLen + 3, c.dark, 1.4); line(ctx, -1, r.legLen, 2, r.legLen + 3, c.dark, 1.4); } },
+    { name: 'legFR', z: 1, space: 'local', pivot: (r) => [r.shoX, r.bodyY + 11], box: [-5, -2, 10, 12],
+      draw(ctx, c, ex, r) { line(ctx, 0, 0, 1, r.legLen, c.dark, r.legW); line(ctx, 1, r.legLen, -2, r.legLen + 3, c.dark, 1.4); line(ctx, 1, r.legLen, 4, r.legLen + 3, c.dark, 1.4); } },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-18, -16, 36, 30],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, 0, r.bodyY, 12 + g * 3, 13 + g * 3, c.light, c.shadow);
+        ell(ctx, 1, r.bodyY + 3, 7.5 + g * 2, 8 + g * 2, c.belly);
+        furTufts(ctx, 0, r.bodyY, 12 + g * 3, 3.6, 5.8, 5, 3.5, c.secondary);
+        if (ex.stage >= 2) { gem(ctx, -8, r.bodyY - 10, 7 + g * 2, 4, -0.5, c.accent, '#ffffff'); gem(ctx, 8, r.bodyY - 10, 7 + g * 2, 4, 0.5, c.accent, '#ffffff'); }
+      } },
+    { name: 'wingR', z: 3, space: 'local', pivot: (r) => [r.shoX + 2, r.bodyY - 4], box: [-4, -28, 48, 36],
+      draw(ctx, c, ex, r) { ctx.rotate(-0.1); batWing(ctx, c, ex, r.g, false); } },
+    { name: 'earL', z: 3.5, space: 'local', pivot: (r) => [r.headX - 8, r.headY - 8], box: [-10, -20, 14, 22],
+      draw(ctx, c, ex, r) { poly(ctx, [[-2, 2], [-9, -14 - r.g * 4], [4, -2]], c.secondary); poly(ctx, [[-2, 1], [-6, -9 - r.g * 3], [2, -1]], c.belly); if (ex.horns) gem(ctx, -9, -14 - r.g * 4, 7, 3.5, -0.4, c.accent, '#ffffff'); } },
+    { name: 'earR', z: 5, space: 'local', pivot: (r) => [r.headX + 6, r.headY - 8], box: [-4, -20, 14, 22],
+      draw(ctx, c, ex, r) { poly(ctx, [[2, 2], [9, -14 - r.g * 4], [-4, -2]], c.primary); poly(ctx, [[2, 1], [6, -9 - r.g * 3], [-2, -1]], c.belly); if (ex.horns) gem(ctx, 9, -14 - r.g * 4, 7, 3.5, 0.4, c.accent, '#ffffff'); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -16, 32, 30],
+      draw(ctx, c, ex, r) {
+        volume(ctx, 0, 0, 12, 11, c.light, c.shadow);
+        ell(ctx, 1, 4.5, 5.5, 3.8, c.belly);
+        ell(ctx, 1, 2.6, 2.2, 1.4, c.dark);
+        if (ex.stage >= 3) gem(ctx, 0, -10, 9, 4.5, -0.05, c.accent, '#ffffff');
+      } },
+  ],
+};
+
+// ---- SERPENT: a coiled, hooded serpent that rears up; no legs, a long tail ----
+const SERPENT = {
+  skel: (ex) => {
+    const g = ex.grow;
+    return { g, legLen: 0, legW: 0, hipX: -14, shoX: 6, bodyY: -20 - g * 3, headX: 14 + g * 3, headY: -58 - g * 12, headS: 1 - g * 0.06 };
+  },
+  face: {
+    eyes: [{ x: 5.4, y: -1.8, r: 3.6, shape: 'sharp', color: 'eye' },
+           { x: -5.2, y: -1.8, r: 3.2, shape: 'sharp', color: 'eye' }],
+    brows: [{ x: 5.4, y: -7, w: 6.6 }, { x: -5.2, y: -7, w: 5.8, mirror: true }],
+    mouth: { x: 11, y: 5.8, w: 7, color: '#2a1a30', fangs: 2 },
+  },
+  parts: [
+    { // the coiled tail lies behind everything
+      name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 4, r.bodyY + 10], box: [-44, -26, 60, 36],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        ctx.lineCap = 'round';
+        for (const [w, col] of [[13 + g * 3, c.secondary], [9 + g * 2, c.primary], [4 + g, c.belly]]) {
+          ctx.strokeStyle = col; ctx.lineWidth = w;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-26 - g * 6, -4, -38 - g * 8, 12, -14, 10); ctx.bezierCurveTo(2, 8, 10, 2, 6 + g * 4, -6); ctx.stroke();
+        }
+        if (ex.stage >= 1) for (let i = 0; i < 3; i++) gem(ctx, -8 - i * 9, -3 - i * 2, 7 + g * 2, 4, -0.6 - i * 0.2, c.accent, '#ffffff');
+      } },
+    { // rearing body column (creature space)
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-26, -46, 52, 60],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        ctx.lineCap = 'round';
+        const w = 15 + g * 4;
+        ctx.strokeStyle = c.shadow; ctx.lineWidth = w + 3;
+        ctx.beginPath(); ctx.moveTo(r.hipX, r.bodyY + 8); ctx.quadraticCurveTo(-4, r.bodyY - 10, r.headX - 6, r.headY + 14); ctx.stroke();
+        ctx.strokeStyle = c.primary; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.moveTo(r.hipX, r.bodyY + 8); ctx.quadraticCurveTo(-4, r.bodyY - 10, r.headX - 6, r.headY + 14); ctx.stroke();
+        ctx.strokeStyle = c.belly; ctx.lineWidth = w * 0.45;
+        ctx.beginPath(); ctx.moveTo(r.hipX + 3, r.bodyY + 9); ctx.quadraticCurveTo(-1, r.bodyY - 8, r.headX - 3, r.headY + 14); ctx.stroke();
+        // belly plates
+        ctx.strokeStyle = c.bellyShade; ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) { const t = 0.15 + i * 0.14; const x = (1 - t) * (1 - t) * r.hipX + 2 * (1 - t) * t * -4 + t * t * (r.headX - 6); const y = (1 - t) * (1 - t) * (r.bodyY + 8) + 2 * (1 - t) * t * (r.bodyY - 10) + t * t * (r.headY + 14); ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 4, y); ctx.stroke(); }
+      } },
+    { name: 'legFL', z: 2.2, space: 'local', pivot: (r) => [r.headX - 14, r.headY + 22], box: [-8, -3, 14, 16],   // tiny vestigial claws
+      draw(ctx, c) { line(ctx, 0, 0, -3, 9, c.secondary, 3.2); line(ctx, -3, 9, -7, 11, c.dark, 1.6); line(ctx, -3, 9, 0, 12, c.dark, 1.6); } },
+    { name: 'legFR', z: 3.2, space: 'local', pivot: (r) => [r.headX - 2, r.headY + 24], box: [-6, -3, 14, 16],
+      draw(ctx, c) { line(ctx, 0, 0, 3, 9, c.primary, 3.2); line(ctx, 3, 9, 7, 11, c.dark, 1.6); line(ctx, 3, 9, 0, 12, c.dark, 1.6); } },
+    { name: 'earL', z: 3.4, space: 'local', pivot: (r) => [r.headX - 10, r.headY - 4], box: [-12, -10, 14, 16],   // side frills
+      draw(ctx, c, ex, r) { poly(ctx, [[0, 0], [-10 - r.g * 3, -6], [-8 - r.g * 2, 4]], c.secondary); poly(ctx, [[0, 0], [-6 - r.g * 2, -3], [-5 - r.g, 2]], c.accent); } },
+    { name: 'earR', z: 4.5, space: 'local', pivot: (r) => [r.headX + 8, r.headY - 4], box: [-2, -10, 14, 16],
+      draw(ctx, c, ex, r) { poly(ctx, [[0, 0], [10 + r.g * 3, -6], [8 + r.g * 2, 4]], c.primary); poly(ctx, [[0, 0], [6 + r.g * 2, -3], [5 + r.g, 2]], c.accent); } },
+    { // hood / mane flares with the stage
+      name: 'mane', z: 3.5, space: 'local', pivot: (r) => [r.headX - 4, r.headY + 6], box: [-24, -30, 44, 40],
+      draw(ctx, c, ex, r) {
+        const g = r.g, hw = 12 + g * 8 + (ex.wings ? 8 : 0), hh = 18 + g * 8 + (ex.wings ? 6 : 0);
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.quadraticCurveTo(-hw, -2, -hw * 0.6, -hh); ctx.quadraticCurveTo(0, -hh * 0.6, hw * 0.6, -hh); ctx.quadraticCurveTo(hw, -2, 0, 8); ctx.closePath();
+        const hg = ctx.createLinearGradient(0, -hh, 0, 8); hg.addColorStop(0, c.secondary); hg.addColorStop(1, c.primary); ctx.fillStyle = hg; ctx.fill();
+        ctx.strokeStyle = c.dark; ctx.lineWidth = 1.2; ctx.stroke();
+        ell(ctx, 0, -hh * 0.45, hw * 0.35, hh * 0.28, c.accent);
+        if (ex.horns) { gem(ctx, -hw * 0.55, -hh * 0.75, 9 + g * 3, 4.5, -0.5, c.accent, '#ffffff'); gem(ctx, hw * 0.55, -hh * 0.75, 9 + g * 3, 4.5, 0.5, c.accent, '#ffffff'); }
+      } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-18, -16, 36, 30],
+      draw(ctx, c, ex, r) {
+        volume(ctx, 0, 0, 12.5, 10, c.light, c.shadow);
+        ell(ctx, 8, 3, 7, 4.5, c.primary);
+        ell(ctx, 9, 4.5, 5.5, 3, c.belly);
+        ctx.strokeStyle = c.accent; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(14, 4); ctx.lineTo(19, 3); ctx.lineTo(17, 1); ctx.moveTo(19, 3); ctx.lineTo(18, 6); ctx.stroke();   // forked tongue
+        if (ex.stage >= 3) gem(ctx, 0, -9, 10, 5, -0.1, c.accent, '#ffffff');
+      } },
+  ],
+};
+
+// ---- WISP: a floating, glowing core wrapped in a mantle, with drifting tendrils ----
+const WISP = {
+  skel: (ex) => {
+    const g = ex.grow;
+    const by = -44 - g * 10;
+    return { g, legLen: 0, legW: 0, hipX: -6, shoX: 6, bodyY: by, headX: 0, headY: by - 8 - g * 2, headS: 1 };
+  },
+  face: {
+    eyes: [{ x: 5.2, y: -2.2, r: 4.2, shape: 'round', color: 'eye', dark: '#1a1230' },
+           { x: -5.2, y: -2.2, r: 4.2, shape: 'round', color: 'eye', dark: '#1a1230' }],
+    brows: [{ x: 5.2, y: -8.2, w: 6.6 }, { x: -5.2, y: -8.2, w: 6.6, mirror: true }],
+    mouth: { x: 0, y: 5, w: 5, color: '#2a1e40' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [0, r.bodyY + 14], box: [-22, -4, 44, 40],
+      draw(ctx, c, ex, r) {                                                    // drifting tendrils
+        const g = r.g; ctx.lineCap = 'round';
+        for (let i = -2; i <= 2; i++) { ctx.strokeStyle = i % 2 ? c.secondary : c.primary; ctx.lineWidth = 3 - Math.abs(i) * 0.5; ctx.beginPath(); ctx.moveTo(i * 5, 0); ctx.quadraticCurveTo(i * 9, 12 + g * 4, i * 4, 24 + g * 8 - Math.abs(i) * 4); ctx.stroke(); }
+      },
+      live(ctx, c, ex, r, t) { ctx.save(); ctx.globalAlpha *= 0.5; for (let i = 0; i < 3; i++) { const p = (t * 0.7 + i * 0.33) % 1; ell(ctx, Math.sin(t * 2 + i * 2) * 8, 26 + r.g * 8 - p * 30, 2 - p * 1.5, 2 - p * 1.5, c.accent); } ctx.restore(); } },
+    { name: 'wingL', z: 0.5, space: 'local', pivot: (r) => [-14, r.bodyY - 6], box: [-30, -30, 34, 40],
+      draw(ctx, c, ex, r) { if (!ex.wings) return; for (let i = 0; i < 3; i++) gem(ctx, -6 - i * 8, 6 - i * 10, 18 - i * 3, 8, -0.6 - i * 0.25, c.accent, '#ffffff'); } },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-24, -26, 48, 48],
+      draw(ctx, c, ex, r) {                                                    // mantle + glowing core
+        const g = r.g;
+        ctx.beginPath(); ctx.moveTo(0, r.bodyY - 20 - g * 5); ctx.quadraticCurveTo(22 + g * 5, r.bodyY - 6, 14 + g * 3, r.bodyY + 18 + g * 4); ctx.quadraticCurveTo(0, r.bodyY + 10, -14 - g * 3, r.bodyY + 18 + g * 4); ctx.quadraticCurveTo(-22 - g * 5, r.bodyY - 6, 0, r.bodyY - 20 - g * 5); ctx.closePath();
+        const mg = ctx.createLinearGradient(0, r.bodyY - 20, 0, r.bodyY + 18); mg.addColorStop(0, c.light); mg.addColorStop(1, c.shadow); ctx.fillStyle = mg; ctx.fill();
+        ctx.strokeStyle = c.dark; ctx.lineWidth = 1.2; ctx.stroke();
+        ell(ctx, 0, r.bodyY + 2, 9 + g * 2, 9 + g * 2, c.belly);
+        ell(ctx, 0, r.bodyY + 2, 5 + g, 5 + g, c.accent);
+        if (ex.stage >= 1) for (let i = -1; i <= 1; i++) gem(ctx, i * 9, r.bodyY - 14 - g * 3, 7 + g * 2, 4, i * 0.35, c.accent, '#ffffff');
+        if (ex.horns) { gem(ctx, -13 - g * 3, r.bodyY - 2, 10 + g * 3, 5, -1.1, c.secondary, c.light); gem(ctx, 13 + g * 3, r.bodyY - 2, 10 + g * 3, 5, 1.1, c.secondary, c.light); }
+      },
+      live(ctx, c, ex, r, t) { ctx.save(); ctx.globalAlpha *= 0.28 + 0.18 * Math.sin(t * 3); ctx.globalCompositeOperation = 'lighter'; ell(ctx, 0, r.bodyY + 2, 12 + r.g * 3, 12 + r.g * 3, c.accent); ctx.restore(); } },
+    { name: 'wingR', z: 3.5, space: 'local', pivot: (r) => [14, r.bodyY - 6], box: [-4, -30, 34, 40],
+      draw(ctx, c, ex, r) { if (!ex.wings) return; for (let i = 0; i < 3; i++) gem(ctx, 6 + i * 8, 6 - i * 10, 18 - i * 3, 8, 0.6 + i * 0.25, c.accent, '#ffffff'); } },
+    { name: 'legFL', z: 1.5, space: 'local', pivot: (r) => [-12, r.bodyY + 6], box: [-8, -2, 12, 22],   // tendril arms that sway like legs
+      draw(ctx, c) { ctx.strokeStyle = c.secondary; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-6, 8, -2, 18); ctx.stroke(); ell(ctx, -2, 18, 2.6, 2.6, c.accent); } },
+    { name: 'legFR', z: 3.6, space: 'local', pivot: (r) => [12, r.bodyY + 6], box: [-4, -2, 12, 22],
+      draw(ctx, c) { ctx.strokeStyle = c.primary; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(6, 8, 2, 18); ctx.stroke(); ell(ctx, 2, 18, 2.6, 2.6, c.accent); } },
+    { name: 'earL', z: 3.7, space: 'local', pivot: (r) => [r.headX - 12, r.headY - 8], box: [-8, -8, 12, 12],   // orbiting motes
+      draw(ctx, c) { ell(ctx, -3, -2, 3.2, 3.2, c.accent); ell(ctx, -3.8, -2.8, 1.2, 1.2, '#ffffff'); } },
+    { name: 'earR', z: 4.6, space: 'local', pivot: (r) => [r.headX + 12, r.headY - 8], box: [-4, -8, 12, 12],
+      draw(ctx, c) { ell(ctx, 3, -2, 3.2, 3.2, c.accent); ell(ctx, 2.2, -2.8, 1.2, 1.2, '#ffffff'); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -18, 32, 30],
+      draw(ctx, c, ex, r) {                                                    // the face floats on the mantle's crown
+        volume(ctx, 0, 0, 12, 10.5, c.light, c.shadow);
+        if (ex.stage >= 3) { ctx.save(); ctx.globalAlpha *= 0.7; ctx.strokeStyle = c.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, -14, 12, 3.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }  // halo
+      } },
+  ],
+};
+
+// ---- RAM: fleece quadruped with curling crystal horns (Psychic ram, the legendary elk) ----
+function ramHorn(ctx, c, size, flip, g) {
+  ctx.save(); if (flip) ctx.scale(-1, 1);
+  const s = size;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * 1.1, -s * 0.9, s * 0.6, -s * 1.5); ctx.quadraticCurveTo(s * 0.1, -s * 1.7, -s * 0.15, -s * 1.05); ctx.quadraticCurveTo(s * 0.5, -s * 1.1, s * 0.45, -s * 0.7); ctx.quadraticCurveTo(s * 0.35, -s * 0.25, 0, 0); ctx.closePath();
+  const hg = ctx.createLinearGradient(0, -s * 1.7, s, 0); hg.addColorStop(0, shadeColor(c.accent, 0.25)); hg.addColorStop(1, shadeColor(c.accent, -0.3));
+  ctx.fillStyle = hg; ctx.fill();
+  ctx.strokeStyle = shadeColor(c.accent, -0.45); ctx.lineWidth = 0.9; ctx.stroke();
+  if (g > 0.4) gem(ctx, s * 0.55, -s * 1.5, s * 0.55, s * 0.25, 0.25, c.accent, '#ffffff');
+  ctx.restore();
+}
+const RAM = {
+  skel: (ex) => skeleton(ex, { legLen: 22, legW: 4.6, bodyY: -35, headY: -60, headX: 20 }),
+  face: {
+    eyes: [{ x: 6.2, y: -2.4, r: 3.8, shape: 'almond', color: 'eye' },
+           { x: -5.8, y: -2.4, r: 3.4, shape: 'almond', color: 'eye' }],
+    brows: [{ x: 6.2, y: -7.6, w: 6.8 }, { x: -5.8, y: -7.6, w: 6, mirror: true }],
+    mouth: { x: 13, y: 8.2, w: 7, color: '#3a3038' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 12, r.bodyY + 2], box: [-12, -10, 14, 16],
+      draw(ctx, c) { ell(ctx, -5, 0, 6, 4.4, c.secondary); ell(ctx, -7, -1, 3.6, 2.6, c.belly); } },
+    { name: 'wingL', z: 0.3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY - 16 - r.g * 4], box: [-30, -30, 34, 38],
+      draw(ctx, c, ex) { if (!ex.wings) return; for (let i = 0; i < 4; i++) gem(ctx, -4 - i * 7, 4 - i * 7, 24 - i * 4, 7.5, -0.75 - i * 0.18, c.accent, '#ffffff'); } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 1, r.bodyY + 8], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.dark, -1.2, 2) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 3, r.bodyY + 8], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.dark, 1.2, 2) },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-32, -28, 62, 48],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, r.hipX + 2, r.bodyY, 16 + g * 4, 14 + g * 3, c.light, c.shadow);
+        volume(ctx, r.shoX, r.bodyY - 1, 15 + g * 3, 13 + g * 3, c.light, c.shadow);
+        ell(ctx, r.shoX - 2, r.bodyY + 5, 12 + g * 2, 8 + g, c.belly);
+        for (let i = 0; i < 6; i++) ell(ctx, r.hipX - 8 + i * 6, r.bodyY - 12 - g * 2 + Math.sin(i) * 1.5, 4.6 + g, 3.6 + g, i % 2 ? c.light : c.primary);
+      } },
+    { name: 'mane', z: 2.6, space: 'creature', pivot: (r) => [r.shoX, r.bodyY - 14], box: [-22, -26, 40, 30],
+      draw(ctx, c, ex, r) {
+        const g = r.g, n = 2 + ex.stage * 2;
+        for (let i = 0; i < n; i++) gem(ctx, r.shoX - 8 + i * 4.5, r.bodyY - 13 - g * 3 + (i % 2) * 2, 7 + g * 3 + (i % 3), 4, -0.3 + i * 0.12, c.accent, '#ffffff');
+      } },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY + 9], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.dark, -1.2, 2) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 8, r.bodyY + 9], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.dark, 1.2, 2) },
+    { name: 'wingR', z: 3.4, space: 'local', pivot: (r) => [r.shoX + 4, r.bodyY - 17 - r.g * 4], box: [-6, -30, 34, 38],
+      draw(ctx, c, ex) { if (!ex.wings) return; for (let i = 0; i < 4; i++) gem(ctx, 4 + i * 7, 4 - i * 7, 24 - i * 4, 7.5, 0.75 + i * 0.18, c.accent, '#ffffff'); } },
+    { name: 'earL', z: 3.6, space: 'local', pivot: (r) => [r.headX - 8, r.headY - 4], box: [-12, -8, 14, 12],
+      draw(ctx, c) { ell(ctx, -5, 1, 6.5, 3, shadeColor(c.primary, -0.08), -0.35); ell(ctx, -5, 1, 4, 1.7, c.belly, -0.35); } },
+    { name: 'earR', z: 5, space: 'local', pivot: (r) => [r.headX + 6, r.headY - 5], box: [-3, -8, 14, 12],
+      draw(ctx, c) { ell(ctx, 5, 1, 6.5, 3, c.primary, 0.35); ell(ctx, 5, 1, 4, 1.7, c.belly, 0.35); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-24, -34, 48, 48],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        const hs = ex.horns ? 8 + g * 5 : 0;
+        if (hs) { ramHorn(ctx, c, hs, true, g); ctx.save(); ctx.translate(8, -2); ramHorn(ctx, c, hs * 0.9, false, g); ctx.restore(); }
+        else { gem(ctx, -5, -10, 6, 4, -0.4, c.accent, '#ffffff'); gem(ctx, 5, -10, 6, 4, 0.4, c.accent, '#ffffff'); }
+        volume(ctx, 0, 0, 12.5, 11.5, c.light, c.shadow);
+        ell(ctx, 8, 4, 6.5, 5, c.belly);
+        for (let i = 0; i < 3; i++) ell(ctx, -6 + i * 4, -9, 3.4, 2.8, i % 2 ? c.light : c.primary);
+      } },
+  ],
+};
+
 const BODY_PLANS = {
   fox: SPRIGGO,
   feline: AQUINI,
@@ -4761,6 +5864,11 @@ const BODY_PLANS = {
   beetle: BEETLE,
   golem: GOLEM,
   lizard: LIZARD,
+  // New-element plans (Electric / Ice / Metal / Poison / Psychic lines)
+  bat: BAT,
+  serpent: SERPENT,
+  wisp: WISP,
+  ram: RAM,
 };
 
 function artFor(speciesId) {
@@ -5484,6 +6592,36 @@ const TERRAIN = {
   quarry:  { grass: '#9a8f78', grass2: '#877c67', path: '#c9bda0', props: ['rock', 'crate', 'barrel', 'deadtree'] },
   crag:    { grass: '#7d7a72', grass2: '#6b685f', path: '#a39e90', props: ['rock', 'rock', 'stalag', 'crystal'] },
   summit:  { grass: '#8f949c', grass2: '#7c8188', path: '#b8bcc2', props: ['pillar', 'rock', 'stalag', 'crystal'] },
+  // ---- Stormreach Plateau (electric) ----
+  storm_camp:    { grass: '#6f7d6a', grass2: '#5c6a58', path: '#aeb2a0', props: ['pylon', 'lamp', 'rock', 'crate'] },
+  static_field:  { grass: '#7c8c74', grass2: '#66765f', path: '#b4b8a2', props: ['pylon', 'bush', 'rock', 'deadtree'] },
+  spire_rock:    { grass: '#6a6f7e', grass2: '#585d6c', path: '#9ea3b0', props: ['stalag', 'pylon', 'rock', 'crystal'] },
+  charged_ruins: { grass: '#727a82', grass2: '#5f676f', path: '#a6acb4', props: ['pillar', 'pylon', 'rock', 'bone'] },
+  storm_peak:    { grass: '#5c6478', grass2: '#4b5266', path: '#8f97aa', props: ['pylon', 'stalag', 'crystal', 'rock'] },
+  // ---- Frostveil Tundra (ice) ----
+  snow_camp:     { grass: '#e6f0f8', grass2: '#d2e0ee', path: '#f7fbff', props: ['snowbush', 'lamp', 'snowrock', 'crate'] },
+  snowfield:     { grass: '#eef5fb', grass2: '#d9e6f2', path: '#ffffff', props: ['snowrock', 'snowbush', 'icicle', 'deadtree'] },
+  frost_wood:    { grass: '#cfe0ee', grass2: '#b8cee0', path: '#eef5fb', props: ['frosttree', 'frosttree', 'snowbush', 'snowrock'] },
+  glacier:       { grass: '#bfe0f4', grass2: '#a4cde8', path: '#e2f3fc', props: ['icicle', 'icicle', 'snowrock', 'crystal'] },
+  aurora_summit: { grass: '#d8e8f8', grass2: '#c0d4ea', path: '#f2f8ff', props: ['icicle', 'crystal', 'pillar', 'snowrock'] },
+  // ---- Ironhold Foundry (metal) ----
+  foundry_yard:  { grass: '#7a7470', grass2: '#66615d', path: '#a39c95', props: ['crate', 'barrel', 'gear', 'lamp'] },
+  scrapfield:    { grass: '#6e6a66', grass2: '#5a5652', path: '#948e88', props: ['gear', 'gear', 'crate', 'rock'] },
+  ore_mine:      { grass: '#5f5a5a', grass2: '#4d4848', path: '#857e7e', props: ['rock', 'stalag', 'gear', 'crystal'] },
+  steelworks:    { grass: '#6b6f78', grass2: '#585c64', path: '#9599a2', props: ['gear', 'pillar', 'brazier', 'crate'] },
+  forge_core:    { grass: '#5a4a48', grass2: '#4a3c3a', path: '#7d6863', props: ['brazier', 'gear', 'obsidian', 'ember'] },
+  // ---- Miremarsh Fen (poison) ----
+  fen_village:   { grass: '#6f8a5a', grass2: '#5c754a', path: '#a8a97e', props: ['reed', 'lamp', 'toxishroom', 'crate'] },
+  bog:           { grass: '#5c7048', grass2: '#4b5d3b', path: '#8a936a', props: ['reed', 'toxishroom', 'deadtree', 'reed'] },
+  toxic_grove:   { grass: '#4f6a45', grass2: '#405838', path: '#7d8a62', props: ['deadtree', 'toxishroom', 'toxishroom', 'bush'] },
+  sludge_flat:   { grass: '#65704e', grass2: '#535d3f', path: '#8e9470', props: ['toxishroom', 'bone', 'reed', 'rock'] },
+  plague_hollow: { grass: '#4a5a4a', grass2: '#3c4a3c', path: '#71806a', props: ['deadtree', 'toxishroom', 'bone', 'pillar'] },
+  // ---- Astral Spire (psychic) ----
+  spire_base:    { grass: '#6c5a94', grass2: '#5a4a7e', path: '#a494c8', props: ['starlight', 'lamp', 'pillar', 'crystal'] },
+  dream_garden:  { grass: '#7f6aa8', grass2: '#6a5890', path: '#b4a4d4', props: ['flower', 'starlight', 'bush', 'crystal'] },
+  mirror_lake:   { grass: '#6e6aa0', grass2: '#5b588a', path: '#a8a4cc', props: ['starlight', 'crystal', 'reed', 'starlight'] },
+  void_steps:    { grass: '#4e4478', grass2: '#403864', path: '#8478ac', props: ['pillar', 'starlight', 'crystal', 'stalag'] },
+  astral_summit: { grass: '#5a5296', grass2: '#4a4480', path: '#948cc4', props: ['starlight', 'crystal', 'pillar', 'starlight'] },
 };
 
 /**
@@ -5544,6 +6682,10 @@ const WATER_COLORS = {
   sea:    ['#38a8e8', '#1d6fb4'],
   river:  ['#48b4ee', '#2a82c6'],
   lava:   ['#ff7a2a', '#c62d0f'],
+  ice:    ['#d7f2ff', '#8cc8ea'],
+  slag:   ['#ff9a3a', '#8a3a12'],
+  bog:    ['#5f7a3a', '#2f4420'],
+  void:   ['#5a3a9a', '#1a0f38'],
 };
 
 class WorldRenderer {
@@ -5567,7 +6709,7 @@ class WorldRenderer {
         if (insideAny(map.water, x, y, 40)) continue;
         if (insideBuildings(map, x, y, 60)) continue;
         const kind = cfg.props[Math.floor(rng() * cfg.props.length)];
-        out.push({ kind, x, y, s: 0.7 + rng() * 0.7, seed: rng() * 100, solid: ['tree', 'bigtree', 'pillar', 'deadtree', 'burnttree', 'crystal', 'obsidian', 'palm', 'stalag'].includes(kind) });
+        out.push({ kind, x, y, s: 0.7 + rng() * 0.7, seed: rng() * 100, solid: ['tree', 'bigtree', 'pillar', 'deadtree', 'burnttree', 'crystal', 'obsidian', 'palm', 'stalag', 'pylon', 'icicle', 'frosttree', 'gear'].includes(kind) });
       }
     }
     out.sort((a, b) => a.y - b.y);
@@ -5654,11 +6796,12 @@ class WorldRenderer {
       ctx.beginPath();
       roundRect(ctx, w.x, w.y, w.w, w.h, 26);
       ctx.clip();
-      ctx.globalAlpha = w.kind === 'lava' ? 0.5 : 0.35;
-      ctx.strokeStyle = w.kind === 'lava' ? '#ffd35a' : '#ffffff';
+      const hot = w.kind === 'lava' || w.kind === 'slag';
+      ctx.globalAlpha = hot ? 0.5 : w.kind === 'ice' ? 0.55 : w.kind === 'void' ? 0.3 : 0.35;
+      ctx.strokeStyle = hot ? '#ffd35a' : w.kind === 'bog' ? '#9fd36a' : w.kind === 'void' ? '#c8a8ff' : '#ffffff';
       ctx.lineWidth = 2.5;
       for (let i = 0; i < 7; i++) {
-        const yy = w.y + ((i * 47 + time * (w.kind === 'lava' ? 12 : 26)) % w.h);
+        const yy = w.y + ((i * 47 + time * (hot ? 12 : w.kind === 'ice' ? 0 : w.kind === 'bog' ? 8 : 26)) % w.h);
         ctx.beginPath();
         for (let x = w.x; x < w.x + w.w; x += 22) {
           const oy = Math.sin((x * 0.03) + time * 1.6 + i) * 4;
@@ -5800,6 +6943,49 @@ class WorldRenderer {
         circle(ctx, 0, -5, 3.5, '#ffd06a'); break;
       }
       case 'bone': ctx.fillStyle = '#e4dcc8'; roundRect(ctx, -10, -5, 20, 5, 3); ctx.fill(); break;
+      // ---- new-element props ----
+      case 'pylon': {                                          // a lightning rod with a crackling tip
+        ctx.fillStyle = '#5c6270'; ctx.fillRect(-3, -40, 6, 40); ctx.fillStyle = '#8a93a4'; ctx.fillRect(-7, -6, 14, 6);
+        const k = (Math.sin(time * 9 + p.seed) + 1) / 2;
+        ctx.strokeStyle = `rgba(255,240,140,${0.35 + k * 0.6})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(4, -48); ctx.lineTo(-2, -50); ctx.lineTo(3, -58); ctx.stroke();
+        ctx.globalAlpha = 0.25 + k * 0.3; circle(ctx, 0, -46, 9, '#fff6a8'); ctx.globalAlpha = 1;
+        break;
+      }
+      case 'snowrock': circle(ctx, 0, -6, 10, '#c9d3dc'); circle(ctx, -5, -9, 6, '#eef4f8'); circle(ctx, 2, -13, 6, '#ffffff'); break;
+      case 'snowbush': circle(ctx, 0, -8, 13, '#4f7f5a'); circle(ctx, -8, -4, 9, '#5f9a6a'); circle(ctx, 8, -5, 9, '#5f9a6a'); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(0, -14, 12, 5, 0, 0, Math.PI * 2); ctx.fill(); break;
+      case 'icicle': {
+        ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(8, -6); ctx.lineTo(-8, -6); ctx.closePath(); ctx.fillStyle = '#bfe6ff'; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(3, -8); ctx.lineTo(-1, -8); ctx.closePath(); ctx.fillStyle = '#f2fbff'; ctx.fill();
+        break;
+      }
+      case 'frosttree': {
+        ctx.fillStyle = '#5a4030'; ctx.fillRect(-4, -20, 8, 20);
+        for (let i = 0; i < 3; i++) { const y = -18 - i * 12, w = 22 - i * 5; ctx.beginPath(); ctx.moveTo(-w, y); ctx.lineTo(0, y - 16); ctx.lineTo(w, y); ctx.closePath(); ctx.fillStyle = '#3f7a5a'; ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(-w * 0.8, y - 2); ctx.lineTo(0, y - 12); ctx.lineTo(w * 0.8, y - 2); ctx.lineTo(w * 0.5, y - 1); ctx.lineTo(0, y - 8); ctx.lineTo(-w * 0.5, y - 1); ctx.closePath(); ctx.fill(); }
+        break;
+      }
+      case 'gear': {
+        ctx.save(); ctx.translate(0, -12); ctx.rotate(p.seed);
+        ctx.fillStyle = '#8a8f9a';
+        for (let i = 0; i < 8; i++) { ctx.save(); ctx.rotate((i / 8) * Math.PI * 2); ctx.fillRect(-3, -14, 6, 8); ctx.restore(); }
+        circle(ctx, 0, 0, 10, '#8a8f9a'); circle(ctx, 0, 0, 4, '#4a4e58');
+        ctx.restore();
+        break;
+      }
+      case 'toxishroom': {
+        const glow = 0.4 + Math.sin(time * 2.6 + p.seed) * 0.25;
+        ctx.globalAlpha = glow * 0.5; circle(ctx, 0, -10, 14, '#c07cff'); ctx.globalAlpha = 1;
+        ctx.fillStyle = '#e8e0c8'; ctx.fillRect(-2.5, -9, 5, 9);
+        circle(ctx, 0, -10, 8, '#8a4fd0'); ctx.fillStyle = '#e4c0ff'; circle(ctx, -3, -12, 2, '#e4c0ff'); circle(ctx, 3, -9, 1.6, '#e4c0ff');
+        break;
+      }
+      case 'starlight': {
+        const k = (Math.sin(time * 2 + p.seed) + 1) / 2;
+        ctx.globalAlpha = 0.35 + k * 0.4; circle(ctx, 0, -18, 10 + k * 3, '#ffd1f0'); ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(2.2, -20); ctx.lineTo(8, -18); ctx.lineTo(2.2, -16); ctx.lineTo(0, -10); ctx.lineTo(-2.2, -16); ctx.lineTo(-8, -18); ctx.lineTo(-2.2, -20); ctx.closePath(); ctx.fill();
+        break;
+      }
       default: circle(ctx, 0, -6, 8, '#888'); break;
     }
     ctx.restore();
@@ -5936,6 +7122,28 @@ class WorldRenderer {
         ctx.fillStyle = i % 4 === 0 ? '#6e665c' : '#e8dcc4';
         const py = i % 4 === 0 ? (y + time * 60) % (cam.h + 100) + cam.y - 50 : y;
         ctx.beginPath(); ctx.arc(x, py, i % 4 === 0 ? 2.2 : 1.6, 0, Math.PI * 2); ctx.fill();
+      } else if (theme === 'electric') {
+        // static sparks that blink
+        const k = (Math.sin(time * 7 + i) + 1) / 2;
+        ctx.globalAlpha = k * 0.7; ctx.fillStyle = i % 3 ? '#fff6a8' : '#bfe0ff';
+        ctx.beginPath(); ctx.arc(x, y, 1.6 + k, 0, Math.PI * 2); ctx.fill();
+      } else if (theme === 'ice') {
+        // falling snow
+        ctx.globalAlpha = 0.7; ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(x, (y + time * 28) % (cam.h + 100) + cam.y - 50, i % 3 ? 1.8 : 2.6, 0, Math.PI * 2); ctx.fill();
+      } else if (theme === 'metal') {
+        // rising forge sparks + soot
+        ctx.globalAlpha = i % 4 === 0 ? 0.35 : 0.6; ctx.fillStyle = i % 4 === 0 ? '#3a3a3a' : '#ffb347';
+        ctx.beginPath(); ctx.arc(x, (y - time * 18 + 10000) % (cam.h + 100) + cam.y - 50, i % 4 === 0 ? 2.4 : 1.6, 0, Math.PI * 2); ctx.fill();
+      } else if (theme === 'poison') {
+        // drifting spores
+        ctx.globalAlpha = 0.45; ctx.fillStyle = i % 2 ? '#c07cff' : '#9cff5a';
+        ctx.beginPath(); ctx.arc(x, y + Math.sin(time * 1.3 + i) * 10, 2.2, 0, Math.PI * 2); ctx.fill();
+      } else if (theme === 'psychic') {
+        // slow stars
+        const k = (Math.sin(time * 1.5 + i * 1.3) + 1) / 2;
+        ctx.globalAlpha = 0.3 + k * 0.6; ctx.fillStyle = i % 3 ? '#ffffff' : '#ffc6e4';
+        ctx.beginPath(); ctx.arc(x, y, 1.4 + k * 1.4, 0, Math.PI * 2); ctx.fill();
       } else {
         ctx.globalAlpha = 0.55;
         ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd07a';
@@ -6064,7 +7272,7 @@ return { drawChest, terrainColor, WorldRenderer, roundRect, circle, drawTrainerA
 })();
   } catch (e) { console.error('GameSnapshot failed to load:', e); return null; }
   return {
-    meta: {"builtAt":"2026-09-28T01:22:50.638Z","commit":"f18cfc9","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/data/chests.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.3.0"},
+    meta: {"builtAt":"2026-09-28T02:14:11.770Z","commit":"12d5a68","files":["src/core/utils.js","src/data/config.js","src/data/elements.js","src/data/rarity.js","src/data/moods.js","src/data/mutations.js","src/data/items.js","src/data/skills.js","src/data/skillVfx.js","src/data/species.js","src/data/maps.js","src/data/chests.js","src/render/creatureArt.js","src/render/creatureRig.js","src/render/worldRenderer.js"],"gameVersion":"0.5.0"},
     modules: __m,
     utils: __m['src/core/utils.js'], config: __m['src/data/config.js'], elements: __m['src/data/elements.js'], rarity: __m['src/data/rarity.js'],
     moods: __m['src/data/moods.js'], mutations: __m['src/data/mutations.js'], items: __m['src/data/items.js'], skills: __m['src/data/skills.js'],
@@ -6666,12 +7874,12 @@ const COLLISION_MODES = [
   { id: 'special', name: 'Special Zone', color: '#a855f7', value: 4 },
 ];
 const COLLISION_LAYERS = ['player', 'npc', 'mythling', 'projectile', 'interaction'];
-const ELEMENTS = { nature: { name: 'Nature', color: '#4fc76a' }, water: { name: 'Water', color: '#4aa8e8' }, fire: { name: 'Fire', color: '#f0743a' }, rock: { name: 'Rock', color: '#c9a86c' }, none: { name: 'None', color: '#9aa7bd' } };
+const ELEMENTS = { nature: { name: 'Nature', color: '#4fc76a' }, water: { name: 'Water', color: '#4aa8e8' }, fire: { name: 'Fire', color: '#f0743a' }, rock: { name: 'Rock', color: '#c9a86c' }, electric: { name: 'Electric', color: '#f4d03f' }, ice: { name: 'Ice', color: '#8fdcff' }, metal: { name: 'Metal', color: '#a9b4c2' }, poison: { name: 'Poison', color: '#b06fe0' }, psychic: { name: 'Psychic', color: '#ff6fb5' }, none: { name: 'None', color: '#9aa7bd' } };
 const RARITIES = ['D', 'C', 'B', 'A', 'S'];
 const MOODS = ['brave', 'clever', 'sturdy', 'playful', 'aggressive', 'focused', 'calm', 'brutal'];
 const ANIM_NAMES = ['Idle', 'Walk', 'Run', 'Battle Idle', 'Normal Attack', 'Special Attack', 'Buff', 'Ultimate', 'Hit', 'Faint', 'Capture', 'Evolution'];
 const VFX_TYPES = ['particle', 'trail', 'projectile', 'burst', 'ring', 'glow', 'shockwave', 'splash', 'flame', 'leaf', 'vine', 'smoke', 'spark', 'aura'];
-const VFX_CATEGORIES = ['Nature', 'Water', 'Fire', 'Rock', 'Universal', 'Buff', 'Debuff', 'Ultimate'];
+const VFX_CATEGORIES = ['Nature', 'Water', 'Fire', 'Rock', 'Electric', 'Ice', 'Metal', 'Poison', 'Psychic', 'Universal', 'Buff', 'Debuff', 'Ultimate'];
 const ATTACH_POINTS = ['AttackOrigin', 'VFXOrigin', 'Mouth', 'Head', 'Body', 'BodyCenter', 'Tail', 'TailBase', 'Root', 'Target', 'TargetCenter', 'World'];
 const NPC_TYPES = ['regular', 'trainer', 'shop', 'healer', 'savepoint', 'quest', 'guide'];
 const BLEND_MODES = ['source-over', 'lighter', 'multiply', 'screen', 'overlay'];
@@ -7619,7 +8827,11 @@ const Game = {
       art: Object.assign({ body: my.bodyType || my.game?.body || 'fox' }, my.palette || {}),
     };
     if (my.starter || (sp && 'starter' in sp)) entry.starter = !!my.starter;
-    return entry;
+    // fields the editor does not model (dual / triple types, legendary flags, home map ...) come through untouched
+    for (const k of Object.keys(sp)) if (!(k in entry)) entry[k] = deepClone(sp[k]);
+    // keep the game's key order so the export diffs cleanly against src/data/species.js
+    const ordered = {}; for (const k of Object.keys(sp)) if (k in entry) ordered[k] = entry[k]; for (const k of Object.keys(entry)) if (!(k in ordered)) ordered[k] = entry[k];
+    return ordered;
   },
 
   // =========================================================================== skills & vfx
@@ -7643,12 +8855,12 @@ const Game = {
     for (const id of [...Object.keys(S.skills.SKILLS), ...Object.keys(S.skills.ULTIMATES)]) { const s = this.importSkill(id); if (s) { project.skills[s.id] = s; n++; } }
     return n;
   },
-  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire', rock: 'Rock' }[el] || 'Universal'; },
+  vfxCategory(el, cat) { return cat === 'buff' ? 'Buff' : cat === 'debuff' ? 'Debuff' : cat === 'ultimate' ? 'Ultimate' : { nature: 'Nature', water: 'Water', fire: 'Fire', rock: 'Rock', electric: 'Electric', ice: 'Ice', metal: 'Metal', poison: 'Poison', psychic: 'Psychic' }[el] || 'Universal'; },
   /** Editable emitter VFX approximating a SKILL_VFX descriptor (cast → projectile → impact → aftermath) with the game's element palette. */
   importVfx(id) {
     const S = GameSnapshot; const d = S.skillVfx.SKILL_VFX[id]; if (!d) return null;
     const P = S.skillVfx.ELEMENT_VFX[d.element] || S.skillVfx.ELEMENT_VFX.none; const el = d.element || 'none'; const cat = d.category || 'special';
-    const scatter = el === 'nature' ? 'leaf' : el === 'water' ? 'splash' : el === 'fire' ? 'flame' : el === 'rock' ? 'shockwave' : 'spark';
+    const scatter = el === 'nature' ? 'leaf' : el === 'water' || el === 'poison' ? 'splash' : el === 'fire' ? 'flame' : el === 'rock' || el === 'metal' || el === 'ice' ? 'shockwave' : 'spark';
     const em = (type, o) => { const e = emitter(type, Object.assign({ color: P.mid, color2: P.core }, o)); for (const k of ['delay', 'duration', 'lifetime']) if (typeof e[k] === 'number') e[k] = round(e[k], 3); return e; };
     const emitters = []; let t = 0;
     const castDur = d.cast?.dur ?? 0.15;

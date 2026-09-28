@@ -32,6 +32,7 @@ const SIZES = { 'canvas-wrap': [1280, 720], 'left-body': [300, 600], 'right-body
 
 export const dom = new JSDOM(html, {
   url: 'http://localhost/MythlingEdit.html', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+  storageQuota: 200 * 1024 * 1024,   // jsdom defaults to 5 MB; a full game-preset project is bigger (real browsers use IndexedDB)
   beforeParse(window) {
     const HC = window.HTMLCanvasElement.prototype;
     const getBacking = (el) => {

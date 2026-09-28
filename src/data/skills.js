@@ -171,7 +171,89 @@ export const SKILLS = {
   predator_focus:  { id: 'predator_focus',  name: 'Predator Focus',  category: 'buff',   effects: [{ stat: 'patk', amount: 7 }, { stat: 'pdef', amount: 6, target: 'foe' }], uses: 4, desc: 'Locks onto the prey. Raises your Physical Attack and lowers the foe\'s Physical Defense.', future: true },
   mind_break:      { id: 'mind_break',      name: 'Mind Break',      category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }, { stat: 'satk', amount: 6, target: 'self' }], uses: 4, desc: 'Cracks the foe\'s focus and feeds on it. Lowers the foe\'s Special Defense and raises your Special Attack.', future: true },
 
+
+  // ---------- ELEMENT-NEUTRAL support pool (used by the Stormreach → Astral Spire species) ----------
+  // Buffs and debuffs carry no element, so these are shared by every new line by role.
+  power_up:  { id: 'power_up',  name: 'Power Up',  category: 'buff', effects: [{ stat: 'patk', amount: 4 }], uses: 10, desc: 'Raises Physical Attack.' },
+  guard_up:  { id: 'guard_up',  name: 'Guard Up',  category: 'buff', effects: [{ stat: 'pdef', amount: 4 }], uses: 10, desc: 'Raises Physical Defense.' },
+  mind_up:   { id: 'mind_up',   name: 'Mind Up',   category: 'buff', effects: [{ stat: 'satk', amount: 4 }], uses: 10, desc: 'Raises Special Attack.' },
+  ward_up:   { id: 'ward_up',   name: 'Ward Up',   category: 'buff', effects: [{ stat: 'sdef', amount: 4 }], uses: 10, desc: 'Raises Special Defense.' },
+  haste:     { id: 'haste',     name: 'Haste',     category: 'buff', effects: [{ stat: 'spd', amount: 5 }], uses: 8,  desc: 'Raises Speed.' },
+  vitality:  { id: 'vitality',  name: 'Vitality',  category: 'buff', effects: [{ stat: 'hp', amount: 9 }], uses: 10, desc: 'Raises max HP.' },
+  overpower: { id: 'overpower', name: 'Overpower', category: 'buff', effects: [{ stat: 'patk', amount: 6 }], uses: 8,  desc: 'Raises Physical Attack sharply.', future: true },
+  overmind:  { id: 'overmind',  name: 'Overmind',  category: 'buff', effects: [{ stat: 'satk', amount: 6 }], uses: 8,  desc: 'Raises Special Attack sharply.', future: true },
+  fortify:   { id: 'fortify',   name: 'Fortify',   category: 'buff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'Raises Physical Defense sharply.', future: true },
+  weaken:    { id: 'weaken',    name: 'Weaken',    category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, desc: 'Lowers the foe\'s Physical Attack.' },
+  daze:      { id: 'daze',      name: 'Daze',      category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, desc: 'Lowers the foe\'s Special Attack.' },
+  hobble:    { id: 'hobble',    name: 'Hobble',    category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 12, desc: 'Lowers the foe\'s Speed.' },
+  expose:    { id: 'expose',    name: 'Expose',    category: 'debuff', effects: [{ stat: 'pdef', amount: 5 }], uses: 10, desc: 'Lowers the foe\'s Physical Defense.' },
+  unnerve:   { id: 'unnerve',   name: 'Unnerve',   category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, desc: 'Lowers the foe\'s Special Defense.' },
+  cripple:   { id: 'cripple',   name: 'Cripple',   category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'Lowers the foe\'s Physical Defense sharply.' },
+  hex:       { id: 'hex',       name: 'Hex',       category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'Lowers the foe\'s Special Defense sharply.' },
+
 };
+// =============================================================================
+// ELEMENT POOLS for Electric / Ice / Metal / Poison / Psychic — the same ladders
+// the first four elements use (same powers, uses and riders), re-skinned per
+// element. Generated here so every element stays identical in balance.
+//   normals:  jab 17 (30 uses) · smash 30 (25) · slam 41 (20)          [elemental → limited]
+//   specials: sp 16/27/41/55 and ph 15/28/40/54 (Lv.1 / 20 / 60 / 80), late tiers carry a rider
+//   drain:    22 power, heals 50% of the damage dealt
+// =============================================================================
+const NEW_ELEMENT_POOLS = {
+  electric: {
+    normals: [['spark_jab', 'Spark Jab', 'A crackling jab.'], ['volt_smash', 'Volt Smash', 'A blow that discharges on impact.'], ['thunder_slam', 'Thunder Slam', 'The whole sky comes down.']],
+    sp: [['static_shot', 'Static Shot', 'A snapping bolt of static.'], ['arc_lance', 'Arc Lance', 'A lance of arcing current.'], ['storm_surge', 'Storm Surge', 'A surge that may reduce the foe\'s Speed.', { stat: 'spd', amount: 3, chance: 0.35 }], ['thunderfall', 'Thunderfall', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 4, chance: 0.4 }]],
+    ph: [['volt_fang', 'Volt Fang', 'A bite that jolts.'], ['tesla_claw', 'Tesla Claw', 'Claws wreathed in current.'], ['lightning_dash', 'Lightning Dash', 'A charge faster than the eye.'], ['stormbreaker', 'Stormbreaker', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    drain: ['volt_leech', 'Volt Leech', 'Draws the foe\'s charge into itself. Heals 50% of the damage dealt.', 'special'],
+  },
+  ice: {
+    normals: [['frost_jab', 'Frost Jab', 'A jab that leaves rime behind.'], ['glacier_smash', 'Glacier Smash', 'A blow like calving ice.'], ['avalanche_slam', 'Avalanche Slam', 'A mountainside of snow comes down.']],
+    sp: [['ice_shard', 'Ice Shard', 'A splinter of hard ice.'], ['frost_lance', 'Frost Lance', 'A lance of frozen air.'], ['blizzard', 'Blizzard', 'May reduce the foe\'s Speed.', { stat: 'spd', amount: 3, chance: 0.35 }], ['absolute_zero', 'Absolute Zero', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    ph: [['icicle_fang', 'Icicle Fang', 'A bite of needle ice.'], ['frostbite_claw', 'Frostbite Claw', 'Claws that numb what they touch.'], ['glacial_charge', 'Glacial Charge', 'A charge with a glacier\'s weight.'], ['permafrost_crush', 'Permafrost Crush', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 4, chance: 0.4 }]],
+    drain: ['frost_siphon', 'Frost Siphon', 'Steals the foe\'s warmth. Heals 50% of the damage dealt.', 'special'],
+  },
+  metal: {
+    normals: [['iron_jab', 'Iron Jab', 'A jab hard as an anvil.'], ['steel_smash', 'Steel Smash', 'A hammer-blow of tempered steel.'], ['titanium_slam', 'Titanium Slam', 'An unbreakable mass comes down.']],
+    sp: [['shrapnel_shot', 'Shrapnel Shot', 'A spray of hot metal splinters.'], ['magnet_pulse', 'Magnet Pulse', 'A pulse that wrenches at the foe.'], ['forge_blast', 'Forge Blast', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 3, chance: 0.35 }], ['singularity_core', 'Singularity Core', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    ph: [['iron_fang', 'Iron Fang', 'A bite with iron teeth.'], ['steel_claw', 'Steel Claw', 'Claws of folded steel.'], ['piston_charge', 'Piston Charge', 'A charge driven like a piston.'], ['titan_press', 'Titan Press', 'May reduce the foe\'s Speed.', { stat: 'spd', amount: 4, chance: 0.4 }]],
+    drain: ['alloy_leech', 'Alloy Leech', 'Magnetises the foe\'s strength into its own plating. Heals 50% of the damage dealt.', 'physical'],
+  },
+  poison: {
+    normals: [['venom_jab', 'Venom Jab', 'A jab that leaves a sting.'], ['toxic_smash', 'Toxic Smash', 'A blow that splatters venom.'], ['plague_slam', 'Plague Slam', 'A crushing, festering impact.']],
+    sp: [['toxic_spit', 'Toxic Spit', 'A gob of burning venom.'], ['venom_lance', 'Venom Lance', 'A lance of concentrated toxin.'], ['plague_wave', 'Plague Wave', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 3, chance: 0.35 }], ['necrotic_burst', 'Necrotic Burst', 'May reduce the foe\'s Physical Attack.', { stat: 'patk', amount: 4, chance: 0.4 }]],
+    ph: [['venom_fang', 'Venom Fang', 'A bite that poisons.'], ['toxic_claw', 'Toxic Claw', 'Claws dripping with toxin.'], ['corrosive_charge', 'Corrosive Charge', 'A charge that eats through armour.'], ['blight_crush', 'Blight Crush', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    drain: ['venom_drain', 'Venom Drain', 'Drinks the foe\'s poisoned blood. Heals 50% of the damage dealt.', 'special'],
+  },
+  psychic: {
+    normals: [['psi_jab', 'Psi Jab', 'A jab of focused will.'], ['mind_smash', 'Mind Smash', 'A blow of pure thought.'], ['astral_slam', 'Astral Slam', 'The weight of a star, imagined.']],
+    sp: [['psi_bolt', 'Psi Bolt', 'A bolt of concentrated thought.'], ['mind_lance', 'Mind Lance', 'A lance aimed straight at the mind.'], ['astral_wave', 'Astral Wave', 'May reduce the foe\'s Special Attack.', { stat: 'satk', amount: 3, chance: 0.35 }], ['singularity', 'Singularity', 'May reduce the foe\'s Special Defense.', { stat: 'sdef', amount: 4, chance: 0.4 }]],
+    ph: [['psi_fang', 'Psi Fang', 'A bite guided by foresight.'], ['telekinetic_claw', 'Telekinetic Claw', 'Claws that strike from a distance.'], ['astral_dash', 'Astral Dash', 'A dash through folded space.'], ['mind_crush', 'Mind Crush', 'May reduce the foe\'s Physical Defense.', { stat: 'pdef', amount: 4, chance: 0.4 }]],
+    drain: ['psi_siphon', 'Psi Siphon', 'Feeds on the foe\'s thoughts. Heals 50% of the damage dealt.', 'special'],
+  },
+};
+const NORMAL_LADDER = [[17, 30], [30, 25], [41, 20]];
+const SP_LADDER = [[16, 20, 1], [27, 18, 20], [41, 15, 60], [55, 12, 80]];
+const PH_LADDER = [[15, 20, 1], [28, 18, 20], [40, 15, 60], [54, 12, 80]];
+for (const [element, pool] of Object.entries(NEW_ELEMENT_POOLS)) {
+  pool.normals.forEach(([id, name, desc], i) => {
+    const [power, uses] = NORMAL_LADDER[i];
+    SKILLS[id] = { id, name, category: 'normal', damageType: 'physical', element, power, uses, desc: `${desc} ${uses} uses.` };
+  });
+  const special = (list, ladder, damageType) => list.forEach(([id, name, desc, rider], i) => {
+    const [power, uses, lv] = ladder[i];
+    SKILLS[id] = { id, name, category: 'special', damageType, element, power, uses, desc };
+    if (rider) SKILLS[id].debuff = rider;
+    if (lv >= 60) SKILLS[id].future = true;
+  });
+  special(pool.sp, SP_LADDER, 'special');
+  special(pool.ph, PH_LADDER, 'physical');
+  const [did, dname, ddesc, dtype] = pool.drain;
+  SKILLS[did] = { id: did, name: dname, category: 'special', damageType: dtype, element, power: 22, uses: 12, drain: 0.5, desc: ddesc };
+}
+/** The pools by element, for species.js (which builds its unlock tables from them). */
+export const ELEMENT_POOLS = NEW_ELEMENT_POOLS;
+
 
 // ---------- Ultimates ----------
 // Tier index 0 = base (Lv.10), 1 = " I" (Lv.20), 2 = " II" (Lv.60, future), 3 = " III" (Lv.80, future)
@@ -283,6 +365,58 @@ export const ULTIMATES = {
 
 };
 
+// ---------- Generated Ultimates for the five new elements ----------
+// Per element: one Physical and one Special damage Ultimate (same tiers as the
+// originals) and one SUPPORT Ultimate. Legendaries get their own, stronger tiers.
+const DMG_TIERS = (p0) => [
+  { suffix: '',    power: p0,      unlockLevel: 10 },
+  { suffix: ' I',  power: p0 + 16, unlockLevel: 20 },
+  { suffix: ' II', power: p0 + 40, unlockLevel: 60, future: true },
+  { suffix: ' III',power: p0 + 70, unlockLevel: 80, future: true },
+];
+const SUPPORT_TIERS = (a, b) => [8, 11, 15, 20].map((amt, i) => ({
+  suffix: ['', ' I', ' II', ' III'][i], unlockLevel: [10, 20, 60, 80][i], future: i >= 2 || undefined,
+  effects: [{ stat: a.stat, amount: amt, target: a.target }, { stat: b.stat, amount: Math.round(amt * 0.75), target: b.target }],
+}));
+const NEW_ULTIMATES = [
+  ['thunder_crown',    'Thunder Crown',    'electric', 'special',  34, 'A crown of lightning detonates over the foe.'],
+  ['gigavolt_charge',  'Gigavolt Charge',  'electric', 'physical', 36, 'A charge carrying a whole storm\'s current.'],
+  ['storm_mantle',     'Storm Mantle',     'electric', null, 0, 'Buff Ultimate: the caster wears the storm. Raises Speed AND Special Attack far beyond any buff skill.', { stat: 'spd', target: 'self' }, { stat: 'satk', target: 'self' }],
+  ['winter_crown',     'Winter Crown',     'ice', 'special',  34, 'A halo of killing frost closes on the foe.'],
+  ['glacier_fall',     'Glacier Fall',     'ice', 'physical', 36, 'A glacier\'s edge comes down on the foe.'],
+  ['frozen_bastion',   'Frozen Bastion',   'ice', null, 0, 'Buff Ultimate: armour of living ice. Raises BOTH Defenses by far more than any buff skill.', { stat: 'pdef', target: 'self' }, { stat: 'sdef', target: 'self' }],
+  ['magnetic_storm',   'Magnetic Storm',   'metal', 'special',  34, 'Every scrap of metal in the field turns into a weapon.'],
+  ['iron_judgment',    'Iron Judgment',    'metal', 'physical', 36, 'A single, colossal hammer-blow.'],
+  ['adamant_shell',    'Adamant Shell',    'metal', null, 0, 'Buff + Debuff Ultimate: the caster hardens while the foe is magnetised down. Raises your Physical Defense and lowers the foe\'s Speed.', { stat: 'pdef', target: 'self' }, { stat: 'spd', target: 'foe' }],
+  ['plague_crown',     'Plague Crown',     'poison', 'special',  34, 'A crown of miasma settles on the foe.'],
+  ['venom_tyrant',     'Venom Tyrant',     'poison', 'physical', 36, 'A single bite carrying every toxin the fen knows.'],
+  ['miasma_hex',       'Miasma Hex',       'poison', null, 0, 'Debuff Ultimate: a poison that eats will and wits alike. Lowers the foe\'s Physical Attack AND Special Defense.', { stat: 'patk', target: 'foe' }, { stat: 'sdef', target: 'foe' }],
+  ['astral_crown',     'Astral Crown',     'psychic', 'special',  34, 'The stars themselves are turned on the foe.'],
+  ['mind_shatter',     'Mind Shatter',     'psychic', 'physical', 36, 'A telekinetic blow that breaks bone and resolve.'],
+  ['astral_ward',      'Astral Ward',      'psychic', null, 0, 'Buff Ultimate: a mind made unassailable. Raises Special Defense AND Special Attack far beyond any buff skill.', { stat: 'sdef', target: 'self' }, { stat: 'satk', target: 'self' }],
+];
+for (const [id, baseName, element, damageType, p0, desc, a, b] of NEW_ULTIMATES) {
+  ULTIMATES[id] = damageType
+    ? { id, baseName, element, damageType, tiers: DMG_TIERS(p0), desc }
+    : { id, baseName, element, damageType: null, kind: 'support', tiers: SUPPORT_TIERS(a, b), desc };
+}
+// ---------- Legendary Ultimates: no evolution, so the tiers unlock by LEVEL (1 / 20 / 60 / 80) ----------
+const LEGEND_TIERS = (p0) => [
+  { suffix: '',    power: p0,      unlockLevel: 10 },
+  { suffix: ' I',  power: p0 + 18, unlockLevel: 20 },
+  { suffix: ' II', power: p0 + 44, unlockLevel: 60 },
+  { suffix: ' III',power: p0 + 78, unlockLevel: 80 },
+];
+ULTIMATES.aurora_cataclysm = { id: 'aurora_cataclysm', baseName: 'Aurora Cataclysm', element: 'psychic', damageType: 'special', legendary: true,
+  tiers: LEGEND_TIERS(46).map((t, i) => ({ ...t, selfBuff: [{ stat: 'satk', amount: 4 + i * 2 }] })),
+  desc: 'LEGENDARY — the aurora itself is torn down onto the foe, and the caster drinks its light (raises its Special Attack).' };
+ULTIMATES.plague_engine = { id: 'plague_engine', baseName: 'Plague Engine', element: 'poison', damageType: 'physical', legendary: true,
+  tiers: LEGEND_TIERS(46).map((t, i) => ({ ...t, foeDebuff: [{ stat: 'pdef', amount: 4 + i * 2 }] })),
+  desc: 'LEGENDARY — a corroded engine of venom and iron tears into the foe and eats its armour (lowers its Physical Defense).' };
+ULTIMATES.core_meltdown = { id: 'core_meltdown', baseName: 'Core Meltdown', element: 'fire', damageType: 'special', legendary: true,
+  tiers: LEGEND_TIERS(46).map((t, i) => ({ ...t, foeDebuff: [{ stat: 'sdef', amount: 4 + i * 2 }] })),
+  desc: 'LEGENDARY — the planet\'s molten heart erupts through the foe and softens it to slag (lowers its Special Defense).' };
+
 export const ULTIMATE_MAX_CHARGE = 8;
 export const MAX_BUFF_STACKS = 30;
 
@@ -364,6 +498,8 @@ export function resolveUltimate(ultId, tierIndex) {
     power: tier.power || 0,
     effects: tier.effects || null,
     selfBuff: tier.selfBuff || null,
+    foeDebuff: tier.foeDebuff || null,
+    legendary: !!ult.legendary,
     desc: ult.desc,
     future: !!tier.future,
   };

@@ -48,7 +48,12 @@ export const ITEMS = {
   vale_charm:  { id: 'vale_charm',  name: 'Vale Charm',  category: 'key', desc: 'Proof that the Verdant Guardian was bested. Opens the Verdant Gate.' },
   coast_pass:  { id: 'coast_pass',  name: 'Coast Pass',  category: 'key', desc: 'Granted at Tidecrest Port. Opens the Emberwild Gate.' },
   ember_sigil: { id: 'ember_sigil', name: 'Ember Sigil', category: 'key', desc: 'Awarded by the Flame Warden. Opens the Emberwild Pass to Stonehollow Crags.' },
-  crag_seal:   { id: 'crag_seal',   name: 'Crag Seal',   category: 'key', desc: 'Proof that the Stone Warden of Stonehollow Crags was bested.' },
+  crag_seal:   { id: 'crag_seal',   name: 'Crag Seal',   category: 'key', desc: 'Proof that the Stone Warden of Stonehollow Crags was bested. Opens the Storm Gate to Stormreach Plateau.' },
+  storm_sigil: { id: 'storm_sigil', name: 'Storm Sigil', category: 'key', desc: 'Awarded by the Storm Warden. Opens the Frost Gate to Frostveil Tundra.' },
+  frost_sigil: { id: 'frost_sigil', name: 'Frost Sigil', category: 'key', desc: 'Awarded by the Frost Warden. Opens the Iron Gate to Ironhold Foundry.' },
+  iron_sigil:  { id: 'iron_sigil',  name: 'Iron Sigil',  category: 'key', desc: 'Awarded by the Forge Warden. Opens the Mire Gate to Miremarsh Fen.' },
+  mire_sigil:  { id: 'mire_sigil',  name: 'Mire Sigil',  category: 'key', desc: 'Awarded by the Plague Warden. Opens the Spire Gate to the Astral Spire.' },
+  astral_crest:{ id: 'astral_crest',name: 'Astral Crest',category: 'key', desc: 'Awarded on the Astral Summit for completing the current build of Wildbound.' },
 };
 
 /** Item ids from earlier versions and what they became (applied when a save is loaded). */
@@ -65,6 +70,11 @@ export const ITEM_CATEGORIES = [
 export const FOOD_IDS = Object.values(ITEMS).filter((i) => i.category === 'food').map((i) => i.id);
 
 export const BALL_IDS = Object.values(ITEMS).filter((i) => i.category === 'balls').map((i) => i.id);
+
+/** Ball tier = position in the catalogue (Basic 0 ... Dark 6). Legendaries need LEGENDARY_MIN_BALL_TIER or better. */
+export function ballTier(id) { return BALL_IDS.indexOf(id); }
+export const LEGENDARY_MIN_BALL = 'absolute_ball';
+export function canHoldLegendary(ballId) { return ballTier(ballId) >= ballTier(LEGENDARY_MIN_BALL); }
 
 export function getItem(id) {
   return ITEMS[id] || null;
