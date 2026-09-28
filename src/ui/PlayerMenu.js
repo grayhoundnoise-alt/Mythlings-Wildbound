@@ -6,26 +6,30 @@ import {
 } from '../systems/GameState.js';
 import {
   displayName, speciesOf, computeStats, maxHp, hpPercent, isFainted, stageData,
-  librarySkills, equipSkill, unequipSkill, ultimateMove, ultimateUnlocked, expNeeded, restoreUses,
+  libraryByLevel, equippedSkills, equipSkill, unequipSkill, moveSkill, canEquipMore,
+  MAX_EQUIPPED_SKILLS, ultimateMove, ultimateUnlocked, expNeeded, applyItemEffects,
+  rerollMood, rerollRational,
 } from '../core/mythling.js';
 import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
-import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat } from '../data/moods.js';
-import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE } from '../data/config.js';
+import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat, getMood, getRational, rationalSummary, RATIONALS, moodModifiers, rationalModifiers } from '../data/moods.js';
+import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP } from '../data/config.js';
 import { openWiki } from './wiki.js';
 import { RARITY_ORDER, getRarity } from '../data/rarity.js';
-import { MUTATIONS } from '../data/mutations.js';
+import { MUTATIONS, getMutation } from '../data/mutations.js';
 import { ITEM_CATEGORIES, getItem } from '../data/items.js';
 import { MAPS, MAP_ORDER } from '../data/maps.js';
-import { ELEMENTS } from '../data/elements.js';
+import { ELEMENTS, ELEMENT_ORDER, speciesElements } from '../data/elements.js';
+import { ChestManager } from '../systems/ChestManager.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
 import { drawMythling } from '../render/creatures.js';
 import {
-  el, button, bar, hpClass, elementChip, rarityChip, mutationChip, toast, modal, confirmDialog,
+  el, button, bar, hpClass, elementChip, elementChips, rarityChip, mutationChip, toast, modal, closeModal, confirmDialog,
   Screens, panelHeader, closeButton,
 } from './ui.js';
 import { icon, iconSvg, iconLabel } from './icons.js';
-import { buffSummary, getSkill } from '../data/skills.js';
+import { ballCanvas, ballLook } from '../render/balls.js';
+import { buffSummary, getSkill, SKILL_CATEGORY_LABEL, isDamageSkill, riderSummary, isSupportUltimate } from '../data/skills.js';
 import { FeedManager } from '../systems/FeedManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { AudioManager } from '../systems/AudioManager.js';
@@ -53,8 +57,35 @@ const TABS = [
  * squashed, and the backing store follows the real CSS box at device
  * resolution so it stays crisp.
  */
-/** Short labels for the three battle slots in the Skill Library. */
-export const SLOT_LABEL = { normal: 'N', special: 'S', buff: 'B' };
+/** One-line description of what a skill does, shared by the library and the detail panel. */
+export function skillMetaText(sk, m = null) {
+  const uses = Number.isFinite(sk.uses)
+    ? `${m ? `${m.uses[sk.id] ?? 0}/` : ''}${sk.uses} uses`
+    : 'Unlimited uses';
+  const what = isDamageSkill(sk)
+    ? (sk.reflect ? `Returns the last hit x${sk.reflect} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}` : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`)
+    : `${buffSummary(sk, ' ')}${(sk.effects || []).some((e) => e.target) ? '' : (sk.category === 'debuff' ? ' on the foe' : ' on self')}`;
+  const rider = !sk.reflect ? riderSummary(sk) : '';
+  return `${SKILL_CATEGORY_LABEL[sk.category] || sk.category} · ${what}${rider ? ` · ${rider}` : ''} · ${uses}`;
+}
+
+/** "<element icon> <name>" — the way a Mythling's name is written everywhere in the menus. */
+export function nameWithElement(m, cls = '') {
+  const sp = getSpecies(m.speciesId);
+  const els = speciesElements(sp);
+  const title = els.map((e) => ELEMENTS[e]?.name || e).join(' / ') + ' type';
+  // one coloured icon per element (dual / triple types show two or three), then the name
+  return el('span', { class: `name-el ${cls}`, title }, [...els.map((e) => icon(ELEMENTS[e]?.icon || 'spark', `el ${e}`)), el('span', { text: displayName(m) })]);
+}
+
+/**
+ * Portrait with an element badge in the corner, so the element is readable at a
+ * glance on every card (party, storage, index).
+ */
+export function portrait(m, size = 66, animated = false) {
+  // Plain portrait: the element is shown as the coloured icon in front of the name, not on the art.
+  return el('div', { class: 'portrait', style: { width: `${size}px`, height: `${size}px` } }, [mythCanvas(m, size, animated)]);
+}
 
 export function mythCanvas(m, size = 66, animated = false) {
   const dpr = () => Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
@@ -218,15 +249,18 @@ export class PlayerMenu {
     const pct = hpPercent(m);
     const evoReady = EvolutionManager.isReady(m);
     const card = el('div', { class: `myth-card ${isFainted(m) ? 'fainted' : ''}` }, [
-      mythCanvas(m, 66),
+      // portrait column: the art, and — in the free space under it — the EVOLVE badge when a stage is ready
+      el('div', { class: 'mc-side' }, [
+        portrait(m, 66),
+        evoReady ? el('span', { class: 'chip evolve mc-evolve', title: 'Ready to evolve! Open the card and press EVOLVE NOW.', 'aria-label': 'Ready to evolve' }, [icon('levelup'), el('span', { text: 'EVOLVE' })]) : null,
+      ]),
       el('div', { class: 'mc-main' }, [
         el('div', { class: 'mc-name' }, [
-          displayName(m),
+          nameWithElement(m),
           m.level >= LEVEL_CAP ? el('span', { class: 'chip max', text: 'MAX' }) : null,
-          evoReady ? el('span', { class: 'chip evolve' }, [icon('levelup'), el('span', { text: 'EVOLVE' })]) : null,
           mutationChip(m.mutation),
         ]),
-        el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${MOODS[m.mood].name} · ${getRarity(m.rarity).name}` }),
+        el('div', { class: 'mc-sub', text: `Lv.${m.level} · ${sp.displayName} · ${getMood(m.mood).name} · ${rationalSummary(m.rational).name} · ${getRarity(m.rarity).name}` }),
         labeledBar('hp', 'HP', `${m.currentHp}/${maxHp(m)}`, pct, hpClass(pct)),
         labeledBar('exp', 'EXP',
           m.level >= LEVEL_CAP ? 'MAX LEVEL' : `${m.exp} / ${expNeeded(m)}`,
@@ -248,14 +282,28 @@ export class PlayerMenu {
     const locked = EvolutionManager.lockedStages(m);
     const ult = ultimateMove(m);
 
+    const rational = getRational(m.rational);
+    // Mood (+) and Rational (+10 / -10) can land on the same stat: the row shows the
+    // NET change — green when the pluses win, red when the penalty wins — and the
+    // exact leftover, e.g. "+15" or "+5" (+15 mood, -10 rational) or "-7".
+    const mag = getRarity(m.rarity).magnitude;
+    const moodMods = moodModifiers(m.mood, mag);
+    const ratMods = rationalModifiers(m.rational);
     const statRows = STAT_KEYS.map((k) => {
-      const isUp = MOODS[m.mood].up.includes(k);
-      const isDown = MOODS[m.mood].down === k;
+      const moodUp = getMood(m.mood).up.includes(k);
+      const ratUp = rational?.up === k;
+      const isDown = rational?.down === k;
+      const net = (moodMods[k] || 0) + (ratMods[k] || 0);
+      const tone = net > 0 ? 'up' : net < 0 ? 'down' : '';
       const maxRef = STAT_BAR_MAX[k] || 90;
-      return el('div', { class: `stat-row ${isUp ? 'up' : ''} ${isDown ? 'down' : ''}`, title: STAT_INFO[k] }, [
-        el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), isUp ? icon('up', 'tiny') : isDown ? icon('down', 'tiny') : null]),
+      const why = [moodUp ? `Mood ${getMood(m.mood).name} +${moodMods[k]}` : '', ratUp ? `Rational ${rational.name} +10` : '', isDown ? `Rational ${rational.name} -10` : ''].filter(Boolean).join(' · ');
+      return el('div', { class: `stat-row ${tone}`, title: `${STAT_INFO[k]}${why ? ` (${why}${moodUp && isDown ? ` = ${net > 0 ? '+' : ''}${net}` : ''})` : ''}` }, [
+        el('span', { class: 'stat-name' }, [el('span', { text: STAT_LABELS[k] }), (moodUp || ratUp) ? icon('up', 'tiny') : null, isDown ? icon('down', 'tiny') : null]),
         el('div', { class: 'sbar' }, [el('i', { style: { width: `${Math.min(100, (stats[k] / maxRef) * 100)}%` } })]),
-        el('b', { text: formatStat(k, stats[k]) }),
+        el('b', {}, [
+          el('span', { text: formatStat(k, stats[k]) }),
+          net !== 0 ? el('span', { class: `stat-net ${tone}`, text: `(${net > 0 ? '+' : ''}${net})` }) : (moodUp || ratUp || isDown) ? el('span', { class: 'stat-net', text: '(±0)' }) : null,
+        ]),
       ]);
     });
 
@@ -263,8 +311,9 @@ export class PlayerMenu {
       el('div', {}, [
         el('div', { class: 'detail-art' }, [mythCanvas(m, 240, true)]),
         el('div', { class: 'row', style: { gap: '6px', marginTop: '10px', justifyContent: 'center' } }, [
-          elementChip(sp.element), rarityChip(m.rarity),
-          el('span', { class: 'chip', text: MOODS[m.mood].name }),
+          ...elementChips(sp), rarityChip(m.rarity),
+          el('span', { class: 'chip', title: 'Mood', text: getMood(m.mood).name }),
+          el('span', { class: 'chip', title: 'Rational', text: rationalSummary(m.rational).name }),
           mutationChip(m.mutation),
         ]),
         el('p', { class: 'sub', style: { marginTop: '10px', fontSize: '.85rem' }, text: sp.description }),
@@ -274,11 +323,11 @@ export class PlayerMenu {
             const ok = await modal({ title: 'NICKNAME', body: el('div', {}, [el('p', { class: 'sub', text: 'Leave blank to use the species name.' }), input]), buttons: [{ label: 'CANCEL', value: false }, { label: 'SAVE', value: true, primary: true }] });
             if (ok) { m.nickname = input.value.trim().slice(0, 12) || null; toast('Nickname updated'); this.renderTab(); }
           } }),
-          EvolutionManager.isReady(m) ? iconTextBtn('levelup', 'EVOLVE NOW', { class: 'small primary', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.game.runEvolution(m, () => this.renderTab()); } }) : null,
+          EvolutionManager.isReady(m) ? iconTextBtn('levelup', 'EVOLVE NOW', { class: 'small primary', onclick: () => { closeModal(true); this.game.runEvolution(m, () => this.renderTab()); } }) : null,
         ]),
       ]),
       el('div', {}, [
-        el('h3', { text: `${displayName(m)}  ·  Lv.${m.level}${m.level >= LEVEL_CAP ? '  (MAX LEVEL)' : ''}` }),
+        el('h3', {}, [nameWithElement(m), el('span', { text: `  ·  Lv.${m.level}${m.level >= LEVEL_CAP ? '  (MAX LEVEL)' : ''}` })]),
         el('div', { class: 'mc-sub', text: `Species: ${sp.displayName} · Breed: ${sp.breed} · Role: ${sp.role} · Form: ${stageData(m).name} (stage ${m.stage + 1})` }),
         el('div', { style: { margin: '8px 0' } }, [
           labeledBar('exp', 'EXP',
@@ -288,18 +337,38 @@ export class PlayerMenu {
         ]),
         el('h3', { text: 'Stats' }),
         el('div', { class: 'stat-rows' }, statRows),
-        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html:
-          `In battle: <b>${Math.round(counterDodgePercent(stats.counter))}%</b> dodge (Counter ${stats.counter}) · `
-          + `<b>${stats.crit}%</b> crit chance · crit damage <b>+${stats.critMult}%</b> (x${(1 + stats.critMult / 100).toFixed(2)})` }),
-        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood ${MOODS[m.mood].name}: ${iconSvg('up', 'tiny')} ${mood.up.join(', ')} &nbsp; ${iconSvg('down', 'tiny')} ${mood.down} — magnitude ${getRarity(m.rarity).magnitude} (rarity ${m.rarity})` }),
+        el('div', { class: 'mc-sub', style: { marginTop: '6px' }, html: `Mood <b>${getMood(m.mood).name}</b>: ${getMood(m.mood).up.map((k) => `${iconSvg('up', 'tiny')} ${STAT_SHORT[k]} +${moodMods[k]}`).join(' &nbsp;')} (magnitude ${mag}, rarity ${m.rarity}) · Rational <b>${rationalSummary(m.rational).name}</b>: ${iconSvg('up', 'tiny')} ${rationalSummary(m.rational).up} +10 &nbsp; ${iconSvg('down', 'tiny')} ${rationalSummary(m.rational).down} -10${getMutation(m.mutation).statBonus ? ` · ${getMutation(m.mutation).name} +${getMutation(m.mutation).statBonus} to every stat` : ''}` }),
+        el('div', { class: 'row', style: { gap: '6px', marginTop: '6px' } }, [
+          iconTextBtn('swap', `Re-roll Mood (Mood Tonic ×${InventoryManager.count('mood_tonic')})`, { class: 'small ghost', disabled: !InventoryManager.has('mood_tonic', 1), title: InventoryManager.has('mood_tonic', 1) ? 'Uses one Mood Tonic: the Mood becomes a different one at random.' : 'Buy a Mood Tonic at a shop (Azure Coast onward).', onclick: async () => {
+            const ok = await confirmDialog('RE-ROLL MOOD', `Use a Mood Tonic on ${displayName(m)}? Its Mood (${getMood(m.mood).name}) becomes a different one at random. This cannot be undone.`);
+            if (!ok) return;
+            if (!InventoryManager.has('mood_tonic', 1)) { toast('You have no Mood Tonic left.', 'bad'); return; }
+            InventoryManager.remove('mood_tonic', 1);
+            const r = rerollMood(m);
+            AudioManager.sfx('heal');
+            toast(`${displayName(m)}'s Mood: ${getMood(r.before).name} → ${getMood(r.after).name}`, 'ok');
+            closeModal(true); this.renderTab(); this.openDetail(m);
+          } }),
+          iconTextBtn('swap', `Re-roll Rational (Temper Tonic ×${InventoryManager.count('temper_tonic')})`, { class: 'small ghost', disabled: !InventoryManager.has('temper_tonic', 1), title: InventoryManager.has('temper_tonic', 1) ? 'Uses one Temper Tonic: the Rational (+10 / -10 trait) becomes a different one at random.' : 'Buy a Temper Tonic at a shop (Azure Coast onward).', onclick: async () => {
+            const ok = await confirmDialog('RE-ROLL RATIONAL', `Use a Temper Tonic on ${displayName(m)}? Its Rational (${rationalSummary(m.rational).name}: ${rationalSummary(m.rational).up} +10 / ${rationalSummary(m.rational).down} -10) becomes a different one at random. This cannot be undone.`);
+            if (!ok) return;
+            if (!InventoryManager.has('temper_tonic', 1)) { toast('You have no Temper Tonic left.', 'bad'); return; }
+            InventoryManager.remove('temper_tonic', 1);
+            const r = rerollRational(m);
+            AudioManager.sfx('heal');
+            toast(`${displayName(m)}'s Rational: ${rationalSummary(r.before).name} → ${rationalSummary(r.after).name}`, 'ok');
+            closeModal(true); this.renderTab(); this.openDetail(m);
+          } }),
+        ]),
 
-        el('h3', { text: 'Equipped Skills' }),
-        ...['normal', 'special', 'buff'].map((slot) => {
-          const sk = m.skills[slot] ? librarySkills(m).find((s) => s.id === m.skills[slot]) : null;
-          return el('div', { class: 'skill-row equipped' }, [
+        el('h3', { text: `Equipped Skills (${equippedSkills(m).length}/${MAX_EQUIPPED_SKILLS})` }),
+        ...Array.from({ length: MAX_EQUIPPED_SKILLS }, (_, i) => {
+          const sk = m.skills[i] ? getSkill(m.skills[i]) : null;
+          return el('div', { class: `skill-row ${sk ? 'equipped' : ''}` }, [
+            el('span', { class: 'slot-badge', text: String(i + 1) }),
             el('div', { style: { flex: '1' } }, [
-              el('div', { class: 'sk-name', text: sk ? sk.name : '—' }),
-              el('div', { class: 'sk-meta', html: sk ? `${slot.toUpperCase()} · ${sk.category === 'buff' ? buffSummary(sk) : `Power ${sk.power}`} · ${Number.isFinite(sk.uses) ? `${m.uses[sk.id] ?? 0}/${sk.uses} uses` : `${iconSvg('infinity', 'tiny')} unlimited`}` : '—' }),
+              el('div', { class: 'sk-name', text: sk ? sk.name : '— empty button —' }),
+              el('div', { class: 'sk-meta', text: sk ? skillMetaText(sk, m) : 'Equip a skill in the Skill Library.' }),
             ]),
           ]);
         }),
@@ -309,7 +378,7 @@ export class PlayerMenu {
             el('div', { class: 'sk-meta', text: ultimateUnlocked(m) ? `ULTIMATE · Power ${ult.power} · Charge ${m.ultCharge}/8 · cannot be replaced` : `ULTIMATE · locked until Lv.${ULTIMATE_UNLOCK_LEVEL}` }),
           ]),
         ]),
-        iconTextBtn('strike', 'Open Skill Library', { class: 'small ghost', onclick: () => { document.getElementById('modal').classList.add('hidden'); this.tab = 'skills'; this.selected = m.uid; this.render(); } }),
+        iconTextBtn('strike', 'Open Skill Library', { class: 'small ghost', onclick: () => { closeModal(true); this.tab = 'skills'; this.selected = m.uid; this.render(); } }),
 
         el('h3', { text: 'Evolution' }),
         el('div', { class: 'mc-sub', html: evoNext
@@ -320,11 +389,14 @@ export class PlayerMenu {
         ...locked.map((s) => el('div', { class: 'mc-sub locked-row', style: { opacity: .6 }, html: `${iconSvg('lock', 'tiny')} ${s.name} — Lv.${s.level} (future content)` })),
 
         el('h3', { text: 'Capture Info' }),
-        el('div', { class: 'mc-sub', text: m.meta?.isStarter
-          ? 'Your starter partner — chosen at the beginning of your journey.'
-          : m.meta?.caughtLevel
-            ? `Caught at Lv.${m.meta.caughtLevel} with a ${getItem(m.meta.caughtWith)?.name || 'ball'} in ${MAPS[m.meta.originMap]?.displayName || 'the wild'} — restarted at Lv.1.`
-            : 'Origin unknown.' }),
+        el('div', { class: 'mc-sub caught-line' }, [
+          m.meta?.caughtWith && !m.meta?.isStarter ? ballCanvas(m.meta.caughtWith, 24) : null,
+          el('span', { text: m.meta?.isStarter
+            ? 'Your starter partner — chosen at the beginning of your journey.'
+            : m.meta?.caughtLevel
+              ? `Caught at Lv.${m.meta.caughtLevel} with a ${getItem(m.meta.caughtWith)?.name || 'ball'} (${ballLook(m.meta.caughtWith)}) in ${MAPS[m.meta.originMap]?.displayName || 'the wild'} — restarted at Lv.1.`
+              : 'Origin unknown.' }),
+        ]),
       ]),
     ]);
 
@@ -368,13 +440,13 @@ export class PlayerMenu {
     }
     for (const m of list) {
       this.storageList.appendChild(this.mythCard(m, {
-        extra: el('div', { class: 'row', style: { gap: '6px' } }, [
+        extra: el('div', { class: 'mc-actions' }, [
           iconTextBtn('dna', 'Party', {
             class: 'small primary', disabled: PartyManager.isFull(),
             onclick: (e) => { e.stopPropagation(); if (StorageManager.toParty(m.uid)) { toast(`${displayName(m)} joined your party`); this.renderStorageList(); } else toast('Party is full!', 'bad'); },
           }),
-          button('RELEASE', {
-            class: 'small ghost',
+          button('Release', {
+            class: 'small ghost release',
             onclick: (e) => { e.stopPropagation(); this.releaseFromStorage(m); },
           }),
         ]),
@@ -385,7 +457,11 @@ export class PlayerMenu {
   // ---------------------------------------------------- SKILLS
   renderSkills(root) {
     this.setTitle('Skill Library');
-    root.appendChild(el('p', { class: 'sub', text: 'Every Mythling has three slots and any skill it has learned can go into any of them — two Specials, three Buffs, whatever you want. The slot only decides which battle button the skill sits on. Leaving a slot empty is allowed and is saved as-is. Everything learned stays in the library — nothing is ever lost. The Ultimate is fixed to the species and cannot be replaced.' }));
+    root.appendChild(el('p', { class: 'sub', text:
+      `Equip up to ${MAX_EQUIPPED_SKILLS} skills — any mix of Normal, Special, Buff and Debuff. `
+      + 'The ORDER you equip them in is the order of the battle buttons: the first equipped is button 1 (leftmost), then 2, then 3. '
+      + 'Skills are listed in the order they are learned. Everything learned stays in the library — nothing is ever lost. '
+      + 'The Ultimate is fixed to the species and cannot be replaced.' }));
     const party = PartyManager.list();
     const sel = this.selected && party.find((m) => m.uid === this.selected) || party[0];
     const picker = el('div', { class: 'row', style: { marginBottom: '14px' } }, party.map((m) =>
@@ -396,43 +472,68 @@ export class PlayerMenu {
     root.appendChild(picker);
     if (!sel) return;
 
+    // ---- the loadout: three battle buttons, in order ----
+    const equipped = equippedSkills(sel);
+    root.appendChild(el('h3', { text: `Battle buttons (${equipped.length}/${MAX_EQUIPPED_SKILLS})` }));
+    const strip = el('div', { class: 'loadout-strip' });
+    for (let i = 0; i < MAX_EQUIPPED_SKILLS; i++) {
+      const entry = equipped.find((e) => e.index === i) || null;
+      const sk = entry ? entry.skill : null;
+      strip.appendChild(el('div', { class: `loadout-slot ${sk ? `filled ${sk.category}` : 'empty'}` }, [
+        el('div', { class: 'ls-head' }, [
+          el('span', { class: 'slot-badge', text: String(i + 1) }),
+          el('span', { class: 'ls-name', html: sk ? `${iconSvg(sk.element || (sk.category === 'buff' ? 'shield' : sk.category === 'debuff' ? 'down' : 'strike'), sk.element || '')} ${sk.name}` : 'Empty' }),
+        ]),
+        el('div', { class: 'ls-meta', text: sk ? skillMetaText(sk, sel) : 'Pick a skill below.' }),
+        sk ? el('div', { class: 'row', style: { gap: '4px', marginTop: '6px' } }, [
+          i > 0 ? button('◀', { class: 'small ghost', title: 'Move left (earlier button)', onclick: () => { moveSkill(sel, i, i - 1); AudioManager.sfx('click'); this.renderTab(); } }) : null,
+          i < equipped.length - 1 ? button('▶', { class: 'small ghost', title: 'Move right (later button)', onclick: () => { moveSkill(sel, i, i + 1); AudioManager.sfx('click'); this.renderTab(); } }) : null,
+          button('UNEQUIP', { class: 'small ghost', onclick: () => { unequipSkill(sel, i); AudioManager.sfx('cancel'); this.renderTab(); } }),
+        ]) : null,
+      ]));
+    }
+    root.appendChild(strip);
+
     const ult = ultimateMove(sel);
     root.appendChild(el('div', { class: 'skill-row', style: { borderColor: '#ffd76a' } }, [
+      el('span', { class: 'slot-badge gold', text: '4' }),
       el('div', { style: { flex: '1' } }, [
         el('div', { class: 'sk-name', html: `${iconSvg('ultimate', 'gold')} ${ult.name} (ULTIMATE — fixed)` }),
         el('div', { class: 'sk-meta', text: ultimateUnlocked(sel) ? `Power ${ult.power} · Charge ${sel.ultCharge}/8 · upgrades with evolution` : `Locked until Lv.${ULTIMATE_UNLOCK_LEVEL}` }),
       ]),
     ]));
 
-    for (const cat of ['normal', 'special', 'buff']) {
-      root.appendChild(el('h3', { text: `${cat.toUpperCase()} SKILLS` }));
-      const skills = librarySkills(sel, cat);
-      if (!skills.length) { root.appendChild(el('p', { class: 'sub', text: 'None learned yet.' })); continue; }
-      for (const sk of skills) {
-        const slots = ['normal', 'special', 'buff'];
-        const inSlot = slots.filter((s) => sel.skills[s] === sk.id);
-        root.appendChild(el('div', { class: `skill-row ${inSlot.length ? 'equipped' : ''}` }, [
-          el('div', { style: { flex: '1' } }, [
-            el('div', { class: 'sk-name', html: `${iconSvg(sk.element || 'strike', sk.element || '')} ${sk.name}` }),
-            el('div', { class: 'sk-meta', text: `${sk.category === 'buff' ? buffSummary(sk, ' ') : `Power ${sk.power} · ${sk.damageType === 'physical' ? 'Physical' : 'Special'}`} · ${Number.isFinite(sk.uses) ? `${sel.uses[sk.id] ?? 0}/${sk.uses} uses` : 'Unlimited uses'} — ${sk.desc}` }),
-          ]),
-          el('div', { class: 'skill-slots' }, [
-            ...slots.map((s) => button(SLOT_LABEL[s], {
-              class: `small ${sel.skills[s] === sk.id ? 'primary' : 'ghost'}`,
-              title: `Put ${sk.name} in the ${s} slot`,
+    // ---- the library, in unlock order ----
+    root.appendChild(el('h3', { text: 'Learned skills — by unlock level' }));
+    const entries = libraryByLevel(sel);
+    if (!entries.length) { root.appendChild(el('p', { class: 'sub', text: 'None learned yet.' })); return; }
+    let lastLevel = null;
+    for (const { skill: sk, level, index } of entries) {
+      if (level !== lastLevel) {
+        lastLevel = level;
+        root.appendChild(el('div', { class: 'lib-level', text: `Lv.${level}` }));
+      }
+      const on = index >= 0;
+      root.appendChild(el('div', { class: `skill-row ${on ? 'equipped' : ''}` }, [
+        on ? el('span', { class: 'slot-badge', text: String(index + 1) }) : el('span', { class: 'slot-badge dim', text: '·' }),
+        el('div', { style: { flex: '1' } }, [
+          el('div', { class: 'sk-name', html: `${iconSvg(sk.element || (sk.category === 'buff' ? 'shield' : sk.category === 'debuff' ? 'down' : 'strike'), sk.element || '')} ${sk.name} <span class="cat-tag ${sk.category}">${SKILL_CATEGORY_LABEL[sk.category]}</span>` }),
+          el('div', { class: 'sk-meta', text: `${skillMetaText(sk, sel)} — ${sk.desc}` }),
+        ]),
+        el('div', { class: 'skill-slots' }, [
+          on
+            ? button('UNEQUIP', { class: 'small ghost', title: `Take ${sk.name} off button ${index + 1}`, onclick: () => { unequipSkill(sel, sk.id); AudioManager.sfx('cancel'); this.renderTab(); } })
+            : button('EQUIP', {
+              class: `small ${canEquipMore(sel) ? 'primary' : 'ghost'}`,
+              title: canEquipMore(sel) ? `Equip ${sk.name} on button ${equippedSkills(sel).length + 1}` : 'All battle buttons are full — unequip one first',
               onclick: () => {
-                equipSkill(sel, s, sk.id);
-                AudioManager.sfx('confirm');
+                if (!canEquipMore(sel)) { toast(`All ${MAX_EQUIPPED_SKILLS} battle buttons are full — unequip one first.`, 'bad'); AudioManager.sfx('cancel'); return; }
+                if (equipSkill(sel, sk.id)) { AudioManager.sfx('confirm'); toast(`${sk.name} → button ${equippedSkills(sel).length}`, 'ok'); }
                 this.renderTab();
               },
-            })),
-            inSlot.length ? button('✕', {
-              class: 'small ghost', title: 'Unequip',
-              onclick: () => { for (const s of inSlot) unequipSkill(sel, s); AudioManager.sfx('cancel'); this.renderTab(); },
-            }) : null,
-          ]),
-        ]));
-      }
+            }),
+        ]),
+      ]));
     }
   }
 
@@ -460,15 +561,18 @@ export class PlayerMenu {
     for (const cat of ITEM_CATEGORIES) {
       const entries = InventoryManager.byCategory(cat.id);
       root.appendChild(el('h3', { text: cat.name }));
+      if (cat.id === 'tonics') {
+        root.appendChild(el('p', { class: 'sub', text: 'Tonics re-roll a Mythling\'s personality traits. Open a Mythling\'s profile (PARTY or MYTHLINGS tab) and press RE-ROLL MOOD / RE-ROLL RATIONAL to use one.' }));
+      }
       if (cat.id === 'food') {
-        root.appendChild(el('p', { class: 'sub', text: 'Feed food to a Mythling to convert it straight into EXP — a faster way to train than battling. Food cannot push a Mythling past the level cap.' }));
+        root.appendChild(el('p', { class: 'sub', text: `Feed food to a Mythling to convert it straight into EXP — a faster way to train than battling. You can feed a whole stack at once; the amount is capped at what it takes to reach Lv.${LEVEL_CAP}, so no food is ever wasted.` }));
       }
       if (!entries.length) { root.appendChild(el('p', { class: 'sub', text: '— empty —' })); continue; }
       for (const e of entries) {
         const isFood = e.item.category === 'food';
-        const usable = e.item.heal || e.item.revive || e.item.restoreUses;
+        const usable = e.item.heal || e.item.healFull || e.item.revive || e.item.restoreUses || e.item.restoreAllUses;
         root.appendChild(el('div', { class: 'item-row' }, [
-          icon(isFood ? 'food' : cat.id === 'balls' ? 'orb' : cat.id === 'key' ? 'key' : 'heal', 'item-ico'),
+          cat.id === 'balls' ? ballCanvas(e.item.id, 30, 'item-ico ball-icon') : icon(isFood ? 'food' : cat.id === 'key' ? 'key' : cat.id === 'tonics' ? 'swap' : 'heal', 'item-ico'),
           el('div', { class: 'ir-main' }, [
             el('div', { class: 'ir-name', text: e.item.name }),
             el('div', { class: 'ir-desc', text: e.item.desc }),
@@ -476,26 +580,41 @@ export class PlayerMenu {
           el('div', { class: 'ir-qty', text: `x${e.qty}` }),
           isFood
             ? iconTextBtn('food', 'FEED', { class: 'small primary', onclick: () => this.feedFromBag(e.id) })
+            : cat.id === 'tonics' ? button('USE ON…', { class: 'small primary', onclick: () => this.useTonicFromBag(e.id) })
             : usable ? button('USE', { class: 'small primary', onclick: () => this.useItemFromBag(e.id) }) : null,
         ]));
       }
     }
   }
 
-  /** Feed a food item to a chosen party Mythling and play the level-up flow. */
+  /**
+   * Feed a food item to a chosen party Mythling and play the level-up flow.
+   * Stacks are fed in one go: a quantity picker (−/+/MAX) caps the count at
+   * what is useful — never more than you own, never past the level cap.
+   */
   async feedFromBag(itemId) {
     const item = getItem(itemId);
     const pick = await this.pickPartyTarget(`FEED ${item.name.toUpperCase()}`, (m) => {
       const need = FeedManager.toNextLevel(m, itemId);
       return m.level >= LEVEL_CAP
         ? 'MAX LEVEL — cannot gain EXP'
-        : `+${item.exp} EXP · ${need} to reach Lv.${m.level + 1}`;
+        : `+${item.exp.toLocaleString()} EXP each · ${need} to reach Lv.${m.level + 1} · ${FeedManager.toCap(m, itemId).toLocaleString()} to reach Lv.${LEVEL_CAP}`;
     });
     if (!pick) return;
-    const res = FeedManager.feed(pick, itemId);
+    const blocked = FeedManager.blockedReason(pick);
+    if (blocked) { toast(blocked, 'bad'); AudioManager.sfx('cancel'); return; }
+
+    const max = FeedManager.maxFeedable(pick, itemId);
+    let qty = 1;
+    if (max > 1) {
+      const chosen = await this.pickFeedQuantity(pick, item, max);
+      if (!chosen) return;
+      qty = chosen;
+    }
+    const res = FeedManager.feed(pick, itemId, qty);
     if (!res.ok) { toast(res.reason, 'bad'); AudioManager.sfx('cancel'); return; }
     AudioManager.sfx('heal');
-    toast(`${displayName(pick)} ate the ${item.name} — +${res.exp} EXP`, 'ok');
+    toast(`${displayName(pick)} ate ${res.count > 1 ? `${res.count}× ` : 'the '}${item.name} — +${res.exp.toLocaleString()} EXP`, 'ok');
     this.renderTab();
     if (res.result.levels.length) {
       const entries = res.result.levels.map((lv) => ({ uid: pick.uid, name: displayName(pick), ...lv }));
@@ -508,59 +627,113 @@ export class PlayerMenu {
     await this.game.autosave();
   }
 
-  /** Shared party picker used by items and food. `note` adds a per-Mythling line. */
-  pickPartyTarget(title, note = null) {
+  /** Quantity picker for feeding a stack. Resolves with the count, or 0 on cancel. */
+  pickFeedQuantity(m, item, max) {
+    let qty = 1;
+    const owned = InventoryManager.count(item.id);
+    const toCap = FeedManager.toCap(m, item.id);
+    const qtyLabel = el('b', { class: 'qty-value', text: '1' });
+    const preview = el('div', { class: 'sub feed-preview' });
+    const refresh = () => {
+      qty = Math.max(1, Math.min(max, qty));
+      qtyLabel.textContent = String(qty);
+      const p = FeedManager.preview(m, item.id, qty);
+      preview.innerHTML = `+${p.totalExp.toLocaleString()} EXP → <b>Lv.${p.level}</b>`
+        + (p.level >= LEVEL_CAP ? ' <span style="color:#ffd76a">(MAX LEVEL)</span>' : ` · ${p.exp.toLocaleString()} / ${expNeeded({ ...m, level: p.level }).toLocaleString()} EXP`)
+        + (p.levelsGained > 0 ? ` · <span style="color:#6de89a">+${p.levelsGained} level${p.levelsGained === 1 ? '' : 's'}</span>` : '')
+        + `<br>Costs ${qty} of your ${owned} ${item.name}${owned === 1 ? '' : 's'}.`;
+    };
+    const step = (d) => { qty += d; refresh(); AudioManager.sfx('click'); };
+    const body = el('div', {}, [
+      el('p', { class: 'sub', html: `How many <b>${item.name}</b> should <b>${displayName(m)}</b> (Lv.${m.level}) eat?`
+        + `<br>Max useful: <b>${max}</b>${max < owned ? ` — that is all it takes to reach Lv.${LEVEL_CAP} (${toCap} needed).` : ' (all you have).'}` }),
+      el('div', { class: 'qty-picker' }, [
+        button('−10', { class: 'small ghost', onclick: () => step(-10) }),
+        button('−', { class: 'small ghost', onclick: () => step(-1) }),
+        qtyLabel,
+        button('+', { class: 'small ghost', onclick: () => step(1) }),
+        button('+10', { class: 'small ghost', onclick: () => step(10) }),
+        button('MAX', { class: 'small primary', onclick: () => { qty = max; refresh(); AudioManager.sfx('click'); } }),
+      ]),
+      preview,
+    ]);
+    refresh();
+    return modal({
+      title: 'FEED HOW MANY?', body,
+      buttons: [{ label: 'CANCEL', value: 0 }, { label: 'FEED', value: true, primary: true }],
+      cancelValue: 0,
+    }).then((v) => (v === true ? qty : 0));
+  }
+
+  /**
+   * Shared party picker used by items and food. `note` adds a per-Mythling line.
+   * Cards close the modal through closeModal() so the dismiss handle is cleared
+   * (hiding the layer by hand left the game thinking a modal was still open).
+   */
+  async pickPartyTarget(title, note = null) {
     const list = el('div', { class: 'grid-cards' });
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (v) => {
-        if (done) return; done = true;
-        const layer = document.getElementById('modal');
-        layer.classList.add('hidden'); layer.innerHTML = '';
-        resolve(v);
-      };
-      PartyManager.list().forEach((m) => {
-        const card = this.mythCard(m, {
-          onClick: () => finish(m),
-          extra: note ? el('div', { class: 'mc-sub feed-note', text: note(m) }) : null,
-        });
-        list.appendChild(card);
-      });
-      modal({ title, body: list, buttons: [{ label: 'CANCEL', value: null }] }).then(() => finish(null));
+    PartyManager.list().forEach((m) => {
+      list.appendChild(this.mythCard(m, {
+        onClick: () => closeModal(m),
+        extra: note ? el('div', { class: 'mc-sub feed-note', text: note(m) }) : null,
+      }));
     });
+    const v = await modal({ title, body: list, buttons: [{ label: 'CANCEL', value: null }], cancelValue: null });
+    return v && v.uid ? v : null;
   }
 
   async useItemFromBag(itemId) {
     const item = getItem(itemId);
-    const pick = await this.pickPartyTarget(`USE ${item.name.toUpperCase()}`);
+    const pick = await this.pickPartyTarget(`USE ${item.name.toUpperCase()}`, (m) => {
+      const dry = applyItemEffects(item, m, { dryRun: true });
+      return dry.ok ? 'Can use' : dry.reason;
+    });
     if (!pick) return;
-    if (item.heal) {
-      if (isFainted(pick)) { toast('That Mythling has fainted — use a Revive Herb.', 'bad'); return; }
-      const before = pick.currentHp;
-      pick.currentHp = Math.min(maxHp(pick), pick.currentHp + item.heal);
-      if (pick.currentHp === before) { toast('HP is already full!', 'bad'); return; }
-      InventoryManager.remove(itemId, 1);
-      toast(`${displayName(pick)} recovered ${pick.currentHp - before} HP`, 'ok');
-    } else if (item.revive) {
-      if (!isFainted(pick)) { toast('That Mythling does not need reviving.', 'bad'); return; }
-      InventoryManager.remove(itemId, 1);
-      pick.currentHp = Math.floor(maxHp(pick) * item.revive);
-      toast(`${displayName(pick)} was revived!`, 'ok');
-    } else if (item.restoreAllUses) {
-      const before = JSON.stringify(pick.uses);
-      pick.uses = {};
-      for (const id of pick.library) { const sk = getSkill(id); if (sk && Number.isFinite(sk.uses)) pick.uses[id] = sk.uses; }
-      if (JSON.stringify(pick.uses) === before) { toast('Every skill is already at full uses!', 'bad'); return; }
-      InventoryManager.remove(itemId, 1);
-      AudioManager.sfx('heal');
-      toast(`${displayName(pick)}'s skills are fully restored`, 'ok');
-    } else if (item.restoreUses) {
-      InventoryManager.remove(itemId, 1);
-      restoreUses(pick, item.restoreUses);
-      toast(`${displayName(pick)}'s skills were restored`, 'ok');
-    }
+    if (!InventoryManager.has(itemId, 1)) { toast(`You have no ${item.name} left.`, 'bad'); return; }
+    // one routine for every healing item — it refuses to waste an item that would do nothing
+    const res = applyItemEffects(item, pick);
+    if (!res.ok) { toast(res.reason, 'bad'); AudioManager.sfx('cancel'); return; }
+    InventoryManager.remove(itemId, 1);
+    const parts = [];
+    if (res.revived) parts.push('was revived');
+    else if (res.healed > 0) parts.push(`recovered ${res.healed} HP`);
+    if (res.usesRestored) parts.push('had its skills restored');
     AudioManager.sfx('heal');
+    toast(`${displayName(pick)} ${parts.join(' and ')}!`, 'ok');
     this.renderTab();
+  }
+
+  /** Tonics from the bag: pick a party Mythling, then re-roll its Mood or Rational. */
+  async useTonicFromBag(itemId) {
+    const item = getItem(itemId);
+    const pick = await this.pickPartyTarget(`${item.name.toUpperCase()} — CHOOSE A MYTHLING`, (m) => item.rerollMood
+      ? `Mood: ${getMood(m.mood).name}` : `Rational: ${rationalSummary(m.rational).name} (${rationalSummary(m.rational).up} +10 / ${rationalSummary(m.rational).down} -10)`);
+    if (!pick) return;
+    if (!InventoryManager.has(itemId, 1)) { toast(`You have no ${item.name} left.`, 'bad'); return; }
+    InventoryManager.remove(itemId, 1);
+    const r = item.rerollMood ? rerollMood(pick) : rerollRational(pick);
+    AudioManager.sfx('heal');
+    toast(item.rerollMood
+      ? `${displayName(pick)}'s Mood: ${getMood(r.before).name} → ${getMood(r.after).name}`
+      : `${displayName(pick)}'s Rational: ${rationalSummary(r.before).name} → ${rationalSummary(r.after).name}`, 'ok');
+    this.renderTab();
+  }
+
+  /** Species ids grouped by element, in ELEMENT_ORDER (Nature, Water, Fire, Rock …). */
+  speciesByElement() {
+    const groups = [];
+    for (const elId of [...ELEMENT_ORDER, ...Object.keys(ELEMENTS).filter((e) => !ELEMENT_ORDER.includes(e))]) {
+      const ids = SPECIES_IDS.filter((id) => SPECIES[id].element === elId);
+      if (ids.length) groups.push({ element: elId, ids });
+    }
+    return groups;
+  }
+
+  elementHeader(elId, sub = '') {
+    const e = ELEMENTS[elId];
+    return el('div', { class: `element-group-head ${elId}` }, [
+      icon(e?.icon || 'spark', elId), el('b', { text: `${e?.name || elId} type` }), sub ? el('span', { class: 'sub', text: sub }) : null,
+    ]);
   }
 
   // ---------------------------------------------------- MAP
@@ -593,36 +766,41 @@ export class PlayerMenu {
     this.setTitle(`Mythling Index — ${seen}/${SPECIES_IDS.length} discovered`);
     root.appendChild(el('p', {
       class: 'sub',
-      text: 'Every Mythling and all four of its forms. Stages unlock at Lv.20, Lv.60 and Lv.80 — raise a Mythling to the level and it evolves on its own.',
+      text: 'Every Mythling, grouped by type. An evolution stays hidden until you have actually owned that form — catch the base form, raise it to Lv.20 / Lv.60 / Lv.80 and each new form is revealed as it evolves.',
     }));
 
     const list = el('div', { class: 'index-list' });
-    for (const id of SPECIES_IDS) {
-      const sp = SPECIES[id];
-      const entry = CollectionManager.entry(id);
-      const known = !!(entry && (entry.seen || entry.caught));
-      const card = el('div', { class: `index-card ${known ? '' : 'locked'}` }, [
-        el('div', { class: 'index-head' }, [
-          el('b', { text: known ? sp.displayName : '???' }),
-          elementChip(sp.element),
-          el('span', { class: 'role', text: sp.role }),
-          el('span', { class: 'role', text: `· ${sp.breed} · ${sp.spawnMaps?.[0]?.replace(/_/g, ' ') || ''}` }),
-        ]),
-        el('div', { class: 'index-stages' }, sp.evolutions.map((ev, stage) => {
-          const unlocked = known;
-          return el('div', { class: `index-stage ${unlocked ? '' : 'locked'}` }, [
-            unlocked
-              ? mythCanvas({ speciesId: id, stage, mutation: 'none' }, 96)
-              : el('div', { class: 'index-blank', text: '?' }),
-            el('div', { class: 'is-name', text: unlocked ? ev.name : '???' }),
-            el('div', { class: 'is-lv', text: stage === 0 ? 'Base form' : `Lv.${ev.level}` }),
-            ev.art?.horns || ev.art?.wings
-              ? el('div', { class: 'is-tag', text: [ev.art.horns ? 'Horns' : '', ev.art.wings ? 'Wings' : ''].filter(Boolean).join(' + ') })
-              : null,
-          ]);
-        })),
-      ]);
-      list.appendChild(card);
+    for (const group of this.speciesByElement()) {
+      const owned = group.ids.filter((id) => CollectionManager.entry(id)?.caught).length;
+      list.appendChild(this.elementHeader(group.element, `${owned}/${group.ids.length} caught`));
+      for (const id of group.ids) {
+        const sp = SPECIES[id];
+        const entry = CollectionManager.entry(id);
+        const known = !!(entry && (entry.seen || entry.caught));
+        const card = el('div', { class: `index-card ${known ? '' : 'locked'}` }, [
+          el('div', { class: 'index-head' }, [
+            el('b', { text: known ? sp.displayName : '???' }),
+            ...elementChips(sp),
+            el('span', { class: 'role', text: known ? sp.role : '???' }),
+            el('span', { class: 'role', text: `· ${known ? sp.breed : '???'} · ${MAPS[sp.spawnMaps?.[0]]?.displayName || ''}` }),
+          ]),
+          el('div', { class: 'index-stages' }, sp.evolutions.map((ev, stage) => {
+            // base form: revealed once seen; evolutions: only once OWNED
+            const unlocked = stage === 0 ? known : CollectionManager.hasForm(id, stage);
+            return el('div', { class: `index-stage ${unlocked ? '' : 'locked'}`, title: unlocked ? ev.name : (stage === 0 ? 'Not discovered yet' : `Locked — evolve a ${known ? sp.displayName : '???'} to Lv.${ev.level} to reveal this form`) }, [
+              unlocked
+                ? mythCanvas({ speciesId: id, stage, mutation: 'none' }, 96)
+                : el('div', { class: 'index-blank' }, [icon('lock')]),
+              el('div', { class: 'is-name', text: unlocked ? ev.name : '???' }),
+              el('div', { class: 'is-lv', text: stage === 0 ? 'Base form' : `Lv.${ev.level}` }),
+              !unlocked && stage > 0 ? el('div', { class: 'is-tag', text: 'LOCKED' }) : (unlocked && (ev.art?.horns || ev.art?.wings)
+                ? el('div', { class: 'is-tag', text: [ev.art.horns ? 'Horns' : '', ev.art.wings ? 'Wings' : ''].filter(Boolean).join(' + ') })
+                : null),
+            ]);
+          })),
+        ]);
+        list.appendChild(card);
+      }
     }
     root.appendChild(list);
   }
@@ -631,25 +809,29 @@ export class PlayerMenu {
     const s = CollectionManager.stats();
     this.setTitle(`Collection — ${s.caught}/${s.total} caught, ${s.seen}/${s.total} seen`);
     root.appendChild(el('p', { class: 'sub', html: `Mutations discovered: ${iconSvg('shiny', 'tiny')} Shiny ${s.shiny} · ${iconSvg('darkness', 'tiny')} Darkness ${s.darkness}` }));
-    const grid = el('div', { class: 'collection-grid' });
-    for (const id of SPECIES_IDS) {
-      const sp = SPECIES[id];
-      const e = CollectionManager.entry(id);
-      const known = e.seen || e.caught;
-      const card = el('div', { class: `col-card ${known ? '' : 'unknown'} ${e.caught ? 'caught' : ''}` }, [
-        mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 90),
-        el('div', { class: 'cc-name', text: known ? sp.displayName : '???' }),
-        el('div', { class: 'cc-status' }, e.caught ? [icon('check', 'tiny'), el('span', { text: 'Caught' })] : [el('span', { text: e.seen ? 'Seen' : 'Undiscovered' })]),
-        known ? el('div', { class: 'row', style: { justifyContent: 'center', gap: '4px', marginTop: '4px' } }, [
-          elementChip(sp.element),
-          e.mutations.shiny ? el('span', { class: 'chip shiny' }, [icon('shiny')]) : null,
-          e.mutations.darkness ? el('span', { class: 'chip darkness' }, [icon('darkness')]) : null,
-        ]) : null,
-      ]);
-      if (known) card.addEventListener('click', () => this.showSpeciesInfo(id));
-      grid.appendChild(card);
+    for (const group of this.speciesByElement()) {
+      const caught = group.ids.filter((id) => CollectionManager.entry(id)?.caught).length;
+      root.appendChild(this.elementHeader(group.element, `${caught}/${group.ids.length} caught`));
+      const grid = el('div', { class: 'collection-grid' });
+      for (const id of group.ids) {
+        const sp = SPECIES[id];
+        const e = CollectionManager.entry(id);
+        const known = e.seen || e.caught;
+        const forms = sp.evolutions.filter((ev, st) => CollectionManager.hasForm(id, st)).length;
+        const card = el('div', { class: `col-card ${known ? '' : 'unknown'} ${e.caught ? 'caught' : ''}` }, [
+          known ? portrait({ speciesId: id, stage: 0, mutation: 'none' }, 90) : mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 90),
+          el('div', { class: 'cc-name', text: known ? sp.displayName : '???' }),
+          el('div', { class: 'cc-status' }, e.caught ? [icon('check', 'tiny'), el('span', { text: `Caught · ${forms}/${sp.evolutions.length} forms` })] : [el('span', { text: e.seen ? 'Seen' : 'Undiscovered' })]),
+          known ? el('div', { class: 'row', style: { justifyContent: 'center', gap: '4px', marginTop: '4px' } }, [
+            e.mutations.shiny ? el('span', { class: 'chip shiny' }, [icon('shiny')]) : null,
+            e.mutations.darkness ? el('span', { class: 'chip darkness' }, [icon('darkness')]) : null,
+          ]) : null,
+        ]);
+        if (known) card.addEventListener('click', () => this.showSpeciesInfo(id));
+        grid.appendChild(card);
+      }
+      root.appendChild(grid);
     }
-    root.appendChild(grid);
   }
 
   showSpeciesInfo(id) {
@@ -658,16 +840,23 @@ export class PlayerMenu {
       el('div', { class: 'row', style: { gap: '16px' } }, [
         mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 150, true),
         el('div', {}, [
-          el('div', { class: 'row', style: { gap: '6px' } }, [elementChip(sp.element), el('span', { class: 'chip', text: sp.breed }), el('span', { class: 'chip', text: sp.role })]),
+          el('div', { class: 'row', style: { gap: '6px' } }, [...elementChips(sp), el('span', { class: 'chip', text: sp.breed }), el('span', { class: 'chip', text: sp.role })]),
           el('p', { class: 'sub', text: sp.description }),
           el('div', { class: 'mc-sub', text: `Base stats — ${STAT_KEYS.map((k) => `${STAT_SHORT[k]} ${formatStat(k, sp.baseStats[k])}`).join(', ')}` }),
           el('div', { class: 'mc-sub', text: `Found in: ${sp.spawnMaps.map((mp) => MAPS[mp].displayName).join(', ')}` }),
         ]),
       ]),
       el('h3', { text: 'Evolution line' }),
-      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev) => el('div', { class: 'chip', style: ev.stage > MAX_UNLOCKED_EVOLUTION_STAGE ? { opacity: .55 } : {} }, [
-        el('span', { text: `${ev.name} (Lv.${ev.level})` }), ev.future ? icon('lock', 'tiny') : null,
-      ]))),
+      el('div', { class: 'row', style: { gap: '8px' } }, sp.evolutions.map((ev, st) => {
+        const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
+        return el('div', { class: 'chip', style: owned ? {} : { opacity: .55 }, title: owned ? ev.name : `Locked — evolve ${sp.displayName} to Lv.${ev.level} to reveal this form` }, [
+          el('span', { text: owned ? `${ev.name} (Lv.${ev.level})` : `??? (Lv.${ev.level})` }), owned ? null : icon('lock', 'tiny'),
+        ]);
+      })),
+      el('div', { class: 'row', style: { gap: '8px', marginTop: '8px' } }, sp.evolutions.map((ev, st) => {
+        const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
+        return owned ? mythCanvas({ speciesId: id, stage: st, mutation: 'none' }, 84) : el('div', { class: 'index-blank', style: { width: '84px', height: '84px' } }, [icon('lock')]);
+      })),
     ]);
     modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: 'CLOSE', value: true, primary: true }] });
   }
@@ -687,6 +876,7 @@ export class PlayerMenu {
       ['Collection', `${s.caught}/${s.total} caught`],
       ['Trainers defeated', String(Object.keys(GameState.world.defeatedTrainers).length)],
       ['Regions visited', String(Object.keys(GameState.world.visitedMaps).length)],
+      ['Treasure chests opened', (() => { const c = ChestManager.stats(); return `${c.total} — Bronze ${c.bronze} · Silver ${c.silver} · Emerald ${c.emerald} · Ultra Gold ${c.ultra_gold}`; })()],
       ['Level cap (this version)', `Lv.${LEVEL_CAP}`],
       ['Game version', GameState.meta.gameVersion],
     ];
@@ -795,10 +985,11 @@ export function settingsPanel() {
     dropdown('Text Speed', 'textSpeed', ['slow', 'normal', 'fast', 'instant']),
     dropdown('Graphics Quality', 'graphicsQuality', ['low', 'medium', 'high']),
     (() => {
-      const val = el('b', { text: S.get('cameraSensitivity').toFixed(1) });
+      const cur = () => Math.min(CAMERA_ZOOM_MAX, Math.max(CAMERA_ZOOM_MIN, Number(S.get('cameraZoom')) || 1.35));
+      const val = el('b', { text: `×${cur().toFixed(2)}` });
       return el('div', { class: 'item-row' }, [
-        el('div', { class: 'ir-main' }, [el('div', { class: 'ir-name', text: 'Camera Sensitivity' })]),
-        el('input', { type: 'range', min: 0.4, max: 2, step: 0.1, value: S.get('cameraSensitivity'), oninput: (e) => { const v = parseFloat(e.target.value); S.set('cameraSensitivity', v); val.textContent = v.toFixed(1); } }),
+        el('div', { class: 'ir-main' }, [el('div', { class: 'ir-name', text: 'Camera Zoom' }), el('div', { class: 'ir-desc', text: `How close the world camera sits (×${CAMERA_ZOOM_MIN} far – ×${CAMERA_ZOOM_MAX} close). The mouse wheel or + / − in the world also zooms.` })]),
+        el('input', { type: 'range', min: CAMERA_ZOOM_MIN, max: CAMERA_ZOOM_MAX, step: CAMERA_ZOOM_STEP, value: cur(), oninput: (e) => { const v = parseFloat(e.target.value); S.set('cameraZoom', v); val.textContent = `×${v.toFixed(2)}`; } }),
         val,
       ]);
     })(),

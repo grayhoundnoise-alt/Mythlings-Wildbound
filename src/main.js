@@ -11,8 +11,9 @@ import { SaveManager } from './systems/SaveManager.js';
 import { SettingsManager } from './systems/SettingsManager.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { EvolutionManager } from './systems/EvolutionManager.js';
+import { ChestManager } from './systems/ChestManager.js';
 import { Battle, BattleType } from './systems/BattleManager.js';
-import { createMythling, displayName, maxHp, hpPercent, restoreAll, speciesOf, isFainted } from './core/mythling.js';
+import { createMythling, displayName, maxHp, hpPercent, restoreAll, restoreUses, speciesOf, isFainted } from './core/mythling.js';
 import { MenuScene } from './scenes/MenuScene.js';
 import { OverworldScene } from './scenes/OverworldScene.js';
 import { BattleScene } from './scenes/BattleScene.js';
@@ -52,6 +53,12 @@ class Game {
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
     window.addEventListener('keyup', (e) => this.onKeyUp(e));
     window.addEventListener('pointerdown', () => AudioManager.resume(), { once: false });
+    // Mouse wheel over the world zooms the camera (within the allowed range).
+    this.canvas.addEventListener('wheel', (e) => {
+      if (this.mode !== 'overworld' || Dialogue.open) return;
+      e.preventDefault();
+      this.showZoomHint(this.overworld.zoomBy(e.deltaY < 0 ? 1 : -1));
+    }, { passive: false });
 
     document.getElementById('btn-menu').addEventListener('click', () => this.openMenu());
     document.getElementById('btn-interact').addEventListener('click', () => this.overworld.interact());
@@ -94,8 +101,27 @@ class Game {
     requestAnimationFrame(this.loop);
   }
 
+  /** Small transient "Camera zoom ×1.35" note in the objective slot of the HUD. */
+  showZoomHint(z) {
+    const obj = document.getElementById('objective');
+    if (!obj) return;
+    clearTimeout(this._zoomHintTimer);
+    obj.innerHTML = `${iconSvg('objective', 'gold')} <span>Camera zoom ×${z.toFixed(2)}</span>`;
+    obj.classList.add('show');
+    this._zoomHintTimer = setTimeout(() => this.updateHud(), 900);
+  }
+
   onKeyDown(e) {
     const k = e.key.toLowerCase();
+    // + / - zoom the world camera
+    if (this.mode === 'overworld' && !Dialogue.open && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_')) {
+      const ae = document.activeElement;
+      if (!(ae && /input|textarea|select/i.test(ae.tagName || ''))) {
+        e.preventDefault();
+        this.showZoomHint(this.overworld.zoomBy(e.key === '-' || e.key === '_' ? -1 : 1));
+        return;
+      }
+    }
     // ESC closes whatever is on top — modal first, then any panel — in every mode.
     if (k === 'escape') {
       e.preventDefault();
@@ -120,9 +146,10 @@ class Game {
     } else if (this.mode === 'battle') {
       const bs = this.battleScene;
       if (bs.busy || !bs.battle) return;
-      if (k === '1') bs.doAction({ type: 'skill', slot: 'normal' });
-      else if (k === '2') bs.doAction({ type: 'skill', slot: 'special' });
-      else if (k === '3') bs.doAction({ type: 'skill', slot: 'buff' });
+      // 1 / 2 / 3 = the battle buttons, in the order the skills were equipped
+      if (k === '1') bs.pressSlot(0);
+      else if (k === '2') bs.pressSlot(1);
+      else if (k === '3') bs.pressSlot(2);
       else if (k === '4' || k === 'r') {
         const p = bs.battle.player;
         if (p.ultCharge >= 8) bs.doAction({ type: 'ultimate' });
@@ -318,6 +345,16 @@ class Game {
     bus.on('overworld:wild', (m) => this.startWildBattle(m));
     bus.on('overworld:trainer', (t) => this.startTrainerBattle(t));
     bus.on('overworld:sign', (s) => Dialogue.show([s.text], 'SIGN'));
+    bus.on('overworld:chest', async (chest) => {
+      const res = ChestManager.open(this.overworld.mapId, chest.id);
+      if (!res.ok) return;
+      AudioManager.sfx(res.tier.id === 'bronze' ? 'coin' : 'heal');
+      const lines = [`You found a ${res.tier.name}! Inside: ${coins(res.coins)} Wildcoins${res.item ? ` and ${res.item.qty}× ${res.item.name}` : ''}.`];
+      if (res.tier.id === 'ultra_gold') lines.push('An ULTRA GOLD chest — almost nobody ever finds one of these.');
+      await Dialogue.show(lines, 'TREASURE');
+      this.updateHud();
+      await this.autosave();
+    });
     bus.on('overworld:npc', async (n) => {
       await Dialogue.show(n.dialogue, n.name);
     });
@@ -335,9 +372,15 @@ class Game {
       if (SettingsManager.get('tutorialHints') && !GameState.world.flags[`intro_${toMap}`]) {
         WorldManager.setFlag(`intro_${toMap}`);
         const lines = {
-          azure_coast: ['Azure Coast — wild Mythlings here are Lv.10 to Lv.20.', 'Aquini and Rivruff live along these shores. Your Mythlings can evolve at Lv.20!'],
-          emberwild: ['Emberwild — the strongest region of this version. Wild Mythlings reach Lv.30.', 'Emberu rules the ash. Remember: anything you catch still starts again at Lv.1.'],
-          verdant_vale: ['Verdant Vale — home turf. Wild Mythlings Lv.1 to Lv.10.'],
+          azure_coast: ['Azure Coast — wild Mythlings here are Lv.15 to Lv.30.', 'Aquini and Rivruff live along these shores. Your Mythlings can evolve at Lv.20!'],
+          emberwild: ['Emberwild — wild Mythlings here are Lv.28 to Lv.40.', 'Emberu rules the ash. Remember: anything you catch still starts again at Lv.1.'],
+          stonehollow_crags: ['Stonehollow Crags — wild Mythlings are Lv.38 to Lv.48, and every one of them is Rock type.', 'Rock smothers Fire and crumbles under Water and Nature. The Stone Warden waits at the Titan Summit — and beyond her, the storm country.'],
+          stormreach_plateau: ['Stormreach Plateau — Electric country, Lv.46 to Lv.56.', 'Rock grounds lightning; Water and Metal conduct it. A legendary aurora elk is said to visit the peak.'],
+          frostveil_tundra: ['Frostveil Tundra — Ice country, Lv.54 to Lv.64.', 'Fire and Metal melt the locals; they freeze Nature and Electric solid.'],
+          ironhold_foundry: ['Ironhold Foundry — Metal country, Lv.62 to Lv.72.', 'Fire, Electric and Poison eat through steel. Something molten sleeps in the Forge Core.'],
+          miremarsh_fen: ['Miremarsh Fen — Poison country, Lv.70 to Lv.80.', 'Only Psychic purges venom. Half-Psychic wisps drift here from the Spire, and an iron wyrm sleeps under the sludge.'],
+          astral_spire: ['Astral Spire — the top of the world. Psychic country, Lv.78 to Lv.90.', 'Poison clouds the mind; nothing else touches it. The Astral Warden keeps the summit.'],
+          verdant_vale: ['Verdant Vale — home turf. Wild Mythlings Lv.1 to Lv.20.'],
         }[toMap];
         if (lines) await Dialogue.show(lines, 'GUIDE');
       }
@@ -379,12 +422,10 @@ class Game {
   startTrainerBattle(trainer) {
     const lead = PartyManager.firstHealthy();
     if (!lead) { toast('All your Mythlings have fainted!', 'bad'); this.handleWhiteout(); return; }
-    // Post-game: a trainer's team keeps pace with the party so rematches and
-    // late grinding stay worth doing on the way to Lv.100.
-    const teamTop = Math.max(...trainer.team.map((s) => s.level || 1));
-    const bump = Math.max(0, PartyManager.topLevel() - teamTop);
+    // Trainer teams are FIXED at the levels written in the map data. They never
+    // follow the party: a Lv.100 partner you ground for should feel like one.
     const enemies = trainer.team.map((spec) => createMythling({
-      speciesId: spec.species, level: Math.min(LEVEL_CAP, (spec.level || 1) + bump),
+      speciesId: spec.species, level: Math.min(LEVEL_CAP, spec.level || 1),
       rarity: spec.rarity || SPECIES[spec.species].defaultRarity,
       mood: spec.mood || SPECIES[spec.species].defaultMood,
       mutation: 'none',
@@ -414,6 +455,10 @@ class Game {
   }
 
   async endBattle(outcome, battle) {
+    // Skill uses are a PER-BATTLE resource: every fight starts full AND ends
+    // full, so the party menu never shows a drained skill and you can never be
+    // caught out of moves on the way to the next fight.
+    for (const m of PartyManager.list()) restoreUses(m, Infinity);
     // level-up + evolution follow-ups
     const levelEntries = [];
     for (const r of battle.rewards.exp) {
@@ -624,6 +669,20 @@ class Game {
     }
     if (mapId === 'emberwild') {
       if (!WorldManager.isTrainerDefeated('flame_warden')) return goal('Challenge the Flame Warden in the Volcanic Ruins');
+      return goal('Travel east through the Emberwild Pass to Stonehollow Crags');
+    }
+    const chain = [
+      ['stonehollow_crags', 'stone_warden', 'Climb to the Titan Summit and defeat the Stone Warden', 'Travel east through the Storm Gate to Stormreach Plateau'],
+      ['stormreach_plateau', 'storm_warden', 'Defeat the Storm Warden on Stormeye Peak', 'Travel east through the Frost Gate to Frostveil Tundra'],
+      ['frostveil_tundra', 'frost_warden', 'Defeat the Frost Warden on the Aurora Summit', 'Travel east through the Iron Gate to Ironhold Foundry'],
+      ['ironhold_foundry', 'iron_warden', 'Defeat the Forge Warden in the Forge Core', 'Travel east through the Mire Gate to Miremarsh Fen'],
+      ['miremarsh_fen', 'mire_warden', 'Defeat the Plague Warden in Plague Hollow', 'Travel east through the Spire Gate to the Astral Spire'],
+      ['astral_spire', 'astral_warden', 'Climb to the Astral Summit and defeat the Astral Warden', null],
+    ];
+    for (const [id, flag, fight, travel] of chain) {
+      if (mapId !== id) continue;
+      if (!WorldManager.isTrainerDefeated(flag)) return goal(fight);
+      return travel ? goal(travel) : null;
     }
     return null;
   }
@@ -634,22 +693,64 @@ class Game {
     const d = this.overworld.minimapData();
     const sx = cv.width / d.w, sy = cv.height / d.h;
     ctx.clearRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = 'rgba(12,22,34,0.85)';
-    ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = 'rgba(80,180,110,0.25)';
+    // The static picture of the map (ground, water, bridges, buildings, gates)
+    // is drawn once per map and cached, so the minimap always matches the
+    // world instead of showing floating rectangles.
+    ctx.drawImage(this.minimapBase(d, cv.width, cv.height), 0, 0);
+    // encounter zones: a faint hatch so tall grass reads as "wild area"
+    ctx.fillStyle = 'rgba(60,220,110,0.16)';
     for (const z of d.zones) ctx.fillRect(z[0] * sx, z[1] * sy, z[2] * sx, z[3] * sy);
-    ctx.fillStyle = 'rgba(240,200,120,0.85)';
-    for (const b of d.buildings) ctx.fillRect(b[0] * sx, b[1] * sy, Math.max(3, b[2] * sx), Math.max(3, b[3] * sy));
-    ctx.fillStyle = 'rgba(160,220,255,0.9)';
-    for (const c of d.conns) ctx.fillRect(c[0] * sx, c[1] * sy, Math.max(3, c[2] * sx), Math.max(3, c[3] * sy));
+    // trainers (red) and NPCs (yellow)
+    for (const t of d.trainers) {
+      ctx.fillStyle = t[2] ? 'rgba(255,255,255,0.55)' : '#ff5a5a';
+      ctx.beginPath(); ctx.arc(t[0] * sx, t[1] * sy, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#ffd76a';
+    for (const n of d.npcs) { ctx.beginPath(); ctx.arc(n[0] * sx, n[1] * sy, 1.8, 0, Math.PI * 2); ctx.fill(); }
+    // roaming wild Mythlings in their element colour
     for (const w of d.wild) {
-      ctx.fillStyle = ELEMENTS[w[2]].color;
+      ctx.fillStyle = ELEMENTS[w[2]]?.color || '#fff';
       ctx.beginPath(); ctx.arc(w[0] * sx, w[1] * sy, 2.2, 0, Math.PI * 2); ctx.fill();
     }
+    // the player
     ctx.fillStyle = '#ffffff';
     ctx.beginPath(); ctx.arc(d.px * sx, d.py * sy, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.strokeRect(0.5, 0.5, cv.width - 1, cv.height - 1);
+  }
+
+  /** Cached base layer of the minimap for the current map (regions, water, bridges, buildings, gates). */
+  minimapBase(d, W, H) {
+    const key = `${d.mapId}:${W}x${H}`;
+    if (this._minimapBase?.key === key) return this._minimapBase.canvas;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const sx = W / d.w, sy = H / d.h;
+    g.fillStyle = 'rgba(12,22,34,0.9)';
+    g.fillRect(0, 0, W, H);
+    for (const r of d.regions) {
+      g.fillStyle = r[4];
+      g.fillRect(r[0] * sx, r[1] * sy, Math.ceil(r[2] * sx), Math.ceil(r[3] * sy));
+    }
+    // the central corridor the world renderer keeps walkable
+    g.fillStyle = 'rgba(255,255,255,0.08)';
+    g.fillRect(0, (d.h * 0.55 - 90) * sy, W, 180 * sy);
+    for (const w of d.water) {
+      g.fillStyle = w[4] === 'lava' ? '#ff7a2a' : '#3fa9f5';
+      g.fillRect(w[0] * sx, w[1] * sy, Math.max(2, w[2] * sx), Math.max(2, w[3] * sy));
+    }
+    g.fillStyle = '#c99a5a';
+    for (const b of d.bridges) g.fillRect(b[0] * sx, b[1] * sy, Math.max(2, b[2] * sx), Math.max(2, b[3] * sy));
+    for (const b of d.buildings) {
+      g.fillStyle = b[4] === 'center' ? '#ff8a8a' : b[4] === 'shop' ? '#7fc4ff' : 'rgba(240,200,120,0.95)';
+      g.fillRect(b[0] * sx, b[1] * sy, Math.max(3, b[2] * sx), Math.max(3, b[3] * sy));
+    }
+    g.fillStyle = 'rgba(160,220,255,0.95)';
+    for (const cn of d.conns) g.fillRect(cn[0] * sx, cn[1] * sy, Math.max(3, cn[2] * sx), Math.max(3, cn[3] * sy));
+    this._minimapBase = { key, canvas: c };
+    return c;
   }
 }
 

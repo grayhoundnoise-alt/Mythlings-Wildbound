@@ -39,6 +39,7 @@ export function pal(speciesId, mutation) {
     }
     if (mutation === 'shiny') out.eye = '#fffbe0';
     if (mutation === 'darkness') out.eye = '#d8b4ff';
+    if (mutation === 'shiny_dark') out.eye = '#ffe9ff';   // both: violet shadow, gold shimmer
   }
   out.light = shadeColor(out.primary, 0.22);
   out.shadow = shadeColor(out.primary, -0.26);
@@ -1060,6 +1061,469 @@ function twigLeg(ctx, len) {
   ctx.beginPath(); ctx.moveTo(-1, len); ctx.lineTo(-2, len + 4); ctx.stroke();
 }
 
+// =============================================================================
+// ROCK BODY PLANS — Stonehollow Crags.  Five new silhouettes: tortoise, boar,
+// beetle, golem and lizard.  Each line grows visibly per evolution stage
+// (ex.stage 0..3): more crystal, bigger tusks / horns / fins, extra plating.
+// Bones stay in the shared vocabulary so every animation state just works.
+// =============================================================================
+
+/** A faceted crystal spike (pointing up) with a lit facet and a dark facet. */
+function crystalSpike(ctx, x, y, h, w, color, tilt = 0) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(tilt);
+  poly(ctx, [[-w, 0], [-w * 0.35, -h], [0, -h * 1.15], [w * 0.4, -h * 0.92], [w, 0]], color);
+  poly(ctx, [[-w * 0.35, -h], [0, -h * 1.15], [0.2, 0], [-w * 0.55, 0]], shadeColor(color, 0.28));
+  poly(ctx, [[0, -h * 1.15], [w * 0.4, -h * 0.92], [w, 0], [0.2, 0]], shadeColor(color, -0.22));
+  ctx.restore();
+}
+
+/** Rough stone plate: a low polygon with a highlight edge. */
+function stonePlate(ctx, x, y, w, h, color, seed = 0) {
+  const j = (k) => Math.sin(seed * 3.1 + k * 1.7) * 0.18;
+  poly(ctx, [
+    [x - w * (0.9 + j(1)), y + h * 0.1], [x - w * 0.5, y - h * (0.9 + j(2))], [x + w * (0.35 + j(3)), y - h],
+    [x + w * (0.95 + j(4)), y - h * 0.2], [x + w * 0.6, y + h * 0.85], [x - w * (0.4 + j(5)), y + h],
+  ], color);
+  poly(ctx, [[x - w * 0.5, y - h * 0.9], [x + w * 0.35, y - h], [x + w * 0.15, y - h * 0.45], [x - w * 0.4, y - h * 0.4]], shadeColor(color, 0.16));
+}
+
+/** Small round pebble with a highlight. */
+function pebble(ctx, x, y, r, color) {
+  ell(ctx, x, y, r, r * 0.8, color);
+  ell(ctx, x - r * 0.3, y - r * 0.3, r * 0.4, r * 0.28, shadeColor(color, 0.22));
+}
+
+// -----------------------------------------------------------------------------
+// PEBBLESHELL — Rock Tortoise.  Domed shell that sprouts crystal spikes with
+// every stage, stubby legs, beaked head.  Patient, immovable.
+// -----------------------------------------------------------------------------
+const TORTOISE = {
+  skel: (ex) => skeleton(ex, { legLen: 13, legW: 6.5, bodyY: -25, headY: -37, headX: 24, hipX: -12, shoX: 9 }),
+  face: {
+    eyes: [{ x: 5.6, y: -2.6, r: 3.4, shape: 'droop', color: 'eye' },
+           { x: -4.6, y: -2.6, r: 3.0, shape: 'droop', color: 'eye' }],
+    brows: [{ x: 5.6, y: -7.4, w: 6 }, { x: -4.6, y: -7.4, w: 5.4, mirror: true }],
+    mouth: { x: 11, y: 5.6, w: 6.2, color: '#2a2f2a' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 14, r.bodyY + 6], box: [-16, -8, 20, 16],
+      draw(ctx, c) {
+        poly(ctx, [[0, -4], [-12, -1], [-14, 3], [0, 5]], c.primary);
+        ell(ctx, -12, 1.5, 2.6, 2.2, c.shadow);
+      } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY + 9], box: [-12, -4, 24, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 0.95, c.shadow, c.secondary, -1.2, 3) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 3, r.bodyY + 9], box: [-12, -4, 24, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.92, c.shadow, c.secondary, 1.1, 3) },
+
+    { // ---- torso + SHELL (the shell grows crystals per stage)
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-46, -58, 90, 82],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        // soft torso under the shell
+        volume(ctx, r.hipX + 6, r.bodyY + 6, 24 + g * 4, 11 + g * 2, c.light, c.shadow);
+        ell(ctx, r.shoX + 4, r.bodyY + 9, 14 + g * 2, 6.5 + g, c.belly);
+        // neck
+        poly(ctx, [[r.shoX + 6, r.bodyY - 2], [r.headX - 6, r.headY + 6], [r.headX + 4, r.headY + 9], [r.shoX + 14, r.bodyY + 8]], c.primary);
+        // shell dome
+        const sx = r.hipX + 4, sy = r.bodyY - 2, sw = 30 + g * 8, sh = 22 + g * 7;
+        ctx.save();
+        ctx.beginPath(); ctx.ellipse(sx, sy, sw, sh, 0, Math.PI, Math.PI * 2); ctx.lineTo(sx + sw, sy + 3); ctx.lineTo(sx - sw, sy + 3); ctx.closePath();
+        const dg = ctx.createLinearGradient(sx, sy - sh, sx, sy + 3);
+        dg.addColorStop(0, shadeColor(c.secondary, 0.22)); dg.addColorStop(1, shadeColor(c.secondary, -0.3));
+        ctx.fillStyle = dg; ctx.fill();
+        ctx.clip();
+        // hex-ish plates
+        ctx.strokeStyle = shadeColor(c.secondary, -0.45); ctx.lineWidth = 1.6;
+        for (let i = -2; i <= 2; i++) {
+          for (let j = 0; j < 2; j++) {
+            const px = sx + i * sw * 0.42 + (j ? sw * 0.21 : 0), py = sy - sh * 0.25 - j * sh * 0.5;
+            ctx.beginPath();
+            for (let k = 0; k < 6; k++) { const a = (Math.PI / 3) * k; const hx = px + Math.cos(a) * sw * 0.2, hy = py + Math.sin(a) * sh * 0.24; k ? ctx.lineTo(hx, hy) : ctx.moveTo(hx, hy); }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+        // moss / lichen patches from stage 1
+        if (st >= 1) { ctx.globalAlpha *= 0.75; ell(ctx, sx - sw * 0.45, sy - sh * 0.35, 6 + g * 2, 3.5, c.accent); ell(ctx, sx + sw * 0.3, sy - sh * 0.15, 5 + g, 3, c.accent); }
+        ctx.restore();
+        // rim
+        ctx.beginPath(); ctx.ellipse(sx, sy + 3, sw + 2, 4.5, 0, 0, Math.PI * 2); ctx.fillStyle = shadeColor(c.secondary, -0.2); ctx.fill();
+        // crystal spikes: 0 / 2 / 4 / 6 with the stage
+        const n = st * 2;
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n;
+          const a = Math.PI + Math.PI * t;
+          const px = sx + Math.cos(a) * sw * 0.72, py = sy + Math.sin(a) * sh * 0.78 + 2;
+          crystalSpike(ctx, px, py, 8 + st * 3 + (i % 2) * 3, 3 + st * 0.6, c.accent, (t - 0.5) * 1.3);
+        }
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 6, r.bodyY + 10], box: [-12, -4, 25, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.belly, -1.1, 3) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 12, r.bodyY + 10], box: [-12, -4, 24, 28],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.96, c.primary, c.belly, 1, 3) },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -22, 36, 36],
+      draw(ctx, c, ex) {
+        if (ex.horns) {                                  // stone crest ridge (stage 2+)
+          crystalSpike(ctx, -4, -10, 9 + (ex.stage || 0) * 2, 3, c.accent, -0.35);
+          crystalSpike(ctx, 3, -11, 6 + (ex.stage || 0) * 2, 2.4, c.accent, 0.1);
+        }
+        volume(ctx, 0, -1, 13, 11, c.light, c.shadow);
+        // beak
+        poly(ctx, [[8, 2], [17, 1], [18, 6], [10, 8]], shadeColor(c.belly, -0.1));
+        line(ctx, 10, 5.4, 16.5, 4.4, shadeColor(c.dark, 0.1), 1.2);
+        ell(ctx, -3, 7, 7, 3.4, c.belly);
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// GRAVELHOG — Rock Boar.  Gravel-plated back ridge (mane bone), flint tusks
+// that grow with every stage, hooves, tufted tail.  Charges first.
+// -----------------------------------------------------------------------------
+const BOAR = {
+  skel: (ex) => skeleton(ex, { legLen: 18, legW: 6, bodyY: -34, headY: -44, headX: 24, hipX: -12, shoX: 8 }),
+  face: {
+    eyes: [{ x: 4.8, y: -6.2, r: 3.1, shape: 'sharp', color: 'eye' },
+           { x: -5.6, y: -6.2, r: 2.8, shape: 'sharp', color: 'eye' }],
+    brows: [{ x: 4.8, y: -11, w: 6 }, { x: -5.6, y: -11, w: 5.4, mirror: true }],
+    mouth: { x: 16, y: 6.4, w: 6.5, color: '#2c211b', fangs: 2 },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 16, r.bodyY - 4], box: [-14, -12, 18, 26],
+      draw(ctx, c) {
+        line(ctx, 0, 0, -8, 9, c.secondary, 2.6);
+        furTufts(ctx, -9, 10, 2.5, 1.2, 4.2, 4, 7, c.dark);
+      } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 4, r.bodyY + 9], box: [-11, -4, 22, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 0.9, c.shadow, c.dark, -1.5, 2) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 4, r.bodyY + 9], box: [-11, -4, 22, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.88, c.shadow, c.dark, 1.3, 2) },
+
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-42, -34, 82, 60],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, r.hipX + 1, r.bodyY + 1, 21 + g * 5, 16 + g * 3.5, c.light, c.shadow);
+        volume(ctx, r.shoX + 2, r.bodyY - 1, 20 + g * 4.5, 16 + g * 3.5, c.light, c.shadow);
+        // thick neck into the head
+        poly(ctx, [[r.shoX + 4, r.bodyY - 14], [r.headX - 4, r.headY - 6], [r.headX + 6, r.headY + 12], [r.shoX + 16, r.bodyY + 6]], c.primary);
+        ell(ctx, r.shoX + 3, r.bodyY + 6, 13 + g * 2, 9 + g, c.belly);
+        // gravel patches on the flank
+        for (let i = 0; i < 3; i++) pebble(ctx, r.hipX - 6 + i * 9, r.bodyY - 5 + (i % 2) * 5, 2.6 + (i % 2), shadeColor(c.secondary, 0.1));
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 5, r.bodyY + 10], box: [-11, -4, 23, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.dark, -1.3, 2) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 12, r.bodyY + 10], box: [-11, -4, 22, 36],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW * 0.95, c.primary, c.dark, 1.1, 2) },
+
+    { // ---- GRAVEL RIDGE along the back (more plates per stage)
+      name: 'mane', z: 3.4, space: 'creature', pivot: (r) => [r.hipX + 6, r.bodyY - 16], box: [-34, -26, 66, 30],
+      draw(ctx, c, ex, r) {
+        const st = ex.stage || 0, g = r.g;
+        const n = 3 + st;
+        for (let i = 0; i < n; i++) {
+          const t = i / (n - 1);
+          const x = r.hipX - 12 + t * (30 + g * 8), y = r.bodyY - 13 - g * 3 - Math.sin(t * Math.PI) * (5 + st * 1.5);
+          stonePlate(ctx, x, y, 5.5 + st * 0.6, 5 + st * 1.2 + Math.sin(t * Math.PI) * 3, shadeColor(c.secondary, 0.08 + (i % 2) * 0.08), i);
+        }
+        if (st >= 3) crystalSpike(ctx, r.hipX + 4, r.bodyY - 20 - g * 3, 9, 2.6, c.accent, -0.2);
+      },
+    },
+
+    { name: 'earL', z: 3.5, space: 'local', pivot: (r) => [r.headX - 6 * r.headS, r.headY - 11 * r.headS, r.headS], box: [-9, -12, 14, 14],
+      draw(ctx, c) { poly(ctx, [[0, 0], [-6, -10], [3, -6]], c.secondary); poly(ctx, [[-1, -1.5], [-4, -7], [1.5, -5]], shadeColor(c.accent, -0.1)); } },
+    { name: 'earR', z: 3.5, space: 'local', pivot: (r) => [r.headX + 6 * r.headS, r.headY - 12 * r.headS, r.headS], box: [-5, -12, 14, 14],
+      draw(ctx, c) { poly(ctx, [[0, 0], [7, -10], [-2, -6]], c.secondary); poly(ctx, [[1, -1.5], [5, -7], [-0.5, -5]], shadeColor(c.accent, -0.1)); } },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-18, -22, 44, 40],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        volume(ctx, 0, -3, 14.5, 12.5, c.light, c.shadow);
+        // long snout
+        volume(ctx, 11, 3, 11, 7.5, shadeColor(c.primary, 0.04), c.shadow);
+        ell(ctx, 20.5, 3.2, 4, 3.3, shadeColor(c.dark, 0.25));          // snout disc
+        ell(ctx, 19.6, 2.6, 1.1, 1.3, c.dark); ell(ctx, 21.6, 2.6, 1.1, 1.3, c.dark);
+        // flint tusks: longer and paler with every stage (horns flag from stage 1)
+        const tl = (ex.horns ? 7 : 4) + st * 2.2;
+        const tusk = shadeColor(c.belly, 0.1);
+        poly(ctx, [[12, 7], [16 + tl * 0.4, 7 - tl], [18 + tl * 0.5, 6 - tl * 0.8], [15, 8.5]], tusk);
+        poly(ctx, [[8, 8], [11 + tl * 0.3, 8 - tl * 0.8], [13 + tl * 0.4, 7.4 - tl * 0.6], [11, 9.6]], shadeColor(tusk, -0.12));
+        if (st >= 2) stonePlate(ctx, -2, -13, 6, 4, shadeColor(c.secondary, 0.1), 3);   // brow plate
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// QUARTZLING — Rock Beetle.  Crystal-studded carapace, elytra on the wing
+// bones (they open into flight wings at stage 2+), a rhino horn that grows
+// with every stage, antennae on the ear bones.
+// -----------------------------------------------------------------------------
+const BEETLE = {
+  skel: (ex) => skeleton(ex, { legLen: 15, legW: 3.4, bodyY: -30, headY: -34, headX: 22, hipX: -10, shoX: 6 }),
+  face: {
+    eyes: [{ x: 5.4, y: -3.2, r: 3.6, shape: 'bead', color: 'eye', dark: '#1a1730' },
+           { x: -4.8, y: -3.2, r: 3.2, shape: 'bead', color: 'eye', dark: '#1a1730' }],
+    brows: [{ x: 5.4, y: -8.4, w: 5.5 }, { x: -4.8, y: -8.4, w: 5, mirror: true }],
+    mouth: { x: 10, y: 5, w: 5.5, color: '#221f36' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 16, r.bodyY + 4], box: [-8, -5, 10, 10],
+      draw(ctx, c) { poly(ctx, [[0, -3], [-6, 0], [0, 3]], c.secondary); } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 6, r.bodyY + 8], box: [-10, -4, 20, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.secondary, -3, 2) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 2, r.bodyY + 8], box: [-10, -4, 20, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.secondary, 2.6, 2) },
+
+    { // ---- carapace with a seed crystal that grows per stage
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-40, -44, 78, 64],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        // abdomen + thorax
+        volume(ctx, r.hipX, r.bodyY + 2, 22 + g * 5, 15 + g * 3, c.light, c.shadow);
+        volume(ctx, r.shoX + 4, r.bodyY, 14 + g * 3, 12 + g * 2, shadeColor(c.primary, 0.04), c.shadow);
+        ell(ctx, r.hipX + 2, r.bodyY + 9, 16 + g * 3, 6 + g, c.belly);
+        // segment lines
+        ctx.strokeStyle = shadeColor(c.dark, 0.2); ctx.lineWidth = 1.4;
+        for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(r.hipX - 6 + i * 7, r.bodyY + 2, 12 + g * 3, 0.5, 2.6); ctx.stroke(); }
+        // crystals: 1 / 2 / 3 / 5
+        const n = [1, 2, 3, 5][st] || 1;
+        for (let i = 0; i < n; i++) {
+          const t = n === 1 ? 0.5 : i / (n - 1);
+          const x = r.hipX - 10 + t * 24, y = r.bodyY - 10 - g * 3 - Math.sin(t * Math.PI) * 4;
+          crystalSpike(ctx, x, y, 10 + st * 3 + (i === Math.floor(n / 2) ? 5 : 0), 3.2 + st * 0.5, c.accent, (t - 0.5) * 1.1);
+        }
+      },
+      live(ctx, c, ex, r, t) {                           // seed crystal glow pulse
+        const p = gemPulse(t, ex.excite);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.35 * p;
+        ell(ctx, r.hipX + 2, r.bodyY - 16 - r.g * 3, 12 + (ex.stage || 0) * 3, 8, c.accent);
+        ctx.restore();
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY + 9], box: [-10, -4, 21, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.belly, -2.6, 2) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 11, r.bodyY + 9], box: [-10, -4, 20, 30],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.belly, 2.2, 2) },
+
+    { // ---- ELYTRA (wing bones). Closed shells; open with flight wings once ex.wings.
+      name: 'wingL', z: 3.3, space: 'local', pivot: (r) => [r.hipX + 2, r.bodyY - 10 - r.g * 3], box: [-30, -30, 44, 36],
+      draw(ctx, c, ex) {
+        if (ex.wings) { ctx.save(); ctx.globalAlpha *= 0.55; poly(ctx, [[-2, 0], [-30, -16], [-28, 4], [-6, 10]], shadeColor(c.accent, 0.3)); ctx.restore(); }
+        poly(ctx, [[0, -2], [-22, -10 - (ex.wings ? 10 : 0)], [-24, 4 - (ex.wings ? 6 : 0)], [-4, 12]], shadeColor(c.secondary, 0.1));
+        line(ctx, -3, 0, -20, -6 - (ex.wings ? 8 : 0), shadeColor(c.dark, 0.1), 1);
+      } },
+    { name: 'wingR', z: 3.6, space: 'local', pivot: (r) => [r.hipX + 6, r.bodyY - 9 - r.g * 3], box: [-14, -30, 44, 36],
+      draw(ctx, c, ex) {
+        if (ex.wings) { ctx.save(); ctx.globalAlpha *= 0.55; poly(ctx, [[2, 0], [28, -18], [30, 2], [8, 10]], shadeColor(c.accent, 0.3)); ctx.restore(); }
+        poly(ctx, [[0, -2], [20, -12 - (ex.wings ? 10 : 0)], [24, 3 - (ex.wings ? 6 : 0)], [6, 12]], shadeColor(c.secondary, 0.22));
+        line(ctx, 3, 0, 18, -8 - (ex.wings ? 8 : 0), shadeColor(c.dark, 0.1), 1);
+      } },
+
+    // antennae on the ear bones
+    { name: 'earL', z: 3.8, space: 'local', pivot: (r) => [r.headX - 4 * r.headS, r.headY - 10 * r.headS, r.headS], box: [-16, -18, 20, 20],
+      draw(ctx, c) { line(ctx, 0, 0, -11, -13, c.dark, 1.5); ell(ctx, -11.5, -13.5, 2.2, 2.2, c.accent); } },
+    { name: 'earR', z: 3.8, space: 'local', pivot: (r) => [r.headX + 3 * r.headS, r.headY - 11 * r.headS, r.headS], box: [-6, -18, 20, 20],
+      draw(ctx, c) { line(ctx, 0, 0, 9, -14, c.dark, 1.5); ell(ctx, 9.5, -14.5, 2.2, 2.2, c.accent); } },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -34, 36, 46],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        volume(ctx, 0, -2, 12, 10.5, c.light, c.shadow);
+        // rhino horn (grows with stage; horns flag from stage 1)
+        const hl = (ex.horns ? 10 : 5) + st * 4;
+        poly(ctx, [[2, -8], [8 + hl * 0.6, -8 - hl], [12 + hl * 0.5, -6 - hl * 0.7], [9, -4]], shadeColor(c.secondary, 0.16));
+        poly(ctx, [[8 + hl * 0.6, -8 - hl], [12 + hl * 0.5, -6 - hl * 0.7], [10 + hl * 0.55, -7 - hl * 0.8]], shadeColor(c.accent, 0.1));
+        // mandibles
+        poly(ctx, [[8, 5], [16, 3], [17, 7], [9, 8]], shadeColor(c.dark, 0.3));
+        poly(ctx, [[7, 7], [14, 9], [12, 11], [6, 9.5]], shadeColor(c.dark, 0.2));
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// RUBBLEKIN — Rock Golem.  Stacked quarry stones, long stone arms on the front
+// leg bones, a rune eye, and a ring of floating stones (mane bone) that grows
+// with every stage.
+// -----------------------------------------------------------------------------
+const GOLEM = {
+  skel: (ex) => skeleton(ex, { legLen: 12, legW: 7, bodyY: -38, headY: -62, headX: 10, hipX: -8, shoX: 10 }),
+  face: {
+    eyes: [{ x: 5.4, y: -2, r: 3.4, shape: 'bead', color: 'accent', dark: '#2a2723' },
+           { x: -5.4, y: -2, r: 3.4, shape: 'bead', color: 'accent', dark: '#2a2723' }],
+    brows: [{ x: 5.4, y: -8, w: 6.5 }, { x: -5.4, y: -8, w: 6.5, mirror: true }],
+    mouth: { x: 0, y: 7, w: 8, color: '#1e1b18' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 18, r.bodyY + 14], box: [-10, -8, 14, 14],
+      draw(ctx, c) { pebble(ctx, -3, 0, 4, c.secondary); pebble(ctx, -8, 3, 2.5, c.shadow); } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 4, r.bodyY + 16], box: [-12, -4, 24, 26],
+      draw(ctx, c, ex, r) { stonePlate(ctx, 0, r.legLen, 8, 6, c.shadow, 1); stonePlate(ctx, 0, r.legLen * 0.5, 6, 6, c.shadow, 2); } },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX - 2, r.bodyY - 6], box: [-14, -6, 22, 46],
+      draw(ctx, c, ex, r) {                              // long stone arm
+        stonePlate(ctx, -2, 10, 6, 7, c.shadow, 3); stonePlate(ctx, -4, 22, 6.5, 7, c.shadow, 4);
+        stonePlate(ctx, -5, 34 + r.g * 3, 8, 7, shadeColor(c.shadow, -0.1), 5);
+      } },
+
+    { // ---- stacked boulder torso with a chest rune
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-40, -36, 80, 60],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        stonePlate(ctx, r.hipX + 2, r.bodyY + 14, 24 + g * 5, 11 + g * 2, c.shadow, 7);
+        stonePlate(ctx, 2, r.bodyY - 2, 26 + g * 6, 15 + g * 3, c.primary, 8);
+        stonePlate(ctx, 6, r.bodyY - 16 - g * 2, 18 + g * 4, 9 + g * 2, c.light, 9);
+        // chest rune
+        ctx.strokeStyle = c.accent; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(6, r.bodyY - 8); ctx.lineTo(10, r.bodyY + 2); ctx.lineTo(2, r.bodyY + 6); ctx.stroke();
+        if (st >= 1) { ctx.beginPath(); ctx.moveTo(-6, r.bodyY - 4); ctx.lineTo(-2, r.bodyY + 6); ctx.stroke(); }
+        // crystal growths from stage 2
+        if (st >= 2) { crystalSpike(ctx, -16, r.bodyY - 8, 9 + st * 2, 3, c.accent, -0.5); crystalSpike(ctx, 22, r.bodyY - 12, 7 + st * 2, 2.6, c.accent, 0.4); }
+      },
+      live(ctx, c, ex, r, t) {                           // rune glow
+        const p = gemPulse(t, ex.excite);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.3 * p;
+        ell(ctx, 6, r.bodyY - 1, 9, 9, c.accent);
+        ctx.restore();
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 12, r.bodyY + 17], box: [-12, -4, 24, 26],
+      draw(ctx, c, ex, r) { stonePlate(ctx, 0, r.legLen, 8.5, 6, c.primary, 11); stonePlate(ctx, 1, r.legLen * 0.5, 6.5, 6, c.primary, 12); } },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 16, r.bodyY - 6], box: [-12, -6, 24, 46],
+      draw(ctx, c, ex, r) {
+        stonePlate(ctx, 2, 10, 6, 7, c.primary, 13); stonePlate(ctx, 4, 22, 6.5, 7, c.primary, 14);
+        stonePlate(ctx, 5, 34 + r.g * 3, 8, 7, shadeColor(c.primary, -0.08), 15);
+      } },
+
+    { // ---- floating stones (2 / 3 / 4 / 6 with the stage) — redrawn live so they orbit
+      name: 'mane', z: 3.6, space: 'creature', pivot: (r) => [4, r.bodyY - 20], liveOnly: true, box: [-44, -48, 88, 70],
+      draw(ctx, c, ex, r, t) {
+        const st = ex.stage || 0, n = [2, 3, 4, 6][st] || 2;
+        for (let i = 0; i < n; i++) {
+          const a = t * 0.9 + (i / n) * Math.PI * 2;
+          const x = 4 + Math.cos(a) * (30 + r.g * 6), y = r.bodyY - 20 - r.g * 4 + Math.sin(a) * 9 + Math.sin(t * 2 + i) * 2;
+          ctx.save(); ctx.globalAlpha *= Math.sin(a) > 0 ? 1 : 0.55;
+          pebble(ctx, x, y, 3 + (i % 3), i % 2 ? c.secondary : c.light);
+          ctx.restore();
+        }
+      },
+    },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-20, -26, 40, 40],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        if (ex.horns) { crystalSpike(ctx, -8, -12, 9 + st * 2, 3, c.accent, -0.3); crystalSpike(ctx, 0, -14, 12 + st * 2, 3.4, c.accent, 0); crystalSpike(ctx, 8, -12, 9 + st * 2, 3, c.accent, 0.3); }
+        stonePlate(ctx, 0, 2, 16, 13, c.light, 21);
+        stonePlate(ctx, -1, -9, 12, 5, shadeColor(c.light, 0.1), 22);
+        // brow shadow and the mouth crack
+        poly(ctx, [[-12, -6], [12, -6], [11, -3], [-11, -3]], shadeColor(c.shadow, -0.1));
+      },
+    },
+  ],
+};
+
+// -----------------------------------------------------------------------------
+// SHALECRAWL — Rock Lizard.  Low flat body, crystal dorsal fins that multiply
+// with every stage, long spiked tail, frills on the ear bones, membranous
+// wings at the final stage (Obsidrake).
+// -----------------------------------------------------------------------------
+const LIZARD = {
+  skel: (ex) => skeleton(ex, { legLen: 12, legW: 4.4, bodyY: -22, headY: -30, headX: 26, hipX: -14, shoX: 10 }),
+  face: {
+    eyes: [{ x: 6.4, y: -3.4, r: 3.4, shape: 'sharp', color: 'eye' },
+           { x: -4.4, y: -3.4, r: 3, shape: 'sharp', color: 'eye' }],
+    brows: [{ x: 6.4, y: -8.4, w: 6.2 }, { x: -4.4, y: -8.4, w: 5.6, mirror: true }],
+    mouth: { x: 14, y: 4.6, w: 8, color: '#1e242c', fangs: 1 },
+  },
+  parts: [
+    { // ---- long tail with a crystal fin at the tip
+      name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 10, r.bodyY + 3], box: [-56, -30, 60, 40],
+      draw(ctx, c, ex, r) {
+        const TL = 34 + r.g * 12, st = ex.stage || 0;
+        ctx.beginPath();
+        ctx.moveTo(0, -5);
+        ctx.bezierCurveTo(-TL * 0.5, -6, -TL * 0.9, 2, -TL, -12 - r.g * 6);
+        ctx.bezierCurveTo(-TL * 0.85, 4, -TL * 0.5, 7, 0, 5);
+        ctx.closePath();
+        const tg = ctx.createLinearGradient(0, 0, -TL, 0);
+        tg.addColorStop(0, c.primary); tg.addColorStop(1, c.secondary);
+        ctx.fillStyle = tg; ctx.fill();
+        for (let i = 0; i < 2 + st; i++) crystalSpike(ctx, -TL * (0.25 + i * 0.16), -2 - i * 1.4, 6 + st * 1.5 + (i === 1 + st ? 4 : 0), 2, c.accent, -0.3 - i * 0.12);
+      },
+    },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY + 6], box: [-12, -4, 24, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.secondary, -3.5, 3) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 2, r.bodyY + 6], box: [-12, -4, 24, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.secondary, 3, 3) },
+
+    { // ---- low body with dorsal crystal fins (2 / 3 / 4 / 5)
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-40, -40, 80, 56],
+      draw(ctx, c, ex, r) {
+        const g = r.g, st = ex.stage || 0;
+        volume(ctx, -2, r.bodyY + 2, 28 + g * 6, 11 + g * 2.5, c.light, c.shadow);
+        poly(ctx, [[r.shoX + 6, r.bodyY - 6], [r.headX - 6, r.headY], [r.headX + 2, r.headY + 8], [r.shoX + 14, r.bodyY + 8]], c.primary);
+        ell(ctx, 0, r.bodyY + 8, 22 + g * 4, 5 + g, c.belly);
+        // shale scale marks
+        ctx.strokeStyle = shadeColor(c.secondary, -0.2); ctx.lineWidth = 1.2;
+        for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(-16 + i * 10, r.bodyY + 1, 6, -2.4, -0.7); ctx.stroke(); }
+        const n = 2 + st;
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n;
+          const x = -24 + t * (40 + g * 8), y = r.bodyY - 9 - g * 2;
+          crystalSpike(ctx, x, y, 8 + st * 2.5 + Math.sin(t * Math.PI) * 4, 2.6 + st * 0.4, c.accent, (t - 0.5) * 0.8);
+        }
+      },
+      live(ctx, c, ex, r, t) {                           // fins glow softly
+        const p = gemPulse(t, ex.excite);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.25 * p;
+        ell(ctx, -4, r.bodyY - 12 - r.g * 2, 24 + r.g * 4, 7, c.accent);
+        ctx.restore();
+      },
+    },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 8, r.bodyY + 7], box: [-12, -4, 25, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW * 1.05, c.primary, c.belly, -3, 3) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 12, r.bodyY + 7], box: [-12, -4, 24, 26],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.belly, 2.6, 3) },
+
+    { // ---- wings: only drawn once ex.wings (Obsidrake)
+      name: 'wingL', z: 1.8, space: 'local', pivot: (r) => [-4, r.bodyY - 6 - r.g * 2], box: [-44, -40, 50, 44],
+      draw(ctx, c, ex) {
+        if (!ex.wings) return;
+        poly(ctx, [[0, 0], [-16, -28], [-40, -20], [-30, 0], [-12, 4]], shadeColor(c.secondary, -0.05));
+        ctx.save(); ctx.globalAlpha *= 0.7; poly(ctx, [[-4, -2], [-16, -24], [-34, -18], [-26, -2]], shadeColor(c.accent, -0.2)); ctx.restore();
+        line(ctx, 0, 0, -16, -28, c.dark, 1.6); line(ctx, -4, -2, -34, -18, c.dark, 1.2);
+      } },
+    { name: 'wingR', z: 3.7, space: 'local', pivot: (r) => [2, r.bodyY - 5 - r.g * 2], box: [-6, -40, 50, 44],
+      draw(ctx, c, ex) {
+        if (!ex.wings) return;
+        poly(ctx, [[0, 0], [14, -30], [40, -22], [30, -2], [12, 4]], c.secondary);
+        ctx.save(); ctx.globalAlpha *= 0.7; poly(ctx, [[4, -2], [14, -26], [34, -20], [26, -4]], shadeColor(c.accent, -0.1)); ctx.restore();
+        line(ctx, 0, 0, 14, -30, c.dark, 1.6); line(ctx, 4, -2, 34, -20, c.dark, 1.2);
+      } },
+
+    // frills on the ear bones
+    { name: 'earL', z: 3.5, space: 'local', pivot: (r) => [r.headX - 8 * r.headS, r.headY - 4 * r.headS, r.headS], box: [-16, -12, 20, 22],
+      draw(ctx, c, ex) { const s = 1 + (ex.stage || 0) * 0.2; poly(ctx, [[0, -2], [-10 * s, -10 * s], [-12 * s, 2], [-6 * s, 8 * s]], shadeColor(c.accent, -0.15)); } },
+    { name: 'earR', z: 3.5, space: 'local', pivot: (r) => [r.headX + 6 * r.headS, r.headY - 6 * r.headS, r.headS], box: [-6, -14, 18, 22],
+      draw(ctx, c, ex) { const s = 1 + (ex.stage || 0) * 0.2; poly(ctx, [[0, 0], [8 * s, -11 * s], [12 * s, 0], [6 * s, 7 * s]], shadeColor(c.accent, -0.05)); } },
+
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-18, -24, 40, 36],
+      draw(ctx, c, ex) {
+        const st = ex.stage || 0;
+        if (ex.horns) { crystalSpike(ctx, -6, -11, 8 + st * 2, 2.6, c.accent, -0.6); crystalSpike(ctx, 1, -12, 10 + st * 2, 2.8, c.accent, -0.2); }
+        // flat wedge head
+        poly(ctx, [[-13, -9], [10, -10], [21, 0], [18, 6], [-6, 8], [-14, 2]], c.light);
+        poly(ctx, [[-13, -9], [10, -10], [8, -4], [-11, -3]], shadeColor(c.light, 0.12));
+        ell(ctx, 16, 2, 2.2, 1.6, shadeColor(c.dark, 0.2));   // nostril
+      },
+    },
+  ],
+};
+
 // -----------------------------------------------------------------------------
 /** body plan -> art definition */
 export const SPECIES_ART = {
@@ -1076,12 +1540,289 @@ export const SPECIES_ART = {
  * Palette, horns, wings and scale still come from the species itself, so two
  * species on the same plan still read as different Mythlings.
  */
+// =============================================================================
+// NEW-ELEMENT BODY PLANS — bat / serpent / wisp
+// -----------------------------------------------------------------------------
+// Used by the Stormreach → Astral Spire species (Electric, Ice, Metal, Poison,
+// Psychic). Stage changes: stage 1 grows crests and markings, stage 2 adds horns
+// / spines (ex.horns), stage 3 unfolds a second, larger wing or an aura (ex.wings).
+// =============================================================================
+
+/** Simple crystal shard used by the new plans (lit facet on the left). */
+function gem(ctx, x, y, h, w, angle, color, light) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+  poly(ctx, [[0, -h], [w * 0.5, 0], [-w * 0.5, 0]], color);
+  poly(ctx, [[0, -h], [w * 0.16, -h * 0.12], [-w * 0.14, -h * 0.06], [-w * 0.34, 0]], light);
+  ctx.restore();
+}
+
+// ---- BAT: a hovering cave bat with big ears and membrane wings ----------------
+function batWing(ctx, c, ex, g, flip) {
+  ctx.save(); if (flip) ctx.scale(-1, 1);
+  const L = 30 + g * 10, H = 16 + g * 5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(L * 0.35, -H * 1.1, L, -H * 0.55);
+  ctx.lineTo(L * 0.86, H * 0.05);
+  ctx.quadraticCurveTo(L * 0.7, -H * 0.25, L * 0.56, H * 0.3);
+  ctx.quadraticCurveTo(L * 0.42, -H * 0.05, L * 0.26, H * 0.5);
+  ctx.quadraticCurveTo(L * 0.12, H * 0.2, 0, H * 0.6);
+  ctx.closePath();
+  const wg = ctx.createLinearGradient(0, 0, L, 0); wg.addColorStop(0, c.primary); wg.addColorStop(1, c.secondary);
+  ctx.fillStyle = wg; ctx.fill();
+  ctx.strokeStyle = c.dark; ctx.lineWidth = 1;
+  for (const k of [0.3, 0.6, 0.86]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L * k, -H * (0.5 - k * 0.2) + H * 0.25 * (k > 0.5 ? 1 : 0)); ctx.stroke(); }
+  if (ex.wings) for (const k of [0.32, 0.6, 0.86]) gem(ctx, L * k, H * 0.3 - k * H * 0.3, 8 + g * 2, 4, Math.PI - 0.3 + k * 0.3, c.accent, '#ffffff');
+  else if (ex.stage >= 1) gem(ctx, L * 0.86, -H * 0.5, 6 + g * 2, 3.5, 0.9, c.accent, '#ffffff');
+  ctx.restore();
+}
+const BAT = {
+  skel: (ex) => {
+    const g = ex.grow;
+    const by = -50 - g * 8;
+    return { g, legLen: 8, legW: 2.4, hipX: -4, shoX: 6, bodyY: by, headX: 6 + g * 2, headY: by - 16 - g * 3, headS: 1 - g * 0.08 };
+  },
+  face: {
+    eyes: [{ x: 4.6, y: -1.2, r: 3.8, shape: 'round', color: 'eye', dark: '#150f1c' },
+           { x: -5.4, y: -1.2, r: 3.4, shape: 'round', color: 'eye', dark: '#150f1c' }],
+    brows: [{ x: 4.6, y: -6.8, w: 6.2 }, { x: -5.4, y: -6.8, w: 5.4, mirror: true }],
+    mouth: { x: 0.5, y: 5.4, w: 6, color: '#1d1524', fangs: 2 },
+  },
+  parts: [
+    { name: 'wingL', z: 0, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY - 4], box: [-44, -28, 48, 36],
+      draw(ctx, c, ex, r) { ctx.rotate(0.1); batWing(ctx, c, ex, r.g, true); } },
+    { name: 'tail', z: 0.5, space: 'local', pivot: (r) => [r.hipX - 2, r.bodyY + 10], box: [-8, -2, 12, 14],
+      draw(ctx, c) { poly(ctx, [[-3, 0], [3, 0], [0, 10]], c.secondary); } },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.hipX, r.bodyY + 11], box: [-5, -2, 10, 12],
+      draw(ctx, c, ex, r) { line(ctx, 0, 0, -1, r.legLen, c.dark, r.legW); line(ctx, -1, r.legLen, -4, r.legLen + 3, c.dark, 1.4); line(ctx, -1, r.legLen, 2, r.legLen + 3, c.dark, 1.4); } },
+    { name: 'legFR', z: 1, space: 'local', pivot: (r) => [r.shoX, r.bodyY + 11], box: [-5, -2, 10, 12],
+      draw(ctx, c, ex, r) { line(ctx, 0, 0, 1, r.legLen, c.dark, r.legW); line(ctx, 1, r.legLen, -2, r.legLen + 3, c.dark, 1.4); line(ctx, 1, r.legLen, 4, r.legLen + 3, c.dark, 1.4); } },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-18, -16, 36, 30],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, 0, r.bodyY, 12 + g * 3, 13 + g * 3, c.light, c.shadow);
+        ell(ctx, 1, r.bodyY + 3, 7.5 + g * 2, 8 + g * 2, c.belly);
+        furTufts(ctx, 0, r.bodyY, 12 + g * 3, 3.6, 5.8, 5, 3.5, c.secondary);
+        if (ex.stage >= 2) { gem(ctx, -8, r.bodyY - 10, 7 + g * 2, 4, -0.5, c.accent, '#ffffff'); gem(ctx, 8, r.bodyY - 10, 7 + g * 2, 4, 0.5, c.accent, '#ffffff'); }
+      } },
+    { name: 'wingR', z: 3, space: 'local', pivot: (r) => [r.shoX + 2, r.bodyY - 4], box: [-4, -28, 48, 36],
+      draw(ctx, c, ex, r) { ctx.rotate(-0.1); batWing(ctx, c, ex, r.g, false); } },
+    { name: 'earL', z: 3.5, space: 'local', pivot: (r) => [r.headX - 8, r.headY - 8], box: [-10, -20, 14, 22],
+      draw(ctx, c, ex, r) { poly(ctx, [[-2, 2], [-9, -14 - r.g * 4], [4, -2]], c.secondary); poly(ctx, [[-2, 1], [-6, -9 - r.g * 3], [2, -1]], c.belly); if (ex.horns) gem(ctx, -9, -14 - r.g * 4, 7, 3.5, -0.4, c.accent, '#ffffff'); } },
+    { name: 'earR', z: 5, space: 'local', pivot: (r) => [r.headX + 6, r.headY - 8], box: [-4, -20, 14, 22],
+      draw(ctx, c, ex, r) { poly(ctx, [[2, 2], [9, -14 - r.g * 4], [-4, -2]], c.primary); poly(ctx, [[2, 1], [6, -9 - r.g * 3], [-2, -1]], c.belly); if (ex.horns) gem(ctx, 9, -14 - r.g * 4, 7, 3.5, 0.4, c.accent, '#ffffff'); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -16, 32, 30],
+      draw(ctx, c, ex, r) {
+        volume(ctx, 0, 0, 12, 11, c.light, c.shadow);
+        ell(ctx, 1, 4.5, 5.5, 3.8, c.belly);
+        ell(ctx, 1, 2.6, 2.2, 1.4, c.dark);
+        if (ex.stage >= 3) gem(ctx, 0, -10, 9, 4.5, -0.05, c.accent, '#ffffff');
+      } },
+  ],
+};
+
+// ---- SERPENT: a coiled, hooded serpent that rears up; no legs, a long tail ----
+const SERPENT = {
+  skel: (ex) => {
+    const g = ex.grow;
+    return { g, legLen: 0, legW: 0, hipX: -14, shoX: 6, bodyY: -20 - g * 3, headX: 14 + g * 3, headY: -58 - g * 12, headS: 1 - g * 0.06 };
+  },
+  face: {
+    eyes: [{ x: 5.4, y: -1.8, r: 3.6, shape: 'sharp', color: 'eye' },
+           { x: -5.2, y: -1.8, r: 3.2, shape: 'sharp', color: 'eye' }],
+    brows: [{ x: 5.4, y: -7, w: 6.6 }, { x: -5.2, y: -7, w: 5.8, mirror: true }],
+    mouth: { x: 11, y: 5.8, w: 7, color: '#2a1a30', fangs: 2 },
+  },
+  parts: [
+    { // the coiled tail lies behind everything
+      name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 4, r.bodyY + 10], box: [-44, -26, 60, 36],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        ctx.lineCap = 'round';
+        for (const [w, col] of [[13 + g * 3, c.secondary], [9 + g * 2, c.primary], [4 + g, c.belly]]) {
+          ctx.strokeStyle = col; ctx.lineWidth = w;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-26 - g * 6, -4, -38 - g * 8, 12, -14, 10); ctx.bezierCurveTo(2, 8, 10, 2, 6 + g * 4, -6); ctx.stroke();
+        }
+        if (ex.stage >= 1) for (let i = 0; i < 3; i++) gem(ctx, -8 - i * 9, -3 - i * 2, 7 + g * 2, 4, -0.6 - i * 0.2, c.accent, '#ffffff');
+      } },
+    { // rearing body column (creature space)
+      name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-26, -46, 52, 60],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        ctx.lineCap = 'round';
+        const w = 15 + g * 4;
+        ctx.strokeStyle = c.shadow; ctx.lineWidth = w + 3;
+        ctx.beginPath(); ctx.moveTo(r.hipX, r.bodyY + 8); ctx.quadraticCurveTo(-4, r.bodyY - 10, r.headX - 6, r.headY + 14); ctx.stroke();
+        ctx.strokeStyle = c.primary; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.moveTo(r.hipX, r.bodyY + 8); ctx.quadraticCurveTo(-4, r.bodyY - 10, r.headX - 6, r.headY + 14); ctx.stroke();
+        ctx.strokeStyle = c.belly; ctx.lineWidth = w * 0.45;
+        ctx.beginPath(); ctx.moveTo(r.hipX + 3, r.bodyY + 9); ctx.quadraticCurveTo(-1, r.bodyY - 8, r.headX - 3, r.headY + 14); ctx.stroke();
+        // belly plates
+        ctx.strokeStyle = c.bellyShade; ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) { const t = 0.15 + i * 0.14; const x = (1 - t) * (1 - t) * r.hipX + 2 * (1 - t) * t * -4 + t * t * (r.headX - 6); const y = (1 - t) * (1 - t) * (r.bodyY + 8) + 2 * (1 - t) * t * (r.bodyY - 10) + t * t * (r.headY + 14); ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 4, y); ctx.stroke(); }
+      } },
+    { name: 'legFL', z: 2.2, space: 'local', pivot: (r) => [r.headX - 14, r.headY + 22], box: [-8, -3, 14, 16],   // tiny vestigial claws
+      draw(ctx, c) { line(ctx, 0, 0, -3, 9, c.secondary, 3.2); line(ctx, -3, 9, -7, 11, c.dark, 1.6); line(ctx, -3, 9, 0, 12, c.dark, 1.6); } },
+    { name: 'legFR', z: 3.2, space: 'local', pivot: (r) => [r.headX - 2, r.headY + 24], box: [-6, -3, 14, 16],
+      draw(ctx, c) { line(ctx, 0, 0, 3, 9, c.primary, 3.2); line(ctx, 3, 9, 7, 11, c.dark, 1.6); line(ctx, 3, 9, 0, 12, c.dark, 1.6); } },
+    { name: 'earL', z: 3.4, space: 'local', pivot: (r) => [r.headX - 10, r.headY - 4], box: [-12, -10, 14, 16],   // side frills
+      draw(ctx, c, ex, r) { poly(ctx, [[0, 0], [-10 - r.g * 3, -6], [-8 - r.g * 2, 4]], c.secondary); poly(ctx, [[0, 0], [-6 - r.g * 2, -3], [-5 - r.g, 2]], c.accent); } },
+    { name: 'earR', z: 4.5, space: 'local', pivot: (r) => [r.headX + 8, r.headY - 4], box: [-2, -10, 14, 16],
+      draw(ctx, c, ex, r) { poly(ctx, [[0, 0], [10 + r.g * 3, -6], [8 + r.g * 2, 4]], c.primary); poly(ctx, [[0, 0], [6 + r.g * 2, -3], [5 + r.g, 2]], c.accent); } },
+    { // hood / mane flares with the stage
+      name: 'mane', z: 3.5, space: 'local', pivot: (r) => [r.headX - 4, r.headY + 6], box: [-24, -30, 44, 40],
+      draw(ctx, c, ex, r) {
+        const g = r.g, hw = 12 + g * 8 + (ex.wings ? 8 : 0), hh = 18 + g * 8 + (ex.wings ? 6 : 0);
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.quadraticCurveTo(-hw, -2, -hw * 0.6, -hh); ctx.quadraticCurveTo(0, -hh * 0.6, hw * 0.6, -hh); ctx.quadraticCurveTo(hw, -2, 0, 8); ctx.closePath();
+        const hg = ctx.createLinearGradient(0, -hh, 0, 8); hg.addColorStop(0, c.secondary); hg.addColorStop(1, c.primary); ctx.fillStyle = hg; ctx.fill();
+        ctx.strokeStyle = c.dark; ctx.lineWidth = 1.2; ctx.stroke();
+        ell(ctx, 0, -hh * 0.45, hw * 0.35, hh * 0.28, c.accent);
+        if (ex.horns) { gem(ctx, -hw * 0.55, -hh * 0.75, 9 + g * 3, 4.5, -0.5, c.accent, '#ffffff'); gem(ctx, hw * 0.55, -hh * 0.75, 9 + g * 3, 4.5, 0.5, c.accent, '#ffffff'); }
+      } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-18, -16, 36, 30],
+      draw(ctx, c, ex, r) {
+        volume(ctx, 0, 0, 12.5, 10, c.light, c.shadow);
+        ell(ctx, 8, 3, 7, 4.5, c.primary);
+        ell(ctx, 9, 4.5, 5.5, 3, c.belly);
+        ctx.strokeStyle = c.accent; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(14, 4); ctx.lineTo(19, 3); ctx.lineTo(17, 1); ctx.moveTo(19, 3); ctx.lineTo(18, 6); ctx.stroke();   // forked tongue
+        if (ex.stage >= 3) gem(ctx, 0, -9, 10, 5, -0.1, c.accent, '#ffffff');
+      } },
+  ],
+};
+
+// ---- WISP: a floating, glowing core wrapped in a mantle, with drifting tendrils ----
+const WISP = {
+  skel: (ex) => {
+    const g = ex.grow;
+    const by = -44 - g * 10;
+    return { g, legLen: 0, legW: 0, hipX: -6, shoX: 6, bodyY: by, headX: 0, headY: by - 8 - g * 2, headS: 1 };
+  },
+  face: {
+    eyes: [{ x: 5.2, y: -2.2, r: 4.2, shape: 'round', color: 'eye', dark: '#1a1230' },
+           { x: -5.2, y: -2.2, r: 4.2, shape: 'round', color: 'eye', dark: '#1a1230' }],
+    brows: [{ x: 5.2, y: -8.2, w: 6.6 }, { x: -5.2, y: -8.2, w: 6.6, mirror: true }],
+    mouth: { x: 0, y: 5, w: 5, color: '#2a1e40' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [0, r.bodyY + 14], box: [-22, -4, 44, 40],
+      draw(ctx, c, ex, r) {                                                    // drifting tendrils
+        const g = r.g; ctx.lineCap = 'round';
+        for (let i = -2; i <= 2; i++) { ctx.strokeStyle = i % 2 ? c.secondary : c.primary; ctx.lineWidth = 3 - Math.abs(i) * 0.5; ctx.beginPath(); ctx.moveTo(i * 5, 0); ctx.quadraticCurveTo(i * 9, 12 + g * 4, i * 4, 24 + g * 8 - Math.abs(i) * 4); ctx.stroke(); }
+      },
+      live(ctx, c, ex, r, t) { ctx.save(); ctx.globalAlpha *= 0.5; for (let i = 0; i < 3; i++) { const p = (t * 0.7 + i * 0.33) % 1; ell(ctx, Math.sin(t * 2 + i * 2) * 8, 26 + r.g * 8 - p * 30, 2 - p * 1.5, 2 - p * 1.5, c.accent); } ctx.restore(); } },
+    { name: 'wingL', z: 0.5, space: 'local', pivot: (r) => [-14, r.bodyY - 6], box: [-30, -30, 34, 40],
+      draw(ctx, c, ex, r) { if (!ex.wings) return; for (let i = 0; i < 3; i++) gem(ctx, -6 - i * 8, 6 - i * 10, 18 - i * 3, 8, -0.6 - i * 0.25, c.accent, '#ffffff'); } },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-24, -26, 48, 48],
+      draw(ctx, c, ex, r) {                                                    // mantle + glowing core
+        const g = r.g;
+        ctx.beginPath(); ctx.moveTo(0, r.bodyY - 20 - g * 5); ctx.quadraticCurveTo(22 + g * 5, r.bodyY - 6, 14 + g * 3, r.bodyY + 18 + g * 4); ctx.quadraticCurveTo(0, r.bodyY + 10, -14 - g * 3, r.bodyY + 18 + g * 4); ctx.quadraticCurveTo(-22 - g * 5, r.bodyY - 6, 0, r.bodyY - 20 - g * 5); ctx.closePath();
+        const mg = ctx.createLinearGradient(0, r.bodyY - 20, 0, r.bodyY + 18); mg.addColorStop(0, c.light); mg.addColorStop(1, c.shadow); ctx.fillStyle = mg; ctx.fill();
+        ctx.strokeStyle = c.dark; ctx.lineWidth = 1.2; ctx.stroke();
+        ell(ctx, 0, r.bodyY + 2, 9 + g * 2, 9 + g * 2, c.belly);
+        ell(ctx, 0, r.bodyY + 2, 5 + g, 5 + g, c.accent);
+        if (ex.stage >= 1) for (let i = -1; i <= 1; i++) gem(ctx, i * 9, r.bodyY - 14 - g * 3, 7 + g * 2, 4, i * 0.35, c.accent, '#ffffff');
+        if (ex.horns) { gem(ctx, -13 - g * 3, r.bodyY - 2, 10 + g * 3, 5, -1.1, c.secondary, c.light); gem(ctx, 13 + g * 3, r.bodyY - 2, 10 + g * 3, 5, 1.1, c.secondary, c.light); }
+      },
+      live(ctx, c, ex, r, t) { ctx.save(); ctx.globalAlpha *= 0.28 + 0.18 * Math.sin(t * 3); ctx.globalCompositeOperation = 'lighter'; ell(ctx, 0, r.bodyY + 2, 12 + r.g * 3, 12 + r.g * 3, c.accent); ctx.restore(); } },
+    { name: 'wingR', z: 3.5, space: 'local', pivot: (r) => [14, r.bodyY - 6], box: [-4, -30, 34, 40],
+      draw(ctx, c, ex, r) { if (!ex.wings) return; for (let i = 0; i < 3; i++) gem(ctx, 6 + i * 8, 6 - i * 10, 18 - i * 3, 8, 0.6 + i * 0.25, c.accent, '#ffffff'); } },
+    { name: 'legFL', z: 1.5, space: 'local', pivot: (r) => [-12, r.bodyY + 6], box: [-8, -2, 12, 22],   // tendril arms that sway like legs
+      draw(ctx, c) { ctx.strokeStyle = c.secondary; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-6, 8, -2, 18); ctx.stroke(); ell(ctx, -2, 18, 2.6, 2.6, c.accent); } },
+    { name: 'legFR', z: 3.6, space: 'local', pivot: (r) => [12, r.bodyY + 6], box: [-4, -2, 12, 22],
+      draw(ctx, c) { ctx.strokeStyle = c.primary; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(6, 8, 2, 18); ctx.stroke(); ell(ctx, 2, 18, 2.6, 2.6, c.accent); } },
+    { name: 'earL', z: 3.7, space: 'local', pivot: (r) => [r.headX - 12, r.headY - 8], box: [-8, -8, 12, 12],   // orbiting motes
+      draw(ctx, c) { ell(ctx, -3, -2, 3.2, 3.2, c.accent); ell(ctx, -3.8, -2.8, 1.2, 1.2, '#ffffff'); } },
+    { name: 'earR', z: 4.6, space: 'local', pivot: (r) => [r.headX + 12, r.headY - 8], box: [-4, -8, 12, 12],
+      draw(ctx, c) { ell(ctx, 3, -2, 3.2, 3.2, c.accent); ell(ctx, 2.2, -2.8, 1.2, 1.2, '#ffffff'); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-16, -18, 32, 30],
+      draw(ctx, c, ex, r) {                                                    // the face floats on the mantle's crown
+        volume(ctx, 0, 0, 12, 10.5, c.light, c.shadow);
+        if (ex.stage >= 3) { ctx.save(); ctx.globalAlpha *= 0.7; ctx.strokeStyle = c.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, -14, 12, 3.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }  // halo
+      } },
+  ],
+};
+
+// ---- RAM: fleece quadruped with curling crystal horns (Psychic ram, the legendary elk) ----
+function ramHorn(ctx, c, size, flip, g) {
+  ctx.save(); if (flip) ctx.scale(-1, 1);
+  const s = size;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * 1.1, -s * 0.9, s * 0.6, -s * 1.5); ctx.quadraticCurveTo(s * 0.1, -s * 1.7, -s * 0.15, -s * 1.05); ctx.quadraticCurveTo(s * 0.5, -s * 1.1, s * 0.45, -s * 0.7); ctx.quadraticCurveTo(s * 0.35, -s * 0.25, 0, 0); ctx.closePath();
+  const hg = ctx.createLinearGradient(0, -s * 1.7, s, 0); hg.addColorStop(0, shadeColor(c.accent, 0.25)); hg.addColorStop(1, shadeColor(c.accent, -0.3));
+  ctx.fillStyle = hg; ctx.fill();
+  ctx.strokeStyle = shadeColor(c.accent, -0.45); ctx.lineWidth = 0.9; ctx.stroke();
+  if (g > 0.4) gem(ctx, s * 0.55, -s * 1.5, s * 0.55, s * 0.25, 0.25, c.accent, '#ffffff');
+  ctx.restore();
+}
+const RAM = {
+  skel: (ex) => skeleton(ex, { legLen: 22, legW: 4.6, bodyY: -35, headY: -60, headX: 20 }),
+  face: {
+    eyes: [{ x: 6.2, y: -2.4, r: 3.8, shape: 'almond', color: 'eye' },
+           { x: -5.8, y: -2.4, r: 3.4, shape: 'almond', color: 'eye' }],
+    brows: [{ x: 6.2, y: -7.6, w: 6.8 }, { x: -5.8, y: -7.6, w: 6, mirror: true }],
+    mouth: { x: 13, y: 8.2, w: 7, color: '#3a3038' },
+  },
+  parts: [
+    { name: 'tail', z: 0, space: 'local', pivot: (r) => [r.hipX - 12, r.bodyY + 2], box: [-12, -10, 14, 16],
+      draw(ctx, c) { ell(ctx, -5, 0, 6, 4.4, c.secondary); ell(ctx, -7, -1, 3.6, 2.6, c.belly); } },
+    { name: 'wingL', z: 0.3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY - 16 - r.g * 4], box: [-30, -30, 34, 38],
+      draw(ctx, c, ex) { if (!ex.wings) return; for (let i = 0; i < 4; i++) gem(ctx, -4 - i * 7, 4 - i * 7, 24 - i * 4, 7.5, -0.75 - i * 0.18, c.accent, '#ffffff'); } },
+    { name: 'legBL', z: 1, space: 'local', pivot: (r) => [r.hipX - 1, r.bodyY + 8], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.shadow, c.dark, -1.2, 2) },
+    { name: 'legFL', z: 1, space: 'local', pivot: (r) => [r.shoX + 3, r.bodyY + 8], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.shadow, c.dark, 1.2, 2) },
+    { name: 'body', z: 2, space: 'creature', pivot: (r) => [0, r.bodyY], box: [-32, -28, 62, 48],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        volume(ctx, r.hipX + 2, r.bodyY, 16 + g * 4, 14 + g * 3, c.light, c.shadow);
+        volume(ctx, r.shoX, r.bodyY - 1, 15 + g * 3, 13 + g * 3, c.light, c.shadow);
+        ell(ctx, r.shoX - 2, r.bodyY + 5, 12 + g * 2, 8 + g, c.belly);
+        for (let i = 0; i < 6; i++) ell(ctx, r.hipX - 8 + i * 6, r.bodyY - 12 - g * 2 + Math.sin(i) * 1.5, 4.6 + g, 3.6 + g, i % 2 ? c.light : c.primary);
+      } },
+    { name: 'mane', z: 2.6, space: 'creature', pivot: (r) => [r.shoX, r.bodyY - 14], box: [-22, -26, 40, 30],
+      draw(ctx, c, ex, r) {
+        const g = r.g, n = 2 + ex.stage * 2;
+        for (let i = 0; i < n; i++) gem(ctx, r.shoX - 8 + i * 4.5, r.bodyY - 13 - g * 3 + (i % 2) * 2, 7 + g * 3 + (i % 3), 4, -0.3 + i * 0.12, c.accent, '#ffffff');
+      } },
+    { name: 'legBR', z: 3, space: 'local', pivot: (r) => [r.hipX + 4, r.bodyY + 9], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen, r.legW, c.primary, c.dark, -1.2, 2) },
+    { name: 'legFR', z: 3, space: 'local', pivot: (r) => [r.shoX + 8, r.bodyY + 9], box: [-9, -4, 18, 38],
+      draw: (ctx, c, ex, r) => limb(ctx, 0, 0, r.legLen - 1, r.legW, c.primary, c.dark, 1.2, 2) },
+    { name: 'wingR', z: 3.4, space: 'local', pivot: (r) => [r.shoX + 4, r.bodyY - 17 - r.g * 4], box: [-6, -30, 34, 38],
+      draw(ctx, c, ex) { if (!ex.wings) return; for (let i = 0; i < 4; i++) gem(ctx, 4 + i * 7, 4 - i * 7, 24 - i * 4, 7.5, 0.75 + i * 0.18, c.accent, '#ffffff'); } },
+    { name: 'earL', z: 3.6, space: 'local', pivot: (r) => [r.headX - 8, r.headY - 4], box: [-12, -8, 14, 12],
+      draw(ctx, c) { ell(ctx, -5, 1, 6.5, 3, shadeColor(c.primary, -0.08), -0.35); ell(ctx, -5, 1, 4, 1.7, c.belly, -0.35); } },
+    { name: 'earR', z: 5, space: 'local', pivot: (r) => [r.headX + 6, r.headY - 5], box: [-3, -8, 14, 12],
+      draw(ctx, c) { ell(ctx, 5, 1, 6.5, 3, c.primary, 0.35); ell(ctx, 5, 1, 4, 1.7, c.belly, 0.35); } },
+    { name: 'head', z: 4, space: 'local', pivot: (r) => [r.headX, r.headY, r.headS], box: [-24, -34, 48, 48],
+      draw(ctx, c, ex, r) {
+        const g = r.g;
+        const hs = ex.horns ? 8 + g * 5 : 0;
+        if (hs) { ramHorn(ctx, c, hs, true, g); ctx.save(); ctx.translate(8, -2); ramHorn(ctx, c, hs * 0.9, false, g); ctx.restore(); }
+        else { gem(ctx, -5, -10, 6, 4, -0.4, c.accent, '#ffffff'); gem(ctx, 5, -10, 6, 4, 0.4, c.accent, '#ffffff'); }
+        volume(ctx, 0, 0, 12.5, 11.5, c.light, c.shadow);
+        ell(ctx, 8, 4, 6.5, 5, c.belly);
+        for (let i = 0; i < 3; i++) ell(ctx, -6 + i * 4, -9, 3.4, 2.8, i % 2 ? c.light : c.primary);
+      } },
+  ],
+};
+
 export const BODY_PLANS = {
   fox: SPRIGGO,
   feline: AQUINI,
   dragon: EMBERU,
   wolf: RIVRUFF,
   avian: LEAFLET,
+  // Rock plans (Stonehollow Crags)
+  tortoise: TORTOISE,
+  boar: BOAR,
+  beetle: BEETLE,
+  golem: GOLEM,
+  lizard: LIZARD,
+  // New-element plans (Electric / Ice / Metal / Poison / Psychic lines)
+  bat: BAT,
+  serpent: SERPENT,
+  wisp: WISP,
+  ram: RAM,
 };
 
 export function artFor(speciesId) {

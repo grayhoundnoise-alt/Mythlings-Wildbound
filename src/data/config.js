@@ -1,10 +1,19 @@
 // Global tunables for the current version.
-export const GAME_VERSION = '0.3.0';
+export const GAME_VERSION = '0.5.1';
 export const SAVE_PREFIX = 'mythlings_wildbound';
 export const SAVE_SLOT_COUNT = 3;
 
 export const LEVEL_CAP = 100;         // live cap: every Mythling can reach Lv.100
 export const ABSOLUTE_MAX_LEVEL = 100; // ceiling the data structures are built for
+
+/** Rarity of the starter partner: always a top-tier S Mythling. */
+export const STARTER_RARITY = 'S';
+/**
+ * Your first partner does not start from scratch: it joins at Lv.5 with its
+ * Lv.1 skills already learned, so the first route is a warm-up rather than a
+ * crawl. Captured Mythlings still ALWAYS reset to Lv.1 - that rule never moves.
+ */
+export const STARTER_LEVEL = 5;
 
 export const PARTY_MAX = 6;
 export const STORAGE_MAX = 200;
@@ -22,24 +31,52 @@ export const FUTURE_CONTENT_LIVE = true;
 
 export const COUNTER_MAX_PERCENT = 35; // Counter can never make something untouchable
 /**
- * Counter is the EVASION stat: every point of Counter used to be a full 1% dodge,
- * which made attacks miss far too often. Each point is now worth half a percent and
- * the dodge chance is hard-capped, so a maxed Counter dodges 18% of hits, not 35%.
+ * Counter is the EVASION stat. A miss should be a rare surprise, never a routine
+ * annoyance: each point is now worth 0.15% dodge and the chance is hard-capped,
+ * so even a maxed Counter (35) dodges only about 5% of hits.
  */
-export const COUNTER_DODGE_SCALE = 0.5;
-export const COUNTER_MAX_DODGE = 18;
+export const COUNTER_DODGE_SCALE = 0.15;
+export const COUNTER_MAX_DODGE = 6;
 
-/** Crit Chance is a percentage (0-60). Crit Damage is a BONUS percentage (0-200 => up to x3). */
-export const CRIT_MAX_PERCENT = 60;
-export const CRIT_MAX_MULT = 200;
+/**
+ * Crit Chance is a percentage, Crit Damage a BONUS percentage on top of the hit.
+ * Both caps were lowered again: a crit should be a lucky spike, not a coin flip
+ * that doubles the damage. Even a fully evolved Lv.100 Mythling now crits at most
+ * one hit in ten, for at most +35% damage (x1.35).
+ */
+export const CRIT_MAX_PERCENT = 10;
+export const CRIT_MAX_MULT = 35;
 
 export const DAMAGE_RANDOM_MIN = 0.85;
 export const DAMAGE_RANDOM_MAX = 1.0;
+/**
+ * Damage scaling on top of the stat ratio. Attack and Defense already grow with level
+ * and evolution stage, so these stay gentle: the old 0.085/level × full stage multiplier
+ * let two Lv.100 Mythlings one-shot each other and made "who moves first" the whole
+ * fight. At Lv.100 / stage 4 the factor is now ~5 instead of ~20.7 — a neutral Special
+ * takes about six hits to KO an equal foe, a super-effective one about four, and even
+ * a super-effective Ultimate needs two or three.
+ */
+export const DAMAGE_LEVEL_SCALE = 0.03;
+export const DAMAGE_STAGE_SCALE = 0.08;
+/**
+ * Ultimates are strong, not a delete button: their listed tier power is scaled by this before
+ * anything else. With it, a neutral Ultimate takes ~4 hits to KO an equal foe, a super-effective
+ * one ~2.7, and even a super-effective CRIT Ultimate cannot one-shot an equal, full-HP foe.
+ */
+export const ULTIMATE_POWER_SCALE = 0.7;
 
 export const STAT_GROWTH = {
-  hp: 0.085, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
-  crit: 0.030, critMult: 0.008,
+  // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.
+  hp: 0.105, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,
+  crit: 0.006, critMult: 0.004,
 };
+
+/**
+ * Rational (the second personality trait): a fixed +10 to one stat and -10 to
+ * another, flat, on top of level growth, Mood, Rarity and mutation bonuses.
+ */
+export const RATIONAL_AMOUNT = 10;
 
 /** Counter (evasion stat) -> actual dodge chance in percent. Single source of truth. */
 export function counterDodgePercent(counter) {
@@ -93,12 +130,17 @@ export function coinReward({ enemyLevel, enemyYield, winnerLevel }) {
   return Math.max(1, Math.floor((2.2 * enemyLevel + enemyYield * 0.55) * scale));
 }
 
+/** Overworld camera zoom limits: you can zoom in a fair bit, but never far enough out to see half the map. */
+export const CAMERA_ZOOM_MIN = 1.1;
+export const CAMERA_ZOOM_MAX = 1.8;
+export const CAMERA_ZOOM_STEP = 0.05;
+
 export const DEFAULT_SETTINGS = {
   masterVolume: 0.7,
   musicVolume: 0.5,
   sfxVolume: 0.75,
   textSpeed: 'normal',      // slow | normal | fast | instant
-  cameraSensitivity: 1.0,
+  cameraZoom: 1.35,         // overworld camera zoom, CAMERA_ZOOM_MIN..CAMERA_ZOOM_MAX (this is a 2D game: no "sensitivity")
   fullscreen: false,
   graphicsQuality: 'high',  // low | medium | high
   screenShake: true,

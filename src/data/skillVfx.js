@@ -21,6 +21,12 @@ export const ELEMENT_VFX = {
   nature: { core: '#d8ffb0', mid: '#6fd36a', deep: '#2f7c3f', glow: '#a8f08a', dark: '#17402a', spark: '#eaffd0' },
   water:  { core: '#f2fdff', mid: '#5cc0f5', deep: '#1a5c9e', glow: '#bfe9ff', dark: '#0d3557', spark: '#ffffff' },
   fire:   { core: '#fff3b0', mid: '#ff9a2e', deep: '#d8391a', glow: '#ffcf7a', dark: '#5a1405', spark: '#fff6d8' },
+  rock:   { core: '#fff1cf', mid: '#c9a86e', deep: '#6e5a3c', glow: '#f0dcb0', dark: '#2e2418', spark: '#fff7e0' },
+  electric: { core: '#fffbd0', mid: '#f4d03f', deep: '#b8860b', glow: '#fff6a8', dark: '#4a3a08', spark: '#ffffff' },
+  ice:      { core: '#ffffff', mid: '#8fdcff', deep: '#3f8fc8', glow: '#e6fbff', dark: '#1d4664', spark: '#ffffff' },
+  metal:    { core: '#f4f7fa', mid: '#a9b4c2', deep: '#5c6878', glow: '#e8eef5', dark: '#262c34', spark: '#ffffff' },
+  poison:   { core: '#f2d8ff', mid: '#b06fe0', deep: '#6a2fa0', glow: '#e4c0ff', dark: '#2c1444', spark: '#c8ff8a' },
+  psychic:  { core: '#fff0f8', mid: '#ff6fb5', deep: '#b8307c', glow: '#ffc6e4', dark: '#4a1234', spark: '#ffffff' },
   none:   { core: '#ffffff', mid: '#d8e2f0', deep: '#7b8798', glow: '#ffffff', dark: '#2b3340', spark: '#ffffff' },
 };
 
@@ -29,6 +35,8 @@ const CATEGORY_FALLBACK = {
   normal:  { cast: 'none', projectile: 'contact', impact: 'slash', shake: 3 },
   special: { cast: 'gather', projectile: 'orb', impact: 'burst', shake: 7 },
   buff:    { cast: 'gather', projectile: null, impact: null, shake: 0 },
+  // debuffs fly to the foe as a dim orb; the stat-drop effect itself is played by the 'debuff' event
+  debuff:  { cast: 'gather', projectile: 'orb', impact: 'burst', shake: 2 },
   ultimate:{ cast: 'charge', projectile: 'orb', impact: 'burst', shake: 14 },
 };
 
@@ -153,6 +161,28 @@ export const SKILL_VFX = {
     cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'leafStorm', dur: 0.44 },
     impact: { style: 'leafStorm', shake: 15, ring: true },
     aftermath: { style: 'pollen', dur: 0.9 }, camera: { shake: 15, flash: 0.35, dur: 1.5 } },
+  // ---- rock ultimates
+  stone_avalanche: { id: 'stone_avalanche', element: 'rock', category: 'ultimate',
+    cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'rootErupt', dur: 0.42 },
+    impact: { style: 'verdantCrush', shake: 17, ring: true, flash: 0.5 },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 17, flash: 0.4, dur: 1.5 } },
+  crystal_cannon: { id: 'crystal_cannon', element: 'rock', category: 'ultimate',
+    cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'orb', dur: 0.36 },
+    impact: { style: 'fireBlast', shake: 15, ring: true, flash: 0.45 },
+    aftermath: { style: 'dust', dur: 0.8 }, camera: { shake: 15, flash: 0.4, dur: 1.4 } },
+  // support ultimates (buff / debuff): a barrier-style burst at the caster, no projectile
+  granite_bastion: { id: 'granite_bastion', element: 'rock', category: 'ultimate', defensive: true,
+    cast: { style: 'charge', dur: 0.3 }, projectile: null,
+    impact: { style: 'oceanGuard', shake: 6, ring: true },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 5, flash: 0.2, dur: 1.4 } },
+  quake_curse: { id: 'quake_curse', element: 'rock', category: 'ultimate',
+    cast: { style: 'charge', dur: 0.3 }, projectile: { style: 'rootErupt', dur: 0.4 },
+    impact: { style: 'verdantCrush', shake: 12, ring: true },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 10, flash: 0.25, dur: 1.4 } },
+  crystal_resonance: { id: 'crystal_resonance', element: 'rock', category: 'ultimate', defensive: true,
+    cast: { style: 'charge', dur: 0.3 }, projectile: null,
+    impact: { style: 'oceanGuard', shake: 6, ring: true },
+    aftermath: { style: 'dust', dur: 0.9 }, camera: { shake: 5, flash: 0.25, dur: 1.4 } },
 };
 
 /** Buff VFX keyed by the stat they raise (element tints the palette). */
