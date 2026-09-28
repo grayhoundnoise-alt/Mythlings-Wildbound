@@ -8,6 +8,19 @@ const P = {
   nature: '<path d="M20.4 3.2c-7.6-.6-12.2 1.5-14.4 4.6-2.2 3.2-1.5 7 .3 9l1.9-2.9c.4-2.6 1.7-4.9 4-6.6-1.6 2-2.6 4.3-3 6.9l-2.9 4.4a1.1 1.1 0 0 0 1.8 1.2l1.7-2.6c2.6 1 6.1.5 8.4-2.3 2.6-3.1 3.1-7.6 2.2-11.7Z"/>',
   water: '<path d="M12 2.2c-.4 0-.8.2-1 .5C8.3 6.3 5 10.4 5 14a7 7 0 0 0 14 0c0-3.6-3.3-7.7-6-11.3a1.3 1.3 0 0 0-1-.5Zm3.6 12.6a.8.8 0 0 1 .8.9 4.6 4.6 0 0 1-4 3.9.8.8 0 1 1-.2-1.6 3 3 0 0 0 2.6-2.5.8.8 0 0 1 .8-.7Z"/>',
   fire: '<path d="M13.4 1.6c.5 3.2-.7 4.8-2.2 6.4-1.7 1.8-3.7 3.8-3.7 7.2a6.5 6.5 0 0 0 13 .3c0-2.5-1-4.3-2-5.8-.2 1-.8 1.9-1.7 2.3.3-3.4-1-6.6-3.4-10.4ZM12 13.2c1.2 1.4 1.8 2.5 1.8 3.6a2.4 2.4 0 0 1-4.8.1c0-1.3.9-2.1 1.6-3 .5-.6.9-1.2 1.4-.7Z"/>',
+  rock: '<path d="M8.2 3.4h6.4l4.6 4.2 1.6 6.4-3.4 6.6H7.4l-4.2-5.2.8-6.6Zm1 2.2L5.9 9.3l-.6 4.9 3.1 3.9h7.2l2.5-4.8-1.2-4.8-3.4-3.1Zm.6 3.2 3.6 1.2 1.1 3.6-2.8 2.3-3-1.3-.5-3.4Z"/>',
+  // electric: a lightning bolt
+  electric: '<path d="M13.2 2 4.6 13.4h5.9L9.4 22l9.9-12.4h-6.1L13.2 2Z"/>',
+  // ice: a six-armed snowflake
+  ice: '<path d="M11 2h2v3.3l2.2-1.3 1 1.7L13 7.6v3.2l2.8-1.6.1-2.6 2-.1.1 1.6 2.8-1.6 1 1.7-2.8 1.6 1.4.9-1 1.7-2.4-1.4L14 12l2.9 1.7 2.4-1.4 1 1.7-1.4.9 2.8 1.6-1 1.7-2.8-1.6-.1 1.6-2-.1-.1-2.6L13 13.2v3.2l3.2 1.9-1 1.7L13 18.7V22h-2v-3.3l-2.2 1.3-1-1.7 3.2-1.9v-3.2l-2.8 1.6-.1 2.6-2 .1-.1-1.6-2.8 1.6-1-1.7 2.8-1.6-1.4-.9 1-1.7 2.4 1.4L10 12 7.1 10.3 4.7 11.7l-1-1.7 1.4-.9-2.8-1.6 1-1.7 2.8 1.6.1-1.6 2 .1.1 2.6L11 10.8V7.6L7.8 5.7l1-1.7L11 5.3V2Z"/>',
+  // metal: a hexagonal bolt head with a hex hole
+  metal: '<path d="M12 1.8 21 7v10l-9 5.2L3 17V7l9-5.2Zm0 2.3L5 8.2v7.6l7 4 7-4V8.2l-7-4.1Zm0 3.4 4.1 2.4v4.7L12 17l-4.1-2.4V9.9L12 7.5Zm0 2.3-2.1 1.2v2.5l2.1 1.2 2.1-1.2v-2.5L12 9.8Z"/>',
+  // poison: a dripping droplet with a skull-eye
+  poison: '<path d="M12 2.4c-.4 0-.7.2-.9.5C8.6 6.6 5.4 10.6 5.4 14.2A6.6 6.6 0 0 0 12 20.8a6.6 6.6 0 0 0 6.6-6.6c0-3.6-3.2-7.6-5.7-11.3a1.1 1.1 0 0 0-.9-.5Zm-2.6 9.4a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6Zm5.2 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6ZM10.4 16h3.2v1.6h-3.2V16Z"/>',
+  // psychic: an eye with a radiating iris
+  matchup: '<path d="M3.1 6.6h3.3l2.1 3.5-1.7 2.8 2.2 3.7H5.7l-2.6-4.3Zm17.8 0h-3.3l-2.1 3.5 1.7 2.8-2.2 3.7h3.3l2.6-4.3ZM12 2.6l1.5 3.9 1.1 2.9-2.6-1.5-2.6 1.5 1.1-2.9Zm0 18.8-1.5-3.9-1.1-2.9 2.6 1.5 2.6-1.5-1.1 2.9Z"/>',
+  fighting: '<path d="M7.4 3.2a1.7 1.7 0 0 1 1.7 1.7v3.3h.9V3.5a1.7 1.7 0 1 1 3.4 0v4.7h.9V4.6a1.7 1.7 0 1 1 3.4 0v3.6h.9V6.4a1.6 1.6 0 1 1 3.2 0v7.1a7.8 7.8 0 0 1-7.8 7.8h-1.6A7.8 7.8 0 0 1 4.6 13.5V9.2c0-.9.5-1.6 1.2-1.9V4.9c0-.9.7-1.7 1.6-1.7Zm-.6 8.6v1.7a5.6 5.6 0 0 0 5.6 5.6h1.6a5.6 5.6 0 0 0 5.6-5.6v-1.7Z"/>',
+  psychic: '<path d="M12 5C7 5 3.2 8.2 1.6 12c1.6 3.8 5.4 7 10.4 7s8.8-3.2 10.4-7C20.8 8.2 17 5 12 5Zm0 11.6A4.6 4.6 0 1 1 12 7.4a4.6 4.6 0 0 1 0 9.2Zm0-7a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Z"/>',
   spark: '<path d="M12 1.8 14 9l7.2 2-7.2 2-2 7.2L10 13 2.8 11 10 9Z"/>',
 
   // ---- battle ---------------------------------------------------------
@@ -70,6 +83,32 @@ export function iconPath(name) {
 }
 
 /** SVG markup string — use inside innerHTML/templates. */
+/**
+ * The raw `d` path data of an icon, for drawing the glyph on a <canvas> with
+ * Path2D (authored on a 24x24 grid). Returns [] when the icon has no path data.
+ */
+export function iconPathData(name) {
+  const src = P[ALIASES[name] || name] || '';
+  const out = [];
+  const re = /\sd="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(src))) out.push(m[1]);
+  return out;
+}
+/** Draw an icon glyph on a canvas at (x, y) top-left, `size` px square, filled with `color`. */
+export function drawIconGlyph(ctx, name, x, y, size, color) {
+  if (typeof Path2D === 'undefined') return false;
+  const paths = iconPathData(name);
+  if (!paths.length) return false;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(size / 24, size / 24);
+  ctx.fillStyle = color;
+  for (const d of paths) ctx.fill(new Path2D(d));
+  ctx.restore();
+  return true;
+}
+
 export function iconSvg(name, cls = '') {
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${iconPath(name)}</svg>`;
 }
@@ -77,8 +116,8 @@ export function iconSvg(name, cls = '') {
 /** SVG element — use with the `el()` DOM helper. */
 export function icon(name, cls = '') {
   const span = document.createElement('span');
-  span.className = `ico-wrap ${cls}`;
-  span.innerHTML = iconSvg(name);
+  span.className = 'ico-wrap';
+  span.innerHTML = iconSvg(name, cls);   // the class goes on the <svg> itself (e.g. an element colour)
   return span.firstElementChild;
 }
 
@@ -90,4 +129,4 @@ export function iconLabel(name, text, cls = '') {
   return span;
 }
 
-export const ELEMENT_ICON = { nature: 'nature', water: 'water', fire: 'fire' };
+export const ELEMENT_ICON = { nature: 'nature', water: 'water', fire: 'fire', rock: 'rock', electric: 'electric', ice: 'ice', metal: 'metal', poison: 'poison', psychic: 'psychic' };
