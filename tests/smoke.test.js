@@ -3814,6 +3814,39 @@ test('the editor\u2019s Starter mode tunes the card the game draws', () => {
   }
 });
 
+section('Partner portrait sizing (no speck)');
+
+test('the A NEW PARTNER portrait is CSS-sized so a fractional dpr cannot shrink it to a speck', () => {
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+  const i = main.indexOf("title: 'A NEW PARTNER'");
+  assert.ok(i > 0, 'the new-partner modal exists');
+  const seg = main.slice(i, i + 700);
+  assert.ok(seg.includes("class: 'portrait'"), 'the partner art sits in a sized portrait box');
+  assert.ok(seg.includes("width: '180px', height: '180px'"), 'the portrait box is 180 x 180');
+  assert.ok(seg.includes('mythCanvas(starter, 180, true)'), 'the modal draws the starter through mythCanvas');
+  assert.ok(/\.portrait canvas \{ width: 100%; height: 100%; display: block; \}/.test(css), 'the portrait box CSS-sizes its canvas');
+});
+
+test('mythCanvas pins an unsized canvas layout — fit() can never feed back into it', () => {
+  const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');
+  const i = pm.indexOf('let classified = false;');
+  assert.ok(i > 0, 'the classification guard exists');
+  const seg = pm.slice(i, i + 1400);
+  assert.ok(seg.includes('if (cv.clientWidth === cv.width && cv.clientHeight === cv.height)'), 'an unsized canvas (layout == attribute) is detected');
+  assert.ok(seg.includes("cv.style.width = `${size}px`"), 'its display size is pinned to the requested size');
+  // ...and the pinned display size is applied BEFORE the backing store is computed.
+  assert.ok(seg.indexOf('cv.style.width') < seg.indexOf('const w = Math.max(1, Math.round((cv.clientWidth || size) * d));'), 'the pin happens before the dpr backing store is measured');
+});
+
+test('the species-info previews are CSS-sized like every other myth canvas', () => {
+  const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');
+  assert.ok(pm.includes("portrait({ speciesId: id, stage: 0, mutation: 'none' }, 150, true)"), 'the species preview goes through the sized portrait box');
+  assert.ok(pm.includes("portrait({ speciesId: id, stage: st, mutation: 'none' }, 84)"), 'the evolution-forms row goes through the sized portrait box');
+  assert.ok(!pm.includes('}, 150, true)') || !/mythCanvas\([^)]*150/.test(pm), 'no bare 150px mythCanvas call remains');
+  assert.ok(!/mythCanvas\([^)]*84\)/.test(pm), 'no bare 84px mythCanvas call remains');
+});
+
 for (const item of queue) {
   if (item.kind === 'section') { console.log(`\n${item.name}`); continue; }
   try {

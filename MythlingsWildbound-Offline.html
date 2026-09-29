@@ -21175,8 +21175,17 @@ h3 .name-el { vertical-align: middle; }
     const ctx = cv.getContext("2d");
     let bw = 0, bh = 0;
     let clock = 0;
+    let classified = false;
     const fit = () => {
       const d = dpr();
+      if (!classified) {
+        if (!cv.clientWidth) return false;
+        classified = true;
+        if (cv.clientWidth === cv.width && cv.clientHeight === cv.height) {
+          cv.style.width = `${size}px`;
+          cv.style.height = `${size}px`;
+        }
+      }
       const w = Math.max(1, Math.round((cv.clientWidth || size) * d));
       const h = Math.max(1, Math.round((cv.clientHeight || size) * d));
       if (w === bw && h === bh) return false;
@@ -22090,7 +22099,7 @@ h3 .name-el { vertical-align: middle; }
       const sp = SPECIES[id];
       const body = el("div", {}, [
         el("div", { class: "row", style: { gap: "16px" } }, [
-          mythCanvas({ speciesId: id, stage: 0, mutation: "none" }, 150, true),
+          portrait({ speciesId: id, stage: 0, mutation: "none" }, 150, true),
           el("div", {}, [
             el("div", { class: "row", style: { gap: "6px" } }, [...elementChips(sp), el("span", { class: "chip", text: sp.breed }), el("span", { class: "chip", text: sp.role })]),
             el("p", { class: "sub", text: sp.description }),
@@ -22108,7 +22117,7 @@ h3 .name-el { vertical-align: middle; }
         })),
         el("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, sp.evolutions.map((ev, st) => {
           const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
-          return owned ? mythCanvas({ speciesId: id, stage: st, mutation: "none" }, 84) : el("div", { class: "index-blank", style: { width: "84px", height: "84px" } }, [icon("lock")]);
+          return owned ? portrait({ speciesId: id, stage: st, mutation: "none" }, 84) : el("div", { class: "index-blank", style: { width: "84px", height: "84px" } }, [icon("lock")]);
         }))
       ]);
       modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: "CLOSE", value: true, primary: true }] });
@@ -22583,8 +22592,8 @@ h3 .name-el { vertical-align: middle; }
     "Raise them.",
     "Discover the world of Wildbound."
   ];
-  var HD_STARTER_DX = 0;
-  var HD_STARTER_DY = 0;
+  var HD_STARTER_DX = -22;
+  var HD_STARTER_DY = 14;
   var HD_STARTER_GLOW_DX = 0;
   var HD_STARTER_GLOW_DY = 0;
   var HD_STARTER_SHADOW_DX = 0;
@@ -23343,7 +23352,11 @@ h3 .name-el { vertical-align: middle; }
               await modal({
                 title: "A NEW PARTNER",
                 body: el("div", { style: { textAlign: "center" } }, [
-                  mythCanvas(starter, 180, true),
+                  el(
+                    "div",
+                    { class: "portrait", style: { width: "180px", height: "180px", margin: "0 auto" } },
+                    [mythCanvas(starter, 180, true)]
+                  ),
                   el("p", { html: `<b>${displayName(starter)}</b> joined your team!` }),
                   el("p", { class: "sub", text: "Lv.1  \xB7  EXP 0  \xB7  Ultimate Charge 0/8" })
                 ]),

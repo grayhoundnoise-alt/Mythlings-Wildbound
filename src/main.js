@@ -219,7 +219,11 @@ class Game {
             await modal({
               title: 'A NEW PARTNER',
               body: el('div', { style: { textAlign: 'center' } }, [
-                mythCanvas(starter, 180, true),
+                el(
+                  'div',
+                  { class: 'portrait', style: { width: '180px', height: '180px', margin: '0 auto' } },
+                  [mythCanvas(starter, 180, true)],
+                ),
                 el('p', { html: `<b>${displayName(starter)}</b> joined your team!` }),
                 el('p', { class: 'sub', text: 'Lv.1  ·  EXP 0  ·  Ultimate Charge 0/8' }),
               ]),

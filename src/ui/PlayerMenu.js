@@ -114,9 +114,26 @@ export function mythCanvas(m, size = 66, animated = false) {
   const ctx = cv.getContext('2d');
   let bw = 0, bh = 0;
   let clock = 0;
+  let classified = false;
 
+  // Every display size for these canvases is CSS (.portrait canvas, .party-chip
+  // canvas, ...) and `fit()` below turns that box into a dpr-sharp backing
+  // store. A canvas NOBODY sizes lays out at its attribute instead — and then
+  // setting the attribute from clientWidth feeds back on itself: the canvas
+  // balloons at dpr > 1 and collapses to a speck at dpr < 1 (which is exactly
+  // how the A NEW PARTNER portrait once shrank to a dot of green). Pin the
+  // layout the first time we see an unsized canvas; a stylesheet-governed one
+  // never matches the check below and keeps winning.
   const fit = () => {
     const d = dpr();
+    if (!classified) {
+      if (!cv.clientWidth) return false;
+      classified = true;
+      if (cv.clientWidth === cv.width && cv.clientHeight === cv.height) {
+        cv.style.width = `${size}px`;
+        cv.style.height = `${size}px`;
+      }
+    }
     const w = Math.max(1, Math.round((cv.clientWidth || size) * d));
     const h = Math.max(1, Math.round((cv.clientHeight || size) * d));
     if (w === bw && h === bh) return false;
@@ -931,7 +948,7 @@ export class PlayerMenu {
     const sp = SPECIES[id];
     const body = el('div', {}, [
       el('div', { class: 'row', style: { gap: '16px' } }, [
-        mythCanvas({ speciesId: id, stage: 0, mutation: 'none' }, 150, true),
+        portrait({ speciesId: id, stage: 0, mutation: 'none' }, 150, true),
         el('div', {}, [
           el('div', { class: 'row', style: { gap: '6px' } }, [...elementChips(sp), el('span', { class: 'chip', text: sp.breed }), el('span', { class: 'chip', text: sp.role })]),
           el('p', { class: 'sub', text: sp.description }),
@@ -948,7 +965,7 @@ export class PlayerMenu {
       })),
       el('div', { class: 'row', style: { gap: '8px', marginTop: '8px' } }, sp.evolutions.map((ev, st) => {
         const owned = st === 0 ? true : CollectionManager.hasForm(id, st);
-        return owned ? mythCanvas({ speciesId: id, stage: st, mutation: 'none' }, 84) : el('div', { class: 'index-blank', style: { width: '84px', height: '84px' } }, [icon('lock')]);
+        return owned ? portrait({ speciesId: id, stage: st, mutation: 'none' }, 84) : el('div', { class: 'index-blank', style: { width: '84px', height: '84px' } }, [icon('lock')]);
       })),
     ]);
     modal({ title: sp.displayName.toUpperCase(), body, wide: true, buttons: [{ label: 'CLOSE', value: true, primary: true }] });

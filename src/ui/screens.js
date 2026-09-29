@@ -170,8 +170,8 @@ export const INTRO_LINES = [
 // (copy its values block and paste it here). The computed body/feet focus
 // still does the heavy lifting (the panel comes to the picture); these are
 // the user's offsets on top. Shadow and Mythling move independently.
-const HD_STARTER_DX = 0;
-const HD_STARTER_DY = 0;
+const HD_STARTER_DX = -22;
+const HD_STARTER_DY = 14;
 const HD_STARTER_GLOW_DX = 0;
 const HD_STARTER_GLOW_DY = 0;
 const HD_STARTER_SHADOW_DX = 0;
