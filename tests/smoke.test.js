@@ -3226,6 +3226,39 @@ test('the secret HD Images mode: off by default, and every asset it names exists
   assert.equal(hdEnabled(), false, 'and flips back off');
 });
 
+test('an HD still is placed in the rig footprint, not at its own pixel size', async () => {
+  // Regression: the stills were first drawn using the PNG's own pixel
+  // dimensions as world units, so a 660x512 file filled the screen at every
+  // size. Nothing threw — it just looked catastrophically wrong.
+  const { artFor, artContext, EXPRESSIONS } = await import('../src/render/creatureArt.js');
+  const { hdPlacement } = await import('../src/render/hdImages.js');
+  const img = { naturalWidth: 660, naturalHeight: 512 };
+
+  for (const id of ['spriggo', 'aquini', 'emberu', 'rivruff']) {
+    const art = artFor(id);
+    const r = art.skel(artContext(id, 0, EXPRESSIONS.neutral, {}));
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const def of art.parts) {
+      if (def.liveOnly) continue;
+      const [px, py, sc = 1] = def.pivot(r);
+      const [bx, by, bw, bh] = def.box || [0, 0, 1, 1];
+      minX = Math.min(minX, px + bx * sc); minY = Math.min(minY, py + by * sc);
+      maxX = Math.max(maxX, px + bx * sc + bw * sc); maxY = Math.max(maxY, py + by * sc + bh * sc);
+    }
+    const rigH = maxY - minY;
+    const p = hdPlacement(img, id, 0);
+    assert.ok(p.matched, `${id} has rig geometry to match`);
+    // Height must equal the rig's height: `size` means height, and this is the
+    // whole difference between "a Mythling" and "a Mythling filling the screen".
+    assert.ok(Math.abs(p.h - rigH) < 0.001, `${id}: still height ${p.h} equals rig height ${rigH}`);
+    // Bottom edge sits on the rig's foot line.
+    assert.ok(Math.abs((p.y + p.h) - maxY) < 0.001, `${id}: still stands on the same foot line`);
+    // And it is nowhere near its own pixel size.
+    assert.ok(p.h < 200, `${id}: a 512px-tall file must not draw 512 units tall`);
+    assert.ok(p.w < 200, `${id}: a 660px-wide file must not draw 660 units wide`);
+  }
+});
+
 test('HD mode only reaches the screens that show a Mythling, never the roaming map', async () => {
   // Every UI/scene that DISPLAYS a Mythling must go through the drawCreature
   // switch, or the secret toggle would not affect it.

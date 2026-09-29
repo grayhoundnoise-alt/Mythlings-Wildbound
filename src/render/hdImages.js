@@ -11,6 +11,7 @@
 // =============================================================================
 import { HD_ASSETS } from '../data/hdManifest.js';
 import { getEvolutionStage } from '../data/species.js';
+import { artFor, artContext, EXPRESSIONS } from './creatureArt.js';
 
 // --- state -------------------------------------------------------------------
 let enabled = false;
@@ -77,6 +78,62 @@ export function hdBackdropFor(theme) {
   return get(`bg:${theme}`);
 }
 
+// --- where the rig actually draws a Mythling ---------------------------------
+/**
+ * The visual box the rig gives a species, in its own unit space (where `size`
+ * is 100 and the origin is the draw point). Computed by walking the same part
+ * boxes creatureRig bakes, so a still can be dropped into exactly the footprint
+ * the animated version would occupy — no per-species tuning, and no per-size
+ * re-export of the art.
+ */
+const boundsCache = new Map();
+
+function rigBounds(speciesId, stage) {
+  const key = `${speciesId}:${stage}`;
+  const hit = boundsCache.get(key);
+  if (hit) return hit;
+
+  let b = null;
+  const art = artFor(speciesId);
+  if (art) {
+    const r = art.skel(artContext(speciesId, stage, EXPRESSIONS.neutral, {}));
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const def of art.parts) {
+      if (def.liveOnly) continue;                     // drawn live, not baked
+      const [px, py, s = 1] = def.pivot(r);
+      const [bx, by, bw, bh] = def.box || [0, 0, 1, 1];
+      minX = Math.min(minX, px + bx * s); minY = Math.min(minY, py + by * s);
+      maxX = Math.max(maxX, px + bx * s + bw * s); maxY = Math.max(maxY, py + by * s + bh * s);
+    }
+    if (Number.isFinite(minX)) {
+      b = { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, feetY: maxY };
+    }
+  }
+  boundsCache.set(key, b);
+  return b;
+}
+
+/**
+ * Where a still should be drawn, in rig unit space, for a given PNG.
+ * Extracted (and exported) so the placement can be asserted in tests: getting
+ * this wrong is invisible until a creature fills the screen, because nothing
+ * about a canvas draw throws.
+ */
+export function hdPlacement(img, speciesId, stage = 0) {
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const b = rigBounds(speciesId, stage);
+  if (!b) {
+    // No rig geometry to match: stand a 100-unit-tall still on the origin.
+    return { x: -50 * aspect, y: 0, w: 100 * aspect, h: 100, matched: false };
+  }
+  // Match the rig's HEIGHT — that is what `size` means — and sit the still on
+  // the same foot line, centred on the same axis. The PNG's own pixel size is
+  // ignored on purpose: one file has to serve a 52px icon and a 190px sprite.
+  const h = b.h;
+  const w = h * aspect;
+  return { x: b.cx - w / 2, y: b.feetY - h, w, h, matched: true };
+}
+
 // --- drawing -----------------------------------------------------------------
 /**
  * Draw a Mythling from its PNG, matching the rig's contract: (x, y) is the
@@ -118,11 +175,13 @@ export function drawHdModel(ctx, img, o) {
   ctx.translate(x, y);
   ctx.scale(facing * s, s);
 
-  // Feet at the origin, centred horizontally: the PNG is already cropped tight
-  // to the creature, so it simply hangs up from the ground point.
+  // Place the still inside the rig's own footprint: same height, same centre,
+  // same foot line. The PNG's pixel size is deliberately ignored — it is only
+  // artwork at whatever resolution it happens to be, and one file has to serve
+  // a 52px list icon and a 190px battle sprite alike.
+  const r = hdPlacement(img, speciesId, stage);
   const src = flash > 0.01 ? tinted(img, flash) : img;
-  const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
-  ctx.drawImage(src, -w / 2, -h, w, h);
+  ctx.drawImage(src, r.x, r.y, r.w, r.h);
   ctx.restore();
   return true;
 }
