@@ -484,11 +484,18 @@ select {
 .tp-actions { display: flex; justify-content: center; margin-top: 12px; }
 .tp-toggle { font-size: .72rem; padding: 6px 14px; }
 .tp-more { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10px; }
-/* CURRENT STATS: a clean label / number pair and nothing else. */
-.tp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 16px; }
-.tp-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; font-size: .82rem; line-height: 1.5; }
-.tp-stat .tp-sname { color: var(--muted); font-weight: 700; }
-.tp-stat .tp-sval { font-weight: 900; font-size: .9rem; font-variant-numeric: tabular-nums; }
+/* CURRENT STATS: a clean label / number pair and nothing else.
+   auto-fit rather than a fixed 2 columns: one column on a narrow screen, two
+   when there is room, and never a track wider than the panel. */
+.tp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 3px 20px; }
+.tp-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; font-size: .82rem; line-height: 1.5; }
+/* The number is the whole point of the row: it never shrinks and never
+   truncates. A long name gives way instead, with an ellipsis. */
+.tp-stat .tp-sname {
+  color: var(--muted); font-weight: 700;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tp-stat .tp-sval { flex: 0 0 auto; white-space: nowrap; font-weight: 900; font-size: .9rem; font-variant-numeric: tabular-nums; }
 
 /* ---------- Battle: weather, sleep & seals ---------- */
 .weather-badge {
@@ -1257,8 +1264,11 @@ h3 .name-el { vertical-align: middle; }
 .cc-info:active { transform: scale(.96); }
 
 /* the panel it opens */
+/* The panel fills whatever the modal gives it. It must NOT carry a px floor:
+   a min-width wider than the modal's content box overflows it, and
+   overflow-x: hidden then quietly shaves a digit off the right-hand column. */
 .type-panel {
-  min-width: min(520px, 82vw); max-width: 100%; max-height: 62vh;
+  width: 100%; min-width: 0; max-width: 100%; max-height: 62vh;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
 }
 .type-panel .tp-head {

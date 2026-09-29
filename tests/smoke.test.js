@@ -2431,6 +2431,37 @@ test('the battle card shows a Burn or Poison chip with the real numbers', async 
   assert.match(textOf(row2), /POISON 6/, 'poison shows its own name and counter');
 });
 
+test('the type sheet never carves a digit off its own stats at any window width', () => {
+  const css = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+  const rule = () => {
+    const hit = css.match(/(?:^|\n)\s*\.type-panel[^{]*\{([^}]*)\}/);
+    return hit ? hit[1] : '';
+  };
+  // A px floor on the panel is what broke this: the modal's content box is
+  // 560 - 48 = 512px, so a min-width of 520px overflowed it and the panel's own
+  // overflow-x: hidden shaved a digit off the right-hand column. It only bit
+  // from roughly a 700px viewport upward, which is why it looked fine small.
+  const tp = rule();
+  assert.doesNotMatch(tp, /min-width:\s*\d+px/, 'the type panel carries no px floor that can outgrow its modal');
+  assert.match(tp, /width:\s*100%/, 'it fills whatever the modal gives it instead');
+
+  // The grid must be able to drop to one column, not demand two at any size.
+  const grid = css.match(/\.tp-stats\s*\{([^}]*)\}/);
+  assert.ok(grid, 'the stats grid is still a grid');
+  assert.match(grid[1], /auto-fit/, 'it reflows instead of forcing two columns into a narrow panel');
+  assert.match(grid[1], /minmax\(/, 'with a floor it can actually fall back from');
+
+  // The number is the point of the row: never shrink it, never clip it.
+  const val = css.match(/\.tp-stat \.tp-sval\s*\{([^}]*)\}/);
+  assert.ok(val, 'the stat value is styled');
+  assert.match(val[1], /flex:\s*0 0 auto/, 'the value never shrinks');
+  assert.match(val[1], /white-space:\s*nowrap/, 'and never wraps mid-number');
+  const name = css.match(/\.tp-stat \.tp-sname\s*\{([^}]*)\}/);
+  assert.ok(name, 'the stat label is styled');
+  assert.match(name[1], /min-width:\s*0/, 'the label is the one allowed to give way');
+  assert.match(name[1], /text-overflow:\s*ellipsis/, 'with an ellipsis rather than pushing the number out');
+});
+
 test('a Max Revive puts the Mythling back on the field, not just back on the bar', async () => {
   const { BattleScene } = await import('../src/scenes/BattleScene.js');
   const me = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
