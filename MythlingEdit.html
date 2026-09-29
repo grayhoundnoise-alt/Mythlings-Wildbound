@@ -17,17 +17,17 @@ html,body { height:100%; margin:0; background:var(--bg); color:var(--text);
 button,input,select,textarea { font:inherit; color:inherit; }
 button { cursor:pointer; }
 .hidden { display:none !important; }
-.mono { font-family:var(--mono); }
 .muted { color:var(--muted); }
 
 #app { height:100%; display:grid; grid-template-rows:44px minmax(0,1fr) auto 30px;
   grid-template-columns:var(--left-w) minmax(0,1fr) var(--right-w);
   grid-template-areas:"head head head" "left center right" "left copy right" "foot foot foot"; }
 
-header { grid-area:head; display:flex; align-items:center; gap:12px; padding:0 14px;
+header { grid-area:head; display:flex; align-items:center; gap:8px; padding:0 14px;
   background:#0a1120; border-bottom:1px solid var(--line); }
 header h1 { margin:0; font-size:14px; letter-spacing:.08em; color:var(--gold); font-weight:800; }
 header .spacer { flex:1; }
+.sep { width:1px; height:22px; background:var(--line2); }
 
 #left { grid-area:left; background:var(--panel); border-right:1px solid var(--line);
   display:flex; flex-direction:column; min-height:0; }
@@ -53,12 +53,14 @@ label.row { display:flex; align-items:center; justify-content:space-between;
   gap:8px; margin:6px 0; }
 label.row input[type=number] { width:74px; padding:4px 6px; background:#0a1220;
   border:1px solid var(--line2); border-radius:5px; }
+label.row input[readonly] { background:#0a1220; color:var(--muted); border-color:var(--line); }
 button.b { padding:6px 12px; background:#1b2b47; border:1px solid var(--line2); border-radius:6px; }
 button.b:hover:not(:disabled) { background:#243a5c; }
 button.b.primary { background:var(--gold); color:#20180a; border-color:var(--gold); font-weight:700; }
 button.b.ghost { background:transparent; }
-button.b:disabled { opacity:.4; cursor:not-allowed; }
+button.b:disabled { opacity:.35; cursor:not-allowed; }
 .btns { display:flex; gap:6px; flex-wrap:wrap; }
+#history { font-size:11px; color:var(--dim); font-family:var(--mono); min-width:52px; text-align:center; }
 
 #stage { position:relative; margin:20px; }
 #canvas { display:block; cursor:crosshair; box-shadow:0 10px 40px rgba(0,0,0,.6); }
@@ -91,18 +93,19 @@ button.b:disabled { opacity:.4; cursor:not-allowed; }
 <div id="app">
   <header>
     <h1>MYTHLING IMAGE EDITOR</h1>
+    <span class="sep"></span>
+    <button class="b ghost" id="btnUndo" title="Ctrl+Z" disabled>&#8630; Undo</button>
+    <button class="b ghost" id="btnRedo" title="Ctrl+Shift+Z" disabled>&#8631; Redo</button>
+    <button class="b ghost" id="btnReset" title="Back to the auto-detected anchor" disabled>&#8635; Reset</button>
+    <span id="history">0 / 0</span>
     <span class="spacer"></span>
     <button class="b" id="btnAdd">Add image&hellip;</button>
-    <button class="b" id="btnSave" disabled>Save PNG</button>
     <input type="file" id="fileInput" accept="image/*" class="hidden">
   </header>
 
   <div id="left">
     <div class="panel-h" style="padding:10px 10px 0;margin:0">assets/mythlings</div>
     <div class="file-list" id="fileList"></div>
-    <div style="padding:10px;border-top:1px solid var(--line)" class="btns">
-      <button class="b ghost" id="btnFit">Snap to feet</button>
-    </div>
   </div>
 
   <div id="center">
@@ -129,13 +132,18 @@ button.b:disabled { opacity:.4; cursor:not-allowed; }
       <button class="b ghost" id="btnCentre">Snap to centre</button>
     </div>
     <div class="muted" style="margin-top:8px;font-size:11px">
-      Drag the gold crosshair to the creature's <b>feet</b>. That exact pixel is
-      placed on the ground line, so the picture is never cut to fit.
+      Drag the gold crosshair to the creature's <b>feet</b>, or type the numbers.
+      That exact pixel is placed on the ground line, so the picture is never
+      cut to fit. <b>Undo</b> walks back through your changes; <b>Reset</b>
+      returns to the auto-detected anchor.
     </div>
 
-    <div class="panel-h">Canvas</div>
-    <label class="row"><span class="muted">Width</span><input type="number" id="inW" min="16" step="1"></label>
-    <label class="row"><span class="muted">Height px</span><input type="number" id="inH" min="16" step="1"></label>
+    <div class="panel-h">Picture</div>
+    <label class="row"><span class="muted">Width</span><input type="number" id="inW" readonly></label>
+    <label class="row"><span class="muted">Height px</span><input type="number" id="inH" readonly></label>
+    <div class="muted" style="font-size:11px">
+      The picture is used as-is. Only the numbers above change where it lands.
+    </div>
 
     <div class="panel-h">Preview &mdash; the game's own maths</div>
     <label class="row"><span class="muted">Show rig box</span><input type="checkbox" id="cbGuide" checked></label>
@@ -170,6 +178,7 @@ const state = {
   canvasW: 0, canvasH: 0,
   anchorX: 0, anchorY: 0,     // a pixel INSIDE the picture
   height: 108,               // how tall to draw it, in rig units
+  original: null,            // where it stood when the file was opened
   species: 'spriggo', stage: 0,
   guide: true,
   extra: [],
@@ -179,7 +188,7 @@ const cv = $('canvas'), ctx = cv.getContext('2d');
 
 function boundsFor(id, stage) { return RIG_BOUNDS[`${id}:${stage}`] || RIG_BOUNDS[`${id}:0`] || null; }
 
-/* The renderer, copied from src/render/hdImages.js (hdPlacement). */
+/* The renderer, copied from src/render/hdImages.js (placeImage). */
 function placementFor(iw, ih, b, hUnits, ax, ay) {
   const aspect = iw / ih;
   const h = (hUnits > 0) ? hUnits : (b ? b.h : 100);
@@ -187,6 +196,65 @@ function placementFor(iw, ih, b, hUnits, ax, ay) {
   if (!b) return { x: -50 * aspect, y: 0, w, h };
   return { x: b.cx - (ax / iw) * w, y: b.feetY - (ay / ih) * h, w, h };
 }
+
+/* --------------------------------------------------------------- history -- */
+/* Every placement is three numbers, so history is a list of those. A drag is
+   one entry, not one per pixel, and a run of arrow-key nudges collapses into a
+   single step — otherwise undo would take hundreds of presses to get back. */
+const LIMIT = 200;
+let history = [], hIndex = -1, nudgeTimer = null;
+
+const snap = () => ({ ax: state.anchorX, ay: state.anchorY, h: state.height });
+const same = (a, b) => a.ax === b.ax && a.ay === b.ay && a.h === b.h;
+
+function apply(s) {
+  state.anchorX = s.ax; state.anchorY = s.ay; state.height = s.h;
+  sync(); redraw();
+}
+function commit() {
+  if (hIndex < 0) return;
+  const now = snap();
+  if (same(now, history[hIndex])) { updateHistoryUI(); return; }
+  history = history.slice(0, hIndex + 1);
+  history.push(now);
+  if (history.length > LIMIT) history.shift();
+  hIndex = history.length - 1;
+  updateHistoryUI();
+}
+function resetHistory() {
+  history = [snap()]; hIndex = 0; updateHistoryUI();
+}
+/** A drag or a held key is one undo step, however many moves it took. */
+function commitSoon() {
+  clearTimeout(nudgeTimer);
+  nudgeTimer = setTimeout(commit, 650);
+}
+function updateHistoryUI() {
+  $('btnUndo').disabled = hIndex <= 0;
+  $('btnRedo').disabled = hIndex < 0 || hIndex >= history.length - 1;
+  $('btnReset').disabled = !state.img || !state.original
+    || same(snap(), state.original);
+  $('history').textContent = `${Math.max(0, hIndex)} / ${Math.max(0, history.length - 1)}`;
+}
+function undo() {
+  if (hIndex <= 0) return;
+  clearTimeout(nudgeTimer); hIndex--; apply(history[hIndex]); updateHistoryUI();
+  say(`Undo \u2014 step ${hIndex} of ${history.length - 1}.`);
+}
+function redo() {
+  if (hIndex < 0 || hIndex >= history.length - 1) return;
+  clearTimeout(nudgeTimer); hIndex++; apply(history[hIndex]); updateHistoryUI();
+  say(`Redo \u2014 step ${hIndex} of ${history.length - 1}.`);
+}
+function resetAll() {
+  if (!state.original) return;
+  clearTimeout(nudgeTimer);
+  apply(state.original); commit();
+  say(`Reset to the auto-detected anchor: x ${state.original.ax}, y ${state.original.ay}.`);
+}
+$('btnUndo').onclick = undo;
+$('btnRedo').onclick = redo;
+$('btnReset').onclick = resetAll;
 
 /* ------------------------------------------------- alpha bounding box ------ */
 function alphaBox(img) {
@@ -208,25 +276,31 @@ function alphaBox(img) {
   }
   return x1 < 0 ? null : { x0, y0, x1, y1 };
 }
+function detectFeet(img) {
+  const bb = alphaBox(img);
+  return bb ? { x: Math.round((bb.x0 + bb.x1) / 2), y: bb.y1 } : null;
+}
+function detectCentre(img) {
+  const bb = alphaBox(img);
+  return bb ? { x: Math.round((bb.x0 + bb.x1) / 2), y: Math.round((bb.y0 + bb.y1) / 2) } : null;
+}
 
 function snapFeet() {
   if (!state.img) return;
-  const bb = alphaBox(state.img);
-  if (!bb) { say('Could not read that image\\u2019s alpha (it may not be a PNG).'); return; }
-  state.anchorX = Math.round((bb.x0 + bb.x1) / 2);
-  state.anchorY = bb.y1;
-  say(`Snapped to feet: x ${state.anchorX}, y ${state.anchorY}.`);
-  sync(); redraw();
+  const f = detectFeet(state.img);
+  if (!f) { say('Could not read that image\u2019s alpha (it may not be a PNG).'); return; }
+  state.anchorX = f.x; state.anchorY = f.y; sync(); redraw(); commit();
+  say(`Snapped to feet: x ${f.x}, y ${f.y}.`);
 }
 function snapCentre() {
   if (!state.img) return;
-  const bb = alphaBox(state.img);
-  if (!bb) { say('Could not read that image\\u2019s alpha (it may not be a PNG).'); return; }
-  state.anchorX = Math.round((bb.x0 + bb.x1) / 2);
-  state.anchorY = Math.round((bb.y0 + bb.y1) / 2);
-  say(`Snapped to centre: x ${state.anchorX}, y ${state.anchorY}.`);
-  sync(); redraw();
+  const c = detectCentre(state.img);
+  if (!c) { say('Could not read that image\u2019s alpha (it may not be a PNG).'); return; }
+  state.anchorX = c.x; state.anchorY = c.y; sync(); redraw(); commit();
+  say(`Snapped to centre: x ${c.x}, y ${c.y}.`);
 }
+$('btnFeet').onclick = snapFeet;
+$('btnCentre').onclick = snapCentre;
 
 /* ----------------------------------------------------------------- files -- */
 function allFiles() {
@@ -261,14 +335,14 @@ function loadImage(img, name) {
   state.species = $('selSpecies').value; state.stage = Number($('inStage').value) || 0;
   const b = boundsFor(state.species, state.stage);
   state.height = b ? b.h : 108;
-  state.anchorX = Math.round(img.naturalWidth / 2);
-  state.anchorY = img.naturalHeight;
-  $('btnSave').disabled = false;
-  renderFileList(); sync(); redraw();
-  // Land on a real anchor rather than the raw canvas corner.
-  const bb = alphaBox(img);
-  if (bb) { state.anchorX = Math.round((bb.x0 + bb.x1) / 2); state.anchorY = bb.y1; sync(); redraw(); }
-  say(`${name} \u2014 ${img.naturalWidth}x${img.naturalHeight}`);
+  // Open on a measured anchor, not a guessed corner.
+  const f = detectFeet(img);
+  state.anchorX = f ? f.x : Math.round(img.naturalWidth / 2);
+  state.anchorY = f ? f.y : img.naturalHeight;
+  state.original = snap();
+  renderFileList(); sync(); redraw(); resetHistory();
+  say(`${name} \u2014 ${img.naturalWidth}x${img.naturalHeight}. Feet auto-detected at `
+    + `x ${state.anchorX}, y ${state.anchorY}. Copy it when you are happy.`);
 }
 
 /* ---------------------------------------------------------------- inputs -- */
@@ -277,19 +351,23 @@ function sync() {
   $('inAX').value = state.anchorX; $('inAY').value = state.anchorY;
   $('inH2').value = Math.round(state.height);
 }
-const num = (id, key, min) => $(id).addEventListener('input', () => {
-  const v = Number($(id).value);
-  if (!Number.isFinite(v)) return;
-  state[key] = Math.max(min, v); sync(); redraw();
-});
-num('inW','canvasW',16); num('inH','canvasH',16);
-num('inAX','anchorX',0);   num('inAY','anchorY',0); num('inH2','height',1);
+/** Typing previews live, but only becomes one undo step on blur or Enter. */
+function numField(id, key, min) {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    const v = Number(el.value);
+    if (!Number.isFinite(v)) return;
+    state[key] = Math.max(min, v); sync(); redraw();
+  });
+  el.addEventListener('change', commit);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.blur(); });
+}
+numField('inAX', 'anchorX', 0);
+numField('inAY', 'anchorY', 0);
+numField('inH2', 'height', 1);
 $('selSpecies').addEventListener('change', () => { state.species = $('selSpecies').value; redraw(); });
 $('inStage').addEventListener('input', () => { state.stage = Math.max(0, Number($('inStage').value)||0); redraw(); });
 $('cbGuide').addEventListener('change', () => { state.guide = $('cbGuide').checked; redraw(); });
-$('btnFeet').onclick = snapFeet;
-$('btnCentre').onclick = snapCentre;
-$('btnFit').onclick = snapFeet;
 
 function say(t) { $('status').textContent = t; }
 
@@ -333,6 +411,7 @@ function redraw() {
 
   drawPreviews();
   buildSnippet();
+  updateHistoryUI();
 }
 
 function drawPreviews() {
@@ -356,24 +435,25 @@ function drawPreviews() {
 }
 
 /* ---------------------------------------------------------------- snippet - */
-function buildSnippet() {
-  if (!state.name) { $('snippet').value = ''; return; }
+function entryText() {
+  if (!state.name) return '';
   const key = `${state.species}:${state.stage}`;
   const rel = BUILTIN_FILES.includes(state.name) ? `assets/mythlings/${state.name}` : state.name;
-  $('snippet').value =
-`  'model:${key}': {
+  return `  'model:${key}': {
     src: '${rel}',
     height: ${Math.round(state.height)},
     anchor: { x: ${Math.round(state.anchorX)}, y: ${Math.round(state.anchorY)} },
   },`;
 }
-function oneLine() {
+function entryLine() {
   if (!state.name) return '';
   const key = `${state.species}:${state.stage}`;
   const rel = BUILTIN_FILES.includes(state.name) ? `assets/mythlings/${state.name}` : state.name;
   return `  'model:${key}': { src: '${rel}', height: ${Math.round(state.height)}, anchor: { x: ${Math.round(state.anchorX)}, y: ${Math.round(state.anchorY)} } },`;
 }
+function buildSnippet() { $('snippet').value = entryText(); }
 async function copyText(text, note) {
+  if (!text) { $('copyNote').textContent = 'Pick a file first.'; return; }
   try {
     await navigator.clipboard.writeText(text);
     $('copyNote').textContent = note;
@@ -383,44 +463,11 @@ async function copyText(text, note) {
     $('copyNote').textContent = 'select-all + Ctrl+C';
   }
 }
-$('btnCopy').onclick = () => copyText($('snippet').value, 'Copied.');
-$('btnCopyLine').onclick = () => copyText(oneLine(), 'One line copied.');
-
-/* ------------------------------------------------------------------ save -- */
-$('btnSave').onclick = () => {
-  if (!state.img) { say('No image loaded.'); return; }
-  say('Saving\u2026');
-  const out = document.createElement('canvas');
-  out.width = state.canvasW; out.height = state.canvasH;
-  try {
-    const g = out.getContext('2d');
-    if (!g) throw new Error('no 2d context');
-    g.drawImage(state.img, 0, 0);
-    const done = (blob) => {
-      if (!blob) { say('The browser could not encode that image.'); return; }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = state.name; a.style.display = 'none';
-      document.body.appendChild(a);      // some browsers ignore a detached click
-      a.click();
-      setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 4000);
-      say(`Saved ${state.name} (${(blob.size/1024).toFixed(0)} KB). If nothing downloaded, right-click the link below.`);
-      const l = document.createElement('a');
-      l.href = url; l.download = state.name;
-      l.textContent = `\u2193 ${state.name} (${(blob.size/1024).toFixed(0)} KB) \u2014 click if it did not download`;
-      l.style.cssText = 'color:#f2c761;margin-left:12px';
-      const old = $('status').querySelector('a'); if (old) old.remove();
-      $('status').appendChild(l);
-    };
-    if (out.toBlob) out.toBlob(done, 'image/png');
-    else done(out.toDataURL('image/png'));   // older browsers
-  } catch (err) {
-    say(`Save failed: ${err && err.message ? err.message : err}`);
-  }
-};
+$('btnCopy').onclick = () => copyText(entryText(), 'Copied.');
+$('btnCopyLine').onclick = () => copyText(entryLine(), 'One line copied.');
 
 /* ------------------------------------------------------------------ drag -- */
-let drag = false;
+let drag = false, dragMoved = false;
 function pointAt(e) {
   const r = cv.getBoundingClientRect();
   return {
@@ -430,15 +477,27 @@ function pointAt(e) {
 }
 cv.addEventListener('pointerdown', (e) => {
   if (!state.img) return;
-  drag = true; cv.setPointerCapture(e.pointerId);
+  drag = true; dragMoved = false;
+  cv.setPointerCapture(e.pointerId);
   const p = pointAt(e); state.anchorX = p.x; state.anchorY = p.y; sync(); redraw();
 });
 cv.addEventListener('pointermove', (e) => {
   if (!drag) return;
+  dragMoved = true;
   const p = pointAt(e); state.anchorX = p.x; state.anchorY = p.y; sync(); redraw();
 });
-cv.addEventListener('pointerup', (e) => { drag = false; try { cv.releasePointerCapture(e.pointerId); } catch {} });
+cv.addEventListener('pointerup', (e) => {
+  if (drag && dragMoved) commit();          // a whole drag is one undo step
+  drag = false;
+  try { cv.releasePointerCapture(e.pointerId); } catch {}
+});
 window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    if (e.shiftKey) redo(); else undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
   if (e.target.matches('input,select,textarea')) return;
   if (!state.img) return;
   const st = e.shiftKey ? 10 : 1;
@@ -447,7 +506,7 @@ window.addEventListener('keydown', (e) => {
   e.preventDefault();
   state.anchorX = Math.max(0, Math.min(state.canvasW, state.anchorX + m[0]));
   state.anchorY = Math.max(0, Math.min(state.canvasH, state.anchorY + m[1]));
-  sync(); redraw();
+  sync(); redraw(); commitSoon();            // a run of nudges is one step
 });
 
 /* ------------------------------------------------------------ load / drop -- */
@@ -481,9 +540,9 @@ for (const id of Object.keys(SPECIES_NAMES)) {
   sel.appendChild(o);
 }
 sel.value = 'spriggo';
-renderFileList(); redraw();
+renderFileList(); redraw(); resetHistory();
 say(BUILTIN_FILES.length
-  ? `${BUILTIN_FILES.length} image(s) in assets/mythlings. Pick one.`
+  ? `${BUILTIN_FILES.length} image(s) in assets/mythlings. Pick one, place it, then Copy.`
   : 'No built-in images found \u2014 serve the folder over http (npm start), or use Add image.');
 </script>
 </body>

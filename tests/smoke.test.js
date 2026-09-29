@@ -3320,8 +3320,13 @@ test('the secret panel is hidden: Ctrl+Enter only, and not in the settings scree
   // normal settings screen must not mention it.
   const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
   assert.ok(main.includes('secretSettingsHotkey(e)'), 'main.js binds the hotkey');
-  const menu = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
-  assert.ok(!menu.includes('hdImages'), 'the main menu never offers it');
+  // Reading the HD renderer's art is fine — the starter screen draws with it —
+  // what must not exist is a control, a label or a settings row. Strip the
+  // import lines so only real usage is left to look at.
+  const menu = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8')
+    .split('\n').filter((l) => !/^\s*import\b/.test(l)).join('\n');
+  assert.ok(!/hdImages/.test(menu), 'the main menu never offers it');
+  assert.ok(!/['\"]HD Images['\"]/.test(menu), 'and no screen ever shows a user-facing HD Images control');
   const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');
   const settingsBlock = pm.slice(pm.indexOf('export function settingsPanel'), pm.indexOf('export function settingsPanel') + 4000);
   assert.ok(!settingsBlock.includes('hdImages'), 'the settings screen never lists it');
@@ -3646,6 +3651,21 @@ test('every manifest entry is read through .src, never used as a path itself', a
   assert.ok(found === 0, `found ${found} unguarded manifest reads`);
 });
 
+test('a starter with HD art stands still, while a starter without it keeps animating', async () => {
+  const screens = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  const start = screens.indexOf('export function starterScreen');
+  assert.ok(start > 0, 'the starter screen exists');
+  const body = screens.slice(start, screens.indexOf('\nfunction elementGlow', start));
+  // Only Spriggo has HD art in stage 1, so the screen has to decide per card.
+  assert.ok(/const still = !!hdModelFor\(/.test(body), 'each card asks whether it has a still');
+  // A still has no turn-around and nothing to idle against.
+  assert.ok(/if \(still\) draw\(0\)/.test(body) || /if \(still\)\s*\{[\s\S]{0,200}?draw\(0\)/.test(body),
+    'a still is drawn once, with no animation loop');
+  assert.ok(/requestAnimationFrame/.test(body), 'the non-HD cards still animate');
+  assert.ok(/if \(still\) return;/.test(body), 'the orbiting sparkles are skipped for a still');
+  assert.ok(/ctx\.scale\(Math\.max\(0\.28/.test(body), 'the shape squash only applies to the rig');
+});
+
 test('the image editor can anchor a picture without ever cropping it', async () => {
   const tpl = readFileSync(new URL('../tools/editor-template.html', import.meta.url), 'utf8');
   // A movable anchor is the approved answer to "my art is off-centre" — the
@@ -3655,11 +3675,17 @@ test('the image editor can anchor a picture without ever cropping it', async () 
   assert.ok(/Snap to feet/.test(tpl), 'and exposes it as a button');
   assert.ok(/pointerdown/.test(tpl) && /pointermove/.test(tpl), 'the anchor is draggable');
   assert.ok(/getImageData/.test(tpl), 'the feet are found by reading the alpha channel');
-  // Saving has to actually work: a detached click never downloads in most browsers.
-  assert.ok(/document\.body\.appendChild\(a\)/.test(tpl), 'the save link is attached to the document before clicking');
-  assert.ok(/toBlob|toDataURL/.test(tpl), 'and the canvas is encoded, with a fallback');
-  assert.ok(/catch/.test(tpl), 'and failures are reported instead of swallowed');
   assert.ok(/clipboard\.writeText/.test(tpl), 'the placement is copyable back into the manifest');
+  // A browser cannot overwrite a file the user did not pick, so Save was dead
+  // weight and the anchor is the part that actually matters. It is gone, and
+  // must not creep back as a control that silently does nothing.
+  assert.ok(!/btnSave|toBlob|Save PNG/.test(tpl), 'there is no Save button that cannot work');
+  // Mistakes need to be cheap to back out of.
+  assert.ok(/btnUndo/.test(tpl) && /btnRedo/.test(tpl), 'undo and redo are there');
+  assert.ok(/btnReset/.test(tpl), 'and a reset back to the auto-detected anchor');
+  assert.ok(/state\.original\s*=/.test(tpl), 'the opening anchor is remembered so Reset has something to restore');
+  assert.ok(/function undo\(\)/.test(tpl) && /function redo\(\)/.test(tpl), 'both really walk the history');
+  assert.ok(/e\.ctrlKey[\s\S]{0,40}===\s*'z'/.test(tpl), 'Ctrl+Z is bound');
   // No crop: the tool must not resize the artwork to the rig.
   assert.ok(!/drawImage\([^)]*,\s*-\d/.test(tpl.replace(/\s+/g,' ')), 'nothing is drawn cropped');
 });

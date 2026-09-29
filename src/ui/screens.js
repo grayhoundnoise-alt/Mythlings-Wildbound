@@ -17,6 +17,7 @@ import { GameState, InventoryManager, PlayerManager, PartyManager, StorageManage
 import { ShopManager } from '../systems/ShopManager.js';
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
 import { drawCreature } from '../render/creatures.js';
+import { hdModelFor } from '../render/hdImages.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { coins, formatTime, formatDate } from '../core/utils.js';
 
@@ -175,6 +176,12 @@ export function starterScreen({ onChoose, onBack }) {
     const cv = el('canvas', { width: 420, height: 380 });
     const ctx = cv.getContext('2d');
     const state = { rot: 0, drag: false, lastX: 0, auto: true };
+
+    // A still has no turn-around to drag through and nothing to idle against,
+    // so a species that has HD art is drawn once, dead still. The pedestal
+    // glow stays: that is the card's backdrop, not part of the creature.
+    const still = !!hdModelFor(id, 0, 'none');
+
     const draw = (t) => {
       ctx.clearRect(0, 0, cv.width, cv.height);
       // pedestal glow
@@ -184,15 +191,22 @@ export function starterScreen({ onChoose, onBack }) {
       ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
       ctx.save();
       ctx.translate(210, 320);
-      const spin = state.auto ? Math.sin(t * 0.7) : Math.sin(state.rot);
-      const facing = spin >= 0 ? 1 : -1;
-      const squash = 0.86 + Math.abs(spin) * 0.14;
-      ctx.scale(Math.max(0.28, Math.abs(spin) * 0.6 + 0.55), 1);
-      drawCreature(ctx, {
-        speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
-        size: 210, t, facing, shadow: true, pose: { squash: 1 },
-      });
+      if (still) {
+        drawCreature(ctx, {
+          speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
+          size: 210, t: 0, facing: 1, shadow: true, pose: { squash: 1 },
+        });
+      } else {
+        const spin = state.auto ? Math.sin(t * 0.7) : Math.sin(state.rot);
+        const facing = spin >= 0 ? 1 : -1;
+        ctx.scale(Math.max(0.28, Math.abs(spin) * 0.6 + 0.55), 1);
+        drawCreature(ctx, {
+          speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
+          size: 210, t, facing, shadow: true, pose: { squash: 1 },
+        });
+      }
       ctx.restore();
+      if (still) return;              // no orbiting sparkles over a still
       // sparkles
       for (let i = 0; i < 12; i++) {
         const a = t * 0.8 + i;
@@ -202,14 +216,21 @@ export function starterScreen({ onChoose, onBack }) {
       }
       ctx.globalAlpha = 1;
     };
-    let t0 = performance.now();
-    const loop = (now) => { draw((now - t0) / 1000); cv._raf = requestAnimationFrame(loop); };
-    cv._raf = requestAnimationFrame(loop);
 
-    cv.addEventListener('pointerdown', (e) => { state.drag = true; state.auto = false; state.lastX = e.clientX; cv.setPointerCapture(e.pointerId); });
-    cv.addEventListener('pointermove', (e) => { if (state.drag) { state.rot += (e.clientX - state.lastX) * 0.02; state.lastX = e.clientX; } });
-    cv.addEventListener('pointerup', () => { state.drag = false; });
-    cv.addEventListener('pointerleave', () => { state.drag = false; });
+    if (still) {
+      // No animation loop at all: one frame, and the card sits there.
+      draw(0);
+      cv.style.cursor = 'default';
+    } else {
+      const t0 = performance.now();
+      const loop = (now) => { draw((now - t0) / 1000); cv._raf = requestAnimationFrame(loop); };
+      cv._raf = requestAnimationFrame(loop);
+
+      cv.addEventListener('pointerdown', (e) => { state.drag = true; state.auto = false; state.lastX = e.clientX; cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener('pointermove', (e) => { if (state.drag) { state.rot += (e.clientX - state.lastX) * 0.02; state.lastX = e.clientX; } });
+      cv.addEventListener('pointerup', () => { state.drag = false; });
+      cv.addEventListener('pointerleave', () => { state.drag = false; });
+    }
 
     const stats = sp.baseStats;
     const card = el('div', { class: 'starter-card' }, [

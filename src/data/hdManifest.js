@@ -27,7 +27,7 @@ export const HD_ASSETS = {
   'model:spriggo:0': {
     src: 'assets/mythlings/spriggo_0.png',
     height: 108,
-    anchor: { x: 469, y: 512 },
+    anchor: { x: 503, y: 512 },
   },
 
   // ---- Battle arena backgrounds (weather still paints its sky on top) ----

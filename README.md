@@ -471,8 +471,14 @@ Pick a file and the art appears at 1:1 with a gold crosshair over it.
 * **The two previews** on the right — a 52px list icon and a 176px battle
   sprite — are drawn with the *exact placement maths the game uses*, not an
   approximation.
-* **Save PNG** downloads over the original. **Copy** puts the matching manifest
-  entry on your clipboard so you can paste it into `src/data/hdManifest.js`.
+* **Undo / Redo / Reset** sit in the top bar. Undo is `Ctrl+Z` (and `Ctrl+Shift+Z`
+  or `Ctrl+Y` to redo). A whole drag is a single undo step, and a run of held
+  arrow keys collapses into one, so backing out is always a few presses rather
+  than hundreds. **Reset** returns to the anchor the editor auto-detected when
+  you opened the file.
+* **Copy** puts the matching manifest entry on your clipboard so you can paste
+  it into `src/data/hdManifest.js` — that is the whole hand-off, since a page
+  cannot write back over a file you never gave it access to.
 
 Placement is **per-asset data**, not something the renderer guesses. Each model
 entry carries its own height and anchor:
@@ -481,7 +487,7 @@ entry carries its own height and anchor:
 'model:spriggo:0': {
   src: 'assets/mythlings/spriggo_0.png',
   height: 108,                      // rig units tall
-  anchor: { x: 469, y: 512 },       // a pixel inside the PNG — the feet
+  anchor: { x: 503, y: 512 },       // a pixel inside the PNG — the feet
 },
 ```
 
@@ -495,6 +501,10 @@ lands correctly whatever shape the artwork is.
 | `npm run edit:images` | rebuilds the editor (re-reads the rig geometry, the species list and the folder) |
 | `npm run edit:rig` | builds the full creature / rig / map editor as `MythlingEdit-rig.html` |
 | `tools/make-hd-image.py` | keys a chroma-keyed raw drawing out to a transparent PNG |
+
+A starter Mythling that has HD art is drawn **once, dead still** — there is no
+turn-around to drag and nothing to idle against. A species with no art yet keeps
+its animated rig, so the three starter cards can differ until all are converted.
 
 `tools/gen-rig-bounds.mjs` walks `creatureArt.js` and records the visual box of
 all **211** forms. The editor previews from that table, so if the rig is ever
