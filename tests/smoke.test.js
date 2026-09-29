@@ -1,6 +1,6 @@
 // Headless verification of the rules that matter most (no DOM required).
 // Run with:  npm test
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
 // minimal browser shims used by a couple of modules at import time
@@ -684,7 +684,7 @@ test('life steal: drain heals a share of the damage dealt, mending heals a share
   assert.ok(!heal3 || heal3.amount <= 3, 'capped at max HP');
 });
 
-test('retaliate returns the last hit taken at double strength — and never wastes the turn', () => {
+test('retaliate returns the last hit taken at double strength', () => {
   const p = createMythling({ speciesId: 'shalecrawl', level: 60, stage: 2 });
   p.library.push('retaliate'); p.skills = ['retaliate'];
   const e = createMythling({ speciesId: 'gravelhog', level: 60, stage: 2 });
@@ -709,15 +709,82 @@ test('retaliate returns the last hit taken at double strength — and never wast
   buffer.skills = ['stone_skin']; buffer.library = ['stone_skin'];
   const b2 = new Battle({ type: BattleType.WILD, party: [p2], enemies: [buffer], mapId: 'stonehollow_crags', rng: () => 0.99 });
   const r3 = b2.act({ type: 'skill', index: 0 });
-  // A foe that only buffs leaves nothing to mirror. That used to be a wasted
-  // turn — and it punished exactly the Mythlings the player is most likely to
-  // have, the fast ones that always move first and so never got hit yet. It now
-  // falls back on the unlimited attack, the same rule every other empty button
-  // follows, and says so in the log.
+  // You chose a reactive skill, so you waited; the foe only buffed, so there is
+  // nothing to mirror. The charge is spent and the turn is gone — the price of
+  // a reactive skill on a round that never offers a hit. It does NOT quietly
+  // turn into a normal attack.
   assert.ok(r3.events.some((x) => x.type === 'log' && /nothing to return/.test(x.text)), 'it explains there is nothing to return');
-  const fallback = r3.events.find((x) => x.type === 'damage' && x.side === 'enemy');
-  assert.ok(fallback, 'but the turn is not wasted — it still attacks');
-  assert.notEqual(fallback.skillId, 'retaliate', 'and it is the fallback attack, not the mirror');
+  assert.equal(r3.events.find((x) => x.type === 'damage' && x.side === 'enemy'), undefined,
+    'and it does not fall back on a plain attack — the turn is spent');
+});
+
+test('a reactive skill WAITS: the foe strikes first, however fast you are', () => {
+  // The rule the player asked for: Retaliate / Vengeance mean "I wait for the
+  // first blow". Speed must not override it, or a fast Mythling always acts
+  // before anything exists to return and the skill is worthless.
+  const castOrder = (events) => events.filter((e) => e.type === 'cast').map((e) => e.side);
+  const waited = (events) => events.some((e) => e.type === 'log' && /waits for the first blow/.test(e.text));
+
+  for (const [pId, eId, label] of [['emberfist', 'rubblekin', 'player is FASTER'], ['rubblekin', 'emberfist', 'player is SLOWER']]) {
+    const p = createMythling({ speciesId: pId, level: 30, stage: 1 });
+    const e = createMythling({ speciesId: eId, level: 30, stage: 1 });
+    p.library.push('vengeance'); p.skills = ['vengeance'];
+    const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.5 });
+    const { events } = b.act({ type: 'skill', index: 0 });
+    assert.equal(castOrder(events)[0], 'enemy', `${label}: the enemy still attacks first`);
+    assert.ok(waited(events), `${label}: and the log says it is waiting on purpose`);
+    // NB: use the event param everywhere — `e` is the enemy Mythling out here.
+    const mirrored = events.find((ev) => ev.type === 'damage' && ev.side === 'enemy' && ev.skillId === 'vengeance');
+    assert.ok(mirrored, `${label}: the mirror now actually lands`);
+    const firstHit = events.find((ev) => ev.type === 'damage' && ev.side === 'player');
+    assert.ok(firstHit && mirrored.amount > firstHit.amount, `${label}: and it returns more than it took`);
+  }
+});
+
+test('when BOTH sides are reactive, higher Speed attacks first (no mutual standoff)', () => {
+  // Two Mythlings each waiting on the other would never strike, so this is the
+  // one case that falls back to plain Speed order.
+  const castOrder = (events) => events.filter((e) => e.type === 'cast').map((e) => e.side);
+  for (const [pId, eId, first] of [['emberfist', 'rubblekin', 'player'], ['rubblekin', 'emberfist', 'enemy']]) {
+    const p = createMythling({ speciesId: pId, level: 30, stage: 1 });
+    const e = createMythling({ speciesId: eId, level: 30, stage: 1 });
+    p.library.push('vengeance'); p.skills = ['vengeance'];
+    e.library.push('vengeance'); e.skills = ['vengeance'];
+    const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.5 });
+    const { events } = b.act({ type: 'skill', index: 0 });
+    assert.equal(castOrder(events)[0], first, `${pId} vs ${eId}: the faster side (${first}) leads`);
+    assert.ok(!events.some((e2) => e2.type === 'log' && /waits for the first blow/.test(e2.text)),
+      `${pId} vs ${eId}: nobody holds back, so the round resolves`);
+  }
+});
+
+test('a spent or sealed reactive skill does not make you hand over the initiative', () => {
+  // Waiting is only correct if the move will actually answer. A used-up or
+  // sealed Vengeance falls back on the unlimited attack inside _resolve, so
+  // waiting first would give the initiative away for nothing.
+  const waited = (events) => events.some((e) => e.type === 'log' && /waits for the first blow/.test(e.text));
+  const firstCaster = (events) => events.filter((e) => e.type === 'cast').map((e) => e.side)[0];
+
+  const p = createMythling({ speciesId: 'emberfist', level: 30, stage: 1 });
+  const e = createMythling({ speciesId: 'rubblekin', level: 30, stage: 1 });
+  p.library.push('vengeance'); p.skills = ['vengeance'];
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.5 });
+  assert.ok(b.cb(p).stat('spd') > b.cb(e).stat('spd'), 'sanity: the player is the faster one here');
+  p.uses.vengeance = 0;                    // after construction: a battle refills uses
+  const { events } = b.act({ type: 'skill', index: 0 });
+  assert.ok(!waited(events), 'a spent Vengeance does not hold the player back');
+  assert.equal(firstCaster(events), 'player', 'it just attacks straight away, as a normal move would');
+});
+
+test('normal skills are untouched: the faster Mythling still strikes first', () => {
+  const p = createMythling({ speciesId: 'emberfist', level: 30, stage: 1 });
+  const e = createMythling({ speciesId: 'rubblekin', level: 30, stage: 1 });
+  p.library.push('flame_rawr'); p.skills = ['flame_rawr'];
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.5 });
+  assert.ok(b.cb(p).stat('spd') > b.cb(e).stat('spd'), 'sanity: the player really is faster here');
+  const { events } = b.act({ type: 'skill', index: 0 });
+  assert.equal(events.filter((e) => e.type === 'cast').map((e) => e.side)[0], 'player', 'player leads as usual');
+  assert.ok(!events.some((e) => e.type === 'log' && /waits for the first blow/.test(e.text)), 'and never holds back');
 });
 
 test('elite support skills carry two effects; foe-side entries are always debuffs, self-side always buffs', () => {

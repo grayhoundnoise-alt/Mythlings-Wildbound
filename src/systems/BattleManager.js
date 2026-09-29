@@ -214,11 +214,32 @@ export class Battle {
       return { events, phase: this.phase };
     }
 
-    const pSpd = this.cb(this.player).stat('spd');
-    const eSpd = this.cb(this.enemy).stat('spd');
+    // Retaliate / Vengeance are REACTIVE: they hand back a hit already taken,
+    // so picking one means "I wait for you to strike first". Speed must not
+    // override that, otherwise a FAST Mythling always acts before anything
+    // exists to return, the skill fizzles, and Speed becomes a liability.
+    //
+    // If exactly one side picks a reactive skill, that side resolves SECOND.
+    // If BOTH pick one (or neither does), Speed decides as usual: two Mythlings
+    // each waiting on the other would never strike at all.
+    const pReactive = this._isReactiveAction(this.player, playerAction);
+    const eReactive = this._isReactiveAction(this.enemy, enemyAction);
     let playerFirst;
-    if (pSpd !== eSpd) playerFirst = pSpd > eSpd;
-    else playerFirst = this.rng() < 0.5;
+    if (pReactive !== eReactive) {
+      playerFirst = !pReactive;                      // the reactive side waits
+      const waiter = pReactive ? this.player : this.enemy;
+      const held = getSkill(this._actionSkillId(waiter, pReactive ? playerAction : enemyAction));
+      events.push({
+        type: 'log',
+        text: `${displayName(waiter)} holds ${held?.name || 'it'} ready and waits for the first blow!`,
+        emphasis: true,
+      });
+    } else {
+      const pSpd = this.cb(this.player).stat('spd');
+      const eSpd = this.cb(this.enemy).stat('spd');
+      if (pSpd !== eSpd) playerFirst = pSpd > eSpd;
+      else playerFirst = this.rng() < 0.5;
+    }
 
     const order = playerFirst
       ? [[this.player, this.enemy, playerAction], [this.enemy, this.player, enemyAction]]
@@ -430,18 +451,13 @@ export class Battle {
         skillId: skill.id, category: skill.category, target: defSide,
       });
       if (taken <= 0) {
-        // Nothing to return. The usual cause is being FASTER than the foe: you
-        // move first, so it has not hit you yet this round and the mirror has
-        // nothing to copy. Fizzling here punished the best Mythlings in the
-        // game, so it follows the same rule as every other empty button — fall
-        // back on the unlimited attack rather than losing the whole turn.
-        const fallback = basicAttack(attacker);
+        // You waited and nothing came back to return: the foe only buffed or
+        // debuffed, or dodged. The charge is already spent and the turn is
+        // gone. That is the price of choosing a reactive skill on a round that
+        // never offers a hit to mirror.
         events.push({
           type: 'log',
-          text: `${displayName(attacker)} used ${skill.name}! — nothing to return yet, so it strikes with ${fallback.name} instead.`,
-        });
-        this._dealDamage(attacker, defender, fallback, events, {
-          logPrefix: `${displayName(attacker)} used ${fallback.name}!`,
+          text: `${displayName(attacker)} used ${skill.name}! \u2014 but there was nothing to return. The turn is lost.`,
         });
         return;
       }
@@ -724,6 +740,23 @@ export class Battle {
    * (`skillId`), a battle button (`index`, 0-based) or — for older callers —
    * a category (`slot`), which resolves to the first equipped skill of that kind.
    */
+  /**
+   * Is this action a Retaliate / Vengeance, i.e. one that must wait for a hit?
+   * Sealed or out-of-uses skills answer false: _resolve() falls back to the
+   * unlimited attack for those, so waiting would hand over the initiative for
+   * nothing and then attack second anyway.
+   */
+  _isReactiveAction(m, action) {
+    if (!action || action.type === 'ultimate') return false;
+    const id = this._actionSkillId(m, action);
+    if (!id) return false;
+    const sk = getSkill(id);
+    if (!sk || !sk.reflect) return false;
+    if (this.cb(m).isSealed(id)) return false;
+    if (Number.isFinite(sk.uses) && usesLeft(m, id) <= 0) return false;
+    return true;
+  }
+
   _actionSkillId(m, action) {
     if (action.skillId) return action.skillId;
     if (Number.isInteger(action.index)) return equippedSkill(m, action.index)?.id || null;

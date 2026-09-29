@@ -189,8 +189,8 @@ export const SKILLS = {
   restoring_pulse: { id: 'restoring_pulse', name: 'Restoring Pulse', category: 'special', damageType: 'special',  element: null,     power: 26, uses: 8,  healPct: 0.3, desc: 'A pulse that hurts the foe and knits your wounds. Heals 30% of max HP after it lands.', future: true },
 
   // ---------- REFLECT: pay the last hit back double ----------
-  retaliate:       { id: 'retaliate',       name: 'Retaliate',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 6, reflect: 2, desc: 'Returns the LAST hit you took at double strength. You still take the hit first — and if the foe only buffed, there is nothing to return.' },
-  vengeance:       { id: 'vengeance',       name: 'Vengeance',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 4, reflect: 3, desc: 'Returns the LAST hit you took at triple strength. Risky: a buffing foe leaves you nothing to return.', future: true },
+  retaliate:       { id: 'retaliate',       name: 'Retaliate',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 6, reflect: 2, desc: 'You WAIT and let the foe strike first — Speed does not go first here — then return that hit at double strength. If the foe only buffed, there is nothing to return and the turn is lost.' },
+  vengeance:       { id: 'vengeance',       name: 'Vengeance',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 4, reflect: 3, desc: 'You WAIT and let the foe strike first, then return that hit at triple strength. Speed does not go first here. Risky: a buffing foe leaves you nothing to return, and the turn is lost.', future: true },
 
   // ---------- TACTICAL support: GUARD, PURGE, WARD ----------
   // The three "thinking" skills. They deal NO damage, so by the house rule they

@@ -3677,8 +3677,8 @@ h3 .name-el { vertical-align: middle; }
     mending_strike: { id: "mending_strike", name: "Mending Strike", category: "special", damageType: "physical", element: null, power: 18, uses: 10, healPct: 0.2, desc: "A measured strike that steadies the body. Heals 20% of max HP after it lands." },
     restoring_pulse: { id: "restoring_pulse", name: "Restoring Pulse", category: "special", damageType: "special", element: null, power: 26, uses: 8, healPct: 0.3, desc: "A pulse that hurts the foe and knits your wounds. Heals 30% of max HP after it lands.", future: true },
     // ---------- REFLECT: pay the last hit back double ----------
-    retaliate: { id: "retaliate", name: "Retaliate", category: "special", damageType: "physical", element: null, power: 0, uses: 6, reflect: 2, desc: "Returns the LAST hit you took at double strength. You still take the hit first \u2014 and if the foe only buffed, there is nothing to return." },
-    vengeance: { id: "vengeance", name: "Vengeance", category: "special", damageType: "physical", element: null, power: 0, uses: 4, reflect: 3, desc: "Returns the LAST hit you took at triple strength. Risky: a buffing foe leaves you nothing to return.", future: true },
+    retaliate: { id: "retaliate", name: "Retaliate", category: "special", damageType: "physical", element: null, power: 0, uses: 6, reflect: 2, desc: "You WAIT and let the foe strike first \u2014 Speed does not go first here \u2014 then return that hit at double strength. If the foe only buffed, there is nothing to return and the turn is lost." },
+    vengeance: { id: "vengeance", name: "Vengeance", category: "special", damageType: "physical", element: null, power: 0, uses: 4, reflect: 3, desc: "You WAIT and let the foe strike first, then return that hit at triple strength. Speed does not go first here. Risky: a buffing foe leaves you nothing to return, and the turn is lost.", future: true },
     // ---------- TACTICAL support: GUARD, PURGE, WARD ----------
     // The three "thinking" skills. They deal NO damage, so by the house rule they
     // are Buff type — but they are utility, not stat boosts, and each costs a
@@ -7872,11 +7872,24 @@ h3 .name-el { vertical-align: middle; }
         this._postTurn(events);
         return { events, phase: this.phase };
       }
-      const pSpd = this.cb(this.player).stat("spd");
-      const eSpd = this.cb(this.enemy).stat("spd");
+      const pReactive = this._isReactiveAction(this.player, playerAction);
+      const eReactive = this._isReactiveAction(this.enemy, enemyAction);
       let playerFirst;
-      if (pSpd !== eSpd) playerFirst = pSpd > eSpd;
-      else playerFirst = this.rng() < 0.5;
+      if (pReactive !== eReactive) {
+        playerFirst = !pReactive;
+        const waiter = pReactive ? this.player : this.enemy;
+        const held = getSkill(this._actionSkillId(waiter, pReactive ? playerAction : enemyAction));
+        events.push({
+          type: "log",
+          text: `${displayName(waiter)} holds ${(held == null ? void 0 : held.name) || "it"} ready and waits for the first blow!`,
+          emphasis: true
+        });
+      } else {
+        const pSpd = this.cb(this.player).stat("spd");
+        const eSpd = this.cb(this.enemy).stat("spd");
+        if (pSpd !== eSpd) playerFirst = pSpd > eSpd;
+        else playerFirst = this.rng() < 0.5;
+      }
       const order = playerFirst ? [[this.player, this.enemy, playerAction], [this.enemy, this.player, enemyAction]] : [[this.enemy, this.player, enemyAction], [this.player, this.enemy, playerAction]];
       for (const [attacker, defender, act] of order) {
         if (isFainted(attacker) || isFainted(defender)) continue;
@@ -8083,13 +8096,9 @@ h3 .name-el { vertical-align: middle; }
           target: defSide
         });
         if (taken <= 0) {
-          const fallback = basicAttack(attacker);
           events.push({
             type: "log",
-            text: `${displayName(attacker)} used ${skill.name}! \u2014 nothing to return yet, so it strikes with ${fallback.name} instead.`
-          });
-          this._dealDamage(attacker, defender, fallback, events, {
-            logPrefix: `${displayName(attacker)} used ${fallback.name}!`
+            text: `${displayName(attacker)} used ${skill.name}! \u2014 but there was nothing to return. The turn is lost.`
           });
           return;
         }
@@ -8368,6 +8377,22 @@ h3 .name-el { vertical-align: middle; }
      * (`skillId`), a battle button (`index`, 0-based) or — for older callers —
      * a category (`slot`), which resolves to the first equipped skill of that kind.
      */
+    /**
+     * Is this action a Retaliate / Vengeance, i.e. one that must wait for a hit?
+     * Sealed or out-of-uses skills answer false: _resolve() falls back to the
+     * unlimited attack for those, so waiting would hand over the initiative for
+     * nothing and then attack second anyway.
+     */
+    _isReactiveAction(m, action) {
+      if (!action || action.type === "ultimate") return false;
+      const id = this._actionSkillId(m, action);
+      if (!id) return false;
+      const sk = getSkill(id);
+      if (!sk || !sk.reflect) return false;
+      if (this.cb(m).isSealed(id)) return false;
+      if (Number.isFinite(sk.uses) && usesLeft(m, id) <= 0) return false;
+      return true;
+    }
     _actionSkillId(m, action) {
       var _a;
       if (action.skillId) return action.skillId;
@@ -19891,7 +19916,7 @@ h3 .name-el { vertical-align: middle; }
         "Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.",
         "<b>ELITE</b> support skills (Lv.60 / Lv.80, only 4 uses) carry <b>two</b> effects \u2014 two buffs, two debuffs, or one of each. Effects on the foe are always debuffs; effects on yourself are always buffs.",
         "<b>Life steal</b> skills attack and heal in the same move: <i>drain</i> skills heal a share of the damage they deal (a crit heals more), <i>mending</i> skills heal a fixed share of max HP after any hit.",
-        "<b>Retaliate</b> / <b>Vengeance</b> return the <b>last hit you took</b> at x2 / x3. You still take the hit first, and if the foe only buffed or debuffed there is nothing to return \u2014 the move fizzles.",
+        "<b>Retaliate</b> / <b>Vengeance</b> return the <b>last hit you took</b> at x2 / x3. They are <b>reactive</b>: picking one means <i>you strike first, I give it back</i>, so the foe attacks first <b>however fast you are</b> \u2014 Speed does not go first. If <b>both</b> sides pick one, it reverts to higher Speed leading, or neither would ever strike. If the foe only buffed or debuffed there is nothing to return, and the turn is lost.",
         "If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn."
       ]),
       h3("Normal skills", "normal unlimited bite scratch peck"),

@@ -554,7 +554,11 @@ function skillsSection() {
       'Every species learns three Debuffs: an opener at <b>Lv.1</b>, a defence breaker at <b>Lv.12</b> and a sharp curse at <b>Lv.40</b>.',
       '<b>ELITE</b> support skills (Lv.60 / Lv.80, only 4 uses) carry <b>two</b> effects — two buffs, two debuffs, or one of each. Effects on the foe are always debuffs; effects on yourself are always buffs.',
       '<b>Life steal</b> skills attack and heal in the same move: <i>drain</i> skills heal a share of the damage they deal (a crit heals more), <i>mending</i> skills heal a fixed share of max HP after any hit.',
-      '<b>Retaliate</b> / <b>Vengeance</b> return the <b>last hit you took</b> at x2 / x3. You still take the hit first, and if the foe only buffed or debuffed there is nothing to return — the move fizzles.',
+      '<b>Retaliate</b> / <b>Vengeance</b> return the <b>last hit you took</b> at x2 / x3. They are '
+      + '<b>reactive</b>: picking one means <i>you strike first, I give it back</i>, so the foe '
+      + 'attacks first <b>however fast you are</b> — Speed does not go first. If <b>both</b> sides '
+      + 'pick one, it reverts to higher Speed leading, or neither would ever strike. If the foe '
+      + 'only buffed or debuffed there is nothing to return, and the turn is lost.',
       'If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn.',
     ]),
     h3('Normal skills', 'normal unlimited bite scratch peck'),

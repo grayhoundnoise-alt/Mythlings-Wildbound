@@ -132,9 +132,20 @@ Optional headless regression test for the editor (drives the built file in jsdom
   Fire learns Kindling / Wildfire / Immolation (Lv.12 / 40 / 80), Poison learns Toxic Bite /
   Venom Bloom / Creeping Toxin / Plague Bloom / Septic Rot (Lv.12 / 20 / 40 / 60 / 80), and no
   other element gets them. A green **BURN** / **POISON** chip on the card shows the rounds left.
-* **Retaliate / Vengeance never waste a turn** — the usual cause of "nothing to return" is being
-  **faster** than your foe: you move first, so it has not hit you yet and the mirror has nothing to
-  copy. It now falls back on the unlimited attack, the same rule every other empty button follows.
+* **Retaliate / Vengeance WAIT for the first blow** — they return a hit you have already taken, so
+  picking one means *"you strike first, I give it back"*. **Speed does not go first here**, which
+  used to be the whole problem: a fast Mythling always resolved before anything existed to return, so
+  the skill fizzled and Speed became a liability.
+  * If **exactly one** side picks a reactive skill, **that side attacks second** — foe first, then
+    the mirror lands. This is symmetric: it works the same when the *enemy* uses one.
+  * If **both** sides pick one, it falls back to **higher Speed attacks first** (coin-flip on a tie),
+    because two Mythlings each waiting on the other would never strike at all.
+  * Every other skill — Normal, Special, Buff, Debuff, Guard, Ward, Purge — is **untouched** and
+    resolves on Speed as before.
+  * A **sealed** or **used-up** reactive skill does **not** make you wait: it falls back on the
+    unlimited attack, so you are not handing over the initiative for nothing.
+  * If the foe only **buffs or debuffs**, there is nothing to mirror: the charge is spent and the
+    turn is lost. That is the price of a reactive skill on a round that never offers a hit.
 * **Debuff skills** — every species learns three (Lv.1 opener, Lv.12 defence breaker, Lv.40 curse)
   that lower one stat of the **foe**: P.ATK, S.ATK, P.DEF, S.DEF or Speed. They always land and
   stack up to 30 times, like buffs. 21 new skills in `src/data/skills.js`.
