@@ -1571,6 +1571,77 @@ test('the evolution summary crops the empty band under the Mythling', () => {
 });
 
 // ------------------------------------------------------------------
+section('Map landing points');
+
+test('no structure or model is ever placed where the player lands', async () => {
+  const { MAPS } = await import('../src/data/maps.js');
+  const { WorldRenderer } = await import('../src/render/worldRenderer.js');
+  const r = new WorldRenderer();
+  // A prop on a landing spot leaves the player wedged: every direction is
+  // blocked, so the controls do nothing and the map reads as broken.
+  for (const id of Object.keys(MAPS)) {
+    const map = MAPS[id];
+    const landings = r.landingPoints(map);
+    assert.ok(landings.length >= 1, `${id} knows where the player lands`);
+    const near = r.props(map).filter((p) => landings.some((l) => Math.abs(l.x - p.x) < 70 && Math.abs(l.y - p.y) < 70));
+    assert.equal(near.length, 0, `${id}: nothing dropped on a landing spot (${landings.length} landing point(s))`);
+  }
+  // the exclusion must not hollow the maps out
+  const total = Object.keys(MAPS).reduce((n, id) => n + r.props(MAPS[id]).length, 0);
+  assert.ok(total > 3000, `scenery is still there (${total} props)`);
+});
+
+test('every map spawn and every connection arrival is standable', async () => {
+  const { MAPS } = await import('../src/data/maps.js');
+  const { OverworldScene } = await import('../src/scenes/OverworldScene.js');
+  const sc = new OverworldScene(document.createElement('canvas'));
+  for (const id of Object.keys(MAPS)) {
+    const m = MAPS[id];
+    sc.enter(m.id, m.spawn.x, m.spawn.y);
+    assert.ok(sc.isStandable(sc.player.x, sc.player.y), `${id} spawn (${m.spawn.x},${m.spawn.y}) is clear`);
+    assert.equal(sc.player.x, m.spawn.x, `${id}: a clear spawn is left exactly where it is`);
+  }
+  for (const id of Object.keys(MAPS)) {
+    for (const c of MAPS[id].connections || []) {
+      if (!c.toPoint) { assert.fail(`${id} -> ${c.toMap} has no toPoint`); continue; }
+      sc.enter(c.toMap, c.toPoint.x, c.toPoint.y);
+      assert.ok(sc.isStandable(sc.player.x, sc.player.y),
+        `${id} -> ${c.toMap} lands clear at (${c.toPoint.x},${c.toPoint.y})`);
+      assert.equal(sc.player.x, c.toPoint.x, `${id} -> ${c.toMap}: not nudged when already clear`);
+    }
+  }
+});
+
+test('a landing point that IS blocked rescues the player instead of wedging them', async () => {
+  const { MAPS } = await import('../src/data/maps.js');
+  const { OverworldScene } = await import('../src/scenes/OverworldScene.js');
+  const sc = new OverworldScene(document.createElement('canvas'));
+  const m = MAPS.stormreach_plateau;
+  sc.enter(m.id, m.spawn.x, m.spawn.y);
+  // force the worst case: a hand-placed building dropped right on the spawn
+  const b = m.buildings[0];
+  const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+  sc.player.x = bx; sc.player.y = by;
+  assert.equal(sc.isStandable(bx, by), false, 'the player really is inside a building');
+  assert.equal(sc.nudgeToFreeSpot(), true, 'the backstop moves them out');
+  assert.ok(sc.isStandable(sc.player.x, sc.player.y), 'and they end up somewhere they can actually walk');
+  // they must be able to move again, not just be standing somewhere legal
+  const px = sc.player.x, py = sc.player.y;
+  sc.tryMove(px + 20, py);
+  assert.ok(sc.player.x !== px || sc.player.y !== py, 'and the controls respond again');
+  // and entering a map uses the same backstop, which is the real path
+  sc.enter(m.id, bx, by);
+  assert.ok(sc.isStandable(sc.player.x, sc.player.y), 'entering a map at a blocked point still lands clear');
+
+  // a clear spot is never touched
+  sc.player.x = 300; sc.player.y = 1100;
+  if (sc.isStandable(300, 1100)) {
+    sc.nudgeToFreeSpot();
+    assert.equal(sc.player.x, 300, 'a free spot is left alone');
+    assert.equal(sc.player.y, 1100, 'in both axes');
+  }
+});
+
 section('Wild encounters');
 const { EncounterManager } = await import('../src/systems/EncounterManager.js');
 

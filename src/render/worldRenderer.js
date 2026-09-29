@@ -1,6 +1,7 @@
 // Procedural world rendering: ground, water, props, buildings, weather particles.
 import { makeRng, shadeColor, clamp } from '../core/utils.js';
 import { CHEST_TIERS } from '../data/chests.js';
+import { MAPS } from '../data/maps.js';
 
 const TERRAIN = {
   town:    { grass: '#7ec96a', grass2: '#6bb95c', path: '#e5d3a1', props: ['tree', 'flower', 'bush', 'lamp'] },
@@ -127,10 +128,29 @@ export class WorldRenderer {
     this.cache = new Map(); // mapId -> props
   }
 
+  /**
+   * Every point the player can ARRIVE on this map: its own spawn, plus the
+   * toPoint of every connection in the whole game that targets it. Props are
+   * kept clear of all of them — a tree or pillar dropped on a landing spot
+   * leaves the player wedged with every direction blocked, which reads as the
+   * map being broken rather than as scenery.
+   */
+  landingPoints(map) {
+    const pts = [];
+    if (map.spawn) pts.push(map.spawn);
+    for (const other of Object.values(MAPS)) {
+      for (const c of other.connections || []) {
+        if (c.toMap === map.id && c.toPoint) pts.push(c.toPoint);
+      }
+    }
+    return pts;
+  }
+
   props(map) {
     if (this.cache.has(map.id)) return this.cache.get(map.id);
     const rng = makeRng(hashStr(map.id));
     const out = [];
+    const landing = this.landingPoints(map);
     for (const region of map.regions) {
       const cfg = TERRAIN[region.terrain] || TERRAIN.forest;
       const [rx, ry, rw, rh] = region.rect;
@@ -142,6 +162,8 @@ export class WorldRenderer {
         if (Math.abs(y - map.height * 0.55) < 90 && rng() < 0.7) continue;
         if (insideAny(map.water, x, y, 40)) continue;
         if (insideBuildings(map, x, y, 60)) continue;
+        // never drop scenery on a landing spot (see landingPoints)
+        if (landing.some((p) => Math.abs(p.x - x) < 70 && Math.abs(p.y - y) < 70)) continue;
         const kind = cfg.props[Math.floor(rng() * cfg.props.length)];
         out.push({ kind, x, y, s: 0.7 + rng() * 0.7, seed: rng() * 100, solid: ['tree', 'bigtree', 'pillar', 'deadtree', 'burnttree', 'crystal', 'obsidian', 'palm', 'stalag', 'pylon', 'icicle', 'frosttree', 'gear'].includes(kind) });
       }

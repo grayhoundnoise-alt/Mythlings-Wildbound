@@ -47,6 +47,8 @@ export class OverworldScene {
     this.wild = [];
     this.spawnTimer = 0;
     this.transitioning = false;
+    // Never drop the player inside geometry (see nudgeToFreeSpot).
+    this.nudgeToFreeSpot();
     WorldManager.visit(this.mapId);
     PlayerManager.setPosition(this.mapId, this.player.x, this.player.y);
     this.populate(true);
@@ -175,24 +177,54 @@ export class OverworldScene {
     }
   }
 
-  tryMove(nx, ny) {
+  /** Can the player stand at (x, y)? Shared by movement and by landing. */
+  isStandable(x, y) {
     const map = this.map;
     const r = 15;
-    const colliders = this.renderer.colliders(map);
-    const test = (x, y) => {
-      if (x < r + 10 || x > map.width - r - 10 || y < r + 40 || y > map.height - r - 10) return false;
-      const box = { x: x - r, y: y - r * 0.6, w: r * 2, h: r * 1.2 };
-      for (const c of colliders) if (rectsOverlap(box, c)) return false;
-      for (const w of map.water) {
-        if (rectsOverlap(box, w)) {
-          const onBridge = (map.bridges || []).some((b) => rectsOverlap(box, b));
-          if (!onBridge) return false;
+    if (x < r + 10 || x > map.width - r - 10 || y < r + 40 || y > map.height - r - 10) return false;
+    const box = { x: x - r, y: y - r * 0.6, w: r * 2, h: r * 1.2 };
+    for (const c of this.renderer.colliders(map)) if (rectsOverlap(box, c)) return false;
+    for (const w of map.water) {
+      if (rectsOverlap(box, w)) {
+        const onBridge = (map.bridges || []).some((b) => rectsOverlap(box, b));
+        if (!onBridge) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Nudge a landing point to the nearest standable spot.
+   *
+   * Scenery is kept clear of every landing point, so this should never fire —
+   * it is the backstop that keeps a hand-placed building, a lake, or any
+   * future map edit from dropping the player inside geometry, where every
+   * direction is blocked and the controls do nothing. Searches outward in
+   * rings, so the player lands as close to the intended spot as possible.
+   */
+  nudgeToFreeSpot() {
+    const sx = this.player.x, sy = this.player.y;
+    if (this.isStandable(sx, sy)) return false;
+    const STEP = 12;
+    for (let ring = 1; ring <= 30; ring++) {
+      // the WHOLE square perimeter at this radius, so nothing on the ring is
+      // skipped and the player always lands on the nearest free spot
+      for (let i = -ring; i <= ring; i++) {
+        for (const [dx, dy] of [[i, -ring], [i, ring], [-ring, i], [ring, i]]) {
+          const nx = sx + dx * STEP, ny = sy + dy * STEP;
+          if (this.isStandable(nx, ny)) {
+            this.player.x = nx; this.player.y = ny;
+            return true;
+          }
         }
       }
-      return true;
-    };
-    if (test(nx, this.player.y)) this.player.x = nx;
-    if (test(this.player.x, ny)) this.player.y = ny;
+    }
+    return false;
+  }
+
+  tryMove(nx, ny) {
+    if (this.isStandable(nx, this.player.y)) this.player.x = nx;
+    if (this.isStandable(this.player.x, ny)) this.player.y = ny;
   }
 
   findInteractable() {
