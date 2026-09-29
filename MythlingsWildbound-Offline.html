@@ -12454,7 +12454,7 @@ h3 .name-el { vertical-align: middle; }
     panelOpen = false;
   }
   function secretSettingsHotkey(e) {
-    if (!(e.ctrlKey && e.key === "Enter")) return false;
+    if (!(e.ctrlKey && e.key === "Delete")) return false;
     e.preventDefault();
     e.stopPropagation();
     if (panelOpen) return true;

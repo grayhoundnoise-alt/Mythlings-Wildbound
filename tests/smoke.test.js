@@ -3311,9 +3311,9 @@ test('HD mode only reaches the screens that show a Mythling, never the roaming m
   assert.ok(!ow.includes('drawCreature'), 'and is never routed through the HD switch');
 });
 
-test('the secret panel is hidden: Ctrl+Enter only, and not in the settings screen', async () => {
+test('the secret panel is hidden: Ctrl+Del only, and not in the settings screen', async () => {
   const sec = readFileSync(new URL('../src/ui/secretSettings.js', import.meta.url), 'utf8');
-  assert.match(sec, /e\.ctrlKey && e\.key === 'Enter'/, 'the hotkey is Ctrl+Enter and nothing else');
+  assert.match(sec, /e\.ctrlKey && e\.key === 'Delete'/, 'the hotkey is Ctrl+Del and nothing else');
   assert.ok(!/metaKey|shiftKey|ctrlKey && e\.key === 'e'/.test(sec), 'no accidental second binding');
 
   // It must be reachable ONLY by the hotkey: no button, no menu entry, and the

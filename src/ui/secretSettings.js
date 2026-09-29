@@ -1,5 +1,5 @@
 // =============================================================================
-// SECRET SETTINGS — a hidden panel, opened with Ctrl + Enter.
+// SECRET SETTINGS — a hidden panel, opened with Ctrl + Del.
 // =============================================================================
 // Not linked from any menu and not listed in the normal Settings screen. One
 // switch lives here: HD Images, which replaces Mythling art and battle
@@ -114,10 +114,10 @@ export async function openSecretSettings() {
 
 /**
  * The global hotkey. Returns true when it consumed the event, so the caller
- * knows not to treat Ctrl+Enter as anything else.
+ * knows not to treat Ctrl+Del as anything else.
  */
 export function secretSettingsHotkey(e) {
-  if (!(e.ctrlKey && e.key === 'Enter')) return false;
+  if (!(e.ctrlKey && e.key === 'Delete')) return false;
   e.preventDefault();
   e.stopPropagation();
   if (panelOpen) return true;
