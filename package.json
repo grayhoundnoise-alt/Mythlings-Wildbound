@@ -3,11 +3,13 @@
   "version": "0.5.1",
   "private": true,
   "type": "module",
-  "description": "Mythlings: Wildbound \u2014 an original creature-collecting RPG. Small Creatures. Big Adventures.",
+  "description": "Mythlings: Wildbound — an original creature-collecting RPG. Small Creatures. Big Adventures.",
   "scripts": {
     "start": "python3 -m http.server 3000 --bind 0.0.0.0",
     "build:offline": "node tools/build-standalone.mjs",
-    "test": "node tests/smoke.test.js"
+    "test": "node tests/smoke.test.js",
+    "edit:images": "node tools/gen-rig-bounds.mjs && node tools/build-editor.mjs",
+    "edit:rig": "node tools/build-mythling-edit.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2"

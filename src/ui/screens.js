@@ -51,24 +51,15 @@ export function mainMenuScreen({ onNewGame, onLoad, onSettings, onExit }) {
     if (sound) AudioManager.sfx('hover');
   }
 
+  // The scene behind this is one full-bleed picture now, so the overlay is just
+  // the title and the buttons. The tagline, the footnote and the version block
+  // all came out with it.
   const column = el('div', { class: 'menu-column' }, [
     titleLogo(),
-    el('div', { class: 'menu-tagline', text: 'Small Creatures. Big Adventures.' }),
     el('div', { class: 'menu-buttons' }, buttons),
   ]);
 
-  const node = el('div', { class: 'menu-overlay' }, [
-    column,
-    el('div', { class: 'menu-footnote' }, [
-      el('span', { class: 'mf-line', text: 'An original creature-collecting adventure' }),
-    ]),
-    el('div', { class: 'version-block' }, [
-      el('span', { text: `v${GAME_VERSION}` }),
-      el('span', { text: `Level Cap: Lv.${LEVEL_CAP}` }),
-      el('span', { text: '5 Mythlings' }),
-      el('span', { text: '3 Regions' }),
-    ]),
-  ]);
+  const node = el('div', { class: 'menu-overlay' }, [column]);
 
   select(0, false);
   const handle = Screens.replace(node, 'main-menu');

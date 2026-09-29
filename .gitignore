@@ -11,3 +11,7 @@ build/
 # tools/make-hd-image.py rebuilds assets/mythlings/ from assets/_raw/.
 assets/_raw/
 assets/concept/
+
+# The full rig / map editor is a build product of tools/mythling-edit/ — 1 MB of
+# generated HTML. Rebuild it with `npm run edit:rig` instead of storing it.
+MythlingEdit-rig.html

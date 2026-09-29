@@ -3196,7 +3196,7 @@ test('the secret HD Images mode: off by default, and every asset it names exists
   for (const [key, rel] of Object.entries(HD_ASSETS)) {
     const p = new URL(`../${rel}`, import.meta.url);
     assert.ok(existsSync(p), `asset for ${key} exists on disk: ${rel}`);
-    assert.match(key, /^(model|bg):/, `${key} is namespaced`);
+    assert.match(key, /^(model|bg|menu):/, `${key} is namespaced`);
   }
   // Keys must be well formed, or a lookup can never find its art.
   for (const key of keys.filter((k) => k.startsWith('model:'))) {
@@ -3224,6 +3224,34 @@ test('the secret HD Images mode: off by default, and every asset it names exists
     setHdEnabled(false);
   }
   assert.equal(hdEnabled(), false, 'and flips back off');
+});
+
+test('the main menu is one full-bleed picture, with only the title and buttons over it', async () => {
+  const { HD_ASSETS } = await import('../src/data/hdManifest.js');
+  assert.ok(HD_ASSETS['menu:main'], 'the menu picture is in the manifest, so the offline build inlines it');
+  const p = new URL(`../${HD_ASSETS['menu:main']}`, import.meta.url);
+  assert.ok(existsSync(p), `the picture exists: ${HD_ASSETS['menu:main']}`);
+
+  // MenuScene draws the picture when it has one, and keeps the old painted
+  // vista as a fallback so the menu is never blank.
+  const scene = readFileSync(new URL('../src/scenes/MenuScene.js', import.meta.url), 'utf8');
+  assert.ok(scene.includes("HD_ASSETS['menu:main']"), 'the scene reads the manifest for the picture');
+  assert.ok(/coverDraw\(/.test(scene), 'and covers the canvas with it');
+  assert.ok(scene.includes('renderPainted'), 'with the painted vista kept as a fallback');
+
+  // The overlay is only the title and the buttons: no tagline, no footnote, no
+  // version block sitting on the picture.
+  const screens = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  const at = screens.indexOf('export function mainMenuScreen');
+  const body = screens.slice(at, screens.indexOf('export function', at + 10));
+  assert.ok(body.includes('titleLogo()'), 'the title stays');
+  assert.ok(body.includes('menu-buttons'), 'and the buttons');
+  assert.ok(!body.includes('menu-tagline'), 'the tagline is gone');
+  assert.ok(!body.includes('menu-footnote'), 'the footnote is gone');
+  assert.ok(!body.includes('version-block'), 'the version block is gone');
+  for (const label of ['NEW GAME', 'LOAD GAME', 'SETTINGS', 'EXIT']) {
+    assert.ok(body.includes(`'${label}'`), `${label} is still there`);
+  }
 });
 
 test('an HD still is placed in the rig footprint, not at its own pixel size', async () => {

@@ -22,4 +22,8 @@ export const HD_ASSETS = {
   // ---- Battle arena backgrounds (drawn behind everything, weather still
   //      paints its sky and tint on top of them) ----
   'bg:nature': 'assets/backgrounds/nature.jpg',
+
+  // ---- the main menu picture. Not a Mythling and not a battle arena, but it
+  //      is inlined the same way so the offline build keeps it.
+  'menu:main': 'assets/backgrounds/mainmenu.jpg',
 };

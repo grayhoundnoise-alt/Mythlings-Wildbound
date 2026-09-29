@@ -452,6 +452,35 @@ managers already account for them.
 
 ---
 
+## The image editor
+
+`MythlingEdit.html` is a small tool for lining up the HD stills. Open it through
+a local server (`npm start`, then visit `MythlingEdit.html`) and it will list
+everything in `assets/mythlings/`.
+
+Pick a file, **drag the art to position it**, and watch the two previews on the
+right: a 52px list icon and a 176px battle sprite, drawn with the *same maths
+the game uses*, over a dashed box showing where the renderer will actually put
+it. Arrow keys nudge, Shift+arrow nudges by 10, and **Save PNG** downloads the
+result to drop back over the original.
+
+The reason it exists: the game ignores a still's pixel size entirely. It scales
+the image to the animated rig's own box, so where the creature sits *inside* the
+PNG is what decides where it appears in game. Centring the art is a composition
+fix, which is why it is a picture editor and not a numbers box.
+
+| | |
+|---|---|
+| `npm run edit:images` | rebuilds the editor (re-reads the rig geometry, the species list and the folder) |
+| `npm run edit:rig` | builds the full creature / rig / map editor as `MythlingEdit-rig.html` |
+| `tools/make-hd-image.py` | keys a chroma-keyed raw drawing out to a transparent PNG |
+
+`tools/gen-rig-bounds.mjs` walks `creatureArt.js` and records the visual box of
+all **211** forms. The editor previews from that table, so if the rig is ever
+re-tuned, one command re-syncs the tool with it.
+
+---
+
 ## Secret: HD Images mode
 
 A hidden panel, opened with **Ctrl + Enter** from any screen, holds a single

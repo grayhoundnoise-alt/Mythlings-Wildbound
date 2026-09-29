@@ -13,6 +13,7 @@
 // focal detail so the menu column stays readable at every supported size.
 // =============================================================================
 import { drawCreature } from '../render/creatures.js';
+import { HD_ASSETS } from '../data/hdManifest.js';
 import { makeRng } from '../core/utils.js';
 
 const SKY_TOP = '#1f6fc4';
@@ -97,6 +98,13 @@ export class MenuScene {
 
   update(dt) { this.time += dt; }
 
+  /**
+   * The main menu is one full-bleed picture. Everything it used to draw itself
+   * — sky, ranges, floating isle, clouds, village, the cast of Mythlings, the
+   * framing foliage, god rays and motes — is gone; the buttons sit straight on
+   * the art. If the picture is missing the old painted scene is still there
+   * underneath, so the menu is never blank.
+   */
   render() {
     const ctx = this.ctx;
     const dpr = this.dpr;
@@ -105,6 +113,49 @@ export class MenuScene {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
 
+    const pic = this.menuPicture();
+    if (pic && pic.naturalWidth) {
+      this.coverDraw(ctx, pic, W, H, t);
+      return;
+    }
+    this.renderPainted(ctx, W, H, t);
+  }
+
+  /**
+   * The full-bleed menu picture, fetched once. Returns null until it arrives, so
+   * the caller falls back to the painted scene rather than showing a blank
+   * screen. `_pic` is left at null after the first call, so this never kicks
+   * off a second load.
+   */
+  menuPicture() {
+    if (this._pic !== undefined) return this._pic;
+    this._pic = null;
+    const url = HD_ASSETS['menu:main'];
+    if (url && typeof Image !== 'undefined') {
+      const img = new Image();
+      img.onload = () => { this._pic = img; };
+      img.src = url;
+    }
+    return this._pic;
+  }
+
+  /**
+   * Cover the canvas with the picture, cropping whatever overflows. `t` adds a
+   * drift of a fraction of a percent — enough that the screen is not dead, slow
+   * enough that nobody consciously sees it.
+   */
+  coverDraw(ctx, img, W, H, t = 0) {
+    const base = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    const zoom = 1.02 + Math.sin(t * 0.09) * 0.006;
+    const s = base * zoom;
+    const w = img.naturalWidth * s, h = img.naturalHeight * s;
+    const dx = (W - w) / 2;
+    const dy = (H - h) / 2 + Math.sin(t * 0.06) * (H * 0.004);
+    ctx.drawImage(img, dx, dy, w, h);
+  }
+
+  /** The old procedural vista, kept as the fallback. */
+  renderPainted(ctx, W, H, t) {
     const sunX = W * 0.665, sunY = H * 0.155;
     const horizon = H * 0.56;
 
