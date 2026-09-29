@@ -12314,6 +12314,17 @@ h3 .name-el { vertical-align: middle; }
     const py = kind === "block" ? f.blockCy : f.feetY;
     return { dx: (px - e.anchor.x) * scale, dy: (py - e.anchor.y) * scale };
   }
+  function hdFeetOffset(speciesId, stage, mutation, sizePx) {
+    var _a;
+    const b = rigBounds(speciesId, stage);
+    const evoScale = ((_a = getEvolutionStage(speciesId, stage).art) == null ? void 0 : _a.scale) || 1;
+    const s = sizePx / 100 * evoScale;
+    const f = hdFocusOffset(speciesId, stage, mutation, sizePx, "feet");
+    return {
+      dx: (b ? b.cx * s : 0) + (f ? f.dx : 0),
+      dy: (b ? b.feetY * s : 0) + (f ? f.dy : 0)
+    };
+  }
   function drawHdModel(ctx, img, o) {
     var _a;
     const {
@@ -22624,9 +22635,12 @@ h3 .name-el { vertical-align: middle; }
         ctx.save();
         ctx.translate(210, 320);
         if (still) {
-          const sf = hdFocusOffset(id, 0, "none", 210, "feet") || { dx: 0, dy: 0 };
+          const fe = hdFeetOffset(id, 0, "none", 210);
           ctx.save();
-          ctx.translate(sf.dx + HD_STARTER_SHADOW_DX, 3 + sf.dy + HD_STARTER_SHADOW_DY);
+          ctx.translate(
+            HD_STARTER_DX + fe.dx + HD_STARTER_SHADOW_DX,
+            3 + HD_STARTER_DY + fe.dy + HD_STARTER_SHADOW_DY
+          );
           ctx.globalAlpha *= 0.3;
           const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);
           sg.addColorStop(0, "rgba(6,16,10,0.75)");

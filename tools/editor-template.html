@@ -782,6 +782,20 @@ function starterScale() {
   const b = boundsFor(state.species, state.stage);
   return (state.height * (210 / 100) * (b ? b.scale : 1)) / (state.canvasH || 1);
 }
+/* Where the picture's visible paws sit on the card — the same maths the game's
+   contact shadow uses: the anchor lands on the rig's ground spot inside the
+   picture's own offset, and the feet focus sits (feet - anchor) * sc from
+   there. The shadow lives here; its offsets nudge it off the paws. */
+function starterFeetHome() {
+  const b = boundsFor(state.species, state.stage);
+  const f = focusFor(state.img);
+  const sc = starterScale();
+  const s = (210 / 100) * (b ? b.scale : 1);
+  return {
+    x: 210 + starter.dx + (b ? b.cx * s : 0) + (f ? (f.feetX - state.anchorX) * sc : 0),
+    y: 323 + starter.dy + (b ? b.feetY * s : 0) + (f ? (f.feetY - state.anchorY) * sc : 0),
+  };
+}
 function syncStarter() {
   $('inSDX').value = Math.round(starter.dx); $('inSDY').value = Math.round(starter.dy);
   $('inSGX').value = Math.round(starter.gx); $('inSGY').value = Math.round(starter.gy);
@@ -806,9 +820,10 @@ function redrawStarter() {
   g.addColorStop(0, '#8fe06a55');
   g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-  // contact shadow — the feet focus + its own offsets, ALWAYS behind
-  const shx = 210 + (f ? (f.feetX - ax) * sc : 0) + starter.sx;
-  const shy = 323 + (f ? (f.feetY - ay) * sc : 0) + starter.sy;
+  // contact shadow — ON the paws of the drawn picture, ALWAYS behind
+  const home = starterFeetHome();
+  const shx = home.x + starter.sx;
+  const shy = home.y + starter.sy;
   ctx.save();
   ctx.globalAlpha = 0.3;
   const sg = ctx.createRadialGradient(shx, shy, 2, shx, shy, 76);
@@ -859,10 +874,9 @@ starterField('inSSX', 'sx');
 starterField('inSSY', 'sy');
 
 function overStarterShadow(pt) {
-  const f = focusFor(state.img);
-  const sc = starterScale();
-  const shx = 210 + (f ? (f.feetX - state.anchorX) * sc : 0) + starter.sx;
-  const shy = 323 + (f ? (f.feetY - state.anchorY) * sc : 0) + starter.sy;
+  const home = starterFeetHome();
+  const shx = home.x + starter.sx;
+  const shy = home.y + starter.sy;
   const dx = (pt.x - shx) / (71 * 1.2), dy = (pt.y - shy) / (19 * 2.4);
   return dx * dx + dy * dy <= 1;
 }
@@ -874,12 +888,11 @@ function starterPointerDown(e) {
 }
 function starterPointerMove(e) {
   const pt = pointAt(e);
-  const f = focusFor(state.img);
-  const sc = starterScale();
-  const fdx = f ? (f.feetX - state.anchorX) * sc : 0;
-  const fdy = f ? (f.feetY - state.anchorY) * sc : 0;
-  if (bDrag === 'shadow') { starter.sx = pt.x - 210 - fdx; starter.sy = pt.y - 323 - fdy; }
-  else if (bDrag === 'model') { starter.dx = pt.x - 210; starter.dy = pt.y - 320; }
+  if (bDrag === 'shadow') {
+    const home = starterFeetHome();
+    starter.sx = pt.x - home.x;
+    starter.sy = pt.y - home.y;
+  } else if (bDrag === 'model') { starter.dx = pt.x - 210; starter.dy = pt.y - 320; }
   dragMoved = true;
   redraw();
 }
@@ -960,10 +973,16 @@ $('btnCopyLine').onclick = () => copyText(entryLine(), 'One line copied.');
 /* ------------------------------------------------------------------ drag -- */
 let drag = false, dragMoved = false;
 function pointAt(e) {
+  // Map into the space the CURRENT mode draws in: the Model tab shows the raw
+  // image (image pixels), Battle draws BATTLE_W x BATTLE_H, Starter draws the
+  // 420 x 380 card. Mapping every mode through the image size made battle and
+  // starter drags land in the wrong place entirely.
+  const W = mode === 'starter' ? CARD_W : mode === 'battle' ? BATTLE_W : state.canvasW;
+  const H = mode === 'starter' ? CARD_H : mode === 'battle' ? BATTLE_H : state.canvasH;
   const r = cv.getBoundingClientRect();
   return {
-    x: Math.max(0, Math.min(state.canvasW, Math.round((e.clientX - r.left) * state.canvasW / r.width))),
-    y: Math.max(0, Math.min(state.canvasH, Math.round((e.clientY - r.top) * state.canvasH / r.height))),
+    x: Math.max(0, Math.min(W, Math.round((e.clientX - r.left) * W / r.width))),
+    y: Math.max(0, Math.min(H, Math.round((e.clientY - r.top) * H / r.height))),
   };
 }
 cv.addEventListener('pointerdown', (e) => {

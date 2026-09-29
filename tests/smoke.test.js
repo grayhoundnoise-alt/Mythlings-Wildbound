@@ -3755,7 +3755,7 @@ test('panels come to the picture, and battle stills sink into the platform', () 
   // The starter pedestal moves to the picture — never the other way round.
   const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
   assert.ok(/hdFocusOffset\(id, 0, 'none', 210, 'body'\)/.test(sc), 'the pedestal recentres on the body');
-  assert.ok(/hdFocusOffset\(id, 0, 'none', 210, 'feet'\)/.test(sc), 'the starter shadow sits on the standing place');
+  assert.ok(/hdFeetOffset\(id, 0, 'none', 210\)/.test(sc), 'the starter shadow sits on the paws (the standing place)');
   // The contact shadow paints BEFORE the still: the Mythling is in front.
   const shadowIdx = sc.indexOf('ctx.ellipse(0, 0, 71, 19');
   const stillIdx = sc.indexOf('size: 210, t: 0, facing: 1, shadow: false');
@@ -3861,6 +3861,41 @@ test('the starter card shows the same picture shape the editor previews (no CSS 
   assert.equal(cw[2], '380', 'the editor previews at 380 tall');
   const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
   assert.ok(sc.includes("el('canvas', { width: 420, height: 380 })"), 'the game card draws into the same 420x380 backing');
+});
+
+test('the starter contact shadow lands on the paws, and rides the Mythling', () => {
+  const hd = readFileSync(new URL('../src/render/hdImages.js', import.meta.url), 'utf8');
+  const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  assert.ok(hd.includes('export function hdFeetOffset'), 'the shared paws offset exists');
+  assert.ok(/dx: \(b \? b\.cx \* s : 0\) \+ \(f \? f\.dx : 0\)/.test(hd), 'it includes the rig ground spot the anchor lands on');
+  const i = sc.indexOf('hdFeetOffset(');
+  assert.ok(i > 0, 'the card uses the shared paws offset');
+  const seg = sc.slice(i - 620, i + 320);
+  assert.ok(seg.includes('HD_STARTER_DX + fe.dx + HD_STARTER_SHADOW_DX'), 'the shadow rides the Mythling and keeps its own nudge');
+  assert.ok(seg.includes('3 + HD_STARTER_DY + fe.dy + HD_STARTER_SHADOW_DY'), 'same for Y');
+  assert.ok(sc.indexOf('ctx.beginPath(); ctx.ellipse(0, 0, 71, 19') > sc.indexOf('ctx.translate(\n          HD_STARTER_DX'), 'the shadow is still painted before the picture');
+});
+
+test('the editor maps drags into the space each mode draws in', () => {
+  const ed = readFileSync(new URL('../tools/editor-template.html', import.meta.url), 'utf8');
+  const i = ed.indexOf('function pointAt');
+  const seg = ed.slice(i, i + 700);
+  assert.ok(seg.includes("mode === 'starter' ? CARD_W"), 'starter drags map into 420-wide card space');
+  assert.ok(seg.includes("mode === 'battle' ? BATTLE_W"), 'battle drags map into battle space');
+  assert.ok(!seg.includes('Math.min(state.canvasW, Math.round((e.clientX - r.left) * state.canvasW'), 'the image-size mapping is gone');
+});
+
+test('the editor’s starter shadow home matches the game’s paws home', () => {
+  const ed = readFileSync(new URL('../tools/editor-template.html', import.meta.url), 'utf8');
+  const i = ed.indexOf('function starterFeetHome');
+  assert.ok(i > 0, 'the editor has the shared paws home');
+  const seg = ed.slice(i, i + 640);
+  assert.ok(seg.includes('210 + starter.dx + (b ? b.cx * s : 0)'), 'home X: card origin + Mythling offset + rig ground spot');
+  assert.ok(seg.includes('323 + starter.dy + (b ? b.feetY * s : 0)'), 'home Y: same, with the +3 the card uses');
+  // the draw, the hit-test and the drag all consume that one home
+  const body = ed.slice(ed.indexOf('function redrawStarter'));
+  assert.ok(body.includes('const home = starterFeetHome()'), 'redraw paints the shadow at the home');
+  assert.ok(ed.includes('overStarterShadow'), 'and the grab test reads the same home');
 });
 
 for (const item of queue) {

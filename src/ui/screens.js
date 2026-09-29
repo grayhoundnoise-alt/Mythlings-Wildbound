@@ -17,7 +17,7 @@ import { GameState, InventoryManager, PlayerManager, PartyManager, StorageManage
 import { ShopManager } from '../systems/ShopManager.js';
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
 import { drawCreature } from '../render/creatures.js';
-import { hdModelFor, hdFocusOffset } from '../render/hdImages.js';
+import { hdModelFor, hdFocusOffset, hdFeetOffset } from '../render/hdImages.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { coins, formatTime, formatDate } from '../core/utils.js';
 
@@ -169,7 +169,8 @@ export const INTRO_LINES = [
 // Starter-card placement — tuned by eye in MythlingEdit.html's Starter mode
 // (copy its values block and paste it here). The computed body/feet focus
 // still does the heavy lifting (the panel comes to the picture); these are
-// the user's offsets on top. Shadow and Mythling move independently.
+// the user's offsets on top. The contact shadow lives ON the paws of the
+// drawn picture; SHADOW_DX/DY nudge the shadow off the paws, alone.
 const HD_STARTER_DX = -22;
 const HD_STARTER_DY = 14;
 const HD_STARTER_GLOW_DX = 0;
@@ -210,11 +211,16 @@ export function starterScreen({ onChoose, onBack }) {
       ctx.translate(210, 320);
       if (still) {
         // Contact shadow under the paws — the shadow belongs to the creature,
-        // so it sits on the standing place (the visible feet), not beside it.
+        // so it sits exactly where the picture's visible feet land (the anchor
+        // goes on the rig's ground spot, and the foot focus rides the picture's
+        // own offset), never at the rig-box origin beside the paws.
         // Painted FIRST: the Mythling image is always in front of its shadow.
-        const sf = hdFocusOffset(id, 0, 'none', 210, 'feet') || { dx: 0, dy: 0 };
+        const fe = hdFeetOffset(id, 0, 'none', 210);
         ctx.save();
-        ctx.translate(sf.dx + HD_STARTER_SHADOW_DX, 3 + sf.dy + HD_STARTER_SHADOW_DY);
+        ctx.translate(
+          HD_STARTER_DX + fe.dx + HD_STARTER_SHADOW_DX,
+          3 + HD_STARTER_DY + fe.dy + HD_STARTER_SHADOW_DY,
+        );
         ctx.globalAlpha *= 0.3;
         const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);
         sg.addColorStop(0, 'rgba(6,16,10,0.75)');

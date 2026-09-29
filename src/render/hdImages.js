@@ -267,6 +267,24 @@ export function hdFocusOffset(speciesId, stage, mutation, sizePx, kind = 'body')
   return { dx: (px - e.anchor.x) * scale, dy: (py - e.anchor.y) * scale };
 }
 
+/**
+ * Where a still's visible feet land, relative to the point (x, y) the still is
+ * drawn at: the anchor goes on the rig's ground spot (cx, feetY) inside the
+ * footprint, and the alpha-scan foot focus sits this far from the anchor. A
+ * contact shadow belongs exactly here — not at (x, y), which is the rig box's
+ * origin and sits up-right of the paws.
+ */
+export function hdFeetOffset(speciesId, stage, mutation, sizePx) {
+  const b = rigBounds(speciesId, stage);
+  const evoScale = getEvolutionStage(speciesId, stage).art?.scale || 1;
+  const s = (sizePx / 100) * evoScale;
+  const f = hdFocusOffset(speciesId, stage, mutation, sizePx, 'feet');
+  return {
+    dx: (b ? b.cx * s : 0) + (f ? f.dx : 0),
+    dy: (b ? b.feetY * s : 0) + (f ? f.dy : 0),
+  };
+}
+
 // --- drawing -----------------------------------------------------------------
 /**
  * Draw a Mythling from its PNG, matching the rig's contract: (x, y) is the
