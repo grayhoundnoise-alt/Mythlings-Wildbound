@@ -27,13 +27,16 @@ const noopCtx = () => {
 const mkEl = (tag) => {
   const e = {
     tagName: String(tag).toUpperCase(), style: {}, dataset: {}, children: [],
-    textContent: '', innerHTML: '', value: '', width: 300, height: 300,
+    textContent: '', value: '', width: 300, height: 300, _html: '',
     classList: { _s: new Set(), add(...c) { c.forEach((x) => this._s.add(x)); }, remove(...c) { c.forEach((x) => this._s.delete(x)); }, toggle() {}, contains(c) { return this._s.has(c); } },
     appendChild(c) { this.children.push(c); return c; },
     append(...c) { c.forEach((x) => this.children.push(x)); },
     removeChild(c) { this.children = this.children.filter((x) => x !== c); },
     remove() {}, insertBefore(c) { this.children.push(c); return c; }, replaceWith() {},
-    addEventListener() {}, removeEventListener() {},
+    addEventListener(k, f) { (this._listeners[k] = this._listeners[k] || []).push(f); },
+    removeEventListener() {},
+    _listeners: {},
+    click() { for (const f of (this._listeners.click || [])) f({ stopPropagation() {} }); },
     attrs: {},
     setAttribute(k, v) { this.attrs[k] = v; if (k === 'disabled') this.disabled = true; },
     getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
@@ -42,6 +45,12 @@ const mkEl = (tag) => {
     focus() {}, blur() {}, scrollTo() {},
     getContext: () => noopCtx(), toDataURL: () => 'data:image/png;base64,',
   };
+  // a real element: setting innerHTML = '' detaches every child. Without this
+  // anything that "re-renders in place" would silently stack up instead.
+  Object.defineProperty(e, 'innerHTML', {
+    get() { return e._html; },
+    set(v) { e._html = v; if (v === '') e.children = []; },
+  });
   return e;
 };
 globalThis.document = {
@@ -841,9 +850,13 @@ test('the Index reveals an evolution only once that form has been owned', () => 
 });
 
 test('battle actions address buttons by index, and a category name still resolves', () => {
-  const p = createMythling({ speciesId: 'spriggo', level: 5 });
+  // Rational is ALWAYS rolled from Math.random unless it is passed in, and it
+  // swings stats by +/-10. Left to chance, Leaflet fainted to Vine Lash in
+  // ~1 run in 30, the battle ended, and the second button had nothing to
+  // resolve - a flake that had nothing to do with what this test is checking.
+  const p = createMythling({ speciesId: 'spriggo', level: 5, rational: 'docile' });
   assert.deepEqual(p.skills, ['bite', 'vine_lash', 'brave_guard'], 'auto-equip: normal, special, then the stat skill');
-  const e = createMythling({ speciesId: 'leaflet', level: 5 });
+  const e = createMythling({ speciesId: 'leaflet', level: 5, rational: 'docile' });
   const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
   const r1 = b.act({ type: 'skill', index: 1 });
   assert.ok(r1.events.some((ev) => ev.type === 'cast' && ev.side === 'player' && ev.skillId === 'vine_lash'), 'button 2 = Vine Lash');
@@ -2429,6 +2442,97 @@ test('the type sheet SEE MORE block lists plain current stats, and nothing else'
 });
 
 // ------------------------------------------------------------------
+section('Elemental special ladders & the Wiki skill sort');
+
+test('Water and Fire each have a full Physical (P.ATK) elemental ladder', async () => {
+  const { SKILLS: ALL } = SKILLS_MOD;
+  // Water and Fire were the only elements whose specials all used S.ATK, so a
+  // Water or Fire brawler had no elemental move that scaled with P.ATK.
+  for (const el of ['water', 'fire']) {
+    const own = Object.values(ALL).filter((k) => k.category === 'special' && k.element === el);
+    const ph = own.filter((k) => k.damageType === 'physical').map((k) => k.power).sort((a, b) => a - b);
+    assert.ok(ph.length >= 4, `${el} has a Physical ladder (${ph.length}: ${ph.join(', ')})`);
+    assert.equal(ph[0], 15, `${el}'s Physical ladder starts at power 15`);
+    assert.ok(ph.includes(54), `${el}'s Physical ladder reaches power 54`);
+    assert.ok(own.some((k) => k.damageType === 'special'), `${el} still has its Special ladder too`);
+  }
+  // the new rungs sit on the same template as the six newer elements
+  for (const [id, power, uses, el] of [
+    ['brine_snap', 15, 20, 'water'], ['tide_fang', 28, 18, 'water'],
+    ['undertow_rush', 40, 15, 'water'], ['maelstrom_crush', 54, 12, 'water'],
+    ['ember_claw', 15, 20, 'fire'], ['furnace_lunge', 40, 15, 'fire'], ['inferno_maul', 54, 12, 'fire'],
+  ]) {
+    const k = ALL[id];
+    assert.ok(k, `${id} exists`);
+    assert.equal(k.element, el, `${id} is a ${el} move`);
+    assert.equal(k.damageType, 'physical', `${id} scales with P.ATK`);
+    assert.equal(k.power, power, `${id} power`);
+    assert.equal(k.uses, uses, `${id} uses`);
+    assert.ok(k.desc && k.desc.length > 10, `${id} is described`);
+  }
+  // Fire's Lv.20 rung was already there (Burning Fang), so only 3 were added
+  const firePh = Object.values(ALL).filter((k) => k.category === 'special' && k.element === 'fire' && k.damageType === 'physical');
+  assert.ok(firePh.some((k) => k.id === 'burning_fang'), 'Burning Fang still fills Fire\'s Lv.20 rung');
+});
+
+test('only Water and Fire BRUISERS learn the new Physical ladders', async () => {
+  const { skillsUnlockedAt, skillLearnLevel } = await import('../src/data/species.js');
+  const NEW = ['brine_snap', 'tide_fang', 'undertow_rush', 'maelstrom_crush', 'ember_claw', 'furnace_lunge', 'inferno_maul'];
+  for (const [id, element] of [['rivruff', 'water'], ['shelldrake', 'water'], ['currentkit', 'water'],
+    ['emberlynx', 'fire'], ['magmataur', 'fire'], ['ashpup', 'fire']]) {
+    const lib = skillsUnlockedAt(id, 100);
+    const own = NEW.filter((s) => lib.includes(s) && SKILLS_MOD.SKILLS[s].element === element);
+    assert.ok(own.length >= 3, `${id} (${element}, P.ATK-led) learns its Physical ladder: ${own.join(', ')}`);
+    assert.equal(skillLearnLevel(id, own[0]), 1, `${id} gets its first rung at Lv.1`);
+  }
+  // a special attacker of the same element must NOT be handed a P.ATK ladder
+  for (const id of ['aquini', 'tidewyrm', 'emberu', 'cinderhawk']) {
+    const got = NEW.filter((s) => skillsUnlockedAt(id, 100).includes(s));
+    assert.deepEqual(got, [], `${id} is a Special attacker and stays out of the Physical ladder`);
+  }
+  // and nothing outside Water / Fire is affected
+  for (const id of ['spriggo', 'gravelhog', 'venoviper', 'zenram']) {
+    assert.deepEqual(NEW.filter((s) => skillsUnlockedAt(id, 100).includes(s)), [], `${id} is untouched`);
+  }
+});
+
+test('the Wiki skills tab has a Sort control for level and element', async () => {
+  const { WIKI_SECTIONS } = await import('../src/ui/wiki.js');
+  const section = WIKI_SECTIONS.find((s) => s[0] === 'skills');
+  assert.ok(section, 'the skills section exists');
+  const nodes = section[3]();
+  const flat = [];
+  const walk = (n) => { flat.push(n); for (const c of n.children || []) walk(c); };
+  for (const n of nodes) walk(n);
+  const strip = (h) => String(h || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  const rows = () => flat.filter((n) => String(n.className || '').includes('wiki-tr'));
+  const bands = () => rows().map((n) => strip(n.children[0]?.innerHTML)).filter((t) => /^[A-Z]/.test(t) && / · \d+ skills?$/.test(t));
+
+  const sortBtns = flat.filter((n) => String(n.className || '').includes('wiki-sort-btn'));
+  assert.equal(sortBtns.length, 2, 'there are two sort options');
+  assert.equal(strip(textOf(sortBtns[0])), 'By level', 'one is "By level"');
+  assert.equal(strip(textOf(sortBtns[1])), 'By element', 'one is "By element"');
+  assert.equal(bands().length, 0, 'level order opens with no element bands');
+
+  // every elemental skill row carries an element badge with an icon
+  const html = flat.map((n) => String(n.innerHTML || '')).join('\n');
+  const badges = html.match(/<span class="wiki-element"[^>]*>.*?<\/span>/g) || [];
+  assert.ok(badges.length > 100, `elemental rows are badged (${badges.length})`);
+  assert.ok(badges.every((b) => b.includes('<svg')), 'and every badge carries an element icon');
+
+  // clicking switches to element order, which heads each group with a band
+  const host = nodes.find((n) => String(n.className || '').includes('wiki-sorted'));
+  assert.ok(host, 'the sorted tables live in a node that can be redrawn in place');
+  sortBtns[1].click();
+  flat.length = 0;
+  walk(host);
+  const after = bands();
+  assert.ok(after.length >= 10, `element order groups the tables (${after.length} bands)`);
+  assert.ok(after.some((b) => /^Fire · \d+ skills$/.test(b)), 'including a Fire band');
+  assert.ok(after.some((b) => /^Water · \d+ skills$/.test(b)), 'and a Water band');
+  assert.ok(after.some((b) => /^No element · \d+ skills$/.test(b)), 'element-less moves are grouped last');
+});
+
 section('Burn & Poison (damage over time)');
 
 test('burn and poison tick for damage that scales with the TARGET\'s level', async () => {

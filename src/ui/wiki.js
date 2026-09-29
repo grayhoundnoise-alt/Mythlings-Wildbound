@@ -5,7 +5,7 @@
 // so the Wiki can never drift away from the way the game actually works.
 // =====================================================================
 import { el, Screens, closeButton, elementChip, elementChips } from './ui.js';
-import { icon } from './icons.js';
+import { icon, iconSvg } from './icons.js';
 import { drawMythling } from '../render/creatures.js';
 import { SPECIES, SPECIES_IDS, STARTER_IDS } from '../data/species.js';
 import { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, buffSummary, skillStrength, isDamageSkill, SKILL_CATEGORY_LABEL, riderSummary, isSupportUltimate } from '../data/skills.js';
@@ -490,6 +490,21 @@ function speciesSection() {
   return out;
 }
 
+/**
+ * How the four skill tables are ordered. Kept at module level so the choice
+ * survives re-rendering the section (and closing and reopening the Wiki).
+ *   'level'   — by the level a skill is first learned at, then by strength
+ *   'element' — grouped under each element, with its own icon
+ */
+let skillSortMode = 'level';
+
+/** The little icon + name shown on every elemental skill row. */
+const elementTag = (elementId) => {
+  if (!elementId || !ELEMENTS[elementId]) return '';
+  const e = ELEMENTS[elementId];
+  return `<span class="wiki-element" style="color:${e.color}">${iconSvg(e.icon, 'tiny')}${e.name}</span>`;
+};
+
 function skillsSection() {
   // reverse map: skill id -> species that learn it, and the level each species learns it at
   const owners = {};
@@ -524,12 +539,64 @@ function skillsSection() {
     return [
       `<span class="wiki-learn">Lv.${Number.isFinite(lv) ? lv : '—'}</span> <b>${s.name}</b>`
         + ` <span class="cat-tag ${s.category}">${SKILL_CATEGORY_LABEL[s.category]}</span>`
+        + (s.element ? ` ${elementTag(s.element)}` : '')
         + `<br><span class="wiki-learn">Learned at ${levelsText(s.id)}</span>`,
       `${meta}<br><span class="wiki-dim">${s.desc}${s.debuff ? ` · ${Math.round(s.debuff.chance * 100)}% chance to lower ${STAT_SHORT[s.debuff.stat]} by ${s.debuff.amount}` : ''}</span>`
         + `<br><span class="wiki-dim">Learned by: ${(owners[s.id] || ['—']).join(', ')}</span>`,
     ];
   };
-  const catRows = (cat) => Object.values(SKILLS).filter((s) => s.category === cat && s.id !== 'struggle').sort(byRank).map(skillRow);
+  const inCategory = (cat) => Object.values(SKILLS).filter((s) => s.category === cat && s.id !== 'struggle');
+
+  /**
+   * The rows for one category table, in whichever order is active.
+   * 'element' groups the rows under a headed band per element (element-less
+   * moves last, since they belong to no element at all), so a player hunting
+   * for a Fire move does not have to read the whole list to find it.
+   */
+  const catRows = (cat) => {
+    const all = inCategory(cat);
+    if (skillSortMode === 'level') return all.sort(byRank).map(skillRow);
+    const groups = [];
+    const used = new Set();
+    for (const el of ELEMENT_ORDER) {
+      const rows = all.filter((s) => s.element === el).sort(byRank);
+      if (!rows.length) continue;
+      used.add(el);
+      const e = ELEMENTS[el];
+      groups.push([
+        `<span class="wiki-grp" style="color:${e.color}">${iconSvg(e.icon, 'tiny')}<b>${e.name}</b></span>`
+          + `<span class="wiki-dim"> · ${rows.length} ${rows.length === 1 ? 'skill' : 'skills'}</span>`,
+        '',
+      ]);
+      groups.push(...rows.map(skillRow));
+    }
+    const none = all.filter((s) => !s.element).sort(byRank);
+    if (none.length) {
+      groups.push(['<span class="wiki-grp"><b>No element</b></span>'
+        + `<span class="wiki-dim"> · ${none.length} ${none.length === 1 ? 'skill' : 'skills'}</span>`, '']);
+      groups.push(...none.map(skillRow));
+    }
+    return groups;
+  };
+
+  /** The "Sort" control. Re-renders this section in place when clicked. */
+  const sortBar = () => {
+    const bar = el('div', { class: 'wiki-sort' }, [el('span', { class: 'wiki-sort-label', text: 'Sort' })]);
+    for (const [mode, label, ico] of [['level', 'By level', 'levelup'], ['element', 'By element', 'spark']]) {
+      const b = el('button', {
+        class: `wiki-sort-btn ${skillSortMode === mode ? 'active' : ''}`,
+        title: mode === 'level' ? 'Order skills by the level they are learned at' : 'Group skills under each element',
+      }, [icon(ico), el('span', { text: label })]);
+      b.addEventListener('click', () => {
+        if (skillSortMode === mode) return;
+        AudioManager.sfx('click');
+        skillSortMode = mode;
+        redraw();
+      });
+      bar.appendChild(b);
+    }
+    return bar;
+  };
 
   // Ultimates: every tier, ordered by unlock level then power
   const ultRows = [];
@@ -539,7 +606,7 @@ function skillsSection() {
   ultRows.sort((a, b) => a.t.unlockLevel - b.t.unlockLevel || (a.t.power || 0) - (b.t.power || 0) || a.u.baseName.localeCompare(b.u.baseName));
   const ultOwners = (uid) => Object.values(SPECIES).filter((sp) => sp.ultimate === uid).map((sp) => sp.displayName).join(', ') || '—';
 
-  return [
+  const head = [
     h3('Battle buttons & the Skill Library', 'equip buttons library order loadout'),
     para(`A Mythling takes <b>${MAX_EQUIPPED_SKILLS} skills</b> into battle — any mix of Normal, Special, Buff and Debuff,
       there are no slot types. <b>The order you equip them in is the order of the battle buttons</b>: the first
@@ -559,16 +626,12 @@ function skillsSection() {
       + 'attacks first <b>however fast you are</b> — Speed does not go first. If <b>both</b> sides '
       + 'pick one, it reverts to higher Speed leading, or neither would ever strike. If the foe '
       + 'only buffed or debuffed there is nothing to return, and the turn is lost.',
+      'Every element gives its <b>Physical</b> brawlers a Physical (P.ATK) elemental ladder and its <b>Special</b> attackers a Special (S.ATK) one. A Mythling only ever learns the ladder that matches how it actually fights, and every elemental row below is badged with its element icon.',
+      'Use the <b>Sort</b> control above the tables: <b>By level</b> orders skills by when they are learned, and <b>By element</b> groups them under each element so you can find a Fire move without reading the whole list.',
       'If every equipped skill is out of uses, the Mythling falls back on its strongest <b>unlimited</b> Normal move instead of losing the turn.',
     ]),
-    h3('Normal skills', 'normal unlimited bite scratch peck'),
-    table(catRows('normal'), 'normal skill level learned at'),
-    h3('Special skills', 'special elemental power uses'),
-    table(catRows('special'), 'special skill level learned at'),
-    h3('Buff skills', 'buff raise stat stacks'),
-    table(catRows('buff'), 'buff skill level learned at'),
-    h3('Debuff skills', 'debuff lower stat foe enemy weaken'),
-    table(catRows('debuff'), 'debuff skill level learned at'),
+  ];
+  const tail = [
     h3('Ultimates — by unlock level and power', 'ultimate charge tier'),
     table(ultRows.map(({ u, t, i }) => [
       `<span class="wiki-learn">Lv.${t.unlockLevel}</span> <b>${u.baseName}${t.suffix}</b>${t.future ? ' <span class="wiki-dim">(late game)</span>' : ''}`
@@ -584,6 +647,27 @@ function skillsSection() {
       <b>Support Ultimates</b> (Granite Bastion, Quake Curse, Crystal Resonance) deal no damage: they are Ultimate-grade
       buffs / debuffs with two effects — buffs on yourself, debuffs on the foe, or one of each.`),
   ];
+
+  // The four skill tables live in their own node so the Sort control can swap
+  // their order without rebuilding the whole page (which would lose the search
+  // box's focus and scroll position).
+  const host = el('div', { class: 'wiki-sorted' });
+  const redraw = () => {
+    host.innerHTML = '';
+    for (const n of [
+      sortBar(),
+      h3('Normal skills', 'normal unlimited bite scratch peck'),
+      table(catRows('normal'), 'normal skill level learned at'),
+      h3('Special skills', 'special elemental power uses'),
+      table(catRows('special'), 'special skill level learned at'),
+      h3('Buff skills', 'buff raise stat stacks'),
+      table(catRows('buff'), 'buff skill level learned at'),
+      h3('Debuff skills', 'debuff lower stat foe enemy weaken'),
+      table(catRows('debuff'), 'debuff skill level learned at'),
+    ]) host.appendChild(n);
+  };
+  redraw();
+  return [...head, host, ...tail];
 }
 
 function itemsSection() {

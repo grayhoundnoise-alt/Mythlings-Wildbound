@@ -1009,6 +1009,40 @@ export const TACTICAL_UNLOCKS = {
 const BURN_UNLOCKS = { 12: ['kindling'], 40: ['wildfire'], 80: ['immolation'] };
 const POISON_UNLOCKS = { 12: ['toxic_bite'], 20: ['venom_bloom'], 40: ['creeping_toxin'], 60: ['plague_bloom'], 80: ['septic_rot'] };
 
+/**
+ * WATER / FIRE Physical (P.ATK) ladders.
+ *
+ * Every other element hands its Physical-attacking Mythlings a Physical
+ * elemental ladder. Water and Fire did not have one at all — all of their
+ * specials used Special (S.ATK) — so a Water or Fire brawler had no elemental
+ * move that scaled with P.ATK. These fill the gap on the same PH_LADDER the
+ * six newer elements already use (15 / 28 / 40 / 54).
+ *
+ * Granted centrally, like the Burn / Poison ladders, and only to a Mythling
+ * that actually fights physically (P.ATK above S.ATK) — the same rule
+ * ELEMENT_POOLS applies when it gives a physical role the `ph` ladder. Fire's
+ * Lv.20 rung is Burning Fang, which its own species tables already teach.
+ */
+const ELEMENT_PHYSICAL_UNLOCKS = {
+  water: { 1: ['brine_snap'], 20: ['tide_fang'], 60: ['undertow_rush'], 80: ['maelstrom_crush'] },
+  fire:  { 1: ['ember_claw'], 60: ['furnace_lunge'], 80: ['inferno_maul'] },
+};
+
+/** Does this species hit with its fists rather than its mind? */
+function isPhysicalAttacker(sp) {
+  return (sp.baseStats?.patk ?? 0) > (sp.baseStats?.satk ?? 0);
+}
+
+/** The Physical ladder this species earns, keyed by level. Empty if it is not a brawler. */
+function physicalLadderFor(sp) {
+  const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
+  if (!isPhysicalAttacker(sp)) return {};
+  for (const el of els) {
+    if (ELEMENT_PHYSICAL_UNLOCKS[el]) return ELEMENT_PHYSICAL_UNLOCKS[el];
+  }
+  return {};
+}
+
 /** The shared tactical set plus whichever DoT ladder this species earns. */
 function sharedUnlocksFor(sp, level) {
   const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
@@ -1021,6 +1055,10 @@ function sharedUnlocksFor(sp, level) {
   }
   if (els.includes('poison')) {
     for (const key of Object.keys(POISON_UNLOCKS)) if (level >= Number(key)) out.push(...POISON_UNLOCKS[key]);
+  }
+  const ladder = physicalLadderFor(sp);
+  for (const key of Object.keys(ladder)) {
+    if (level >= Number(key)) out.push(...ladder[key]);
   }
   return out;
 }
@@ -1047,7 +1085,7 @@ export function skillLearnLevel(speciesId, skillId) {
     if (best == null || lv < best) best = lv;
   }
   const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
-  for (const table of [els.includes('fire') ? BURN_UNLOCKS : null, els.includes('poison') ? POISON_UNLOCKS : null]) {
+  for (const table of [els.includes('fire') ? BURN_UNLOCKS : null, els.includes('poison') ? POISON_UNLOCKS : null, physicalLadderFor(sp)]) {
     if (!table) continue;
     for (const key of Object.keys(table)) {
       if (!table[key].includes(skillId)) continue;

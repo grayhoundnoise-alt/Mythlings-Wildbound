@@ -146,6 +146,18 @@ Optional headless regression test for the editor (drives the built file in jsdom
     unlimited attack, so you are not handing over the initiative for nothing.
   * If the foe only **buffs or debuffs**, there is nothing to mirror: the charge is spent and the
     turn is lost. That is the price of a reactive skill on a round that never offers a hit.
+* **Elemental PHYSICAL (P.ATK) ladders for Water and Fire** — every element hands its brawlers a
+  Physical elemental ladder *except* Water and Fire, whose specials all used Special (S.ATK) — so a
+  Water or Fire attacker swinging with P.ATK had no elemental move to use. Filled with 7 new skills on
+  the identical `PH_LADDER` every other element already uses (**15 / 28 / 40 / 54**, same use counts),
+  so the balance is unchanged: **Brine Snap / Tide Fang / Undertow Rush / Maelstrom Crush** (Water) and
+  **Ember Claw / Furnace Lunge / Inferno Maul** (Fire — its Lv.20 rung was already Burning Fang).
+  Granted centrally and **only to a Mythling whose P.ATK beats its S.ATK**, the same rule the six
+  newer elements use, so Aquini / Tidewyrm / Emberu / Cinderhawk are deliberately left out.
+* **Wiki: Sort the skill tables by level or by element** — the **Skills & Ultimates** tab has a
+  **Sort** control with **By level** (the order a skill is learned at) and **By element** (grouped
+  under a headed band per element, element-less moves last). Every elemental row also carries its
+  **element icon** and name, so you can see at a glance who owns what.
 * **Debuff skills** — every species learns three (Lv.1 opener, Lv.12 defence breaker, Lv.40 curse)
   that lower one stat of the **foe**: P.ATK, S.ATK, P.DEF, S.DEF or Speed. They always land and
   stack up to 30 times, like buffs. 21 new skills in `src/data/skills.js`.

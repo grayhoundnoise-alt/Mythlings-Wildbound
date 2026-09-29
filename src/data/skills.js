@@ -275,6 +275,21 @@ export const SKILLS = {
   miasma_bloom:     { id: 'miasma_bloom',     name: 'Miasma Bloom',     category: 'special', damageType: 'special', element: 'poison',   power: 42, uses: 6,
                       weather: { id: 'miasma',     chance: 0.75 }, desc: 'EXCLUSIVE — the fen exhales. Calls down Miasma.' },
 
+  // ---------- WATER / FIRE PHYSICAL (P.ATK) LADDERS ----------
+  // Water and Fire were the only elements with no Physical elemental ladder of
+  // their own: every one of their specials used Special (S.ATK), so a Water or
+  // Fire attacker fighting with its fists had nothing elemental to swing. These
+  // are the same PH_LADDER the six newer elements use (15 / 28 / 40 / 54, with
+  // the same use counts), so the balance is identical. Burning Fang already
+  // filled Fire's Lv.20 tier, so only the three missing rungs are added there.
+  brine_snap:      { id: 'brine_snap',      name: 'Brine Snap',      category: 'special', damageType: 'physical', element: 'water', power: 15, uses: 20, desc: 'A snapping bite of salt water.' },
+  tide_fang:       { id: 'tide_fang',       name: 'Tide Fang',       category: 'special', damageType: 'physical', element: 'water', power: 28, uses: 18, desc: 'Fangs that close like the tide going out.' },
+  undertow_rush:   { id: 'undertow_rush',   name: 'Undertow Rush',   category: 'special', damageType: 'physical', element: 'water', power: 40, uses: 15, desc: 'A drag beneath the waves that carries the foe off its feet.', future: true },
+  maelstrom_crush: { id: 'maelstrom_crush', name: 'Maelstrom Crush', category: 'special', damageType: 'physical', element: 'water', power: 54, uses: 12, desc: "May reduce the foe's Speed.", debuff: { stat: 'spd', amount: 4, chance: 0.4 }, future: true },
+  ember_claw:      { id: 'ember_claw',      name: 'Ember Claw',      category: 'special', damageType: 'physical', element: 'fire',  power: 15, uses: 20, desc: 'Claws that trail smoke.' },
+  furnace_lunge:   { id: 'furnace_lunge',   name: 'Furnace Lunge',   category: 'special', damageType: 'physical', element: 'fire',  power: 40, uses: 15, desc: 'A shoulder-first charge straight through open flame.', future: true },
+  inferno_maul:    { id: 'inferno_maul',    name: 'Inferno Maul',    category: 'special', damageType: 'physical', element: 'fire',  power: 54, uses: 12, desc: "May reduce the foe's Physical Defense.", debuff: { stat: 'pdef', amount: 4, chance: 0.4 }, future: true },
+
 };
 // =============================================================================
 // ELEMENT POOLS for Electric / Ice / Metal / Poison / Psychic — the same ladders
@@ -343,6 +358,7 @@ for (const [element, pool] of Object.entries(NEW_ELEMENT_POOLS)) {
 }
 /** The pools by element, for species.js (which builds its unlock tables from them). */
 export const ELEMENT_POOLS = NEW_ELEMENT_POOLS;
+
 
 
 // ---------- Ultimates ----------
