@@ -492,16 +492,11 @@ select {
 .tp-actions { display: flex; justify-content: center; margin-top: 12px; }
 .tp-toggle { font-size: .72rem; padding: 6px 14px; }
 .tp-more { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10px; }
-.tp-stats { display: flex; flex-direction: column; gap: 7px; }
-.tp-stat { display: grid; grid-template-columns: 88px minmax(0, 1fr) 46px; gap: 8px; align-items: baseline; font-size: .84rem; }
-.tp-stat .tp-sname { color: var(--muted); }
-.tp-stat .tp-sval { font-weight: 900; font-size: .92rem; }
-.tp-stat .tp-sdelta { font-weight: 800; font-size: .78rem; text-align: right; color: var(--muted); }
-.tp-stat .tp-sdelta.up { color: #6ee87f; }
-.tp-stat .tp-sdelta.down { color: #ff7b7b; }
-.tp-stat .tp-why { grid-column: 1 / -1; font-size: .7rem; color: var(--muted); line-height: 1.25; }
-.tp-stat .tp-why b.up { color: #6ee87f; }
-.tp-stat .tp-why b.down { color: #ff7b7b; }
+/* CURRENT STATS: a clean label / number pair and nothing else. */
+.tp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 16px; }
+.tp-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; font-size: .82rem; line-height: 1.5; }
+.tp-stat .tp-sname { color: var(--muted); font-weight: 700; }
+.tp-stat .tp-sval { font-weight: 900; font-size: .9rem; font-variant-numeric: tabular-nums; }
 
 /* ---------- Battle: weather, sleep & seals ---------- */
 .weather-badge {
@@ -551,6 +546,10 @@ select {
 .status-chip.sealed { color: #ffcf6f; border-color: rgba(255, 207, 111, .55); background: rgba(180, 130, 40, .18); }
 /* Guard Stance: a shield-blue chip that breathes, so a live block is obvious. */
 .status-chip.guarded { color: #9fe0ff; border-color: rgba(140, 210, 255, .7); background: rgba(60, 150, 220, .22); animation: sleep-pulse 1.4s ease-in-out infinite; }
+/* Burn and Poison: the same mechanic, two colours. They pulse like Guard so a
+   ticking status is never mistaken for a one-off weather burn. */
+.status-chip.dot.burn   { color: #ffb066; border-color: rgba(255, 140, 60, .75); background: rgba(200, 80, 20, .26); animation: sleep-pulse 1.1s ease-in-out infinite; }
+.status-chip.dot.poison { color: #b6ea72; border-color: rgba(150, 220, 90, .7);  background: rgba(90, 160, 40, .24); animation: sleep-pulse 1.1s ease-in-out infinite; }
 @keyframes sleep-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 .ab-sealed { color: #ffcf6f; font-weight: 800; }
 
@@ -1279,23 +1278,23 @@ h3 .name-el { vertical-align: middle; }
 .type-panel .tp-mult { margin-left: 2px; opacity: .85; font-size: .72em; }
 .type-panel .tp-empty { color: #7f94a9; font-size: .84rem; font-style: italic; }
 .type-panel .tp-vs {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 6px 10px; border-radius: 10px; margin-bottom: 5px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 9px; border-radius: 8px; margin-bottom: 4px;
   background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  font-size: .8rem; min-width: 0; max-width: 100%;
+  font-size: .76rem; min-width: 0; max-width: 100%;
 }
 /* The verdict and the multiplier are the point of the row: they never shrink or
    truncate. The label gives way instead, so a long name can never widen the
    panel and hand the modal a horizontal scrollbar. */
 .type-panel .tp-vs-label {
-  flex: 1 1 60px; min-width: 0; color: #dce9f8;
+  flex: 1 1 40px; min-width: 0; color: #dce9f8;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .type-panel .tp-vs-word {
   flex: 0 0 auto; white-space: nowrap;
-  font-weight: 800; letter-spacing: .05em; font-size: .66rem;
+  font-weight: 800; letter-spacing: .03em; font-size: .64rem;
 }
-.type-panel .tp-vs-mult { flex: none; font-weight: 800; padding: 1px 7px; border-radius: 7px; background: rgba(0,0,0,.3); }
+.type-panel .tp-vs-mult { flex: none; font-weight: 800; padding: 0 6px; border-radius: 6px; background: rgba(0,0,0,.3); font-size: .72rem; }
 .type-panel .tp-vs.strong { border-color: rgba(134,240,160,.5); }
 .type-panel .tp-vs.strong .tp-vs-word { color: #8ef0a8; }
 .type-panel .tp-vs.weak { border-color: rgba(255,170,140,.5); }
@@ -1401,6 +1400,9 @@ h3 .name-el { vertical-align: middle; }
   var SKILL_POWER_SCALE = 1.12;
   var ULTIMATE_POWER_SCALE = 1.25;
   var SLEEP_MAX_TURNS = 5;
+  var DOT_MAX_TURNS = 10;
+  var DOT_BASE = 2;
+  var DOT_PER_LEVEL = 0.55;
   var STAT_GROWTH = {
     // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.
     hp: 0.105,
@@ -3611,6 +3613,21 @@ h3 .name-el { vertical-align: middle; }
     ash_cloud: { id: "ash_cloud", name: "Ash Cloud", category: "debuff", effects: [{ stat: "sdef", amount: 5 }], uses: 10, desc: "Choking ash. Lowers the foe's Special Defense." },
     magma_brand: { id: "magma_brand", name: "Magma Brand", category: "debuff", effects: [{ stat: "pdef", amount: 7 }], uses: 8, desc: "A searing brand. Lowers the foe's Physical Defense sharply." },
     cinder_curse: { id: "cinder_curse", name: "Cinder Curse", category: "debuff", effects: [{ stat: "sdef", amount: 7 }], uses: 8, desc: "Smouldering cinders cling to the foe. Lowers its Special Defense sharply." },
+    // ---------- BURN & POISON: damage over time ----------
+    // Both are the SAME rider with a different name and colour. The tick scales
+    // with the TARGET's level (see DOT_BASE / DOT_PER_LEVEL in config.js), so a
+    // burn is worth far more against something that can survive it, and it lasts
+    // up to DOT_MAX_TURNS. Re-applying refreshes the counter, never stacks.
+    // Fire: the early move is a Special, so it lands a hit AND leaves the burn.
+    kindling: { id: "kindling", name: "Kindling", category: "special", damageType: "special", element: "fire", power: 14, uses: 12, burn: { chance: 1, turns: 4 }, desc: "Sets the foe alight. It burns every round for a few turns \u2014 and the hotter it is, the higher its level, the more it hurts." },
+    wildfire: { id: "wildfire", name: "Wildfire", category: "special", damageType: "special", element: "fire", power: 20, uses: 10, burn: { chance: 1, turns: 6 }, desc: "A spreading blaze. Burns for longer, and a high-level foe cooks in it." },
+    immolation: { id: "immolation", name: "Immolation", category: "special", damageType: "special", element: "fire", power: 30, uses: 8, burn: { chance: 1, turns: 8 }, desc: "Sets the whole field alight. A long, punishing burn on a strong foe.", future: true },
+    // Poison: the early move is a pure Debuff, so it does no damage of its own.
+    toxic_bite: { id: "toxic_bite", name: "Toxic Bite", category: "debuff", effects: [{ stat: "patk", amount: 4 }], uses: 12, poison: { chance: 1, turns: 4 }, desc: "Poisons the foe. It loses Health every round \u2014 the higher its level, the worse it festers." },
+    venom_bloom: { id: "venom_bloom", name: "Venom Bloom", category: "debuff", effects: [{ stat: "satk", amount: 4 }], uses: 12, poison: { chance: 1, turns: 4 }, desc: "A toxic bloom. Poisons the foe and dulls its Special Attack." },
+    creeping_toxin: { id: "creeping_toxin", name: "Creeping Toxin", category: "debuff", effects: [{ stat: "spd", amount: 4 }], uses: 10, poison: { chance: 1, turns: 6 }, desc: "A slow poison that drags at the foe and festers for a long time." },
+    plague_bloom: { id: "plague_bloom", name: "Plague Bloom", category: "debuff", effects: [{ stat: "sdef", amount: 5 }], uses: 10, poison: { chance: 1, turns: 6 }, desc: "A wasting plague. The foe rots away a little more every round." },
+    septic_rot: { id: "septic_rot", name: "Septic Rot", category: "debuff", effects: [{ stat: "pdef", amount: 7 }], uses: 8, poison: { chance: 1, turns: 8 }, desc: "Rot that will not leave. A long, punishing poison on a strong foe.", future: true },
     // ---------- ROCK pool (Stonehollow Crags) ----------
     pebble_toss: { id: "pebble_toss", name: "Pebble Toss", category: "normal", damageType: "physical", element: null, power: 10, uses: Infinity, desc: "A flick of loose gravel. Unlimited uses." },
     rock_jab: { id: "rock_jab", name: "Rock Jab", category: "normal", damageType: "physical", element: "rock", power: 18, uses: 30, desc: "A stone-hard headbutt. 30 uses." },
@@ -3664,10 +3681,6 @@ h3 .name-el { vertical-align: middle; }
     guard_stance: { id: "guard_stance", name: "Guard Stance", category: "buff", effects: [{ stat: "pdef", amount: 5 }, { stat: "sdef", amount: 5 }], uses: 8, utility: "guard", desc: "Braces for one turn: the foe's next attack is cancelled outright. Raises both Defenses in the meantime. Stops attacks only \u2014 a weather still burns through." },
     purge: { id: "purge", name: "Purge", category: "debuff", effects: [{ stat: "pdef", amount: 3, target: "foe" }], uses: 8, utility: "purge", desc: "Wipes every buff off the foe \u2014 Attack, Defense, Speed, all of it \u2014 and leaves a gap in its guard." },
     ward: { id: "ward", name: "Ward", category: "buff", effects: [{ stat: "sdef", amount: 3 }], uses: 8, utility: "ward", desc: "Cleanses every debuff off you. Your own buffs are left alone." },
-    // Elite versions: the same three verbs, stronger numbers, far fewer uses.
-    aegis: { id: "aegis", name: "Aegis", category: "buff", effects: [{ stat: "pdef", amount: 8 }, { stat: "sdef", amount: 8 }], uses: 4, utility: "guard", desc: "A full Aegis. Cancels the foe's next attack outright and hardens both Defenses.", future: true },
-    ruin: { id: "ruin", name: "Ruin", category: "debuff", effects: [{ stat: "pdef", amount: 5, target: "foe" }], uses: 4, utility: "purge", desc: "Strips every buff off the foe and leaves its guard badly broken.", future: true },
-    sanctuary: { id: "sanctuary", name: "Sanctuary", category: "buff", effects: [{ stat: "sdef", amount: 5 }], uses: 4, utility: "ward", desc: "A clean slate: every debuff falls away and your Special Defense rises.", future: true },
     // ---------- ELITE support skills: two effects, few uses ----------
     // Foe-side entries are always debuffs, self-side entries always buffs.
     war_cry: { id: "war_cry", name: "War Cry", category: "buff", effects: [{ stat: "patk", amount: 8 }, { stat: "spd", amount: 6 }], uses: 4, desc: "A roar that quickens the blood. Raises Physical Attack AND Speed.", future: true },
@@ -4147,6 +4160,9 @@ h3 .name-el { vertical-align: middle; }
     if (sk.weather) {
       const w = getWeather(sk.weather.id);
       if (w) out.push(`${Math.round(sk.weather.chance * 100)}% chance to call down ${w.name}`);
+    }
+    for (const kind of ["burn", "poison"]) {
+      if (sk[kind]) out.push(`${Math.round(sk[kind].chance * 100)}% chance to ${kind} for ${sk[kind].turns} turns (scales with level, 10-turn cap)`);
     }
     return out.join(" \xB7 ");
   }
@@ -5598,17 +5614,28 @@ h3 .name-el { vertical-align: middle; }
   var TACTICAL_UNLOCKS = {
     12: ["ward"],
     20: ["guard_stance"],
-    40: ["purge"],
-    60: ["sanctuary"],
-    80: ["aegis", "ruin"]
+    40: ["purge"]
   };
-  function skillsUnlockedAt(speciesId, level) {
-    const sp = getSpecies(speciesId);
-    if (!sp) return [];
+  var BURN_UNLOCKS = { 12: ["kindling"], 40: ["wildfire"], 80: ["immolation"] };
+  var POISON_UNLOCKS = { 12: ["toxic_bite"], 20: ["venom_bloom"], 40: ["creeping_toxin"], 60: ["plague_bloom"], 80: ["septic_rot"] };
+  function sharedUnlocksFor(sp, level) {
+    const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
     const out = [];
     for (const key of Object.keys(TACTICAL_UNLOCKS)) {
       if (level >= Number(key)) out.push(...TACTICAL_UNLOCKS[key]);
     }
+    if (els.includes("fire")) {
+      for (const key of Object.keys(BURN_UNLOCKS)) if (level >= Number(key)) out.push(...BURN_UNLOCKS[key]);
+    }
+    if (els.includes("poison")) {
+      for (const key of Object.keys(POISON_UNLOCKS)) if (level >= Number(key)) out.push(...POISON_UNLOCKS[key]);
+    }
+    return out;
+  }
+  function skillsUnlockedAt(speciesId, level) {
+    const sp = getSpecies(speciesId);
+    if (!sp) return [];
+    const out = sharedUnlocksFor(sp, level);
     for (const key of Object.keys(sp.skillUnlocks)) {
       if (level >= Number(key)) out.push(...sp.skillUnlocks[key]);
     }
@@ -5622,6 +5649,15 @@ h3 .name-el { vertical-align: middle; }
       if (!TACTICAL_UNLOCKS[key].includes(skillId)) continue;
       const lv = Number(key);
       if (best == null || lv < best) best = lv;
+    }
+    const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
+    for (const table2 of [els.includes("fire") ? BURN_UNLOCKS : null, els.includes("poison") ? POISON_UNLOCKS : null]) {
+      if (!table2) continue;
+      for (const key of Object.keys(table2)) {
+        if (!table2[key].includes(skillId)) continue;
+        const lv = Number(key);
+        if (best == null || lv < best) best = lv;
+      }
     }
     for (const key of Object.keys(sp.skillUnlocks)) {
       if (!sp.skillUnlocks[key].includes(skillId)) continue;
@@ -7657,6 +7693,7 @@ h3 .name-el { vertical-align: middle; }
       this.sealedTurns = 0;
       this.lastSkillId = null;
       this.guard = false;
+      this.dot = null;
     }
     base() {
       return computeStats(this.m);
@@ -7742,7 +7779,7 @@ h3 .name-el { vertical-align: middle; }
     const dmg = Math.max(1, Math.floor(move.power * powerScale * off / Math.max(1, def) * levelFactor * stageFactor * rand2 * mult * weatherMult));
     return { dmg, mult, element: atkElement, weatherMult, tone: mult > 1.01 ? "strong" : mult < 0.99 ? "weak" : "even" };
   }
-  var Battle = class {
+  var Battle = class _Battle {
     /**
      * @param {object} cfg
      *  type: 'wild'|'trainer', party: Mythling[], enemies: Mythling[],
@@ -8179,6 +8216,73 @@ h3 .name-el { vertical-align: middle; }
       this.cb(m).sleep -= 1;
       this.cb(m).lastHit = 0;
     }
+    // ---------------- burn & poison: damage over time ----------------
+    /**
+     * The per-round damage a status does to `m`. It scales with the TARGET's
+     * level, not the attacker's: the same burn is far heavier on something that
+     * can survive it, which is what makes a status worth a turn in a long fight.
+     * Flat, so it is never reduced by Defense and never crits.
+     */
+    static dotDamage(m) {
+      return Math.max(1, Math.round(DOT_BASE + DOT_PER_LEVEL * Math.max(1, m.level)));
+    }
+    /**
+     * Set (or refresh) a Burn / Poison on `m`. Re-applying takes whichever is
+     * stronger and lasts longer; it never ADDS a second tick, so a status can
+     * never be doubled by pressing the button twice.
+     * @returns {{applied:boolean, turns:number, perTick:number, refreshed:boolean}}
+     */
+    applyDot(m, kind, turns) {
+      const cb = this.cb(m);
+      const perTick = _Battle.dotDamage(m);
+      const capped = Math.min(DOT_MAX_TURNS, Math.max(1, Math.round(turns || 1)));
+      const prev = cb.dot;
+      if (prev && prev.kind === kind) {
+        cb.dot = { kind, turns: Math.max(prev.turns, capped), perTick };
+        return { applied: true, turns: cb.dot.turns, perTick, refreshed: true };
+      }
+      cb.dot = { kind, turns: capped, perTick };
+      return { applied: true, turns: capped, perTick, refreshed: false };
+    }
+    /** The active status on `m`, or null. */
+    statusOf(m) {
+      var _a;
+      return ((_a = this.combatants.get(m == null ? void 0 : m.uid)) == null ? void 0 : _a.dot) || null;
+    }
+    /**
+     * End of every round: burn and poison each tick once for every Mythling on
+     * the field. It lands AFTER both have acted, so a status set this round bites
+     * immediately. Guard does not stop it — bracing stops a blow, not the fire
+     * that is already inside you.
+     */
+    _dotTick(events) {
+      for (const [m, side] of [[this.enemy, "enemy"], [this.player, "player"]]) {
+        const cb = m && this.combatants.get(m.uid);
+        if (!cb || !cb.dot || isFainted(m)) continue;
+        const { kind, turns, perTick } = cb.dot;
+        const name = kind === "burn" ? "Burn" : "Poison";
+        m.currentHp = Math.max(0, m.currentHp - perTick);
+        const turnsLeft = Math.max(0, turns - 1);
+        events.push({
+          type: "dot-tick",
+          side,
+          uid: m.uid,
+          kind,
+          amount: perTick,
+          turns: turnsLeft,
+          name
+        });
+        events.push({
+          type: "log",
+          text: `${displayName(m)} is ${kind === "burn" ? "burning" : "poisoned"}! (${perTick} damage \xB7 ${turnsLeft} more turn${turnsLeft === 1 ? "" : "s"}${name} \u2014 scales with a Lv.${m.level} target)`
+        });
+        cb.dot = turnsLeft > 0 ? { kind, turns: turnsLeft, perTick } : null;
+        if (isFainted(m)) {
+          events.push({ type: "faint", side, uid: m.uid });
+          events.push({ type: "log", text: `${displayName(m)} was overcome by ${name.toLowerCase()}!`, emphasis: true });
+        }
+      }
+    }
     /**
      * Sleep / Seal riders, both landing on the foe. Sleep is capped at
      * SLEEP_MAX_TURNS however often it is re-applied; a Seal locks the move the foe
@@ -8187,6 +8291,22 @@ h3 .name-el { vertical-align: middle; }
     _applyStatusRiders(move, attacker, defender, events, atkSide, defSide) {
       if (!move) return;
       const dcb = this.cb(defender);
+      for (const kind of ["burn", "poison"]) {
+        const rider = move[kind];
+        if (!rider) continue;
+        if (this.rng() >= rider.chance) {
+          events.push({ type: "log", text: `${move.name} leaves no lasting mark.` });
+          continue;
+        }
+        const r = this.applyDot(defender, kind, rider.turns);
+        const name = kind === "burn" ? "Burning" : "Poisoned";
+        events.push({ type: "dot-set", side: defSide, uid: defender.uid, kind, turns: r.turns, amount: r.perTick, refreshed: r.refreshed });
+        events.push({
+          type: "log",
+          text: `${displayName(defender)} is ${name}! (${r.perTick} damage a round for up to ${r.turns} turns \u2014 a Lv.${defender.level} target burns harder)`,
+          emphasis: true
+        });
+      }
       if (move.sleep && this.rng() < move.sleep.chance) {
         const [lo, hi] = move.sleep.turns;
         const roll = lo + Math.floor(this.rng() * (hi - lo + 1));
@@ -8384,6 +8504,7 @@ h3 .name-el { vertical-align: middle; }
     // ---------------- turn bookkeeping ----------------
     _postTurn(events) {
       if (this.phase !== BattlePhase.ACTIVE) return;
+      this._dotTick(events);
       this._weatherBurn(events);
       this.cb(this.player).tick();
       this.cb(this.enemy).tick();
@@ -17840,34 +17961,15 @@ h3 .name-el { vertical-align: middle; }
       body.appendChild(list(prof.weakTo, "Nothing \u2014 no element hits it for extra."));
       body.appendChild(el("h3", { class: "tp-head", text: "RESISTS" }));
       body.appendChild(list(prof.resists, "Nothing \u2014 no element is resisted."));
-      const rows = statBreakdown(m);
-      const moodName = getMood(m.mood).name;
-      const rat = getRational(m.rational);
-      const ratName = (rat == null ? void 0 : rat.name) || "\u2014";
-      const mut = getMutation(m.mutation);
       const detail = el("div", { class: "tp-stats" });
-      for (const r of rows) {
-        const net = r.mood + r.rational + r.mutation;
-        const parts = [`Lv.${m.level} &amp; stage ${r.grown}`];
-        if (r.mood) parts.push(`Mood ${moodName} <b class="up">+${r.mood}</b>`);
-        if (r.rational > 0) parts.push(`Rational ${ratName} <b class="up">+${r.rational}</b>`);
-        if (r.rational < 0) parts.push(`Rational ${ratName} <b class="down">${r.rational}</b>`);
-        if (r.mutation) parts.push(`${mut.name} <b class="up">+${r.mutation}</b>`);
-        parts.push(`Rarity ${m.rarity} &middot; mood &times;${r.rarityMag}`);
+      for (const r of statBreakdown(m)) {
         detail.appendChild(el("div", { class: "tp-stat" }, [
           el("span", { class: "tp-sname", text: STAT_LABELS[r.key] || r.key.toUpperCase() }),
-          el("b", { class: "tp-sval", text: String(r.total) }),
-          el("span", { class: `tp-sdelta ${net > 0 ? "up" : net < 0 ? "down" : ""}`, text: net ? `${net > 0 ? "+" : ""}${net}` : "\u2014" }),
-          el("div", { class: "tp-why", html: parts.join(" &middot; ") })
+          el("b", { class: "tp-sval", text: String(r.total) })
         ]));
       }
       const more = el("div", { class: "tp-more" }, [
         el("h3", { class: "tp-head", text: "CURRENT STATS" }),
-        el("p", {
-          class: "sub",
-          style: { margin: "0 0 8px" },
-          text: "The number the battle uses, then everything feeding it: level and stage growth, Mood (scaled by Rarity), the Rational\u2019s +10 / \u221210 and the mutation bonus."
-        }),
         detail
       ]);
       more.hidden = true;
@@ -17881,18 +17983,6 @@ h3 .name-el { vertical-align: middle; }
       });
       body.appendChild(el("div", { class: "tp-actions" }, [toggle]));
       body.appendChild(more);
-      body.appendChild(el("p", {
-        class: "sub",
-        style: { marginTop: "10px" },
-        text: "Weak against = elements that hit this one harder. Resists = elements it shrugs off: those attacks land for less."
-      }));
-      if (mine.length > 1) {
-        body.appendChild(el("p", {
-          class: "sub",
-          style: { marginTop: "6px" },
-          text: "Dual type: every one of its elements is weighed in, so a \xD71.5 and a \xD70.75 multiply out to \xD71.125."
-        }));
-      }
       return { title: `${names} \u2014 TYPE MATCH-UP`, body };
     }
     /**
@@ -17907,11 +17997,20 @@ h3 .name-el { vertical-align: middle; }
       const sleep = (cb == null ? void 0 : cb.sleep) || 0;
       const sealed = (cb == null ? void 0 : cb.isSealed(cb.sealed)) ? cb.sealed : null;
       const guarded = !!(cb == null ? void 0 : cb.guard);
-      row.dataset.sig = this.statusSig(m) + (guarded ? "|g" : "");
-      if (!sleep && !sealed && !guarded) {
+      const dot = (cb == null ? void 0 : cb.dot) || null;
+      row.dataset.sig = this.statusSig(m) + (guarded ? "|g" : "") + (dot ? `|${dot.kind}${dot.turns}` : "");
+      if (!sleep && !sealed && !guarded && !dot) {
         row.classList.add("empty");
         row.appendChild(el("span", { class: "status-none", text: "No status" }));
         return row;
+      }
+      if (dot) {
+        const burn = dot.kind === "burn";
+        row.appendChild(el("span", {
+          class: `status-chip dot ${burn ? "burn" : "poison"}`,
+          title: `${burn ? "Burn" : "Poison"}: ${dot.perTick} damage at the end of every round, ${dot.turns} turn(s) left. The damage is set when the status lands and scales with this Mythling's level \u2014 a higher level burns or poisons harder. Capped at ${DOT_MAX_TURNS} turns, and Guard does not stop it.`,
+          text: `${burn ? "\u2733 BURN" : "\u2620 POISON"} ${dot.turns}`
+        }));
       }
       if (guarded) {
         row.appendChild(el("span", {
@@ -18562,6 +18661,24 @@ h3 .name-el { vertical-align: middle; }
           if (v) v.hp = Math.max(0, v.hp - ev.amount);
           AudioManager.sfx("hit");
           this.floatNumber(ev.side, `-${ev.amount}`, "#ffb35c", "");
+          this.shake = Math.max(this.shake, 3);
+          this.refreshCards();
+          await wait(340);
+          break;
+        }
+        case "dot-set": {
+          const burn = ev.kind === "burn";
+          this.floatNumber(ev.side, `${burn ? "\u2733" : "\u2620"} ${burn ? "BURN" : "PSN"} ${ev.turns}`, burn ? "#ff9a4a" : "#a8e06a", "buff");
+          this.refreshCards();
+          await wait(440);
+          break;
+        }
+        case "dot-tick": {
+          const v = this.view[ev.side];
+          if (v) v.hp = Math.max(0, v.hp - ev.amount);
+          const burn = ev.kind === "burn";
+          AudioManager.sfx(burn ? "hit" : "hit");
+          this.floatNumber(ev.side, `-${ev.amount}`, burn ? "#ff8c3a" : "#9fd85c", "");
           this.shake = Math.max(this.shake, 3);
           this.refreshCards();
           await wait(340);
@@ -19496,16 +19613,34 @@ h3 .name-el { vertical-align: middle; }
       and no Ultimate charge for the attacker. It is the answer to a telegraphed Ultimate: brace, eat
       nothing, and save your own for the next round. It covers <b>exactly one attack</b>, and an unused
       stance lapses at the end of the round, so it can never be banked into a free double block.
-      It also raises both Defenses while it is up. <b>Aegis</b> (Lv.80) is the stronger version.
+      It also raises both Defenses while it is up.
       Guard stops <i>attacks</i> only: a raised <b>weather</b> is a condition of the field, not
       something the foe swung at you, so it still burns through a Guard.`),
       h3("Purge", "purge dispel strip enemy buffs"),
       para(`Wipes <b>every buff off the foe</b> \u2014 Attack, Defense, Speed, all of it \u2014 and leaves a gap in its
-      guard. Debuffs are untouched: Purge strips what the foe built for itself, not what it did to you.
-      <b>Ruin</b> (Lv.80) is the stronger version.`),
+      guard. Debuffs are untouched: Purge strips what the foe built for itself, not what it did to you.`),
       h3("Ward", "ward cleanse remove own debuffs"),
       para(`Cleanses <b>every debuff off you</b>. Your own buffs are left alone \u2014 it lifts what the foe did to
-      you, it does not strip what you did for yourself. <b>Sanctuary</b> (Lv.80) is the stronger version.`),
+      you, it does not strip what you did for yourself.`),
+      h3("Burn &amp; Poison", "burn poison damage over time dot status level scaling"),
+      para(`Two <b>damage-over-time</b> statuses. A <b>Fire</b> skill can leave the foe
+      <b>BURNING</b>; a <b>Poison</b> skill can leave it <b>POISONED</b>. Either way the foe loses
+      Health at the <b>end of every round</b>, for up to <b>10 turns</b> \u2014 that is the hard cap, and
+      nothing pushes past it.`),
+      para(`The tick <b>scales with the TARGET's level</b>, not the attacker's:
+      <b>2 + 0.55 x level</b>, so a Lv.20 Mythling burns for 13 a round and a Lv.100 one for 57.
+      A status is therefore worth far more against something strong enough to survive it \u2014 set the
+      burn early and it does the killing for you.`),
+      para(`Three rules keep it honest: re-applying <b>refreshes</b> the counter rather than adding to
+      it, so a status can never be doubled; the tick is <b>flat</b>, so no crit and no Defense
+      reduction; and <b>Guard does not stop it</b> \u2014 bracing stops a blow, not the fire that is
+      already inside you. This is a <i>status</i>, distinct from the <b>weather</b> field, which
+      burns everything on screen and ignores levels entirely.`),
+      para(`Fire Mythlings learn <b>Kindling</b> (Lv.12), <b>Wildfire</b> (Lv.40) and
+      <b>Immolation</b> (Lv.80). Poison Mythlings learn <b>Toxic Bite</b> (Lv.12),
+      <b>Venom Bloom</b> (Lv.20), <b>Creeping Toxin</b> (Lv.40), <b>Plague Bloom</b> (Lv.60) and
+      <b>Septic Rot</b> (Lv.80). No other element gets them. The card shows a
+      <b>BURN</b> or <b>POISON</b> chip with the rounds remaining.`),
       h3("Sleep, Seals & Weather", "sleep seal weather wildfire status"),
       para(`Three battle conditions live on their own page: <b>Sleep</b> (lose your turn),
       <b>Seals</b> (a move locked shut) and <b>Weather</b> (the arena itself changes).

@@ -484,16 +484,11 @@ select {
 .tp-actions { display: flex; justify-content: center; margin-top: 12px; }
 .tp-toggle { font-size: .72rem; padding: 6px 14px; }
 .tp-more { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10px; }
-.tp-stats { display: flex; flex-direction: column; gap: 7px; }
-.tp-stat { display: grid; grid-template-columns: 88px minmax(0, 1fr) 46px; gap: 8px; align-items: baseline; font-size: .84rem; }
-.tp-stat .tp-sname { color: var(--muted); }
-.tp-stat .tp-sval { font-weight: 900; font-size: .92rem; }
-.tp-stat .tp-sdelta { font-weight: 800; font-size: .78rem; text-align: right; color: var(--muted); }
-.tp-stat .tp-sdelta.up { color: #6ee87f; }
-.tp-stat .tp-sdelta.down { color: #ff7b7b; }
-.tp-stat .tp-why { grid-column: 1 / -1; font-size: .7rem; color: var(--muted); line-height: 1.25; }
-.tp-stat .tp-why b.up { color: #6ee87f; }
-.tp-stat .tp-why b.down { color: #ff7b7b; }
+/* CURRENT STATS: a clean label / number pair and nothing else. */
+.tp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 16px; }
+.tp-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; font-size: .82rem; line-height: 1.5; }
+.tp-stat .tp-sname { color: var(--muted); font-weight: 700; }
+.tp-stat .tp-sval { font-weight: 900; font-size: .9rem; font-variant-numeric: tabular-nums; }
 
 /* ---------- Battle: weather, sleep & seals ---------- */
 .weather-badge {
@@ -543,6 +538,10 @@ select {
 .status-chip.sealed { color: #ffcf6f; border-color: rgba(255, 207, 111, .55); background: rgba(180, 130, 40, .18); }
 /* Guard Stance: a shield-blue chip that breathes, so a live block is obvious. */
 .status-chip.guarded { color: #9fe0ff; border-color: rgba(140, 210, 255, .7); background: rgba(60, 150, 220, .22); animation: sleep-pulse 1.4s ease-in-out infinite; }
+/* Burn and Poison: the same mechanic, two colours. They pulse like Guard so a
+   ticking status is never mistaken for a one-off weather burn. */
+.status-chip.dot.burn   { color: #ffb066; border-color: rgba(255, 140, 60, .75); background: rgba(200, 80, 20, .26); animation: sleep-pulse 1.1s ease-in-out infinite; }
+.status-chip.dot.poison { color: #b6ea72; border-color: rgba(150, 220, 90, .7);  background: rgba(90, 160, 40, .24); animation: sleep-pulse 1.1s ease-in-out infinite; }
 @keyframes sleep-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 .ab-sealed { color: #ffcf6f; font-weight: 800; }
 
@@ -1271,23 +1270,23 @@ h3 .name-el { vertical-align: middle; }
 .type-panel .tp-mult { margin-left: 2px; opacity: .85; font-size: .72em; }
 .type-panel .tp-empty { color: #7f94a9; font-size: .84rem; font-style: italic; }
 .type-panel .tp-vs {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 6px 10px; border-radius: 10px; margin-bottom: 5px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 9px; border-radius: 8px; margin-bottom: 4px;
   background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  font-size: .8rem; min-width: 0; max-width: 100%;
+  font-size: .76rem; min-width: 0; max-width: 100%;
 }
 /* The verdict and the multiplier are the point of the row: they never shrink or
    truncate. The label gives way instead, so a long name can never widen the
    panel and hand the modal a horizontal scrollbar. */
 .type-panel .tp-vs-label {
-  flex: 1 1 60px; min-width: 0; color: #dce9f8;
+  flex: 1 1 40px; min-width: 0; color: #dce9f8;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .type-panel .tp-vs-word {
   flex: 0 0 auto; white-space: nowrap;
-  font-weight: 800; letter-spacing: .05em; font-size: .66rem;
+  font-weight: 800; letter-spacing: .03em; font-size: .64rem;
 }
-.type-panel .tp-vs-mult { flex: none; font-weight: 800; padding: 1px 7px; border-radius: 7px; background: rgba(0,0,0,.3); }
+.type-panel .tp-vs-mult { flex: none; font-weight: 800; padding: 0 6px; border-radius: 6px; background: rgba(0,0,0,.3); font-size: .72rem; }
 .type-panel .tp-vs.strong { border-color: rgba(134,240,160,.5); }
 .type-panel .tp-vs.strong .tp-vs-word { color: #8ef0a8; }
 .type-panel .tp-vs.weak { border-color: rgba(255,170,140,.5); }

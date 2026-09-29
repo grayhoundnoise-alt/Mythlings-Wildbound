@@ -9,10 +9,9 @@ import {
   MAX_EQUIPPED_SKILLS,
 } from '../core/mythling.js';
 import { getSkill, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS } from '../data/skills.js';
-import { STAT_SHORT, STAT_LABELS, getMood, getRational } from '../data/moods.js';
+import { STAT_SHORT, STAT_LABELS, getMood } from '../data/moods.js';
 import { ELEMENTS, ELEMENT_ORDER, speciesElements, attackMatchup, typeProfile } from '../data/elements.js';
 import { BALL_IDS, getItem } from '../data/items.js';
-import { getMutation } from '../data/mutations.js';
 import { getWeather } from '../data/weather.js';
 import { drawMythling, prewarm } from '../render/creatures.js';
 import { SkillVFX } from '../render/vfx/SkillVFX.js';
@@ -25,7 +24,7 @@ import { buffSummary, isDamageSkill } from '../data/skills.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { SettingsManager } from '../systems/SettingsManager.js';
 import { clamp, coins, randInt } from '../core/utils.js';
-import { LEVEL_CAP, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, SLEEP_MAX_TURNS } from '../data/config.js';
+import { LEVEL_CAP, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, SLEEP_MAX_TURNS, DOT_MAX_TURNS } from '../data/config.js';
 
 const SLOT_POS = {
   player: { x: 0.30, y: 0.80 },
@@ -394,32 +393,19 @@ export class BattleScene {
     body.appendChild(el('h3', { class: 'tp-head', text: 'RESISTS' }));
     body.appendChild(list(prof.resists, 'Nothing — no element is resisted.'));
 
-    // ---- SEE MORE: this Mythling's current stats and where every point comes from ----
-    const rows = statBreakdown(m);
-    const moodName = getMood(m.mood).name;
-    const rat = getRational(m.rational);
-    const ratName = rat?.name || '—';
-    const mut = getMutation(m.mutation);
+    // ---- SEE MORE: this Mythling's current stats, plainly ----
+    // Just the numbers the battle uses. No level/stage, no Rarity, no Mood, no
+    // Rational and no (+n) deltas: where a number came from is detail-panel
+    // business, and the type sheet is about TYPES.
     const detail = el('div', { class: 'tp-stats' });
-    for (const r of rows) {
-      const net = r.mood + r.rational + r.mutation;
-      const parts = [`Lv.${m.level} &amp; stage ${r.grown}`];
-      if (r.mood) parts.push(`Mood ${moodName} <b class="up">+${r.mood}</b>`);
-      if (r.rational > 0) parts.push(`Rational ${ratName} <b class="up">+${r.rational}</b>`);
-      if (r.rational < 0) parts.push(`Rational ${ratName} <b class="down">${r.rational}</b>`);
-      if (r.mutation) parts.push(`${mut.name} <b class="up">+${r.mutation}</b>`);
-      parts.push(`Rarity ${m.rarity} &middot; mood &times;${r.rarityMag}`);
+    for (const r of statBreakdown(m)) {
       detail.appendChild(el('div', { class: 'tp-stat' }, [
         el('span', { class: 'tp-sname', text: STAT_LABELS[r.key] || r.key.toUpperCase() }),
         el('b', { class: 'tp-sval', text: String(r.total) }),
-        el('span', { class: `tp-sdelta ${net > 0 ? 'up' : net < 0 ? 'down' : ''}`, text: net ? `${net > 0 ? '+' : ''}${net}` : '—' }),
-        el('div', { class: 'tp-why', html: parts.join(' &middot; ') }),
       ]));
     }
     const more = el('div', { class: 'tp-more' }, [
       el('h3', { class: 'tp-head', text: 'CURRENT STATS' }),
-      el('p', { class: 'sub', style: { margin: '0 0 8px' },
-        text: 'The number the battle uses, then everything feeding it: level and stage growth, Mood (scaled by Rarity), the Rational’s +10 / −10 and the mutation bonus.' }),
       detail,
     ]);
     more.hidden = true;
@@ -433,12 +419,6 @@ export class BattleScene {
     });
     body.appendChild(el('div', { class: 'tp-actions' }, [toggle]));
     body.appendChild(more);
-    body.appendChild(el('p', { class: 'sub', style: { marginTop: '10px' },
-      text: 'Weak against = elements that hit this one harder. Resists = elements it shrugs off: those attacks land for less.' }));
-    if (mine.length > 1) {
-      body.appendChild(el('p', { class: 'sub', style: { marginTop: '6px' },
-        text: 'Dual type: every one of its elements is weighed in, so a \u00d71.5 and a \u00d70.75 multiply out to \u00d71.125.' }));
-    }
 
     return { title: `${names} \u2014 TYPE MATCH-UP`, body };
   }
@@ -454,11 +434,18 @@ export class BattleScene {
     const sleep = cb?.sleep || 0;
     const sealed = cb?.isSealed(cb.sealed) ? cb.sealed : null;
     const guarded = !!cb?.guard;
-    row.dataset.sig = this.statusSig(m) + (guarded ? '|g' : '');
-    if (!sleep && !sealed && !guarded) {
+    const dot = cb?.dot || null;
+    row.dataset.sig = this.statusSig(m) + (guarded ? '|g' : '') + (dot ? `|${dot.kind}${dot.turns}` : '');
+    if (!sleep && !sealed && !guarded && !dot) {
       row.classList.add('empty');
       row.appendChild(el('span', { class: 'status-none', text: 'No status' }));
       return row;
+    }
+    if (dot) {
+      const burn = dot.kind === 'burn';
+      row.appendChild(el('span', { class: `status-chip dot ${burn ? 'burn' : 'poison'}`,
+        title: `${burn ? 'Burn' : 'Poison'}: ${dot.perTick} damage at the end of every round, ${dot.turns} turn(s) left. The damage is set when the status lands and scales with this Mythling's level — a higher level burns or poisons harder. Capped at ${DOT_MAX_TURNS} turns, and Guard does not stop it.`,
+        text: `${burn ? '\u2733 BURN' : '\u2620 POISON'} ${dot.turns}` }));
     }
     if (guarded) {
       row.appendChild(el('span', { class: 'status-chip guarded',
@@ -1123,6 +1110,24 @@ export class BattleScene {
         if (v) v.hp = Math.max(0, v.hp - ev.amount);
         AudioManager.sfx('hit');
         this.floatNumber(ev.side, `-${ev.amount}`, '#ffb35c', '');
+        this.shake = Math.max(this.shake, 3);
+        this.refreshCards();
+        await wait(340);
+        break;
+      }
+      case 'dot-set': {
+        const burn = ev.kind === 'burn';
+        this.floatNumber(ev.side, `${burn ? '\u2733' : '\u2620'} ${burn ? 'BURN' : 'PSN'} ${ev.turns}`, burn ? '#ff9a4a' : '#a8e06a', 'buff');
+        this.refreshCards();
+        await wait(440);
+        break;
+      }
+      case 'dot-tick': {
+        const v = this.view[ev.side];
+        if (v) v.hp = Math.max(0, v.hp - ev.amount);
+        const burn = ev.kind === 'burn';
+        AudioManager.sfx(burn ? 'hit' : 'hit');
+        this.floatNumber(ev.side, `-${ev.amount}`, burn ? '#ff8c3a' : '#9fd85c', '');
         this.shake = Math.max(this.shake, 3);
         this.refreshCards();
         await wait(340);

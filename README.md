@@ -109,8 +109,8 @@ Optional headless regression test for the editor (drives the built file in jsdom
 * **RUN is absolute** — you can leave *any* battle, wild **or** trainer, at any moment, and it
   always succeeds. The enemy gets no free hit; EXP already earned is kept; the trainer can be
   challenged again later.
-* **TACTICAL skills — Guard, Purge, Ward** (every Mythling learns them; Lv.12 / Lv.20 / Lv.40,
-  with the stronger Aegis / Ruin / Sanctuary at Lv.80). They deal **no damage**, so by the house
+* **TACTICAL skills — Guard, Purge, Ward** (every Mythling learns them; Lv.12 / Lv.20 / Lv.40 —
+  exactly three, no elite variants). They deal **no damage**, so by the house
   rule they are **Buff-type** buttons — but each costs a whole turn, and they exist so a Mythling
   that is **faster than its foe** can act first and shape the round before the enemy's blow lands:
   * **Guard Stance** — the foe's **next attack is cancelled outright**: no damage, no crit, no
@@ -121,6 +121,17 @@ Optional headless regression test for the editor (drives the built file in jsdom
   * **Ward** — strips **every debuff off you**. Your own buffs are left alone.
   * They are **never auto-equipped** — the default loadout stays the species' real
     attacker / defender / debuff. Equip them by hand in the Skill Library.
+* **BURN & POISON — damage over time** — Fire skills leave a **Burn**, Poison skills leave a
+  **Poison**, and the foe bleeds Health at the **end of every round** for up to **10 turns**
+  (the hard cap). The tick **scales with the TARGET's level**
+  (`2 + 0.55 x level`, so Lv.20 takes 13 a round and Lv.100 takes 57) — the same burn is worth
+  far more against something that can survive it, which is what makes a status a real turn to
+  spend. Re-applying **refreshes** the counter, so a status can never be doubled into a double
+  tick. Ticks are flat: no crit, no Defense reduction, and **Guard does not stop them** — bracing
+  stops a blow, not the fire already inside you. Burn is <i>not</i> the weather field: see below.
+  Fire learns Kindling / Wildfire / Immolation (Lv.12 / 40 / 80), Poison learns Toxic Bite /
+  Venom Bloom / Creeping Toxin / Plague Bloom / Septic Rot (Lv.12 / 20 / 40 / 60 / 80), and no
+  other element gets them. A green **BURN** / **POISON** chip on the card shows the rounds left.
 * **Retaliate / Vengeance never waste a turn** — the usual cause of "nothing to return" is being
   **faster** than your foe: you move first, so it has not hit you yet and the mirror has nothing to
   copy. It now falls back on the unlimited attack, the same rule every other empty button follows.

@@ -363,16 +363,34 @@ function battleSection() {
       and no Ultimate charge for the attacker. It is the answer to a telegraphed Ultimate: brace, eat
       nothing, and save your own for the next round. It covers <b>exactly one attack</b>, and an unused
       stance lapses at the end of the round, so it can never be banked into a free double block.
-      It also raises both Defenses while it is up. <b>Aegis</b> (Lv.80) is the stronger version.
+      It also raises both Defenses while it is up.
       Guard stops <i>attacks</i> only: a raised <b>weather</b> is a condition of the field, not
       something the foe swung at you, so it still burns through a Guard.`),
     h3('Purge', 'purge dispel strip enemy buffs'),
     para(`Wipes <b>every buff off the foe</b> — Attack, Defense, Speed, all of it — and leaves a gap in its
-      guard. Debuffs are untouched: Purge strips what the foe built for itself, not what it did to you.
-      <b>Ruin</b> (Lv.80) is the stronger version.`),
+      guard. Debuffs are untouched: Purge strips what the foe built for itself, not what it did to you.`),
     h3('Ward', 'ward cleanse remove own debuffs'),
     para(`Cleanses <b>every debuff off you</b>. Your own buffs are left alone — it lifts what the foe did to
-      you, it does not strip what you did for yourself. <b>Sanctuary</b> (Lv.80) is the stronger version.`),
+      you, it does not strip what you did for yourself.`),
+    h3('Burn &amp; Poison', 'burn poison damage over time dot status level scaling'),
+    para(`Two <b>damage-over-time</b> statuses. A <b>Fire</b> skill can leave the foe
+      <b>BURNING</b>; a <b>Poison</b> skill can leave it <b>POISONED</b>. Either way the foe loses
+      Health at the <b>end of every round</b>, for up to <b>10 turns</b> — that is the hard cap, and
+      nothing pushes past it.`),
+    para(`The tick <b>scales with the TARGET's level</b>, not the attacker's:
+      <b>2 + 0.55 x level</b>, so a Lv.20 Mythling burns for 13 a round and a Lv.100 one for 57.
+      A status is therefore worth far more against something strong enough to survive it — set the
+      burn early and it does the killing for you.`),
+    para(`Three rules keep it honest: re-applying <b>refreshes</b> the counter rather than adding to
+      it, so a status can never be doubled; the tick is <b>flat</b>, so no crit and no Defense
+      reduction; and <b>Guard does not stop it</b> — bracing stops a blow, not the fire that is
+      already inside you. This is a <i>status</i>, distinct from the <b>weather</b> field, which
+      burns everything on screen and ignores levels entirely.`),
+    para(`Fire Mythlings learn <b>Kindling</b> (Lv.12), <b>Wildfire</b> (Lv.40) and
+      <b>Immolation</b> (Lv.80). Poison Mythlings learn <b>Toxic Bite</b> (Lv.12),
+      <b>Venom Bloom</b> (Lv.20), <b>Creeping Toxin</b> (Lv.40), <b>Plague Bloom</b> (Lv.60) and
+      <b>Septic Rot</b> (Lv.80). No other element gets them. The card shows a
+      <b>BURN</b> or <b>POISON</b> chip with the rounds remaining.`),
     h3('Sleep, Seals & Weather', 'sleep seal weather wildfire status'),
     para(`Three battle conditions live on their own page: <b>Sleep</b> (lose your turn),
       <b>Seals</b> (a move locked shut) and <b>Weather</b> (the arena itself changes).

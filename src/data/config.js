@@ -122,6 +122,30 @@ export const ULTIMATE_POWER_SCALE = 1.25;
  */
 export const SLEEP_MAX_TURNS = 5;
 
+/* ---------------------------------------------------------------------
+   BURN & POISON — damage over time.
+   Two riders, one shape: a flat tick that SCALES WITH THE TARGET'S LEVEL, so
+   a burn set on a Lv.100 Mythling hurts far more than the same burn on a Lv.20
+   one. That is the whole point: the number on the card is read against the foe
+   in front of you, not against a flat wall.
+
+   A status lasts DOT_MAX_TURNS and is refreshed, never stacked, so a second
+   burn cannot double the tick. It ticks at the END of the round, after both
+   Mythlings have acted, and it bypasses Guard: bracing stops a blow, not the
+   fire that is already inside you.
+   --------------------------------------------------------------------- */
+export const DOT_MAX_TURNS = 10;          // Burn and Poison both cap here
+/** Ticks at the end of a round, before the faint checks. */
+export const DOT_TICK_PERCENT = 100;      // of the computed per-tick damage
+/**
+ * Per-tick damage = DOT_BASE + DOT_PER_LEVEL x target level. Deliberately
+ * linear in the TARGET's level (not the attacker's): a status is worth more
+ * against something that can survive it, and it keeps a late-game burn
+ * meaningful without scaling into an instant knockout.
+ */
+export const DOT_BASE = 2;
+export const DOT_PER_LEVEL = 0.55;
+
 export const STAT_GROWTH = {
   // HP grows a little faster than the attacking stats, so fights get LONGER as levels rise, not shorter.
   hp: 0.105, patk: 0.075, satk: 0.075, pdef: 0.070, sdef: 0.070, spd: 0.060, counter: 0.035,

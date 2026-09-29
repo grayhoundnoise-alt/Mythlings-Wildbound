@@ -15,6 +15,14 @@ import { getWeather } from './weather.js';
 //                   turns. Re-sleeping adds to the counter, capped at 5.
 //   seal:  { chance, turns: [min, max] }  seal the move the foe JUST used for
 //                   1-2 turns. The unlimited Normal attack can never be sealed.
+//   burn:   { chance, turns }   set BURNING on the foe (Fire). It ticks at the
+//                   end of every round for up to DOT_MAX_TURNS. The tick scales
+//                   with the TARGET's level, so the same burn is far heavier on
+//                   a Lv.100 Mythling than on a Lv.20 one. Re-applying REFRESHES
+//                   the counter; it never stacks into a double tick.
+//   poison: { chance, turns }   the same rider for Poison. Identical maths, and
+//                   it is listed separately so the Wiki and the icons can tell
+//                   the two apart.
 //   weather: { id, chance }  raise a weather condition for the rest of the battle
 //
 // Skill definitions. Categories: 'normal' (infinite uses), 'special', 'buff',
@@ -124,6 +132,22 @@ export const SKILLS = {
   magma_brand:     { id: 'magma_brand',     name: 'Magma Brand',     category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  desc: 'A searing brand. Lowers the foe\'s Physical Defense sharply.' },
   cinder_curse:    { id: 'cinder_curse',    name: 'Cinder Curse',    category: 'debuff', effects: [{ stat: 'sdef', amount: 7 }], uses: 8,  desc: 'Smouldering cinders cling to the foe. Lowers its Special Defense sharply.' },
 
+  // ---------- BURN & POISON: damage over time ----------
+  // Both are the SAME rider with a different name and colour. The tick scales
+  // with the TARGET's level (see DOT_BASE / DOT_PER_LEVEL in config.js), so a
+  // burn is worth far more against something that can survive it, and it lasts
+  // up to DOT_MAX_TURNS. Re-applying refreshes the counter, never stacks.
+  // Fire: the early move is a Special, so it lands a hit AND leaves the burn.
+  kindling:        { id: 'kindling',        name: 'Kindling',        category: 'special', damageType: 'special',  element: 'fire',   power: 14, uses: 12, burn: { chance: 1.0, turns: 4 },  desc: 'Sets the foe alight. It burns every round for a few turns — and the hotter it is, the higher its level, the more it hurts.' },
+  wildfire:        { id: 'wildfire',        name: 'Wildfire',        category: 'special', damageType: 'special',  element: 'fire',   power: 20, uses: 10, burn: { chance: 1.0, turns: 6 },  desc: 'A spreading blaze. Burns for longer, and a high-level foe cooks in it.' },
+  immolation:      { id: 'immolation',      name: 'Immolation',      category: 'special', damageType: 'special',  element: 'fire',   power: 30, uses: 8,  burn: { chance: 1.0, turns: 8 },  desc: 'Sets the whole field alight. A long, punishing burn on a strong foe.', future: true },
+  // Poison: the early move is a pure Debuff, so it does no damage of its own.
+  toxic_bite:      { id: 'toxic_bite',      name: 'Toxic Bite',      category: 'debuff', effects: [{ stat: 'patk', amount: 4 }], uses: 12, poison: { chance: 1.0, turns: 4 }, desc: "Poisons the foe. It loses Health every round — the higher its level, the worse it festers." },
+  venom_bloom:     { id: 'venom_bloom',     name: 'Venom Bloom',     category: 'debuff', effects: [{ stat: 'satk', amount: 4 }], uses: 12, poison: { chance: 1.0, turns: 4 }, desc: "A toxic bloom. Poisons the foe and dulls its Special Attack." },
+  creeping_toxin:  { id: 'creeping_toxin',  name: 'Creeping Toxin',  category: 'debuff', effects: [{ stat: 'spd',  amount: 4 }], uses: 10, poison: { chance: 1.0, turns: 6 }, desc: 'A slow poison that drags at the foe and festers for a long time.' },
+  plague_bloom:    { id: 'plague_bloom',    name: 'Plague Bloom',    category: 'debuff', effects: [{ stat: 'sdef', amount: 5 }], uses: 10, poison: { chance: 1.0, turns: 6 }, desc: 'A wasting plague. The foe rots away a little more every round.' },
+  septic_rot:      { id: 'septic_rot',      name: 'Septic Rot',      category: 'debuff', effects: [{ stat: 'pdef', amount: 7 }], uses: 8,  poison: { chance: 1.0, turns: 8 }, desc: 'Rot that will not leave. A long, punishing poison on a strong foe.', future: true },
+
   // ---------- ROCK pool (Stonehollow Crags) ----------
   pebble_toss:     { id: 'pebble_toss',     name: 'Pebble Toss',     category: 'normal', damageType: 'physical', element: null,   power: 10, uses: Infinity, desc: 'A flick of loose gravel. Unlimited uses.' },
   rock_jab:        { id: 'rock_jab',        name: 'Rock Jab',        category: 'normal', damageType: 'physical', element: 'rock', power: 18, uses: 30, desc: 'A stone-hard headbutt. 30 uses.' },
@@ -180,10 +204,6 @@ export const SKILLS = {
   guard_stance:    { id: 'guard_stance',    name: 'Guard Stance',    category: 'buff', effects: [{ stat: 'pdef', amount: 5 }, { stat: 'sdef', amount: 5 }], uses: 8, utility: 'guard', desc: "Braces for one turn: the foe's next attack is cancelled outright. Raises both Defenses in the meantime. Stops attacks only — a weather still burns through." },
   purge:           { id: 'purge',           name: 'Purge',           category: 'debuff', effects: [{ stat: 'pdef', amount: 3, target: 'foe' }], uses: 8, utility: 'purge', desc: "Wipes every buff off the foe — Attack, Defense, Speed, all of it — and leaves a gap in its guard." },
   ward:            { id: 'ward',            name: 'Ward',            category: 'buff', effects: [{ stat: 'sdef', amount: 3 }], uses: 8, utility: 'ward', desc: 'Cleanses every debuff off you. Your own buffs are left alone.' },
-  // Elite versions: the same three verbs, stronger numbers, far fewer uses.
-  aegis:           { id: 'aegis',           name: 'Aegis',           category: 'buff', effects: [{ stat: 'pdef', amount: 8 }, { stat: 'sdef', amount: 8 }], uses: 4, utility: 'guard', desc: "A full Aegis. Cancels the foe's next attack outright and hardens both Defenses.", future: true },
-  ruin:            { id: 'ruin',            name: 'Ruin',            category: 'debuff', effects: [{ stat: 'pdef', amount: 5, target: 'foe' }], uses: 4, utility: 'purge', desc: "Strips every buff off the foe and leaves its guard badly broken.", future: true },
-  sanctuary:       { id: 'sanctuary',       name: 'Sanctuary',       category: 'buff', effects: [{ stat: 'sdef', amount: 5 }], uses: 4, utility: 'ward', desc: 'A clean slate: every debuff falls away and your Special Defense rises.', future: true },
 
   // ---------- ELITE support skills: two effects, few uses ----------
   // Foe-side entries are always debuffs, self-side entries always buffs.
@@ -543,6 +563,9 @@ export function riderSummary(sk) {
   if (sk.weather) {
     const w = getWeather(sk.weather.id);
     if (w) out.push(`${Math.round(sk.weather.chance * 100)}% chance to call down ${w.name}`);
+  }
+  for (const kind of ['burn', 'poison']) {
+    if (sk[kind]) out.push(`${Math.round(sk[kind].chance * 100)}% chance to ${kind} for ${sk[kind].turns} turns (scales with level, 10-turn cap)`);
   }
   return out.join(' · ');
 }

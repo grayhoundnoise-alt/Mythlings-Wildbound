@@ -990,24 +990,45 @@ export function getEvolutionStage(speciesId, stage) {
  * The three tactical skills every Mythling learns, whatever its species or role.
  * They are support (no damage), so they are added centrally here rather than
  * copied into every one of the 55 species tables: Guard Stance at Lv.20, Ward at
- * Lv.12, Purge at Lv.40, and the stronger Aegis / Ruin / Sanctuary at Lv.60-80.
+ * Lv.12, Purge at Lv.40. Exactly three, with no elite variants.
  * This way a species added later gets them for free.
  */
 export const TACTICAL_UNLOCKS = {
   12: ['ward'],
   20: ['guard_stance'],
   40: ['purge'],
-  60: ['sanctuary'],
-  80: ['aegis', 'ruin'],
 };
 
-export function skillsUnlockedAt(speciesId, level) {
-  const sp = getSpecies(speciesId);
-  if (!sp) return [];
+/**
+ * BURN and POISON: the two damage-over-time ladders. A Mythling learns the one
+ * that matches its own element — Fire scorches, Poison festers — at the same
+ * levels, so the two read identically in shape and differ only in name, colour
+ * and which stat they pair with. A dual Fire/Poison line learns both.
+ * Applied centrally, like TACTICAL_UNLOCKS, so a species added later gets them.
+ */
+const BURN_UNLOCKS = { 12: ['kindling'], 40: ['wildfire'], 80: ['immolation'] };
+const POISON_UNLOCKS = { 12: ['toxic_bite'], 20: ['venom_bloom'], 40: ['creeping_toxin'], 60: ['plague_bloom'], 80: ['septic_rot'] };
+
+/** The shared tactical set plus whichever DoT ladder this species earns. */
+function sharedUnlocksFor(sp, level) {
+  const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
   const out = [];
   for (const key of Object.keys(TACTICAL_UNLOCKS)) {
     if (level >= Number(key)) out.push(...TACTICAL_UNLOCKS[key]);
   }
+  if (els.includes('fire')) {
+    for (const key of Object.keys(BURN_UNLOCKS)) if (level >= Number(key)) out.push(...BURN_UNLOCKS[key]);
+  }
+  if (els.includes('poison')) {
+    for (const key of Object.keys(POISON_UNLOCKS)) if (level >= Number(key)) out.push(...POISON_UNLOCKS[key]);
+  }
+  return out;
+}
+
+export function skillsUnlockedAt(speciesId, level) {
+  const sp = getSpecies(speciesId);
+  if (!sp) return [];
+  const out = sharedUnlocksFor(sp, level);
   for (const key of Object.keys(sp.skillUnlocks)) {
     if (level >= Number(key)) out.push(...sp.skillUnlocks[key]);
   }
@@ -1019,11 +1040,20 @@ export function skillLearnLevel(speciesId, skillId) {
   const sp = getSpecies(speciesId);
   if (!sp) return null;
   let best = null;
-  // the shared tactical skills first: a species table may also list them
+  // the shared skills first: the tactical trio, plus this species' DoT ladder
   for (const key of Object.keys(TACTICAL_UNLOCKS)) {
     if (!TACTICAL_UNLOCKS[key].includes(skillId)) continue;
     const lv = Number(key);
     if (best == null || lv < best) best = lv;
+  }
+  const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
+  for (const table of [els.includes('fire') ? BURN_UNLOCKS : null, els.includes('poison') ? POISON_UNLOCKS : null]) {
+    if (!table) continue;
+    for (const key of Object.keys(table)) {
+      if (!table[key].includes(skillId)) continue;
+      const lv = Number(key);
+      if (best == null || lv < best) best = lv;
+    }
   }
   for (const key of Object.keys(sp.skillUnlocks)) {
     if (!sp.skillUnlocks[key].includes(skillId)) continue;

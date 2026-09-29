@@ -1926,6 +1926,16 @@ const textOf = (node) => {
   return out;
 };
 
+/** Collect every descendant whose className contains `cls` (the DOM shim has no querySelectorAll). */
+const byClass = (node, cls) => {
+  const out = [];
+  for (const c of node?.children || []) {
+    if (String(c.className || '').split(/\s+/).includes(cls)) out.push(c);
+    out.push(...byClass(c, cls));
+  }
+  return out;
+};
+
 test('previewDamage promises the number the hit will actually deal', async () => {
   const { previewDamage } = await import('../src/systems/BattleManager.js');
   const { DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX } = await import('../src/data/config.js');
@@ -2240,7 +2250,7 @@ test('food gets dearer per EXP the higher you go — the top of the range is end
   assert.ok(top.price > 1000000, `Wildbound Ambrosia costs ${top.price.toLocaleString()} — buying two is an achievement`);
 });
 
-test('the type sheet SEE MORE block breaks the current stats down by source', async () => {
+test('the type sheet SEE MORE block lists plain current stats, and nothing else', async () => {
   const { BattleScene } = await import('../src/scenes/BattleScene.js');
   const m = createMythling({ speciesId: 'spriggo', level: 40, stage: 1, rarity: 'A', mood: 'brave', rational: 'docile' });
   const foe = createMythling({ speciesId: 'emberu', level: 40, stage: 1 });
@@ -2255,9 +2265,25 @@ test('the type sheet SEE MORE block breaks the current stats down by source', as
   for (const label of ['HP', 'Physical Attack', 'Special Attack', 'Physical Defense', 'Special Defense', 'Speed']) {
     assert.ok(txt.includes(label), `${label} is listed with its current value`);
   }
-  assert.match(txt, /Mood Brave/, 'the Mood bonus is named');
-  assert.match(txt, /Rational/, 'so is the Rational, plus and minus');
-  assert.match(txt, /Rarity A/, 'and the rarity tier behind the Mood bonus');
+  // The type sheet is about TYPES. The arithmetic behind a number (level growth,
+  // Mood, Rational, Rarity, the (+n) deltas) lives in the Mythling's detail panel.
+  assert.doesNotMatch(txt, /Mood Brave/, 'no Mood breakdown here');
+  assert.doesNotMatch(txt, /Rational/, 'no Rational breakdown here');
+  assert.doesNotMatch(txt, /Rarity A/, 'no rarity tier here');
+  assert.doesNotMatch(txt, /Lv\.40/, 'no level/stage line here');
+  assert.doesNotMatch(txt, /stage \d+/, 'no stage total here');
+  assert.doesNotMatch(txt, /The number the battle uses/, 'and no explanation paragraph');
+  // the numbers themselves are still there and still correct
+  for (const k of ['hp', 'patk', 'satk', 'pdef', 'sdef', 'spd']) {
+    const st = computeStats(m)[k];
+    assert.ok(txt.includes(String(st)), `${k} shows its real current value (${st})`);
+  }
+
+  // the STRONG / WEAK / RESISTS chip lists above already explain themselves, so
+  // the sheet must not repeat the same two paragraphs underneath.
+  const full = textOf(body);
+  assert.doesNotMatch(full, /Weak against = elements/, 'no duplicated "Weak against =" note');
+  assert.doesNotMatch(full, /Dual type: every one of its elements/, 'no duplicated "Dual type" note');
 
   const theirs = scene.typePanel(foe, 'enemy');
   const moreFoe = theirs.body.children.find((c) => String(c.className || '').includes('tp-more'));
@@ -2265,6 +2291,172 @@ test('the type sheet SEE MORE block breaks the current stats down by source', as
 });
 
 // ------------------------------------------------------------------
+section('Burn & Poison (damage over time)');
+
+test('burn and poison tick for damage that scales with the TARGET\'s level', async () => {
+  const { DOT_BASE, DOT_PER_LEVEL } = await import('../src/data/config.js');
+  const tickAt = (lv) => { const m = createMythling({ speciesId: 'emberu', level: lv, stage: 1 }); new Battle({ type: BattleType.WILD, party: [m], enemies: [createMythling({ speciesId: 'aquini', level: lv })], mapId: 'verdant_vale' }); return Battle.dotDamage(m); };
+  const lo = tickAt(1), mid = tickAt(50), hi = tickAt(LEVEL_CAP);
+  assert.ok(lo < mid && mid < hi, `the same status hurts more on a higher-level target (${lo} < ${mid} < ${hi})`);
+  assert.equal(hi, Math.round(DOT_BASE + DOT_PER_LEVEL * LEVEL_CAP), 'the number is the documented formula');
+  // a level-1 burn on a level-100 Mythling would be a joke; it is not
+  assert.ok(hi >= 10 * lo, `a high-level target genuinely takes a beating (${hi} vs ${lo})`);
+});
+
+test('a Fire skill burns the foe and the burn bites at the end of that same round', async () => {
+  const atk = createMythling({ speciesId: 'emberu', level: 30, stage: 1 });
+  const foe = createMythling({ speciesId: 'aquini', level: 30 });
+  atk.library.push('kindling'); atk.uses.kindling = 99;
+  const bt = new Battle({ type: BattleType.WILD, party: [atk], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.1 });
+  const { events } = bt.act({ type: 'skill', skillId: 'kindling' });
+  const set = events.find((e) => e.type === 'dot-set' && e.side === 'enemy');
+  assert.ok(set, 'Kindling set a status on the foe');
+  assert.equal(set.kind, 'burn', 'and it is Burn, not Poison');
+  const tick = events.find((e) => e.type === 'dot-tick' && e.side === 'enemy');
+  assert.ok(tick, 'the burn already ticks at the end of the round it was set');
+  assert.equal(tick.amount, set.amount, 'for the level-scaled number the status was created with');
+  assert.equal(tick.turns, set.turns - 1, 'and the counter counts down');
+});
+
+test('a Poison skill poisons without needing to deal damage first', async () => {
+  const atk = createMythling({ speciesId: 'venoviper', level: 30, stage: 1 });
+  const foe = createMythling({ speciesId: 'aquini', level: 30 });
+  atk.library.push('toxic_bite'); atk.uses.toxic_bite = 99;
+  const bt = new Battle({ type: BattleType.WILD, party: [atk], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.1 });
+  const { events } = bt.act({ type: 'skill', skillId: 'toxic_bite' });
+  assert.equal(events.find((e) => e.type === 'dot-set').kind, 'poison', 'Toxic Bite poisons');
+  assert.equal(events.find((e) => e.type === 'damage' && e.side === 'enemy'), undefined, 'and is a pure debuff — no hit of its own');
+});
+
+test('re-applying a status refreshes it; it can never be doubled into a double tick', async () => {
+  const atk = createMythling({ speciesId: 'emberu', level: 30, stage: 1 });
+  const foe = createMythling({ speciesId: 'aquini', level: 30 });
+  atk.library.push('kindling'); atk.uses.kindling = 99;
+  const bt = new Battle({ type: BattleType.WILD, party: [atk], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.1 });
+  bt.act({ type: 'skill', skillId: 'kindling' });
+  const hpBefore = foe.currentHp;
+  const { events } = bt.act({ type: 'skill', skillId: 'kindling' });
+  const set = events.find((e) => e.type === 'dot-set' && e.side === 'enemy');
+  assert.equal(set.turns, 4, 'the counter is refreshed back to full, not added to');
+  assert.equal(set.refreshed, true, 'and the engine says so');
+  const ticks = events.filter((e) => e.type === 'dot-tick' && e.side === 'enemy');
+  assert.equal(ticks.length, 1, 'still exactly one tick per round');
+  assert.equal(ticks[0].amount, Battle.dotDamage(foe), 'for one tick worth, not two');
+  // the foe strikes back in the same round, so check the burn specifically
+  assert.ok(foe.currentHp < hpBefore, 'the foe bleeds Health every round while it burns');
+  assert.ok(foe.currentHp <= hpBefore - ticks[0].amount, 'and at minimum by the tick on top of the hit it took');
+});
+
+test('burn and poison both cap at 10 turns, wear off cleanly, and can end a fight on their own', async () => {
+  const { DOT_MAX_TURNS } = await import('../src/data/config.js');
+  assert.equal(DOT_MAX_TURNS, 10, 'the cap is ten turns');
+  for (const kind of ['burn', 'poison']) {
+    const big = createMythling({ speciesId: 'aquini', level: 30 });
+    const cap = new Battle({ type: BattleType.WILD, party: [createMythling({ speciesId: 'emberu', level: 30 })], enemies: [big], mapId: 'verdant_vale' });
+    cap.applyDot(big, kind, 999);
+    assert.equal(cap.cb(big).dot.turns, DOT_MAX_TURNS, `${kind} refuses to last past the cap`);
+
+    const tgt = createMythling({ speciesId: 'aquini', level: 30 });
+    const bt = new Battle({ type: BattleType.WILD, party: [createMythling({ speciesId: 'emberu', level: 30 })], enemies: [tgt], mapId: 'verdant_vale' });
+    bt.applyDot(tgt, kind, 2);
+    for (let r = 0; r < 4; r++) bt.act({ type: 'skill', skillId: 'bite' });
+    assert.equal(bt.cb(tgt).dot, null, `${kind} wears off and leaves no zero-stack behind`);
+    assert.ok(tgt.currentHp > 0, `${kind} ticked but did not kill a healthy foe`);
+  }
+  // and it CAN decide the fight
+  const glass = createMythling({ speciesId: 'aquini', level: 1 });
+  const bt2 = new Battle({ type: BattleType.WILD, party: [createMythling({ speciesId: 'emberu', level: 60 })], enemies: [glass], mapId: 'verdant_vale', rng: () => 0.1 });
+  bt2.applyDot(glass, 'poison', 5);
+  for (let r = 0; r < 8 && glass.currentHp > 0; r++) bt2.act({ type: 'skill', skillId: 'bite' });
+  assert.equal(glass.currentHp, 0, 'damage over time can finish a Mythling off by itself');
+  assert.equal(bt2.phase, BattlePhase.DEFEATED_WILD, 'and the battle resolves');
+});
+
+test('Guard does not stop a status — and weather burn stays a separate, field-wide thing', async () => {
+  const guarded = createMythling({ speciesId: 'aquini', level: 30 });
+  const bt = new Battle({ type: BattleType.WILD, party: [createMythling({ speciesId: 'emberu', level: 30 })], enemies: [guarded], mapId: 'verdant_vale', rng: () => 0.5 });
+  bt.cb(guarded).guard = true;
+  bt.applyDot(guarded, 'burn', 3);
+  bt.act({ type: 'skill', skillId: 'bite' });
+  assert.ok(bt.cb(guarded).dot, 'bracing stops a blow, not the fire that is already inside you');
+
+  const other = createMythling({ speciesId: 'aquini', level: 30 });
+  const bt2 = new Battle({ type: BattleType.WILD, party: [createMythling({ speciesId: 'emberu', level: 30 })], enemies: [other], mapId: 'verdant_vale', rng: () => 0.5 });
+  bt2.applyDot(other, 'burn', 3);
+  const evs = bt2.act({ type: 'skill', skillId: 'bite' }).events;
+  assert.ok(!evs.some((e) => e.type === 'weather-tick'), 'no field damage is involved');
+  assert.equal(bt2.cb(other).dot.turns, 2, 'the status is its own thing and ticks on its own counter');
+});
+
+test('burn and poison are learned by the right element, at levels, and nobody else gets them', async () => {
+  const { skillsUnlockedAt, skillLearnLevel } = await import('../src/data/species.js');
+  for (const id of ['kindling', 'wildfire', 'immolation']) {
+    assert.ok(skillsUnlockedAt('emberu', LEVEL_CAP).includes(id), `a Fire Mythling learns ${id}`);
+    assert.ok(!skillsUnlockedAt('spriggo', LEVEL_CAP).includes(id), `a Nature Mythling does NOT learn ${id}`);
+  }
+  for (const id of ['toxic_bite', 'venom_bloom', 'creeping_toxin', 'plague_bloom', 'septic_rot']) {
+    assert.ok(skillsUnlockedAt('venoviper', LEVEL_CAP).includes(id), `a Poison Mythling learns ${id}`);
+    assert.ok(!skillsUnlockedAt('emberu', LEVEL_CAP).includes(id), `a Fire Mythling does NOT learn ${id}`);
+  }
+  assert.ok(skillLearnLevel('emberu', 'kindling') > 1, 'Burn is a later unlock, not a freebie');
+  assert.ok(skillLearnLevel('venoviper', 'septic_rot') > skillLearnLevel('venoviper', 'toxic_bite'), 'and the ladder deepens with level');
+  for (const id of ['kindling', 'wildfire', 'immolation', 'toxic_bite', 'venom_bloom', 'creeping_toxin', 'plague_bloom', 'septic_rot']) {
+    const sk = getSkillById(id);
+    assert.ok(sk, `${id} is a real skill`);
+    assert.ok(sk.burn || sk.poison, `${id} actually carries a damage-over-time rider`);
+  }
+});
+
+test('the battle card shows a Burn or Poison chip with the real numbers', async () => {
+  const { BattleScene } = await import('../src/scenes/BattleScene.js');
+  const atk = createMythling({ speciesId: 'emberu', level: 40, stage: 1 });
+  const foe = createMythling({ speciesId: 'aquini', level: 40 });
+  atk.library.push('kindling'); atk.uses.kindling = 99;
+  const bt = new Battle({ type: BattleType.WILD, party: [atk], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.1 });
+  bt.act({ type: 'skill', skillId: 'kindling' });
+  const scene = new BattleScene(document.createElement('canvas'));
+  scene.battle = bt;
+  const row = scene.statusRow(foe);
+  const txt = textOf(row);
+  assert.match(txt, /BURN/, 'the foe is chipped as burning');
+  assert.match(txt, /3/, 'with the rounds it has left');
+  assert.match(String(row.children[0].getAttribute('title')), /scales with this Mythling's level/, 'and the tooltip says where the number comes from');
+  assert.match(String(row.children[0].getAttribute('title')), /Capped at 10 turns/, 'and says the cap');
+  // poison reads differently, so the two are never confused
+  const p2 = createMythling({ speciesId: 'aquini', level: 40 });
+  const bt2 = new Battle({ type: BattleType.WILD, party: [createMythling({ speciesId: 'venoviper', level: 40 })], enemies: [p2], mapId: 'verdant_vale' });
+  bt2.applyDot(p2, 'poison', 6);
+  scene.battle = bt2;
+  const row2 = scene.statusRow(p2);
+  assert.match(textOf(row2), /POISON 6/, 'poison shows its own name and counter');
+});
+
+test('the type sheet shows plain current stats and a slim match-up row, with no duplicate footer', async () => {
+  const { BattleScene } = await import('../src/scenes/BattleScene.js');
+  const m = createMythling({ speciesId: 'emberu', level: 55, stage: 2, rarity: 'S', mood: 'brutal', rational: 'feral' });
+  const foe = createMythling({ speciesId: 'aquini', level: 55, stage: 2 });
+  const scene = new BattleScene(document.createElement('canvas'));
+  scene.battle = new Battle({ type: BattleType.WILD, party: [m], enemies: [foe], mapId: 'verdant_vale' });
+
+  const { body } = scene.typePanel(m, 'player');
+  const stats = byClass(body, 'tp-stat');
+  assert.ok(stats.length >= 6, 'the six stats are listed');
+  // each stat row is a label and a number, nothing else
+  for (const st of stats) {
+    const kids = st.children;
+    assert.equal(kids.length, 2, `a stat row is exactly a label and a value (got ${kids.length})`);
+    assert.equal(kids[0].className, 'tp-sname', 'first the label');
+    assert.equal(kids[1].className, 'tp-sval', 'then the number');
+    assert.match(kids[1].textContent, /^\d+$/, 'and the value is a bare number');
+  }
+  assert.doesNotMatch(textOf(body), /Mood|Rational|Rarity|Lv\.\d+|stage/i, 'no provenance, no level, no tier');
+  // the match-up rows stay slim: label, verdict, multiplier, and nothing tall
+  const rows = byClass(body, 'tp-vs');
+  assert.ok(rows.length >= 2, 'Attacking / Taking hits rows are present');
+  for (const r of rows) assert.equal(r.children.length, 3, 'a match-up row is label + word + multiplier only');
+  assert.doesNotMatch(textOf(body), /Dual type|Weak against =|Resists =/, 'and the footer does not repeat what the chips already say');
+});
+
 section('Sleep, Seals & Weather');
 
 test('a sleeping Mythling loses its whole turn, and sleep is capped', async () => {
@@ -2663,7 +2855,7 @@ test('the tactical skills are described to the player, not just hidden in data',
   assert.equal(getSkill('purge').utility, 'purge');
   assert.equal(getSkill('ward').utility, 'ward');
   // they deal no damage, so the house rule makes them Buff-type buttons
-  for (const id of ['guard_stance', 'purge', 'ward', 'aegis', 'ruin', 'sanctuary']) {
+  for (const id of ['guard_stance', 'purge', 'ward']) {
     const sk = getSkill(id);
     assert.ok(['buff', 'debuff'].includes(sk.category), `${id} is a support button, not an attack`);
     assert.ok(riderSummary(sk).includes(UTILITY_LABEL[sk.utility]), `${id} explains itself: ${riderSummary(sk)}`);

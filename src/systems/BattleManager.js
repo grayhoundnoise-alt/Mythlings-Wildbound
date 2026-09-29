@@ -15,6 +15,7 @@ import {
   DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, COUNTER_MAX_PERCENT, expReward, LEVEL_CAP,
   counterDodgePercent, CRIT_MAX_PERCENT, CRIT_MAX_MULT, coinReward, FUTURE_CONTENT_LIVE,
   DAMAGE_LEVEL_SCALE, DAMAGE_STAGE_SCALE, SKILL_POWER_SCALE, SLEEP_MAX_TURNS,
+  DOT_MAX_TURNS, DOT_BASE, DOT_PER_LEVEL,
 } from '../data/config.js';
 import { clamp, randInt } from '../core/utils.js';
 
@@ -41,6 +42,10 @@ class Combatant {
     this.sealedTurns = 0;
     this.lastSkillId = null;  // the move it used last — what a Seal locks
     this.guard = false;       // Guard Stance: cancel the foe's NEXT attack, then drop
+    // Damage over time. Both are the same shape: a status that ticks at the end
+    // of the round for `turns` more rounds, scaling with THIS combatant's level
+    // (see DOT_BASE / DOT_PER_LEVEL). Re-applying refreshes; it never stacks.
+    this.dot = null;          // null | { kind: 'burn'|'poison', turns, perTick }
   }
   base() { return computeStats(this.m); }
   stat(key) {
@@ -575,6 +580,69 @@ export class Battle {
     this.cb(m).lastHit = 0;      // nothing to retaliate against
   }
 
+  // ---------------- burn & poison: damage over time ----------------
+  /**
+   * The per-round damage a status does to `m`. It scales with the TARGET's
+   * level, not the attacker's: the same burn is far heavier on something that
+   * can survive it, which is what makes a status worth a turn in a long fight.
+   * Flat, so it is never reduced by Defense and never crits.
+   */
+  static dotDamage(m) {
+    return Math.max(1, Math.round(DOT_BASE + DOT_PER_LEVEL * Math.max(1, m.level)));
+  }
+
+  /**
+   * Set (or refresh) a Burn / Poison on `m`. Re-applying takes whichever is
+   * stronger and lasts longer; it never ADDS a second tick, so a status can
+   * never be doubled by pressing the button twice.
+   * @returns {{applied:boolean, turns:number, perTick:number, refreshed:boolean}}
+   */
+  applyDot(m, kind, turns) {
+    const cb = this.cb(m);
+    const perTick = Battle.dotDamage(m);
+    const capped = Math.min(DOT_MAX_TURNS, Math.max(1, Math.round(turns || 1)));
+    const prev = cb.dot;
+    if (prev && prev.kind === kind) {
+      cb.dot = { kind, turns: Math.max(prev.turns, capped), perTick };
+      return { applied: true, turns: cb.dot.turns, perTick, refreshed: true };
+    }
+    cb.dot = { kind, turns: capped, perTick };
+    return { applied: true, turns: capped, perTick, refreshed: false };
+  }
+
+  /** The active status on `m`, or null. */
+  statusOf(m) { return this.combatants.get(m?.uid)?.dot || null; }
+
+  /**
+   * End of every round: burn and poison each tick once for every Mythling on
+   * the field. It lands AFTER both have acted, so a status set this round bites
+   * immediately. Guard does not stop it — bracing stops a blow, not the fire
+   * that is already inside you.
+   */
+  _dotTick(events) {
+    for (const [m, side] of [[this.enemy, 'enemy'], [this.player, 'player']]) {
+      const cb = m && this.combatants.get(m.uid);
+      if (!cb || !cb.dot || isFainted(m)) continue;
+      const { kind, turns, perTick } = cb.dot;
+      const name = kind === 'burn' ? 'Burn' : 'Poison';
+      m.currentHp = Math.max(0, m.currentHp - perTick);
+      const turnsLeft = Math.max(0, turns - 1);
+      events.push({
+        type: 'dot-tick', side, uid: m.uid, kind, amount: perTick,
+        turns: turnsLeft, name,
+      });
+      events.push({
+        type: 'log',
+        text: `${displayName(m)} is ${kind === 'burn' ? 'burning' : 'poisoned'}! (${perTick} damage · ${turnsLeft} more turn${turnsLeft === 1 ? '' : 's'}${name} — scales with a Lv.${m.level} target)`,
+      });
+      cb.dot = turnsLeft > 0 ? { kind, turns: turnsLeft, perTick } : null;
+      if (isFainted(m)) {
+        events.push({ type: 'faint', side, uid: m.uid });
+        events.push({ type: 'log', text: `${displayName(m)} was overcome by ${name.toLowerCase()}!`, emphasis: true });
+      }
+    }
+  }
+
   /**
    * Sleep / Seal riders, both landing on the foe. Sleep is capped at
    * SLEEP_MAX_TURNS however often it is re-applied; a Seal locks the move the foe
@@ -583,6 +651,24 @@ export class Battle {
   _applyStatusRiders(move, attacker, defender, events, atkSide, defSide) {
     if (!move) return;
     const dcb = this.cb(defender);
+    // Burn / Poison: one rider, two names. Applied here so a damaging skill that
+    // carries it hits AND scorches, and a pure debuff poisons on its own.
+    for (const kind of ['burn', 'poison']) {
+      const rider = move[kind];
+      if (!rider) continue;
+      if (this.rng() >= rider.chance) {
+        events.push({ type: 'log', text: `${move.name} leaves no lasting mark.` });
+        continue;
+      }
+      const r = this.applyDot(defender, kind, rider.turns);
+      const name = kind === 'burn' ? 'Burning' : 'Poisoned';
+      events.push({ type: 'dot-set', side: defSide, uid: defender.uid, kind, turns: r.turns, amount: r.perTick, refreshed: r.refreshed });
+      events.push({
+        type: 'log',
+        text: `${displayName(defender)} is ${name}! (${r.perTick} damage a round for up to ${r.turns} turns — a Lv.${defender.level} target burns harder)`,
+        emphasis: true,
+      });
+    }
     if (move.sleep && this.rng() < move.sleep.chance) {
       const [lo, hi] = move.sleep.turns;
       const roll = lo + Math.floor(this.rng() * (hi - lo + 1));
@@ -813,6 +899,7 @@ export class Battle {
   // ---------------- turn bookkeeping ----------------
   _postTurn(events) {
     if (this.phase !== BattlePhase.ACTIVE) return;
+    this._dotTick(events);          // burn / poison bite at the end of the round
     this._weatherBurn(events);      // before the faint checks, so a lethal burn counts
     this.cb(this.player).tick();
     this.cb(this.enemy).tick();
