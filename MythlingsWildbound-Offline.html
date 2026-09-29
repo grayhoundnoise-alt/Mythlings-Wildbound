@@ -13313,10 +13313,28 @@ h3 .name-el { vertical-align: middle; }
     constructor() {
       this.cache = /* @__PURE__ */ new Map();
     }
+    /**
+     * Every point the player can ARRIVE on this map: its own spawn, plus the
+     * toPoint of every connection in the whole game that targets it. Props are
+     * kept clear of all of them — a tree or pillar dropped on a landing spot
+     * leaves the player wedged with every direction blocked, which reads as the
+     * map being broken rather than as scenery.
+     */
+    landingPoints(map) {
+      const pts = [];
+      if (map.spawn) pts.push(map.spawn);
+      for (const other of Object.values(MAPS)) {
+        for (const c of other.connections || []) {
+          if (c.toMap === map.id && c.toPoint) pts.push(c.toPoint);
+        }
+      }
+      return pts;
+    }
     props(map) {
       if (this.cache.has(map.id)) return this.cache.get(map.id);
       const rng = makeRng(hashStr(map.id));
       const out = [];
+      const landing = this.landingPoints(map);
       for (const region of map.regions) {
         const cfg = TERRAIN[region.terrain] || TERRAIN.forest;
         const [rx, ry, rw, rh] = region.rect;
@@ -13327,6 +13345,7 @@ h3 .name-el { vertical-align: middle; }
           if (Math.abs(y - map.height * 0.55) < 90 && rng() < 0.7) continue;
           if (insideAny(map.water, x, y, 40)) continue;
           if (insideBuildings(map, x, y, 60)) continue;
+          if (landing.some((p) => Math.abs(p.x - x) < 70 && Math.abs(p.y - y) < 70)) continue;
           const kind = cfg.props[Math.floor(rng() * cfg.props.length)];
           out.push({ kind, x, y, s: 0.7 + rng() * 0.7, seed: rng() * 100, solid: ["tree", "bigtree", "pillar", "deadtree", "burnttree", "crystal", "obsidian", "palm", "stalag", "pylon", "icicle", "frosttree", "gear"].includes(kind) });
         }
@@ -14284,6 +14303,7 @@ h3 .name-el { vertical-align: middle; }
       this.wild = [];
       this.spawnTimer = 0;
       this.transitioning = false;
+      this.nudgeToFreeSpot();
       WorldManager.visit(this.mapId);
       PlayerManager.setPosition(this.mapId, this.player.x, this.player.y);
       this.populate(true);
@@ -14416,24 +14436,51 @@ h3 .name-el { vertical-align: middle; }
         if (this.toast.t <= 0) this.toast = null;
       }
     }
-    tryMove(nx, ny) {
+    /** Can the player stand at (x, y)? Shared by movement and by landing. */
+    isStandable(x, y) {
       const map = this.map;
       const r = 15;
-      const colliders = this.renderer.colliders(map);
-      const test = (x, y) => {
-        if (x < r + 10 || x > map.width - r - 10 || y < r + 40 || y > map.height - r - 10) return false;
-        const box = { x: x - r, y: y - r * 0.6, w: r * 2, h: r * 1.2 };
-        for (const c of colliders) if (rectsOverlap(box, c)) return false;
-        for (const w of map.water) {
-          if (rectsOverlap(box, w)) {
-            const onBridge = (map.bridges || []).some((b) => rectsOverlap(box, b));
-            if (!onBridge) return false;
+      if (x < r + 10 || x > map.width - r - 10 || y < r + 40 || y > map.height - r - 10) return false;
+      const box = { x: x - r, y: y - r * 0.6, w: r * 2, h: r * 1.2 };
+      for (const c of this.renderer.colliders(map)) if (rectsOverlap(box, c)) return false;
+      for (const w of map.water) {
+        if (rectsOverlap(box, w)) {
+          const onBridge = (map.bridges || []).some((b) => rectsOverlap(box, b));
+          if (!onBridge) return false;
+        }
+      }
+      return true;
+    }
+    /**
+     * Nudge a landing point to the nearest standable spot.
+     *
+     * Scenery is kept clear of every landing point, so this should never fire —
+     * it is the backstop that keeps a hand-placed building, a lake, or any
+     * future map edit from dropping the player inside geometry, where every
+     * direction is blocked and the controls do nothing. Searches outward in
+     * rings, so the player lands as close to the intended spot as possible.
+     */
+    nudgeToFreeSpot() {
+      const sx = this.player.x, sy = this.player.y;
+      if (this.isStandable(sx, sy)) return false;
+      const STEP = 12;
+      for (let ring = 1; ring <= 30; ring++) {
+        for (let i = -ring; i <= ring; i++) {
+          for (const [dx, dy] of [[i, -ring], [i, ring], [-ring, i], [ring, i]]) {
+            const nx = sx + dx * STEP, ny = sy + dy * STEP;
+            if (this.isStandable(nx, ny)) {
+              this.player.x = nx;
+              this.player.y = ny;
+              return true;
+            }
           }
         }
-        return true;
-      };
-      if (test(nx, this.player.y)) this.player.x = nx;
-      if (test(this.player.x, ny)) this.player.y = ny;
+      }
+      return false;
+    }
+    tryMove(nx, ny) {
+      if (this.isStandable(nx, this.player.y)) this.player.x = nx;
+      if (this.isStandable(this.player.x, ny)) this.player.y = ny;
     }
     findInteractable() {
       var _a;
