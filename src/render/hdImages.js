@@ -39,9 +39,24 @@ function load(url) {
   });
 }
 
+/** The src of an entry, whether it is a bare string or a { src } object. */
+function srcOf(entry) {
+  return typeof entry === 'string' ? entry : entry?.src;
+}
+
+/**
+ * The file to load for a manifest key, for callers that want the picture
+ * themselves rather than going through the loader — the main menu does.
+ * Reading `.src` off the entry directly is easy to forget, and assigning the
+ * whole entry to `img.src` silently yields "[object Object]".
+ */
+export function hdSrc(key) {
+  return srcOf(HD_ASSETS[key]);
+}
+
 function get(key) {
   if (cache.has(key)) return cache.get(key);
-  const url = HD_ASSETS[key];
+  const url = srcOf(HD_ASSETS[key]);
   // No Image means no DOM (a test runner, a worker): report "no art" instead of
   // throwing, so the animated rig stays in charge.
   if (!url || typeof Image === 'undefined') { cache.set(key, null); return null; }
@@ -61,7 +76,13 @@ function get(key) {
  */
 export function preloadHdAssets() {
   if (typeof Image === 'undefined') return Promise.resolve();
-  return Promise.all(Object.keys(HD_ASSETS).map((k) => load(HD_ASSETS[k])));
+  return Promise.all(Object.keys(HD_ASSETS).map((k) => load(srcOf(HD_ASSETS[k]))));
+}
+
+/** The per-asset placement an image declares, or null when it declares none. */
+function entryFor(speciesId, stage) {
+  const e = HD_ASSETS[`model:${speciesId}:${stage}`];
+  return e && typeof e === 'object' ? e : null;
 }
 
 // --- lookups -----------------------------------------------------------------
@@ -119,19 +140,47 @@ function rigBounds(speciesId, stage) {
  * this wrong is invisible until a creature fills the screen, because nothing
  * about a canvas draw throws.
  */
-export function hdPlacement(img, speciesId, stage = 0) {
-  const aspect = img.naturalWidth / img.naturalHeight;
-  const b = rigBounds(speciesId, stage);
+/**
+ * Where to draw a picture, in rig units, given the rig's box and the picture's
+ * own declared height and anchor. Pulled out of `hdPlacement` as a pure
+ * function so it can be reasoned about (and tested) on its own.
+ *
+ *   iw, ih  the picture's own pixel size
+ *   b       the rig box { cx, feetY, ... }, or null when there is no rig
+ *   height  how tall to draw it in units; 0 or less means "use the rig's height"
+ *   anchor  a pixel inside the picture to stand on the rig's ground spot;
+ *           omit it and the feet are assumed (bottom centre of the picture)
+ */
+export function placeImage(iw, ih, b, height = 0, anchor = null) {
+  const aspect = iw / ih;
   if (!b) {
     // No rig geometry to match: stand a 100-unit-tall still on the origin.
     return { x: -50 * aspect, y: 0, w: 100 * aspect, h: 100, matched: false };
   }
-  // Match the rig's HEIGHT — that is what `size` means — and sit the still on
-  // the same foot line, centred on the same axis. The PNG's own pixel size is
-  // ignored on purpose: one file has to serve a 52px icon and a 190px sprite.
-  const h = b.h;
+  // Height is the asset's own when it declares one, otherwise the rig's box.
+  // Either way it is a number of units, never the PNG's pixel size: one file
+  // has to serve a 52px list icon and a 190px battle sprite.
+  const h = Number(height) > 0 ? Number(height) : b.h;
   const w = h * aspect;
-  return { x: b.cx - w / 2, y: b.feetY - h, w, h, matched: true };
+  // The anchor is a point inside the picture, in its own pixels, which is put
+  // on the rig's ground spot. Default to the feet: the bottom centre of the
+  // opaque area, which is what a standing creature wants.
+  const ax = Number.isFinite(anchor?.x) ? anchor.x : iw / 2;
+  const ay = Number.isFinite(anchor?.y) ? anchor.y : ih;
+  return {
+    x: b.cx - (ax / iw) * w,
+    y: b.feetY - (ay / ih) * h,
+    w, h, matched: true,
+  };
+}
+
+export function hdPlacement(img, speciesId, stage = 0) {
+  const e = entryFor(speciesId, stage);
+  return placeImage(
+    img.naturalWidth, img.naturalHeight,
+    rigBounds(speciesId, stage),
+    e?.height, e?.anchor,
+  );
 }
 
 // --- drawing -----------------------------------------------------------------

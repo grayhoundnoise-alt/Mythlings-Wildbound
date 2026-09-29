@@ -458,16 +458,37 @@ managers already account for them.
 a local server (`npm start`, then visit `MythlingEdit.html`) and it will list
 everything in `assets/mythlings/`.
 
-Pick a file, **drag the art to position it**, and watch the two previews on the
-right: a 52px list icon and a 176px battle sprite, drawn with the *same maths
-the game uses*, over a dashed box showing where the renderer will actually put
-it. Arrow keys nudge, Shift+arrow nudges by 10, and **Save PNG** downloads the
-result to drop back over the original.
+Pick a file and the art appears at 1:1 with a gold crosshair over it.
 
-The reason it exists: the game ignores a still's pixel size entirely. It scales
-the image to the animated rig's own box, so where the creature sits *inside* the
-PNG is what decides where it appears in game. Centring the art is a composition
-fix, which is why it is a picture editor and not a numbers box.
+* **The crosshair is the anchor** — the one pixel in the picture that the game
+  places on the ground line. It starts on the creature's **feet** (bottom centre
+  of the opaque area, found by reading the alpha channel), and you can drag it
+  or nudge it with the arrow keys. **Nothing is ever cropped to centre the art.**
+* **The dashed cyan box** is the animated rig's own footprint, correctly mapped
+  into the picture's pixel space, so you can see how much room the sprite gets.
+* **Height** is how tall to draw the picture, in the same units the rig uses.
+  It defaults to the form's rig box height.
+* **The two previews** on the right — a 52px list icon and a 176px battle
+  sprite — are drawn with the *exact placement maths the game uses*, not an
+  approximation.
+* **Save PNG** downloads over the original. **Copy** puts the matching manifest
+  entry on your clipboard so you can paste it into `src/data/hdManifest.js`.
+
+Placement is **per-asset data**, not something the renderer guesses. Each model
+entry carries its own height and anchor:
+
+```js
+'model:spriggo:0': {
+  src: 'assets/mythlings/spriggo_0.png',
+  height: 108,                      // rig units tall
+  anchor: { x: 469, y: 512 },       // a pixel inside the PNG — the feet
+},
+```
+
+The game scales the picture to `height` units and puts that exact pixel on the
+rig's `(cx, feetY)` ground spot. One high-resolution PNG therefore serves a 52px
+icon and a 190px battle sprite without ever being re-exported per size, and it
+lands correctly whatever shape the artwork is.
 
 | | |
 |---|---|
@@ -478,6 +499,11 @@ fix, which is why it is a picture editor and not a numbers box.
 `tools/gen-rig-bounds.mjs` walks `creatureArt.js` and records the visual box of
 all **211** forms. The editor previews from that table, so if the rig is ever
 re-tuned, one command re-syncs the tool with it.
+
+`tools/make-hd-image.py` does more than cut out a key. It *unmixes* the key out
+of every partially transparent edge pixel rather than thresholding it, blurs the
+alpha by half a pixel to soften the cut, and then scrubs whatever magenta is
+left. Thresholding alone is what leaves a pink halo around a creature.
 
 ---
 

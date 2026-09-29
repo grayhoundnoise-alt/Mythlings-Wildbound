@@ -29,22 +29,22 @@ const manifestSrc = fs.readFileSync(path.join(root, 'src/data/hdManifest.js'), '
 let jsOut = js;
 let inlined = 0;
 let inlinedBytes = 0;
-for (const m of manifestSrc.matchAll(/'([a-z]+:[^']+)'\s*:\s*'([^']+)'/g)) {
-  const file = path.join(root, m[2]);
+for (const m of manifestSrc.matchAll(/src:\s*'([^']+)'/g)) {
+  const file = path.join(root, m[1]);
   if (!fs.existsSync(file)) {
-    console.warn(`  ! HD asset missing, left as a path: ${m[2]}`);
+    console.warn(`  ! HD asset missing, left as a path: ${m[1]}`);
     continue;
   }
   const buf = fs.readFileSync(file);
   const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[path.extname(file).toLowerCase()];
   if (!mime) {
-    console.warn(`  ! HD asset has no known image type, left as a path: ${m[2]}`);
+    console.warn(`  ! HD asset has no known image type, left as a path: ${m[1]}`);
     continue;
   }
   const uri = `data:${mime};base64,${buf.toString('base64')}`;
   // The bundler keeps the manifest's string literals verbatim, so swapping the
   // path for the data URI is enough. replaceAll, not replace.
-  jsOut = jsOut.split(m[2]).join(uri);
+  jsOut = jsOut.split(m[1]).join(uri);
   inlined++;
   inlinedBytes += buf.length;
 }

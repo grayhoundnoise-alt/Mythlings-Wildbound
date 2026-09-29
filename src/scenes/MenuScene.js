@@ -13,7 +13,7 @@
 // focal detail so the menu column stays readable at every supported size.
 // =============================================================================
 import { drawCreature } from '../render/creatures.js';
-import { HD_ASSETS } from '../data/hdManifest.js';
+import { hdSrc } from '../render/hdImages.js';
 import { makeRng } from '../core/utils.js';
 
 const SKY_TOP = '#1f6fc4';
@@ -130,7 +130,7 @@ export class MenuScene {
   menuPicture() {
     if (this._pic !== undefined) return this._pic;
     this._pic = null;
-    const url = HD_ASSETS['menu:main'];
+    const url = hdSrc('menu:main');
     if (url && typeof Image !== 'undefined') {
       const img = new Image();
       img.onload = () => { this._pic = img; };

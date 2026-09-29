@@ -1,6 +1,6 @@
 // Headless verification of the rules that matter most (no DOM required).
 // Run with:  npm test
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
 // minimal browser shims used by a couple of modules at import time
@@ -3193,7 +3193,11 @@ test('the secret HD Images mode: off by default, and every asset it names exists
   // back to the rig, so the art would just never appear. Catch it at test time.
   const keys = Object.keys(HD_ASSETS);
   assert.ok(keys.length > 0, 'the manifest is not empty');
-  for (const [key, rel] of Object.entries(HD_ASSETS)) {
+  for (const [key, entry] of Object.entries(HD_ASSETS)) {
+    // Entries carry their own placement, so they are objects; a bare string is
+    // still accepted for art that is simply stretched, but nothing in the
+    // manifest should be left without the richer form.
+    const rel = typeof entry === 'string' ? entry : entry.src;
     const p = new URL(`../${rel}`, import.meta.url);
     assert.ok(existsSync(p), `asset for ${key} exists on disk: ${rel}`);
     assert.match(key, /^(model|bg|menu):/, `${key} is namespaced`);
@@ -3229,13 +3233,16 @@ test('the secret HD Images mode: off by default, and every asset it names exists
 test('the main menu is one full-bleed picture, with only the title and buttons over it', async () => {
   const { HD_ASSETS } = await import('../src/data/hdManifest.js');
   assert.ok(HD_ASSETS['menu:main'], 'the menu picture is in the manifest, so the offline build inlines it');
-  const p = new URL(`../${HD_ASSETS['menu:main']}`, import.meta.url);
-  assert.ok(existsSync(p), `the picture exists: ${HD_ASSETS['menu:main']}`);
+  const p = new URL(`../${HD_ASSETS['menu:main'].src}`, import.meta.url);
+  assert.ok(existsSync(p), `the picture exists: ${HD_ASSETS['menu:main'].src}`);
 
   // MenuScene draws the picture when it has one, and keeps the old painted
   // vista as a fallback so the menu is never blank.
   const scene = readFileSync(new URL('../src/scenes/MenuScene.js', import.meta.url), 'utf8');
-  assert.ok(scene.includes("HD_ASSETS['menu:main']"), 'the scene reads the manifest for the picture');
+  assert.ok(scene.includes("hdSrc('menu:main')"), 'the scene reads the manifest for the picture');
+  // A manifest entry is now an object, so handing the entry itself to an
+  // <img> assigns "[object Object]" and the menu quietly loses its art.
+  assert.ok(!/img\.src\s*=\s*HD_ASSETS/.test(scene), 'the scene passes the entry a real file path, not the entry object');
   assert.ok(/coverDraw\(/.test(scene), 'and covers the canvas with it');
   assert.ok(scene.includes('renderPainted'), 'with the painted vista kept as a fallback');
 
@@ -3545,6 +3552,116 @@ test('cards read out clean stat numbers', async () => {
     assert.equal(line.children[1].className, 'cs-val');
   }
   assert.match(cssText, /\.clean-stats\s*\{/, 'the clean readout is styled');
+});
+
+/** Width and height out of a PNG's IHDR chunk, with no image library. */
+function pngSize(url) {
+  const b = readFileSync(url);
+  assert.equal(b.readUInt32BE(0), 0x89504e47, 'it really is a PNG');
+  return [b.readUInt32BE(16), b.readUInt32BE(20)];
+}
+
+test('each picture declares its own height and anchor, and the anchor lands on the rig feet', async () => {
+  const { HD_ASSETS } = await import('../src/data/hdManifest.js');
+  const bounds = JSON.parse(readFileSync(new URL('../assets/mythlings/rig-bounds.json', import.meta.url), 'utf8'));
+
+  for (const [key, entry] of Object.entries(HD_ASSETS)) {
+    if (!key.startsWith('model:')) continue;
+    const [, speciesId, stage] = key.split(':');
+    const b = bounds[`${speciesId}:${stage}`];
+    assert.ok(b, `${key} has rig data to place against`);
+    assert.ok(entry.height > 0, `${key} declares a height in rig units`);
+    assert.ok(Number.isInteger(entry.anchor?.x) && Number.isInteger(entry.anchor?.y),
+      `${key} declares an anchor as whole pixels inside the picture`);
+
+    // The anchor must be inside the picture, or it is a typo rather than a placement.
+    const [iw, ih] = pngSize(new URL(`../${entry.src}`, import.meta.url));
+    assert.ok(entry.anchor.x >= 0 && entry.anchor.x <= iw, `${key} anchor x sits inside the picture`);
+    assert.ok(entry.anchor.y >= 0 && entry.anchor.y <= ih, `${key} anchor y sits inside the picture`);
+  }
+
+  // And the placement maths the renderer uses must put that exact pixel on the
+  // rig's ground spot, which is the whole point of the anchor. Spriggo's own
+  // anchor is dead centre at the bottom, which is indistinguishable from simply
+  // centring the picture — so this is checked on a deliberately off-centre
+  // anchor, where ignoring it would move the art and fail the test.
+  const { hdPlacement, placeImage } = await import('../src/render/hdImages.js');
+  const e = HD_ASSETS['model:spriggo:0'];
+  const b = bounds['spriggo:0'];
+  const [iw, ih] = pngSize(new URL(`../${e.src}`, import.meta.url));
+  const p = hdPlacement({ naturalWidth: iw, naturalHeight: ih }, 'spriggo', 0);
+  assert.ok(Math.abs(p.h - e.height) < 0.01, 'the declared height is the height used');
+
+  for (const anchor of [{ x: 120, y: 90 }, { x: 800, y: 430 }, { x: 469, y: 512 }, { x: 0, y: 0 }]) {
+    const q = placeImage(iw, ih, b, e.height, anchor);
+    const ux = q.x + (anchor.x / iw) * q.w;
+    const uy = q.y + (anchor.y / ih) * q.h;
+    assert.ok(Math.abs(ux - b.cx) < 0.01, `anchor ${JSON.stringify(anchor)} lands on the rig axis (${ux.toFixed(1)} vs ${b.cx})`);
+    assert.ok(Math.abs(uy - b.feetY) < 0.01, `anchor ${JSON.stringify(anchor)} lands on the ground line (${uy.toFixed(1)} vs ${b.feetY})`);
+  }
+  // An off-centre anchor must actually move the picture, or the check above is
+  // passing for the wrong reason.
+  const near = placeImage(iw, ih, b, e.height, { x: 100, y: ih });
+  const far = placeImage(iw, ih, b, e.height, { x: iw - 100, y: ih });
+  // Anchoring further right slides the picture left, so the origin must move.
+  assert.ok(far.x < near.x - 1, 'moving the anchor sideways moves the picture');
+  assert.ok(Math.abs(far.x - near.x) > 100, 'by a real amount, not a rounding wobble');
+  assert.ok(Math.abs(near.y - far.y) < 0.01, 'while both still stand on the same ground line');
+  // Anchoring a pixel above the floor still stands that pixel on the ground
+  // line, so the real feet end up below it — which is exactly why the editor
+  // defaults the anchor to the feet. Canvas y grows downward, hence the sign.
+  const lifted = placeImage(iw, ih, b, e.height, { x: 100, y: ih - 50 });
+  assert.ok(Math.abs((lifted.y - near.y) - 50 / ih * b.h) < 0.01,
+    'lifting the anchor above the feet pushes the feet below the ground line');
+  assert.ok(lifted.y + lifted.h > b.feetY, 'and the picture really does overhang');
+});
+
+test('every manifest entry is read through .src, never used as a path itself', async () => {
+  // Entries became { src, height, anchor } so each picture can place itself.
+  // Anywhere that still treats an entry as a string passes an object to
+  // <img>.src, which becomes "[object Object]" and fails silently — the menu
+  // simply loses its picture with nothing in the console. Inside hdImages.js
+  // the reads are deliberate; everywhere else the file path is required.
+  const dir = new URL('../src/', import.meta.url);
+  const walk = (u, out = []) => {
+    for (const e of readdirSync(u, { withFileTypes: true })) {
+      const f = new URL(`${e.name}${e.isDirectory() ? '/' : ''}`, u);
+      if (e.isDirectory()) walk(f, out);
+      else if (e.name.endsWith('.js')) out.push(f);
+    }
+    return out;
+  };
+  const files = walk(dir);
+  assert.ok(files.length > 10, `the sweep found the source tree (${files.length} files)`);
+  let found = 0;
+  for (const f of files) {
+    if (f.pathname.endsWith('render/hdImages.js')) continue;   // the one place that knows the shape
+    const text = readFileSync(f, 'utf8');
+    for (const m of text.matchAll(/HD_ASSETS\[[^\]]*\](?!\s*\.src)/g)) {
+      found++;
+      const line = text.slice(0, m.index).split('\n').length;
+      assert.fail(`${f.pathname}:${line} uses a manifest entry without reading .src`);
+    }
+  }
+  assert.ok(found === 0, `found ${found} unguarded manifest reads`);
+});
+
+test('the image editor can anchor a picture without ever cropping it', async () => {
+  const tpl = readFileSync(new URL('../tools/editor-template.html', import.meta.url), 'utf8');
+  // A movable anchor is the approved answer to "my art is off-centre" — the
+  // picture must be placed, not cut down to fit.
+  assert.ok(/state\.anchorX\s*=\s*0/.test(tpl) || /anchorX/.test(tpl), 'the editor keeps an anchor x');
+  assert.ok(/snapFeet/.test(tpl), 'the editor can auto-detect the feet');
+  assert.ok(/Snap to feet/.test(tpl), 'and exposes it as a button');
+  assert.ok(/pointerdown/.test(tpl) && /pointermove/.test(tpl), 'the anchor is draggable');
+  assert.ok(/getImageData/.test(tpl), 'the feet are found by reading the alpha channel');
+  // Saving has to actually work: a detached click never downloads in most browsers.
+  assert.ok(/document\.body\.appendChild\(a\)/.test(tpl), 'the save link is attached to the document before clicking');
+  assert.ok(/toBlob|toDataURL/.test(tpl), 'and the canvas is encoded, with a fallback');
+  assert.ok(/catch/.test(tpl), 'and failures are reported instead of swallowed');
+  assert.ok(/clipboard\.writeText/.test(tpl), 'the placement is copyable back into the manifest');
+  // No crop: the tool must not resize the artwork to the rig.
+  assert.ok(!/drawImage\([^)]*,\s*-\d/.test(tpl.replace(/\s+/g,' ')), 'nothing is drawn cropped');
 });
 
 for (const item of queue) {
