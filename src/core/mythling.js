@@ -104,7 +104,12 @@ export const MAX_EQUIPPED_SKILLS = 3;
 export function autoEquip(m) {
   if (!Array.isArray(m.skills)) m.skills = normalizeEquipped(m.skills);
   m.skills = m.skills.filter((id) => id && m.library.includes(id) && getSkill(id));
-  const owned = (cat) => m.library.map(getSkill).filter((s) => s && s.category === cat && !m.skills.includes(s.id));
+  // Tactical utilities (Guard / Purge / Ward) are NEVER auto-equipped. They cost
+  // a whole turn and only earn their button in the right round, so the default
+  // loadout must stay the species' real attacker / defender / debuff — the
+  // player puts a Guard on a button on purpose, or never at all.
+  const owned = (cat) => m.library.map(getSkill)
+    .filter((s) => s && s.category === cat && !s.utility && !m.skills.includes(s.id));
   const strongest = (cat) => {
     const list = owned(cat);
     if (!list.length) return null;
@@ -120,7 +125,7 @@ export function autoEquip(m) {
   pick(['buff', 'debuff']);
   // still room (e.g. a species that lacks a category)? take the strongest of anything
   while (m.skills.length < MAX_EQUIPPED_SKILLS) {
-    const rest = m.library.map(getSkill).filter((s) => s && !m.skills.includes(s.id));
+    const rest = m.library.map(getSkill).filter((s) => s && !s.utility && !m.skills.includes(s.id));
     if (!rest.length) break;
     rest.sort((a, b) => skillStrength(b) - skillStrength(a));
     m.skills.push(rest[0].id);

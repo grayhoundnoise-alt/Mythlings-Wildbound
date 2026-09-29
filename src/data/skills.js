@@ -168,6 +168,23 @@ export const SKILLS = {
   retaliate:       { id: 'retaliate',       name: 'Retaliate',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 6, reflect: 2, desc: 'Returns the LAST hit you took at double strength. You still take the hit first — and if the foe only buffed, there is nothing to return.' },
   vengeance:       { id: 'vengeance',       name: 'Vengeance',       category: 'special', damageType: 'physical', element: null, power: 0, uses: 4, reflect: 3, desc: 'Returns the LAST hit you took at triple strength. Risky: a buffing foe leaves you nothing to return.', future: true },
 
+  // ---------- TACTICAL support: GUARD, PURGE, WARD ----------
+  // The three "thinking" skills. They deal NO damage, so by the house rule they
+  // are Buff type — but they are utility, not stat boosts, and each costs a
+  // whole turn. Together they let a Mythling that is FASTER than its foe act
+  // first and shape the round before the enemy's blow ever lands:
+  //   GUARD — nullify the foe's next attack entirely. Press it when you can see
+  //           an Ultimate coming: brace, eat nothing, then charge your own.
+  //   PURGE — strip every buff off the foe (its Attack, Defense, Speed …).
+  //   WARD  — strip every debuff off yourself. It does NOT touch your own buffs.
+  guard_stance:    { id: 'guard_stance',    name: 'Guard Stance',    category: 'buff', effects: [{ stat: 'pdef', amount: 5 }, { stat: 'sdef', amount: 5 }], uses: 8, utility: 'guard', desc: "Braces for one turn: the foe's next attack is cancelled outright. Raises both Defenses in the meantime. Stops attacks only — a weather still burns through." },
+  purge:           { id: 'purge',           name: 'Purge',           category: 'debuff', effects: [{ stat: 'pdef', amount: 3, target: 'foe' }], uses: 8, utility: 'purge', desc: "Wipes every buff off the foe — Attack, Defense, Speed, all of it — and leaves a gap in its guard." },
+  ward:            { id: 'ward',            name: 'Ward',            category: 'buff', effects: [{ stat: 'sdef', amount: 3 }], uses: 8, utility: 'ward', desc: 'Cleanses every debuff off you. Your own buffs are left alone.' },
+  // Elite versions: the same three verbs, stronger numbers, far fewer uses.
+  aegis:           { id: 'aegis',           name: 'Aegis',           category: 'buff', effects: [{ stat: 'pdef', amount: 8 }, { stat: 'sdef', amount: 8 }], uses: 4, utility: 'guard', desc: "A full Aegis. Cancels the foe's next attack outright and hardens both Defenses.", future: true },
+  ruin:            { id: 'ruin',            name: 'Ruin',            category: 'debuff', effects: [{ stat: 'pdef', amount: 5, target: 'foe' }], uses: 4, utility: 'purge', desc: "Strips every buff off the foe and leaves its guard badly broken.", future: true },
+  sanctuary:       { id: 'sanctuary',       name: 'Sanctuary',       category: 'buff', effects: [{ stat: 'sdef', amount: 5 }], uses: 4, utility: 'ward', desc: 'A clean slate: every debuff falls away and your Special Defense rises.', future: true },
+
   // ---------- ELITE support skills: two effects, few uses ----------
   // Foe-side entries are always debuffs, self-side entries always buffs.
   war_cry:         { id: 'war_cry',         name: 'War Cry',         category: 'buff',   effects: [{ stat: 'patk', amount: 8 }, { stat: 'spd', amount: 6 }], uses: 4, desc: 'A roar that quickens the blood. Raises Physical Attack AND Speed.', future: true },
@@ -506,10 +523,18 @@ export function buffSummary(sk, joiner = ' ') {
   }).join(', ');
 }
 
+/** What a `utility` skill actually does, in one line (or '' when it has none). */
+export const UTILITY_LABEL = {
+  guard: "cancels the foe's next attack",
+  purge: 'strips every buff off the foe',
+  ward: 'strips every debuff off you',
+};
+
 /** Short text for the extra riders of a skill (life steal, fixed heal, reflect). */
 export function riderSummary(sk) {
   if (!sk) return '';
   const out = [];
+  if (sk.utility) out.push(UTILITY_LABEL[sk.utility] || sk.utility);
   if (sk.drain) out.push(`heals ${Math.round(sk.drain * 100)}% of damage dealt`);
   if (sk.healPct) out.push(`heals ${Math.round(sk.healPct * 100)}% max HP on hit`);
   if (sk.reflect) out.push(`returns the last hit taken x${sk.reflect}`);
@@ -529,7 +554,14 @@ export function riderSummary(sk) {
  */
 export function skillStrength(sk) {
   if (!sk) return 0;
-  if (sk.category === 'buff' || sk.category === 'debuff' || sk.kind === 'support') return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+  // A utility (Guard / Purge / Ward) is ranked on its stat numbers like any other
+  // support skill. It is deliberately NOT boosted: auto-equip fills a battle
+  // button with the strongest support it can find, and a boosted utility would
+  // push itself onto every Mythling's loadout and evict the debuff the species
+  // is actually built around. Utilities are meant to be equipped BY HAND.
+  if (sk.category === 'buff' || sk.category === 'debuff' || sk.kind === 'support') {
+    return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+  }
   if (sk.reflect) return 30 * sk.reflect;      // ranks between the mid and late specials
   return (sk.power || 0) + (sk.drain ? 6 : 0) + (sk.healPct ? 6 : 0);
 }

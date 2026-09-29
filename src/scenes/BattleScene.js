@@ -453,11 +453,17 @@ export class BattleScene {
     const cb = this.battle?.cb(m);
     const sleep = cb?.sleep || 0;
     const sealed = cb?.isSealed(cb.sealed) ? cb.sealed : null;
-    row.dataset.sig = this.statusSig(m);
-    if (!sleep && !sealed) {
+    const guarded = !!cb?.guard;
+    row.dataset.sig = this.statusSig(m) + (guarded ? '|g' : '');
+    if (!sleep && !sealed && !guarded) {
       row.classList.add('empty');
       row.appendChild(el('span', { class: 'status-none', text: 'No status' }));
       return row;
+    }
+    if (guarded) {
+      row.appendChild(el('span', { class: 'status-chip guarded',
+        title: "Guard Stance is up: the foe's next attack is cancelled outright. It covers this turn only.",
+        text: '\u26E8 GUARDED' }));
     }
     if (sleep > 0) {
       row.appendChild(el('span', { class: 'status-chip sleep',
@@ -1038,6 +1044,32 @@ export class BattleScene {
         this.floatNumber(ev.side, 'MISS', '#cfe6ff');
         await wait(330);
         break;
+      case 'guarded':
+        // Guard Stance ate the whole attack: a shield flash, no damage, no shake.
+        AudioManager.sfx('cancel');
+        SkillVFX.playBuffVFX(ev.side, { stat: 'pdef', up: true, element: 'none' });
+        this.floatNumber(ev.side, ev.isUltimate ? 'BLOCKED!' : 'GUARD', '#9fe0ff');
+        this.pushLog(ev.isUltimate
+          ? 'The Ultimate was cancelled by the Guard Stance!'
+          : 'The attack was cancelled by the Guard Stance!');
+        this.refreshCards();
+        await wait(380);
+        break;
+      case 'guard':
+        AudioManager.sfx('charge');
+        SkillVFX.playBuffVFX(ev.side, { stat: 'pdef', up: true, element: 'none' });
+        this.floatNumber(ev.side, 'GUARD', '#9fe0ff');
+        await wait(300);
+        break;
+      case 'purge':
+      case 'ward': {
+        AudioManager.sfx('confirm');
+        const lbl = (ev.stats || []).map((k) => STAT_SHORT[k] || k.toUpperCase()).join(', ');
+        if (lbl) this.floatNumber(ev.side, ev.type === 'purge' ? `PURGED ${lbl}` : `CLEARED ${lbl}`, ev.type === 'purge' ? '#ffb3e6' : '#b6f09b');
+        this.refreshCards();
+        await wait(300);
+        break;
+      }
       case 'coins':
         if (ev.amount > 0) {
           AudioManager.sfx('coin');

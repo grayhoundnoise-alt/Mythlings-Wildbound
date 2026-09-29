@@ -684,7 +684,7 @@ test('life steal: drain heals a share of the damage dealt, mending heals a share
   assert.ok(!heal3 || heal3.amount <= 3, 'capped at max HP');
 });
 
-test('retaliate returns the last hit taken at double strength — and fizzles when there is nothing to return', () => {
+test('retaliate returns the last hit taken at double strength — and never wastes the turn', () => {
   const p = createMythling({ speciesId: 'shalecrawl', level: 60, stage: 2 });
   p.library.push('retaliate'); p.skills = ['retaliate'];
   const e = createMythling({ speciesId: 'gravelhog', level: 60, stage: 2 });
@@ -709,8 +709,15 @@ test('retaliate returns the last hit taken at double strength — and fizzles wh
   buffer.skills = ['stone_skin']; buffer.library = ['stone_skin'];
   const b2 = new Battle({ type: BattleType.WILD, party: [p2], enemies: [buffer], mapId: 'stonehollow_crags', rng: () => 0.99 });
   const r3 = b2.act({ type: 'skill', index: 0 });
-  assert.ok(r3.events.some((x) => x.type === 'log' && /nothing to return/.test(x.text)), 'fizzles against a buffer');
-  assert.ok(!r3.events.some((x) => x.type === 'damage' && x.side === 'enemy'), 'no damage dealt');
+  // A foe that only buffs leaves nothing to mirror. That used to be a wasted
+  // turn — and it punished exactly the Mythlings the player is most likely to
+  // have, the fast ones that always move first and so never got hit yet. It now
+  // falls back on the unlimited attack, the same rule every other empty button
+  // follows, and says so in the log.
+  assert.ok(r3.events.some((x) => x.type === 'log' && /nothing to return/.test(x.text)), 'it explains there is nothing to return');
+  const fallback = r3.events.find((x) => x.type === 'damage' && x.side === 'enemy');
+  assert.ok(fallback, 'but the turn is not wasted — it still attacks');
+  assert.notEqual(fallback.skillId, 'retaliate', 'and it is the fallback attack, not the mirror');
 });
 
 test('elite support skills carry two effects; foe-side entries are always debuffs, self-side always buffs', () => {
@@ -2521,6 +2528,146 @@ test('Release All empties storage and never touches the party', async () => {
   for (const m of [...StorageManager.list()]) StorageManager.remove(m.uid);
   assert.equal(StorageManager.list().length, 0, 'storage is empty');
   assert.deepEqual(PartyManager.list().map((m) => m.uid), party, 'and the party is untouched');
+});
+
+test('every Mythling learns the tactical trio, and it is never auto-equipped', async () => {
+  const { SPECIES_IDS, skillsUnlockedAt, skillLearnLevel } = await import('../src/data/species.js');
+  const { getSkill } = await import('../src/data/skills.js');
+  for (const id of SPECIES_IDS) {
+    const lib = skillsUnlockedAt(id, LEVEL_CAP);
+    for (const sk of ['ward', 'guard_stance', 'purge']) {
+      assert.ok(lib.includes(sk), `${id} learns ${sk}`);
+    }
+    // they cost a whole turn, so they must NOT hijack the default loadout
+    const m = createMythling({ speciesId: id, level: LEVEL_CAP });
+    assert.ok(!m.skills.some((s) => getSkill(s)?.utility),
+      `${id}'s default buttons stay its attacker / defender / debuff (${m.skills.join(', ')})`);
+  }
+  assert.equal(skillLearnLevel('spriggo', 'ward'), 12, 'Ward at Lv.12');
+  assert.equal(skillLearnLevel('spriggo', 'guard_stance'), 20, 'Guard Stance at Lv.20');
+  assert.equal(skillLearnLevel('spriggo', 'purge'), 40, 'Purge at Lv.40');
+  // a Lv.1 Mythling is unaffected
+  assert.ok(!skillsUnlockedAt('spriggo', 1).includes('guard_stance'), 'nothing new at Lv.1');
+});
+
+test('Guard Stance cancels the foe\'s next attack, then lapses', () => {
+  // Spriggo is the faster of the two, which is the whole point: it braces on
+  // its own turn and the foe's blow is cancelled before it can land.
+  const p = createMythling({ speciesId: 'aquini', level: 60, stage: 2 });
+  p.library.push('guard_stance'); p.skills = ['guard_stance'];
+  const e = createMythling({ speciesId: 'gravelhog', level: 60, stage: 2 });
+  e.currentHp = 99999; p.currentHp = 99999;
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
+  const before = p.currentHp;
+  const r = b.act({ type: 'skill', index: 0 });
+  assert.ok(r.events.some((x) => x.type === 'guard'), 'the stance went up');
+  // the foe's attack in the same round is the one that gets cancelled
+  const blocked = r.events.find((x) => x.type === 'guarded' && x.side === 'player');
+  assert.ok(blocked, 'the attack was cancelled outright');
+  assert.equal(p.currentHp, before, 'and not a single point of damage landed');
+  assert.ok(r.events.some((x) => x.type === 'log' && /braced/.test(x.text)), 'the log says so');
+  // it covered exactly ONE attack: the stance is spent
+  assert.equal(b.cb(p).guard, false, 'the stance is used up');
+  // press a real attack (NOT Guard again) and the foe's next blow must land
+  const after = p.currentHp;
+  const r2 = b.act({ type: 'skill', skillId: 'aqua_spear' });
+  const landed = r2.events.some((x) => x.type === 'damage' && x.side === 'player');
+  assert.ok(landed, 'the next attack gets through');
+  assert.ok(p.currentHp < after, `and it hurts (${after} -> ${p.currentHp})`);
+});
+
+test('Guard Stance also stops a full-charge Ultimate', () => {
+  const p = createMythling({ speciesId: 'aquini', level: LEVEL_CAP, stage: 3 });
+  p.library.push('guard_stance'); p.skills = ['guard_stance'];
+  const e = createMythling({ speciesId: 'emberu', level: LEVEL_CAP, stage: 3 });
+  e.currentHp = 99999; p.currentHp = 99999;
+  e.ultCharge = 8;                                  // the foe is holding an Ultimate
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'emberwild', rng: () => 0.99 });
+  const r = b.act({ type: 'skill', index: 0 });
+  const blocked = r.events.find((x) => x.type === 'guarded');
+  assert.ok(blocked, 'the Ultimate was cancelled');
+  assert.equal(blocked.isUltimate, true, 'and the block reports it was an Ultimate');
+  assert.equal(p.currentHp, 99999, 'the Ultimate landed for nothing');
+  assert.equal(e.ultCharge, 0, 'and its Ultimate was still spent — the block is not a free charge');
+});
+
+test('an unused Guard lapses at the end of the round (it covers one turn only)', () => {
+  const p = createMythling({ speciesId: 'aquini', level: 60, stage: 2 });
+  p.library.push('guard_stance'); p.skills = ['guard_stance'];
+  const e = createMythling({ speciesId: 'gravelhog', level: 60, stage: 2 });
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
+  b.cb(e).guard = false;
+  b.act({ type: 'skill', index: 0 });
+  // the foe is slower, so it never attacked: brace, then let the round end
+  if (b.cb(p).guard) {
+    assert.equal(b.cb(p).guard, true, 'still braced because the foe never swung');
+    b._postTurn([]);
+    assert.equal(b.cb(p).guard, false, 'the stance lapsed rather than being banked for a free double block');
+  } else {
+    assert.equal(b.cb(p).guard, false, 'the stance lapsed rather than being banked for a free double block');
+  }
+});
+
+test('Purge strips every buff off the foe and leaves debuffs alone', () => {
+  const p = createMythling({ speciesId: 'spriggo', level: 60, stage: 2 });
+  p.library.push('purge'); p.skills = ['purge'];
+  const e = createMythling({ speciesId: 'gravelhog', level: 60, stage: 2 });
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
+  // give the foe a spread of buffs and one debuff
+  const ecb = b.cb(e);
+  ecb.buffs = {
+    patk: { stacks: 3, total: 12 }, spd: { stacks: 2, total: 10 }, sdef: { stacks: 1, total: 4 },
+    satk: { stacks: -2, total: -8 },
+  };
+  const satkBefore = ecb.stat('satk');
+  b.act({ type: 'skill', index: 0 });
+  const after = b.cb(e).buffs;
+  assert.equal(after.patk, undefined, 'its Attack buff is gone');
+  assert.equal(after.spd, undefined, 'its Speed buff is gone');
+  assert.equal(after.sdef, undefined, 'its Defense buff is gone');
+  assert.ok(after.satk && after.satk.stacks < 0, 'its DEBUFF is untouched — Purge is not a cleanse');
+  assert.equal(b.cb(e).stat('satk'), satkBefore, 'so the debuff still bites');
+});
+
+test('Ward strips every debuff off you and leaves your buffs alone', () => {
+  const p = createMythling({ speciesId: 'spriggo', level: 60, stage: 2 });
+  p.library.push('ward'); p.skills = ['ward'];
+  const e = createMythling({ speciesId: 'gravelhog', level: 60, stage: 2 });
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
+  b.cb(p).buffs = {
+    patk: { stacks: -3, total: -12 }, sdef: { stacks: -1, total: -4 },   // debuffs on me
+    spd: { stacks: 2, total: 10 },                                       // my own buff
+  };
+  const myBuff = b.cb(p).stat('spd');
+  b.act({ type: 'skill', index: 0 });
+  const after = b.cb(p).buffs;
+  assert.equal(after.patk, undefined, 'the Attack debuff is gone');
+  assert.equal(after.sdef, undefined, 'the Defense debuff is gone');
+  assert.ok(after.spd && after.spd.stacks > 0, 'my own Speed buff survives');
+  assert.equal(b.cb(p).stat('spd'), myBuff, 'and still counts');
+});
+
+test('a tactical skill against a clean target says so instead of silently wasting the turn', () => {
+  const p = createMythling({ speciesId: 'spriggo', level: 60, stage: 2 });
+  p.library.push('purge', 'ward'); p.skills = ['purge', 'ward'];
+  const e = createMythling({ speciesId: 'gravelhog', level: 60, stage: 2 });
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.99 });
+  b.act({ type: 'skill', index: 0 });
+  assert.ok(b.act({ type: 'skill', index: 1 }).events.some((x) => x.type === 'log' && /no debuffs to clear/.test(x.text)),
+    'Ward on a clean Mythling says there was nothing to clear');
+});
+
+test('the tactical skills are described to the player, not just hidden in data', async () => {
+  const { getSkill, riderSummary, UTILITY_LABEL } = await import('../src/data/skills.js');
+  assert.equal(getSkill('guard_stance').utility, 'guard');
+  assert.equal(getSkill('purge').utility, 'purge');
+  assert.equal(getSkill('ward').utility, 'ward');
+  // they deal no damage, so the house rule makes them Buff-type buttons
+  for (const id of ['guard_stance', 'purge', 'ward', 'aegis', 'ruin', 'sanctuary']) {
+    const sk = getSkill(id);
+    assert.ok(['buff', 'debuff'].includes(sk.category), `${id} is a support button, not an attack`);
+    assert.ok(riderSummary(sk).includes(UTILITY_LABEL[sk.utility]), `${id} explains itself: ${riderSummary(sk)}`);
+  }
 });
 
 test('a legendary Mythling gets its own panel on every card', async () => {

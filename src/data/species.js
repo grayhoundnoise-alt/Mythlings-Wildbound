@@ -986,14 +986,32 @@ export function getEvolutionStage(speciesId, stage) {
 }
 
 /** All skills a species knows by a given level & stage (cumulative, respecting the level cap). */
+/**
+ * The three tactical skills every Mythling learns, whatever its species or role.
+ * They are support (no damage), so they are added centrally here rather than
+ * copied into every one of the 55 species tables: Guard Stance at Lv.20, Ward at
+ * Lv.12, Purge at Lv.40, and the stronger Aegis / Ruin / Sanctuary at Lv.60-80.
+ * This way a species added later gets them for free.
+ */
+export const TACTICAL_UNLOCKS = {
+  12: ['ward'],
+  20: ['guard_stance'],
+  40: ['purge'],
+  60: ['sanctuary'],
+  80: ['aegis', 'ruin'],
+};
+
 export function skillsUnlockedAt(speciesId, level) {
   const sp = getSpecies(speciesId);
   if (!sp) return [];
   const out = [];
+  for (const key of Object.keys(TACTICAL_UNLOCKS)) {
+    if (level >= Number(key)) out.push(...TACTICAL_UNLOCKS[key]);
+  }
   for (const key of Object.keys(sp.skillUnlocks)) {
     if (level >= Number(key)) out.push(...sp.skillUnlocks[key]);
   }
-  return out;
+  return [...new Set(out)];
 }
 
 /** The level a species learns `skillId` at (lowest table entry), or null if it never does. */
@@ -1001,6 +1019,12 @@ export function skillLearnLevel(speciesId, skillId) {
   const sp = getSpecies(speciesId);
   if (!sp) return null;
   let best = null;
+  // the shared tactical skills first: a species table may also list them
+  for (const key of Object.keys(TACTICAL_UNLOCKS)) {
+    if (!TACTICAL_UNLOCKS[key].includes(skillId)) continue;
+    const lv = Number(key);
+    if (best == null || lv < best) best = lv;
+  }
   for (const key of Object.keys(sp.skillUnlocks)) {
     if (!sp.skillUnlocks[key].includes(skillId)) continue;
     const lv = Number(key);

@@ -549,6 +549,8 @@ select {
 }
 .status-chip.sleep { color: #b0c4ff; border-color: rgba(176, 196, 255, .55); background: rgba(90, 110, 200, .18); animation: sleep-pulse 1.8s ease-in-out infinite; }
 .status-chip.sealed { color: #ffcf6f; border-color: rgba(255, 207, 111, .55); background: rgba(180, 130, 40, .18); }
+/* Guard Stance: a shield-blue chip that breathes, so a live block is obvious. */
+.status-chip.guarded { color: #9fe0ff; border-color: rgba(140, 210, 255, .7); background: rgba(60, 150, 220, .22); animation: sleep-pulse 1.4s ease-in-out infinite; }
 @keyframes sleep-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 .ab-sealed { color: #ffcf6f; font-weight: 800; }
 
@@ -3650,6 +3652,22 @@ h3 .name-el { vertical-align: middle; }
     // ---------- REFLECT: pay the last hit back double ----------
     retaliate: { id: "retaliate", name: "Retaliate", category: "special", damageType: "physical", element: null, power: 0, uses: 6, reflect: 2, desc: "Returns the LAST hit you took at double strength. You still take the hit first \u2014 and if the foe only buffed, there is nothing to return." },
     vengeance: { id: "vengeance", name: "Vengeance", category: "special", damageType: "physical", element: null, power: 0, uses: 4, reflect: 3, desc: "Returns the LAST hit you took at triple strength. Risky: a buffing foe leaves you nothing to return.", future: true },
+    // ---------- TACTICAL support: GUARD, PURGE, WARD ----------
+    // The three "thinking" skills. They deal NO damage, so by the house rule they
+    // are Buff type — but they are utility, not stat boosts, and each costs a
+    // whole turn. Together they let a Mythling that is FASTER than its foe act
+    // first and shape the round before the enemy's blow ever lands:
+    //   GUARD — nullify the foe's next attack entirely. Press it when you can see
+    //           an Ultimate coming: brace, eat nothing, then charge your own.
+    //   PURGE — strip every buff off the foe (its Attack, Defense, Speed …).
+    //   WARD  — strip every debuff off yourself. It does NOT touch your own buffs.
+    guard_stance: { id: "guard_stance", name: "Guard Stance", category: "buff", effects: [{ stat: "pdef", amount: 5 }, { stat: "sdef", amount: 5 }], uses: 8, utility: "guard", desc: "Braces for one turn: the foe's next attack is cancelled outright. Raises both Defenses in the meantime. Stops attacks only \u2014 a weather still burns through." },
+    purge: { id: "purge", name: "Purge", category: "debuff", effects: [{ stat: "pdef", amount: 3, target: "foe" }], uses: 8, utility: "purge", desc: "Wipes every buff off the foe \u2014 Attack, Defense, Speed, all of it \u2014 and leaves a gap in its guard." },
+    ward: { id: "ward", name: "Ward", category: "buff", effects: [{ stat: "sdef", amount: 3 }], uses: 8, utility: "ward", desc: "Cleanses every debuff off you. Your own buffs are left alone." },
+    // Elite versions: the same three verbs, stronger numbers, far fewer uses.
+    aegis: { id: "aegis", name: "Aegis", category: "buff", effects: [{ stat: "pdef", amount: 8 }, { stat: "sdef", amount: 8 }], uses: 4, utility: "guard", desc: "A full Aegis. Cancels the foe's next attack outright and hardens both Defenses.", future: true },
+    ruin: { id: "ruin", name: "Ruin", category: "debuff", effects: [{ stat: "pdef", amount: 5, target: "foe" }], uses: 4, utility: "purge", desc: "Strips every buff off the foe and leaves its guard badly broken.", future: true },
+    sanctuary: { id: "sanctuary", name: "Sanctuary", category: "buff", effects: [{ stat: "sdef", amount: 5 }], uses: 4, utility: "ward", desc: "A clean slate: every debuff falls away and your Special Defense rises.", future: true },
     // ---------- ELITE support skills: two effects, few uses ----------
     // Foe-side entries are always debuffs, self-side entries always buffs.
     war_cry: { id: "war_cry", name: "War Cry", category: "buff", effects: [{ stat: "patk", amount: 8 }, { stat: "spd", amount: 6 }], uses: 4, desc: "A roar that quickens the blood. Raises Physical Attack AND Speed.", future: true },
@@ -4112,9 +4130,15 @@ h3 .name-el { vertical-align: middle; }
       return `${foe ? "foe " : ""}${short[e.stat] || e.stat.toUpperCase()}${joiner}${foe ? "-" : "+"}${e.amount}`;
     }).join(", ");
   }
+  var UTILITY_LABEL = {
+    guard: "cancels the foe's next attack",
+    purge: "strips every buff off the foe",
+    ward: "strips every debuff off you"
+  };
   function riderSummary(sk) {
     if (!sk) return "";
     const out = [];
+    if (sk.utility) out.push(UTILITY_LABEL[sk.utility] || sk.utility);
     if (sk.drain) out.push(`heals ${Math.round(sk.drain * 100)}% of damage dealt`);
     if (sk.healPct) out.push(`heals ${Math.round(sk.healPct * 100)}% max HP on hit`);
     if (sk.reflect) out.push(`returns the last hit taken x${sk.reflect}`);
@@ -4128,7 +4152,9 @@ h3 .name-el { vertical-align: middle; }
   }
   function skillStrength(sk) {
     if (!sk) return 0;
-    if (sk.category === "buff" || sk.category === "debuff" || sk.kind === "support") return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+    if (sk.category === "buff" || sk.category === "debuff" || sk.kind === "support") {
+      return (sk.effects || []).reduce((s, e) => s + Math.abs(e.amount), 0);
+    }
     if (sk.reflect) return 30 * sk.reflect;
     return (sk.power || 0) + (sk.drain ? 6 : 0) + (sk.healPct ? 6 : 0);
   }
@@ -5569,19 +5595,34 @@ h3 .name-el { vertical-align: middle; }
     if (!sp) return null;
     return sp.evolutions[Math.max(0, Math.min(stage, sp.evolutions.length - 1))];
   }
+  var TACTICAL_UNLOCKS = {
+    12: ["ward"],
+    20: ["guard_stance"],
+    40: ["purge"],
+    60: ["sanctuary"],
+    80: ["aegis", "ruin"]
+  };
   function skillsUnlockedAt(speciesId, level) {
     const sp = getSpecies(speciesId);
     if (!sp) return [];
     const out = [];
+    for (const key of Object.keys(TACTICAL_UNLOCKS)) {
+      if (level >= Number(key)) out.push(...TACTICAL_UNLOCKS[key]);
+    }
     for (const key of Object.keys(sp.skillUnlocks)) {
       if (level >= Number(key)) out.push(...sp.skillUnlocks[key]);
     }
-    return out;
+    return [...new Set(out)];
   }
   function skillLearnLevel(speciesId, skillId) {
     const sp = getSpecies(speciesId);
     if (!sp) return null;
     let best = null;
+    for (const key of Object.keys(TACTICAL_UNLOCKS)) {
+      if (!TACTICAL_UNLOCKS[key].includes(skillId)) continue;
+      const lv = Number(key);
+      if (best == null || lv < best) best = lv;
+    }
     for (const key of Object.keys(sp.skillUnlocks)) {
       if (!sp.skillUnlocks[key].includes(skillId)) continue;
       const lv = Number(key);
@@ -6154,7 +6195,7 @@ h3 .name-el { vertical-align: middle; }
   function autoEquip(m) {
     if (!Array.isArray(m.skills)) m.skills = normalizeEquipped(m.skills);
     m.skills = m.skills.filter((id) => id && m.library.includes(id) && getSkill(id));
-    const owned = (cat) => m.library.map(getSkill).filter((s) => s && s.category === cat && !m.skills.includes(s.id));
+    const owned = (cat) => m.library.map(getSkill).filter((s) => s && s.category === cat && !s.utility && !m.skills.includes(s.id));
     const strongest = (cat) => {
       const list = owned(cat);
       if (!list.length) return null;
@@ -6169,7 +6210,7 @@ h3 .name-el { vertical-align: middle; }
     pick(["special"]);
     pick(["buff", "debuff"]);
     while (m.skills.length < MAX_EQUIPPED_SKILLS) {
-      const rest = m.library.map(getSkill).filter((s) => s && !m.skills.includes(s.id));
+      const rest = m.library.map(getSkill).filter((s) => s && !s.utility && !m.skills.includes(s.id));
       if (!rest.length) break;
       rest.sort((a, b) => skillStrength(b) - skillStrength(a));
       m.skills.push(rest[0].id);
@@ -7615,6 +7656,7 @@ h3 .name-el { vertical-align: middle; }
       this.sealed = null;
       this.sealedTurns = 0;
       this.lastSkillId = null;
+      this.guard = false;
     }
     base() {
       return computeStats(this.m);
@@ -7833,8 +7875,8 @@ h3 .name-el { vertical-align: middle; }
       const cleared = [];
       if (!cb) return cleared;
       for (const [stat, b] of Object.entries(cb.buffs)) {
-        if (b.stacks >= 0) continue;
-        cleared.push(stat);
+        if (b.stacks > 0) continue;
+        if (b.stacks < 0) cleared.push(stat);
         delete cb.buffs[stat];
       }
       return cleared;
@@ -7975,6 +8017,7 @@ h3 .name-el { vertical-align: middle; }
           target: skill.category === "debuff" ? defSide : atkSide
         });
         this._applyEffects(skill, attacker, defender, events, atkSide, defSide);
+        if (skill.utility) this._applyUtility(skill.utility, attacker, defender, events, atkSide, defSide);
         this._applyStatusRiders(skill, attacker, defender, events, atkSide, defSide);
         this._rollWeather(skill, events);
         this.cb(defender).lastHit = 0;
@@ -7993,7 +8036,14 @@ h3 .name-el { vertical-align: middle; }
           target: defSide
         });
         if (taken <= 0) {
-          events.push({ type: "log", text: `${displayName(attacker)} used ${skill.name}! \u2014 but there was nothing to return.` });
+          const fallback = basicAttack(attacker);
+          events.push({
+            type: "log",
+            text: `${displayName(attacker)} used ${skill.name}! \u2014 nothing to return yet, so it strikes with ${fallback.name} instead.`
+          });
+          this._dealDamage(attacker, defender, fallback, events, {
+            logPrefix: `${displayName(attacker)} used ${fallback.name}!`
+          });
           return;
         }
         this._dealDamage(attacker, defender, skill, events, {
@@ -8064,6 +8114,60 @@ h3 .name-el { vertical-align: middle; }
         events.push({ type: "weather-tick", side, uid: m.uid, amount: eff.damage, weak: eff.weak, weather: w.id });
         events.push({ type: "log", text: `${displayName(m)} is battered by ${w.name}! (${eff.damage} damage${eff.weak ? " \u2014 weak to it" : ""})` });
       }
+    }
+    // ---------------- tactical utilities: guard / purge / ward ----------------
+    /**
+     * The three support verbs. None of them deals damage; each spends a turn.
+     * They exist so a Mythling that is FASTER than its foe can act first and
+     * shape the round before the enemy's blow lands.
+     * @returns {boolean} true when the skill actually did something.
+     */
+    _applyUtility(utility, attacker, defender, events, atkSide, defSide) {
+      if (utility === "guard") {
+        this.cb(attacker).guard = true;
+        events.push({ type: "guard", side: atkSide, uid: attacker.uid });
+        events.push({ type: "log", text: `${displayName(attacker)} braces \u2014 the foe's next attack will be cancelled!`, emphasis: true });
+        return true;
+      }
+      if (utility === "purge") {
+        const stripped = this.clearBuffs(defender);
+        if (!stripped.length) {
+          events.push({ type: "log", text: `${displayName(defender)} has no buffs to strip.` });
+          return false;
+        }
+        const bits = stripped.map((k) => `${STAT_SHORT[k] || k.toUpperCase()}`).join(", ");
+        events.push({ type: "purge", side: defSide, uid: defender.uid, stats: stripped });
+        events.push({ type: "log", text: `${displayName(defender)}'s buffs are stripped away! (${bits})`, emphasis: true });
+        return true;
+      }
+      if (utility === "ward") {
+        const cleared = this.clearDebuffs(attacker);
+        if (!cleared.length) {
+          events.push({ type: "log", text: `${displayName(attacker)} has no debuffs to clear.` });
+          return false;
+        }
+        const bits = cleared.map((k) => `${STAT_SHORT[k] || k.toUpperCase()}`).join(", ");
+        events.push({ type: "ward", side: atkSide, uid: attacker.uid, stats: cleared });
+        events.push({ type: "log", text: `${displayName(attacker)} shakes off every debuff! (${bits})`, emphasis: true });
+        return true;
+      }
+      return false;
+    }
+    /**
+     * Wipe every positive buff off `m` (a Purge). Debuffs are untouched — it
+     * strips what the foe built FOR itself, not what it did to you.
+     * @returns {string[]} the stat keys that were cleared.
+     */
+    clearBuffs(m) {
+      const cb = this.combatants.get(m == null ? void 0 : m.uid);
+      const cleared = [];
+      if (!cb) return cleared;
+      for (const [stat, b] of Object.entries(cb.buffs)) {
+        if (b.stacks < 0) continue;
+        if (b.stacks > 0) cleared.push(stat);
+        delete cb.buffs[stat];
+      }
+      return cleared;
     }
     // ---------------- status conditions: sleep & seals ----------------
     /** A sleeping Mythling loses its whole turn. */
@@ -8163,6 +8267,17 @@ h3 .name-el { vertical-align: middle; }
           text: `${prefix}${displayName(defender)} countered and dodged it! (${Math.round(dodge)}% Counter)`
         });
         events.push({ type: "miss", side: defSide, uid: defender.uid });
+        dcb.lastHit = 0;
+        return;
+      }
+      if (dcb.guard) {
+        dcb.guard = false;
+        events.push({
+          type: "log",
+          text: `${prefix}${displayName(defender)} is braced \u2014 the attack is cancelled!`,
+          emphasis: true
+        });
+        events.push({ type: "guarded", side: defSide, uid: defender.uid, attacker: attacker.uid, skillId: move.id, isUltimate: !!isUltimate });
         dcb.lastHit = 0;
         return;
       }
@@ -8272,6 +8387,8 @@ h3 .name-el { vertical-align: middle; }
       this._weatherBurn(events);
       this.cb(this.player).tick();
       this.cb(this.enemy).tick();
+      this.cb(this.player).guard = false;
+      this.cb(this.enemy).guard = false;
       if (isFainted(this.enemy)) {
         const nextEnemy = this.enemies.findIndex((m, i) => i > this.enemyIndex && !isFainted(m));
         if (this.type === BattleType.TRAINER && nextEnemy >= 0) {
@@ -17789,11 +17906,19 @@ h3 .name-el { vertical-align: middle; }
       const cb = (_a = this.battle) == null ? void 0 : _a.cb(m);
       const sleep = (cb == null ? void 0 : cb.sleep) || 0;
       const sealed = (cb == null ? void 0 : cb.isSealed(cb.sealed)) ? cb.sealed : null;
-      row.dataset.sig = this.statusSig(m);
-      if (!sleep && !sealed) {
+      const guarded = !!(cb == null ? void 0 : cb.guard);
+      row.dataset.sig = this.statusSig(m) + (guarded ? "|g" : "");
+      if (!sleep && !sealed && !guarded) {
         row.classList.add("empty");
         row.appendChild(el("span", { class: "status-none", text: "No status" }));
         return row;
+      }
+      if (guarded) {
+        row.appendChild(el("span", {
+          class: "status-chip guarded",
+          title: "Guard Stance is up: the foe's next attack is cancelled outright. It covers this turn only.",
+          text: "\u26E8 GUARDED"
+        }));
       }
       if (sleep > 0) {
         row.appendChild(el("span", {
@@ -18357,6 +18482,29 @@ h3 .name-el { vertical-align: middle; }
           this.floatNumber(ev.side, "MISS", "#cfe6ff");
           await wait(330);
           break;
+        case "guarded":
+          AudioManager.sfx("cancel");
+          SkillVFX.playBuffVFX(ev.side, { stat: "pdef", up: true, element: "none" });
+          this.floatNumber(ev.side, ev.isUltimate ? "BLOCKED!" : "GUARD", "#9fe0ff");
+          this.pushLog(ev.isUltimate ? "The Ultimate was cancelled by the Guard Stance!" : "The attack was cancelled by the Guard Stance!");
+          this.refreshCards();
+          await wait(380);
+          break;
+        case "guard":
+          AudioManager.sfx("charge");
+          SkillVFX.playBuffVFX(ev.side, { stat: "pdef", up: true, element: "none" });
+          this.floatNumber(ev.side, "GUARD", "#9fe0ff");
+          await wait(300);
+          break;
+        case "purge":
+        case "ward": {
+          AudioManager.sfx("confirm");
+          const lbl = (ev.stats || []).map((k) => STAT_SHORT[k] || k.toUpperCase()).join(", ");
+          if (lbl) this.floatNumber(ev.side, ev.type === "purge" ? `PURGED ${lbl}` : `CLEARED ${lbl}`, ev.type === "purge" ? "#ffb3e6" : "#b6f09b");
+          this.refreshCards();
+          await wait(300);
+          break;
+        }
         case "coins":
           if (ev.amount > 0) {
             AudioManager.sfx("coin");
@@ -19338,6 +19486,26 @@ h3 .name-el { vertical-align: middle; }
       so you always know how much fight is left.`),
       h3("EXP from battle", "exp experience reward"),
       para("Every Mythling that took part earns full EXP; bench members earn 40%. Trainer battles pay a x1.6 bonus. Over-levelled opponents pay far less."),
+      h3("Guard, Purge & Ward", "guard stance purge ward tactical defensive cleanse"),
+      para(`Three <b>tactical</b> skills every Mythling learns. They deal no damage, so they are
+      <b>Buff-type</b> buttons \u2014 but each one costs a whole turn, and together they let a Mythling
+      that is <b>faster than its foe act first and shape the round</b> before the enemy's blow lands.
+      They are <b>never auto-equipped</b>: put them on a button yourself.`),
+      h3("Guard Stance", "guard brace block shield cancel attack"),
+      para(`Braces for one turn: the foe's <b>next attack is cancelled outright</b> \u2014 no damage, no crit,
+      and no Ultimate charge for the attacker. It is the answer to a telegraphed Ultimate: brace, eat
+      nothing, and save your own for the next round. It covers <b>exactly one attack</b>, and an unused
+      stance lapses at the end of the round, so it can never be banked into a free double block.
+      It also raises both Defenses while it is up. <b>Aegis</b> (Lv.80) is the stronger version.
+      Guard stops <i>attacks</i> only: a raised <b>weather</b> is a condition of the field, not
+      something the foe swung at you, so it still burns through a Guard.`),
+      h3("Purge", "purge dispel strip enemy buffs"),
+      para(`Wipes <b>every buff off the foe</b> \u2014 Attack, Defense, Speed, all of it \u2014 and leaves a gap in its
+      guard. Debuffs are untouched: Purge strips what the foe built for itself, not what it did to you.
+      <b>Ruin</b> (Lv.80) is the stronger version.`),
+      h3("Ward", "ward cleanse remove own debuffs"),
+      para(`Cleanses <b>every debuff off you</b>. Your own buffs are left alone \u2014 it lifts what the foe did to
+      you, it does not strip what you did for yourself. <b>Sanctuary</b> (Lv.80) is the stronger version.`),
       h3("Sleep, Seals & Weather", "sleep seal weather wildfire status"),
       para(`Three battle conditions live on their own page: <b>Sleep</b> (lose your turn),
       <b>Seals</b> (a move locked shut) and <b>Weather</b> (the arena itself changes).

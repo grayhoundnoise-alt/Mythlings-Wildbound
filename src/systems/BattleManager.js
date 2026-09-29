@@ -40,6 +40,7 @@ class Combatant {
     this.sealed = null;       // the skill id a Seal has locked away
     this.sealedTurns = 0;
     this.lastSkillId = null;  // the move it used last — what a Seal locks
+    this.guard = false;       // Guard Stance: cancel the foe's NEXT attack, then drop
   }
   base() { return computeStats(this.m); }
   stat(key) {
@@ -264,9 +265,9 @@ export class Battle {
     const cleared = [];
     if (!cb) return cleared;
     for (const [stat, b] of Object.entries(cb.buffs)) {
-      if (b.stacks >= 0) continue;
-      cleared.push(stat);
-      delete cb.buffs[stat];
+      if (b.stacks > 0) continue;                    // a real buff of our own
+      if (b.stacks < 0) cleared.push(stat);          // a debuff: report it
+      delete cb.buffs[stat];                         // a leftover that netted to 0 goes too
     }
     return cleared;
   }
@@ -407,6 +408,9 @@ export class Battle {
         skillId: skill.id, category: skill.category, target: skill.category === 'debuff' ? defSide : atkSide,
       });
       this._applyEffects(skill, attacker, defender, events, atkSide, defSide);
+      // Guard / Purge / Ward: no damage, so they ride the support path. They run
+      // BEFORE the stat effects so the log reads "braces" then the stat rises.
+      if (skill.utility) this._applyUtility(skill.utility, attacker, defender, events, atkSide, defSide);
       this._applyStatusRiders(skill, attacker, defender, events, atkSide, defSide);
       this._rollWeather(skill, events);
       this.cb(defender).lastHit = 0;   // a foe that only buffed / debuffed leaves nothing to retaliate against
@@ -414,15 +418,26 @@ export class Battle {
     }
 
     if (skill.reflect) {
-      // Retaliate / Vengeance: return the LAST hit taken, multiplied. Nothing to
-      // return (the foe buffed, missed or has not attacked yet) -> the move fizzles.
+      // Retaliate / Vengeance: return the LAST hit taken, multiplied.
       const taken = this.cb(attacker).lastHit || 0;
       events.push({
         type: 'cast', side: atkSide, kind: skill.damageType, element: skill.element, name: skill.name,
         skillId: skill.id, category: skill.category, target: defSide,
       });
       if (taken <= 0) {
-        events.push({ type: 'log', text: `${displayName(attacker)} used ${skill.name}! — but there was nothing to return.` });
+        // Nothing to return. The usual cause is being FASTER than the foe: you
+        // move first, so it has not hit you yet this round and the mirror has
+        // nothing to copy. Fizzling here punished the best Mythlings in the
+        // game, so it follows the same rule as every other empty button — fall
+        // back on the unlimited attack rather than losing the whole turn.
+        const fallback = basicAttack(attacker);
+        events.push({
+          type: 'log',
+          text: `${displayName(attacker)} used ${skill.name}! — nothing to return yet, so it strikes with ${fallback.name} instead.`,
+        });
+        this._dealDamage(attacker, defender, fallback, events, {
+          logPrefix: `${displayName(attacker)} used ${fallback.name}!`,
+        });
         return;
       }
       this._dealDamage(attacker, defender, skill, events, {
@@ -491,6 +506,62 @@ export class Battle {
       events.push({ type: 'weather-tick', side, uid: m.uid, amount: eff.damage, weak: eff.weak, weather: w.id });
       events.push({ type: 'log', text: `${displayName(m)} is battered by ${w.name}! (${eff.damage} damage${eff.weak ? ' — weak to it' : ''})` });
     }
+  }
+
+  // ---------------- tactical utilities: guard / purge / ward ----------------
+  /**
+   * The three support verbs. None of them deals damage; each spends a turn.
+   * They exist so a Mythling that is FASTER than its foe can act first and
+   * shape the round before the enemy's blow lands.
+   * @returns {boolean} true when the skill actually did something.
+   */
+  _applyUtility(utility, attacker, defender, events, atkSide, defSide) {
+    if (utility === 'guard') {
+      this.cb(attacker).guard = true;
+      events.push({ type: 'guard', side: atkSide, uid: attacker.uid });
+      events.push({ type: 'log', text: `${displayName(attacker)} braces — the foe's next attack will be cancelled!`, emphasis: true });
+      return true;
+    }
+    if (utility === 'purge') {
+      const stripped = this.clearBuffs(defender);
+      if (!stripped.length) {
+        events.push({ type: 'log', text: `${displayName(defender)} has no buffs to strip.` });
+        return false;
+      }
+      const bits = stripped.map((k) => `${STAT_SHORT[k] || k.toUpperCase()}`).join(', ');
+      events.push({ type: 'purge', side: defSide, uid: defender.uid, stats: stripped });
+      events.push({ type: 'log', text: `${displayName(defender)}'s buffs are stripped away! (${bits})`, emphasis: true });
+      return true;
+    }
+    if (utility === 'ward') {
+      const cleared = this.clearDebuffs(attacker);
+      if (!cleared.length) {
+        events.push({ type: 'log', text: `${displayName(attacker)} has no debuffs to clear.` });
+        return false;
+      }
+      const bits = cleared.map((k) => `${STAT_SHORT[k] || k.toUpperCase()}`).join(', ');
+      events.push({ type: 'ward', side: atkSide, uid: attacker.uid, stats: cleared });
+      events.push({ type: 'log', text: `${displayName(attacker)} shakes off every debuff! (${bits})`, emphasis: true });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Wipe every positive buff off `m` (a Purge). Debuffs are untouched — it
+   * strips what the foe built FOR itself, not what it did to you.
+   * @returns {string[]} the stat keys that were cleared.
+   */
+  clearBuffs(m) {
+    const cb = this.combatants.get(m?.uid);
+    const cleared = [];
+    if (!cb) return cleared;
+    for (const [stat, b] of Object.entries(cb.buffs)) {
+      if (b.stacks < 0) continue;                    // a debuff: not ours to strip
+      if (b.stacks > 0) cleared.push(stat);          // a real buff: report it
+      delete cb.buffs[stat];                         // a leftover that netted to 0 goes too
+    }
+    return cleared;
   }
 
   // ---------------- status conditions: sleep & seals ----------------
@@ -600,6 +671,22 @@ export class Battle {
       events.push({ type: 'miss', side: defSide, uid: defender.uid });
       dcb.lastHit = 0;
       return; // no charge on a miss
+    }
+
+    // GUARD: a braced Mythling cancels the attack outright — no damage, no
+    // crit, no charge for the attacker. The stance is spent either way, so a
+    // Guard left unused for a whole round simply lapses (it is cleared in
+    // _postTurn). This is the answer to a telegraphed Ultimate.
+    if (dcb.guard) {
+      dcb.guard = false;
+      events.push({
+        type: 'log',
+        text: `${prefix}${displayName(defender)} is braced — the attack is cancelled!`,
+        emphasis: true,
+      });
+      events.push({ type: 'guarded', side: defSide, uid: defender.uid, attacker: attacker.uid, skillId: move.id, isUltimate: !!isUltimate });
+      dcb.lastHit = 0;      // nothing landed, so there is nothing to return
+      return;               // no Ultimate charge for a blocked attack
     }
 
     const offKey = move.damageType === 'physical' ? 'patk' : 'satk';
@@ -729,6 +816,10 @@ export class Battle {
     this._weatherBurn(events);      // before the faint checks, so a lethal burn counts
     this.cb(this.player).tick();
     this.cb(this.enemy).tick();
+    // A Guard that never had to block lapses at the end of the round: the stance
+    // covers ONE turn, so it can never be banked into a free double-block later.
+    this.cb(this.player).guard = false;
+    this.cb(this.enemy).guard = false;
 
     if (isFainted(this.enemy)) {
       const nextEnemy = this.enemies.findIndex((m, i) => i > this.enemyIndex && !isFainted(m));

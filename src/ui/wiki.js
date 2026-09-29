@@ -353,6 +353,26 @@ function battleSection() {
       so you always know how much fight is left.`),
     h3('EXP from battle', 'exp experience reward'),
     para('Every Mythling that took part earns full EXP; bench members earn 40%. Trainer battles pay a x1.6 bonus. Over-levelled opponents pay far less.'),
+    h3('Guard, Purge & Ward', 'guard stance purge ward tactical defensive cleanse'),
+    para(`Three <b>tactical</b> skills every Mythling learns. They deal no damage, so they are
+      <b>Buff-type</b> buttons — but each one costs a whole turn, and together they let a Mythling
+      that is <b>faster than its foe act first and shape the round</b> before the enemy's blow lands.
+      They are <b>never auto-equipped</b>: put them on a button yourself.`),
+    h3('Guard Stance', 'guard brace block shield cancel attack'),
+    para(`Braces for one turn: the foe's <b>next attack is cancelled outright</b> — no damage, no crit,
+      and no Ultimate charge for the attacker. It is the answer to a telegraphed Ultimate: brace, eat
+      nothing, and save your own for the next round. It covers <b>exactly one attack</b>, and an unused
+      stance lapses at the end of the round, so it can never be banked into a free double block.
+      It also raises both Defenses while it is up. <b>Aegis</b> (Lv.80) is the stronger version.
+      Guard stops <i>attacks</i> only: a raised <b>weather</b> is a condition of the field, not
+      something the foe swung at you, so it still burns through a Guard.`),
+    h3('Purge', 'purge dispel strip enemy buffs'),
+    para(`Wipes <b>every buff off the foe</b> — Attack, Defense, Speed, all of it — and leaves a gap in its
+      guard. Debuffs are untouched: Purge strips what the foe built for itself, not what it did to you.
+      <b>Ruin</b> (Lv.80) is the stronger version.`),
+    h3('Ward', 'ward cleanse remove own debuffs'),
+    para(`Cleanses <b>every debuff off you</b>. Your own buffs are left alone — it lifts what the foe did to
+      you, it does not strip what you did for yourself. <b>Sanctuary</b> (Lv.80) is the stronger version.`),
     h3('Sleep, Seals & Weather', 'sleep seal weather wildfire status'),
     para(`Three battle conditions live on their own page: <b>Sleep</b> (lose your turn),
       <b>Seals</b> (a move locked shut) and <b>Weather</b> (the arena itself changes).

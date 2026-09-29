@@ -109,6 +109,21 @@ Optional headless regression test for the editor (drives the built file in jsdom
 * **RUN is absolute** — you can leave *any* battle, wild **or** trainer, at any moment, and it
   always succeeds. The enemy gets no free hit; EXP already earned is kept; the trainer can be
   challenged again later.
+* **TACTICAL skills — Guard, Purge, Ward** (every Mythling learns them; Lv.12 / Lv.20 / Lv.40,
+  with the stronger Aegis / Ruin / Sanctuary at Lv.80). They deal **no damage**, so by the house
+  rule they are **Buff-type** buttons — but each costs a whole turn, and they exist so a Mythling
+  that is **faster than its foe** can act first and shape the round before the enemy's blow lands:
+  * **Guard Stance** — the foe's **next attack is cancelled outright**: no damage, no crit, no
+    Ultimate charge for the attacker. The answer to a telegraphed Ultimate — brace, eat nothing,
+    then charge your own. It covers **exactly one attack** and lapses at the end of the round, so
+    it can never be banked into a free double block. It also raises both Defenses.
+  * **Purge** — wipes **every buff off the foe** (Attack, Defense, Speed). Debuffs untouched.
+  * **Ward** — strips **every debuff off you**. Your own buffs are left alone.
+  * They are **never auto-equipped** — the default loadout stays the species' real
+    attacker / defender / debuff. Equip them by hand in the Skill Library.
+* **Retaliate / Vengeance never waste a turn** — the usual cause of "nothing to return" is being
+  **faster** than your foe: you move first, so it has not hit you yet and the mirror has nothing to
+  copy. It now falls back on the unlimited attack, the same rule every other empty button follows.
 * **Debuff skills** — every species learns three (Lv.1 opener, Lv.12 defence breaker, Lv.40 curse)
   that lower one stat of the **foe**: P.ATK, S.ATK, P.DEF, S.DEF or Speed. They always land and
   stack up to 30 times, like buffs. 21 new skills in `src/data/skills.js`.

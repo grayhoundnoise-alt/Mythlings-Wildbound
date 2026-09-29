@@ -541,6 +541,8 @@ select {
 }
 .status-chip.sleep { color: #b0c4ff; border-color: rgba(176, 196, 255, .55); background: rgba(90, 110, 200, .18); animation: sleep-pulse 1.8s ease-in-out infinite; }
 .status-chip.sealed { color: #ffcf6f; border-color: rgba(255, 207, 111, .55); background: rgba(180, 130, 40, .18); }
+/* Guard Stance: a shield-blue chip that breathes, so a live block is obvious. */
+.status-chip.guarded { color: #9fe0ff; border-color: rgba(140, 210, 255, .7); background: rgba(60, 150, 220, .22); animation: sleep-pulse 1.4s ease-in-out infinite; }
 @keyframes sleep-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 .ab-sealed { color: #ffcf6f; font-weight: 800; }
 
