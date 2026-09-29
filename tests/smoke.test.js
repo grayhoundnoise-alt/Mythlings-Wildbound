@@ -3847,6 +3847,22 @@ test('the species-info previews are CSS-sized like every other myth canvas', () 
   assert.ok(!/mythCanvas\([^)]*84\)/.test(pm), 'no bare 84px mythCanvas call remains');
 });
 
+test('the starter card shows the same picture shape the editor previews (no CSS squash)', () => {
+  const css = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+  const ed = readFileSync(new URL('../tools/editor-template.html', import.meta.url), 'utf8');
+  const m = /\.starter-card canvas \{([^}]*)\}/.exec(css);
+  assert.ok(m, 'the starter card sizes its canvas');
+  assert.ok(!/height:\s*190px/.test(m[1]), 'the card no longer squashes the 420x380 backing into a 190px strip');
+  assert.ok(/aspect-ratio:\s*420\s*\/\s*380/.test(m[1]), 'the card keeps the backing’s 420:380 aspect');
+  // ...and the backing box itself matches the editor's Starter preview box.
+  const cw = /const CARD_W = (\d+), CARD_H = (\d+);/.exec(ed);
+  assert.ok(cw, 'the editor declares its card box');
+  assert.equal(cw[1], '420', 'the editor previews at 420 wide');
+  assert.equal(cw[2], '380', 'the editor previews at 380 tall');
+  const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  assert.ok(sc.includes("el('canvas', { width: 420, height: 380 })"), 'the game card draws into the same 420x380 backing');
+});
+
 for (const item of queue) {
   if (item.kind === 'section') { console.log(`\n${item.name}`); continue; }
   try {
