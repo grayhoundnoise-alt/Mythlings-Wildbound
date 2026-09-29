@@ -27,6 +27,13 @@ import { SettingsManager } from '../systems/SettingsManager.js';
 import { clamp, coins, randInt } from '../core/utils.js';
 import { LEVEL_CAP, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, SLEEP_MAX_TURNS, DOT_MAX_TURNS } from '../data/config.js';
 
+// Depth for HD stills on the battle platforms. A still carries transparent
+// padding under its feet, so its anchor floats above the ground ellipse; sink
+// the picture (rig units, shadow untouched) until the feet plant just past the
+// platform's centre — the ground reads as receding behind the creature. The
+// user measured this by eye; tweak one number to taste.
+const HD_BATTLE_SINK = 15;
+
 const SLOT_POS = {
   player: { x: 0.30, y: 0.80 },
   enemy: { x: 0.72, y: 0.52 },
@@ -1575,6 +1582,7 @@ export class BattleScene {
       drawCreature(ctx, {
         speciesId: em.speciesId, stage: em.stage, mutation: em.mutation,
         x: ep.x + ea.lean, y: ep.y, size: 150, t: this.time, facing: -1,
+        sink: HD_BATTLE_SINK,
         animTag: 'enemy', pose: this.creaturePose('enemy'),
       });
       ctx.restore();
@@ -1601,6 +1609,7 @@ export class BattleScene {
       drawCreature(ctx, {
         speciesId: pm.speciesId, stage: pm.stage, mutation: pm.mutation,
         x: pp.x + pa.lean, y: pp.y, size: 176, t: this.time, facing: 1,
+        sink: HD_BATTLE_SINK,
         animTag: 'player', pose: this.creaturePose('player'),
       });
     }

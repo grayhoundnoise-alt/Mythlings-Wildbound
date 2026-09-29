@@ -12232,6 +12232,85 @@ h3 .name-el { vertical-align: middle; }
       e == null ? void 0 : e.anchor
     );
   }
+  var focusCache = /* @__PURE__ */ new WeakMap();
+  function hdFocus(img) {
+    if (!img || typeof document === "undefined") return null;
+    if (focusCache.has(img)) return focusCache.get(img);
+    let out = null;
+    try {
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      const c = document.createElement("canvas");
+      c.width = iw;
+      c.height = ih;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, iw, ih).data;
+      const col = new Float64Array(iw);
+      let x0 = iw, x1 = -1, y0 = ih, y1 = -1;
+      for (let y = 0; y < ih; y++) {
+        for (let x = 0; x < iw; x++) {
+          if (d[(y * iw + x) * 4 + 3] > 128) {
+            col[x]++;
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            if (y > y1) y1 = y;
+          }
+        }
+      }
+      if (x1 < 0) {
+        focusCache.set(img, null);
+        return null;
+      }
+      let maxc = 0;
+      for (let x = x0; x <= x1; x++) if (col[x] > maxc) maxc = col[x];
+      let sw = 0, sx = 0;
+      for (let x = x0; x <= x1; x++) {
+        if (col[x] >= maxc * 0.5) {
+          const w = col[x] * col[x];
+          sw += w;
+          sx += x * w;
+        }
+      }
+      const band = Math.max(4, Math.round((y1 - y0) * 0.18));
+      let fw = 0, fx = 0;
+      for (let y = y1 - band; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          if (d[(y * iw + x) * 4 + 3] > 128) {
+            fx += x;
+            fw++;
+          }
+        }
+      }
+      out = {
+        iw,
+        ih,
+        bodyX: sw ? sx / sw : (x0 + x1) / 2,
+        feetX: fw ? fx / fw : (x0 + x1) / 2,
+        feetY: y1,
+        blockCx: (x0 + x1) / 2,
+        blockCy: (y0 + y1) / 2
+      };
+    } catch {
+      out = null;
+    }
+    focusCache.set(img, out);
+    return out;
+  }
+  function hdFocusOffset(speciesId, stage, mutation, sizePx, kind = "body") {
+    var _a;
+    const img = hdModelFor(speciesId, stage, mutation);
+    const f = img && hdFocus(img);
+    const e = entryFor(speciesId, stage);
+    if (!f || !e || !e.anchor) return null;
+    const b = rigBounds(speciesId, stage);
+    const hUnits = Number(e.height) > 0 ? Number(e.height) : b ? b.h : 100;
+    const evoScale = ((_a = getEvolutionStage(speciesId, stage).art) == null ? void 0 : _a.scale) || 1;
+    const scale = hUnits * (sizePx / 100) * evoScale / f.ih;
+    const px = kind === "block" ? f.blockCx : kind === "feet" ? f.feetX : f.bodyX;
+    const py = kind === "block" ? f.blockCy : f.feetY;
+    return { dx: (px - e.anchor.x) * scale, dy: (py - e.anchor.y) * scale };
+  }
   function drawHdModel(ctx, img, o) {
     var _a;
     const {
@@ -12266,7 +12345,7 @@ h3 .name-el { vertical-align: middle; }
     ctx.scale(facing * s, s);
     const r = hdPlacement(img, speciesId, stage);
     const src = flash > 0.01 ? tinted(img, flash) : img;
-    ctx.drawImage(src, r.x, r.y, r.w, r.h);
+    ctx.drawImage(src, r.x, r.y + (o.sink || 0), r.w, r.h);
     ctx.restore();
     return true;
   }
@@ -18328,6 +18407,7 @@ h3 .name-el { vertical-align: middle; }
   }
 
   // src/scenes/BattleScene.js
+  var HD_BATTLE_SINK = 15;
   var SLOT_POS = {
     player: { x: 0.3, y: 0.8 },
     enemy: { x: 0.72, y: 0.52 }
@@ -19860,6 +19940,7 @@ h3 .name-el { vertical-align: middle; }
           size: 150,
           t: this.time,
           facing: -1,
+          sink: HD_BATTLE_SINK,
           animTag: "enemy",
           pose: this.creaturePose("enemy")
         });
@@ -19893,6 +19974,7 @@ h3 .name-el { vertical-align: middle; }
           size: 176,
           t: this.time,
           facing: 1,
+          sink: HD_BATTLE_SINK,
           animTag: "player",
           pose: this.creaturePose("player")
         });
@@ -21101,12 +21183,13 @@ h3 .name-el { vertical-align: middle; }
       ctx.scale(s, s);
       ctx.save();
       ctx.translate(size / 2, size * 0.88);
+      const fo = hdFocusOffset(m.speciesId, m.stage ?? 0, m.mutation || "none", size * 0.78, "block");
       drawCreature(ctx, {
         speciesId: m.speciesId,
         stage: m.stage ?? 0,
         mutation: m.mutation || "none",
-        x: -size * 0.06,
-        y: 0,
+        x: fo ? -fo.dx : -size * 0.06,
+        y: fo ? -size * 0.38 - fo.dy : 0,
         size: size * 0.78,
         t,
         facing: 1,
@@ -22497,7 +22580,9 @@ h3 .name-el { vertical-align: middle; }
       const still = !!hdModelFor(id, 0, "none");
       const draw = (t) => {
         ctx.clearRect(0, 0, cv.width, cv.height);
-        const g = ctx.createRadialGradient(210, 300, 10, 210, 300, 190);
+        const fo = still ? hdFocusOffset(id, 0, "none", 210, "body") : null;
+        const px = 210 + (fo ? fo.dx : 0);
+        const g = ctx.createRadialGradient(px, 300, 10, px, 300, 190);
         g.addColorStop(0, `${elementGlow(sp.element)}55`);
         g.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = g;
@@ -22514,9 +22599,20 @@ h3 .name-el { vertical-align: middle; }
             size: 210,
             t: 0,
             facing: 1,
-            shadow: true,
+            shadow: false,
             pose: { squash: 1 }
           });
+          ctx.save();
+          ctx.translate(px - 210, 3);
+          ctx.globalAlpha *= 0.3;
+          const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);
+          sg.addColorStop(0, "rgba(6,16,10,0.75)");
+          sg.addColorStop(1, "rgba(6,16,10,0)");
+          ctx.fillStyle = sg;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 71, 19, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
         } else {
           const spin = state.auto ? Math.sin(t * 0.7) : Math.sin(state.rot);
           const facing = spin >= 0 ? 1 : -1;

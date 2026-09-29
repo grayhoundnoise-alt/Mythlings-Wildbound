@@ -14,6 +14,7 @@ import { EvolutionManager } from '../systems/EvolutionManager.js';
 import { SPECIES, SPECIES_IDS, getSpecies } from '../data/species.js';
 import { MOODS, STAT_LABELS, STAT_KEYS, STAT_SHORT, STAT_INFO, STAT_BAR_MAX, moodSummary, formatStat, getMood, getRational, rationalSummary, RATIONALS, moodModifiers, rationalModifiers } from '../data/moods.js';
 import { counterDodgePercent, MAX_UNLOCKED_EVOLUTION_STAGE, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_STEP } from '../data/config.js';
+import { hdFocusOffset } from '../render/hdImages.js';
 import { openWiki } from './wiki.js';
 import { RARITY_ORDER, getRarity } from '../data/rarity.js';
 import { MUTATIONS, getMutation } from '../data/mutations.js';
@@ -136,9 +137,17 @@ export function mythCanvas(m, size = 66, animated = false) {
     ctx.scale(s, s);
     ctx.save();
     ctx.translate(size / 2, size * 0.88);
+    // A card picture has no separate panel to slide — the box IS the canvas —
+    // so the picture is framed inside its box: the artwork's silhouette lands
+    // at the box's centre instead of hanging left of it. The manifest anchor is
+    // untouched; that placement is the battle ground spot and stays exactly
+    // where the user measured it.
+    const fo = hdFocusOffset(m.speciesId, m.stage ?? 0, m.mutation || 'none', size * 0.78, 'block');
     drawCreature(ctx, {
       speciesId: m.speciesId, stage: m.stage ?? 0, mutation: m.mutation || 'none',
-      x: -size * 0.06, y: 0, size: size * 0.78, t, facing: 1, shadow: false,
+      x: fo ? -fo.dx : -size * 0.06,
+      y: fo ? -size * 0.38 - fo.dy : 0,
+      size: size * 0.78, t, facing: 1, shadow: false,
     });
     ctx.restore();
   };

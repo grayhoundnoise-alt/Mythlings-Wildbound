@@ -183,6 +183,90 @@ export function hdPlacement(img, speciesId, stage = 0) {
   );
 }
 
+// --- art focus ---------------------------------------------------------------
+// Where the artwork's visible mass actually sits inside its own pixels. The
+// manifest anchor is the GROUND point and is never where a frame should centre:
+// a picture with a sweeping tail has its silhouette left of the anchor and its
+// body right of it. Panels frame the body, picture boxes balance the silhouette
+// — and in every case the PANEL comes to the picture. The picture's placement
+// (the manifest) never moves.
+const focusCache = new WeakMap();
+
+export function hdFocus(img) {
+  if (!img || typeof document === 'undefined') return null;
+  if (focusCache.has(img)) return focusCache.get(img);
+  let out = null;
+  try {
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const c = document.createElement('canvas');
+    c.width = iw; c.height = ih;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, iw, ih).data;
+    const col = new Float64Array(iw);
+    let x0 = iw, x1 = -1, y0 = ih, y1 = -1;
+    for (let y = 0; y < ih; y++) {
+      for (let x = 0; x < iw; x++) {
+        if (d[(y * iw + x) * 4 + 3] > 128) {
+          col[x]++;
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < 0) { focusCache.set(img, null); return null; }
+    // The body is the tall columns (torso, head). Weighting by height squared
+    // keeps a thin sweeping tail from dragging the frame point sideways.
+    let maxc = 0;
+    for (let x = x0; x <= x1; x++) if (col[x] > maxc) maxc = col[x];
+    let sw = 0, sx = 0;
+    for (let x = x0; x <= x1; x++) {
+      if (col[x] >= maxc * 0.5) { const w = col[x] * col[x]; sw += w; sx += x * w; }
+    }
+    // The feet: the bottom band of the solid art — the place it stands.
+    const band = Math.max(4, Math.round((y1 - y0) * 0.18));
+    let fw = 0, fx = 0;
+    for (let y = y1 - band; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (d[(y * iw + x) * 4 + 3] > 128) { fx += x; fw++; }
+      }
+    }
+    out = {
+      iw, ih,
+      bodyX: sw ? sx / sw : (x0 + x1) / 2,
+      feetX: fw ? fx / fw : (x0 + x1) / 2,
+      feetY: y1,
+      blockCx: (x0 + x1) / 2,
+      blockCy: (y0 + y1) / 2,
+    };
+  } catch { out = null; }
+  focusCache.set(img, out);
+  return out;
+}
+
+/**
+ * The focus point's offset (in the caller's px) from the point the picture
+ * stands on, for a creature drawn at `sizePx`. `kind` picks which point a
+ * caller needs: 'body' for a panel/pedestal, 'feet' for ground chrome,
+ * 'block' for a frame around the picture itself. Null when there is no HD art
+ * (the rig frames itself and must not be nudged).
+ */
+export function hdFocusOffset(speciesId, stage, mutation, sizePx, kind = 'body') {
+  const img = hdModelFor(speciesId, stage, mutation);
+  const f = img && hdFocus(img);
+  const e = entryFor(speciesId, stage);
+  if (!f || !e || !e.anchor) return null;
+  const b = rigBounds(speciesId, stage);
+  const hUnits = Number(e.height) > 0 ? Number(e.height) : (b ? b.h : 100);
+  const evoScale = getEvolutionStage(speciesId, stage).art?.scale || 1;
+  const scale = (hUnits * (sizePx / 100) * evoScale) / f.ih;
+  const px = kind === 'block' ? f.blockCx : kind === 'feet' ? f.feetX : f.bodyX;
+  const py = kind === 'block' ? f.blockCy : f.feetY;
+  return { dx: (px - e.anchor.x) * scale, dy: (py - e.anchor.y) * scale };
+}
+
 // --- drawing -----------------------------------------------------------------
 /**
  * Draw a Mythling from its PNG, matching the rig's contract: (x, y) is the
@@ -221,6 +305,9 @@ export function drawHdModel(ctx, img, o) {
     ctx.restore();
   }
 
+  // `sink` drops the still (in rig units) without touching its shadow: battle
+  // platforms want the feet planted into the ground ellipse for depth, while
+  // the shadow stays where the ground spot is.
   ctx.translate(x, y);
   ctx.scale(facing * s, s);
 
@@ -230,7 +317,7 @@ export function drawHdModel(ctx, img, o) {
   // a 52px list icon and a 190px battle sprite alike.
   const r = hdPlacement(img, speciesId, stage);
   const src = flash > 0.01 ? tinted(img, flash) : img;
-  ctx.drawImage(src, r.x, r.y, r.w, r.h);
+  ctx.drawImage(src, r.x, r.y + (o.sink || 0), r.w, r.h);
   ctx.restore();
   return true;
 }

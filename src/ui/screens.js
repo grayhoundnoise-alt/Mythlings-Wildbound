@@ -17,7 +17,7 @@ import { GameState, InventoryManager, PlayerManager, PartyManager, StorageManage
 import { ShopManager } from '../systems/ShopManager.js';
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
 import { drawCreature } from '../render/creatures.js';
-import { hdModelFor } from '../render/hdImages.js';
+import { hdModelFor, hdFocusOffset } from '../render/hdImages.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { coins, formatTime, formatDate } from '../core/utils.js';
 
@@ -184,8 +184,13 @@ export function starterScreen({ onChoose, onBack }) {
 
     const draw = (t) => {
       ctx.clearRect(0, 0, cv.width, cv.height);
-      // pedestal glow
-      const g = ctx.createRadialGradient(210, 300, 10, 210, 300, 190);
+      // Pedestal glow. For a still the PANEL comes to the picture: the glow and
+      // the contact shadow recentre on the artwork's body (the tail hangs left
+      // over the pedestal edge). The picture itself never moves — its placement
+      // is the manifest anchor and stays exactly where the user measured it.
+      const fo = still ? hdFocusOffset(id, 0, 'none', 210, 'body') : null;
+      const px = 210 + (fo ? fo.dx : 0);
+      const g = ctx.createRadialGradient(px, 300, 10, px, 300, 190);
       g.addColorStop(0, `${elementGlow(sp.element)}55`);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -194,8 +199,18 @@ export function starterScreen({ onChoose, onBack }) {
       if (still) {
         drawCreature(ctx, {
           speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
-          size: 210, t: 0, facing: 1, shadow: true, pose: { squash: 1 },
+          size: 210, t: 0, facing: 1, shadow: false, pose: { squash: 1 },
         });
+        // contact shadow with the pedestal, not pinned to the anchor
+        ctx.save();
+        ctx.translate(px - 210, 3);
+        ctx.globalAlpha *= 0.3;
+        const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);
+        sg.addColorStop(0, 'rgba(6,16,10,0.75)');
+        sg.addColorStop(1, 'rgba(6,16,10,0)');
+        ctx.fillStyle = sg;
+        ctx.beginPath(); ctx.ellipse(0, 0, 71, 19, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
       } else {
         const spin = state.auto ? Math.sin(t * 0.7) : Math.sin(state.rot);
         const facing = spin >= 0 ? 1 : -1;

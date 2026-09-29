@@ -3726,6 +3726,29 @@ test('the editor and the offline bundle open on the manifest placement', () => {
   }
 });
 
+test('panels come to the picture, and battle stills sink into the platform', () => {
+  const hd = readFileSync(new URL('../src/render/hdImages.js', import.meta.url), 'utf8');
+  // The measured focus is what lets a panel find the artwork's body/feet
+  // without touching the manifest placement.
+  assert.ok(/export function hdFocus\(/.test(hd), 'the art focus is measured from the alpha channel');
+  assert.ok(/export function hdFocusOffset\(/.test(hd), 'and handed to UI callers in px');
+  // Battle depth: the still drops into the ground ellipse; its shadow stays
+  // where the ground spot is.
+  assert.ok(/r\.y \+ \(o\.sink \|\| 0\)/.test(hd), 'a still can sink without moving its shadow');
+
+  const bs = readFileSync(new URL('../src/scenes/BattleScene.js', import.meta.url), 'utf8');
+  assert.ok(/const HD_BATTLE_SINK = \d+/.test(bs), 'the battle depth is one named number');
+  assert.equal((bs.match(/sink: HD_BATTLE_SINK/g) || []).length, 2, 'both battle models sink');
+
+  // The starter pedestal moves to the picture — never the other way round.
+  const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  assert.ok(/hdFocusOffset\(id, 0, 'none', 210, 'body'\)/.test(sc), 'the pedestal recentres on the body');
+
+  // Card pictures reframe inside their box (the box IS the canvas there).
+  const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');
+  assert.ok(/hdFocusOffset\([\s\S]*?'block'\)/.test(pm), 'card pictures frame their silhouette');
+});
+
 for (const item of queue) {
   if (item.kind === 'section') { console.log(`\n${item.name}`); continue; }
   try {
