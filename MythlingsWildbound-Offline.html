@@ -18455,6 +18455,46 @@ h3 .name-el { vertical-align: middle; }
         flash: 0
       };
     }
+    /**
+     * Is this side currently lying KO'd on the field? The faint handler fades the
+     * sprite out and leaves the collapse HELD, so a revived Mythling needs this
+     * state cleared or it stands back up at full HP with no creature on the field
+     * and a stuck, wobbling KO pose still applied every frame.
+     */
+    isKnockedOut(side) {
+      const a = this.anim[side];
+      return !!a && (a.anim === "faint" || a.alpha <= 0.01);
+    }
+    /**
+     * Bring a revived combatant back on the field: kill the held faint pose and
+     * fade the sprite in. Shared by revive-on-heal and a switch, which are the
+     * only two ways a fallen Mythling re-enters the fight.
+     * @returns {boolean} whether there was anything to clear
+     */
+    reviveSprite(side) {
+      const a = this.anim[side];
+      if (!a) return false;
+      if (!this.isKnockedOut(side) && a.anim !== "faint") return false;
+      a.anim = "battleIdle";
+      a.hold = false;
+      a.tilt = 0;
+      a.lean = 0;
+      a.flash = 0;
+      a.alpha = 0;
+      return true;
+    }
+    /** Ease a revived sprite from invisible to solid, so it does not just pop in. */
+    async fadeSpriteBack(side) {
+      const a = this.anim[side];
+      if (!a) return;
+      const fast = SettingsManager.get("textSpeed") === "instant";
+      const steps = fast ? 4 : 10;
+      for (let i = 1; i <= steps; i++) {
+        a.alpha = i / steps;
+        await new Promise((r) => setTimeout(r, fast ? 10 : 22));
+      }
+      a.alpha = 1;
+    }
     /** Starts a creature rig animation (see ANIMATIONS in creatureRig.js). */
     playCreatureAnim(side, name, dur, hold = false) {
       const a = this.anim[side];
@@ -18568,13 +18608,19 @@ h3 .name-el { vertical-align: middle; }
           await wait(ev.crit ? 520 : 400);
           break;
         }
-        case "heal":
+        case "heal": {
           AudioManager.sfx("heal");
+          const wasDown = this.reviveSprite(ev.side);
           this.applyViewHp(ev);
-          this.floatNumber(ev.side, `+${ev.amount}`, "#6de89a");
+          this.floatNumber(ev.side, wasDown ? "REVIVED" : `+${ev.amount}`, "#6de89a");
           this.refreshCards();
-          await wait(330);
+          if (wasDown) {
+            this.playCreatureAnim(ev.side, "buff", 0.7);
+            await this.fadeSpriteBack(ev.side);
+          }
+          await wait(wasDown ? 420 : 330);
           break;
+        }
         case "miss":
           AudioManager.sfx("miss");
           SkillVFX.whiff(ev.side);
@@ -18725,13 +18771,9 @@ h3 .name-el { vertical-align: middle; }
           break;
         }
         case "switch": {
+          this.reviveSprite(ev.side);
           const a = this.anim[ev.side];
           a.alpha = 1;
-          a.tilt = 0;
-          a.lean = 0;
-          a.flash = 0;
-          a.anim = "battleIdle";
-          a.hold = false;
           this.view[ev.side] = this.viewOf(ev.side === "player" ? this.battle.player : this.battle.enemy, ev.side);
           this.refreshCards();
           await wait(360);

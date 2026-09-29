@@ -2431,6 +2431,66 @@ test('the battle card shows a Burn or Poison chip with the real numbers', async 
   assert.match(textOf(row2), /POISON 6/, 'poison shows its own name and counter');
 });
 
+test('a Max Revive puts the Mythling back on the field, not just back on the bar', async () => {
+  const { BattleScene } = await import('../src/scenes/BattleScene.js');
+  const me = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  const foe = createMythling({ speciesId: 'emberu', level: 20, stage: 1 });
+  const bt = new Battle({ type: BattleType.WILD, party: [me], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.5 });
+  const scene = new BattleScene(document.createElement('canvas'));
+  scene.battle = bt;
+  scene.view.player = scene.viewOf(me, 'player');
+  scene.view.enemy = scene.viewOf(foe, 'enemy');
+
+  // knocked out: the sprite is faded out and the collapse is HELD
+  me.currentHp = 0;
+  scene.view.player.hp = 0;
+  await scene.playEvent({ type: 'faint', side: 'player' });
+  const ko = scene.anim.player;
+  assert.equal(ko.alpha, 0, 'a fainted Mythling is off the field');
+  assert.equal(ko.anim, 'faint', 'and lying in the collapse pose');
+  assert.equal(ko.hold, true, 'held there until something puts them back');
+
+  // Max Revive
+  const evs = bt.useItem('max_revive', me.uid).events;
+  const heal = evs.find((e) => e.type === 'heal');
+  assert.ok(heal, 'the revive heals');
+  await scene.playEvent(heal);
+  const back = scene.anim.player;
+  assert.notEqual(back.anim, 'faint', 'the held collapse is cleared — this is the bug that left it wobbling');
+  assert.equal(back.hold, false, 'and nothing holds it there any more');
+  assert.equal(back.alpha, 1, 'the creature is back on the field and fully solid');
+  assert.equal(scene.view.player.hp, me.currentHp, 'and the bar matches the real HP');
+  assert.ok(me.currentHp > 0, 'the Mythling is genuinely back in the fight');
+
+  // the same must be true of a plain Revive Herb
+  const me2 = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  const bt2 = new Battle({ type: BattleType.WILD, party: [me2], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.5 });
+  const scene2 = new BattleScene(document.createElement('canvas'));
+  scene2.battle = bt2;
+  scene2.view.player = scene2.viewOf(me2, 'player');
+  me2.currentHp = 0; scene2.view.player.hp = 0;
+  await scene2.playEvent({ type: 'faint', side: 'player' });
+  await scene2.playEvent(bt2.useItem('revive_herb', me2.uid).events.find((e) => e.type === 'heal'));
+  assert.equal(scene2.anim.player.alpha, 1, 'a Revive Herb brings the sprite back too');
+  assert.equal(scene2.anim.player.anim === 'faint', false, 'with no stuck collapse');
+});
+
+test('a plain potion on a standing Mythling leaves the sprite alone', async () => {
+  const { BattleScene } = await import('../src/scenes/BattleScene.js');
+  const me = createMythling({ speciesId: 'spriggo', level: 20, stage: 1 });
+  const foe = createMythling({ speciesId: 'emberu', level: 20, stage: 1 });
+  const bt = new Battle({ type: BattleType.WILD, party: [me], enemies: [foe], mapId: 'verdant_vale', rng: () => 0.5 });
+  const scene = new BattleScene(document.createElement('canvas'));
+  scene.battle = bt;
+  scene.view.player = scene.viewOf(me, 'player');
+  me.currentHp = Math.floor(maxHpOf(me) * 0.3);
+  const heal = bt.useItem('greater_potion', me.uid).events.find((e) => e.type === 'heal');
+  assert.ok(heal, 'the potion healed');
+  await scene.playEvent(heal);
+  assert.equal(scene.anim.player.alpha, 1, 'a healthy Mythling stays solid — the revive path must not blank it');
+  assert.equal(scene.anim.player.anim, 'battleIdle', 'and stays in its idle, not a revive flourish');
+});
+
 test('the type sheet shows plain current stats and a slim match-up row, with no duplicate footer', async () => {
   const { BattleScene } = await import('../src/scenes/BattleScene.js');
   const m = createMythling({ speciesId: 'emberu', level: 55, stage: 2, rarity: 'S', mood: 'brutal', rational: 'feral' });
