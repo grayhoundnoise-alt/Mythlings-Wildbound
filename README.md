@@ -474,11 +474,19 @@ Pick a file and the art appears at 1:1 with a gold crosshair over it.
 * **Undo / Redo / Reset** sit in the top bar. Undo is `Ctrl+Z` (and `Ctrl+Shift+Z`
   or `Ctrl+Y` to redo). A whole drag is a single undo step, and a run of held
   arrow keys collapses into one, so backing out is always a few presses rather
-  than hundreds. **Reset** returns to the anchor the editor auto-detected when
-  you opened the file.
+  than hundreds. **Reset** returns to where the picture opened: the placement
+  already saved in `src/data/hdManifest.js` when there is one, otherwise the
+  auto-detected feet.
 * **Copy** puts the matching manifest entry on your clipboard so you can paste
   it into `src/data/hdManifest.js` — that is the whole hand-off, since a page
   cannot write back over a file you never gave it access to.
+
+**The editor opens on the numbers the game is using.** On build it reads
+`src/data/hdManifest.js` and injects every saved placement, so a measured anchor
+shows up immediately instead of being re-guessed. The same goes for
+`MythlingsWildbound-Offline.html`: it is a generated **snapshot** — after
+editing the manifest, rebuild it with `npm run build:offline` (and the editor
+with `npm run edit:images`) so the copies stay in step with the source.
 
 Placement is **per-asset data**, not something the renderer guesses. Each model
 entry carries its own height and anchor:

@@ -3682,12 +3682,48 @@ test('the image editor can anchor a picture without ever cropping it', async () 
   assert.ok(!/btnSave|toBlob|Save PNG/.test(tpl), 'there is no Save button that cannot work');
   // Mistakes need to be cheap to back out of.
   assert.ok(/btnUndo/.test(tpl) && /btnRedo/.test(tpl), 'undo and redo are there');
-  assert.ok(/btnReset/.test(tpl), 'and a reset back to the auto-detected anchor');
+  assert.ok(/btnReset/.test(tpl), 'and a reset back to the placement it opened with');
   assert.ok(/state\.original\s*=/.test(tpl), 'the opening anchor is remembered so Reset has something to restore');
   assert.ok(/function undo\(\)/.test(tpl) && /function redo\(\)/.test(tpl), 'both really walk the history');
   assert.ok(/e\.ctrlKey[\s\S]{0,40}===\s*'z'/.test(tpl), 'Ctrl+Z is bound');
   // No crop: the tool must not resize the artwork to the rig.
   assert.ok(!/drawImage\([^)]*,\s*-\d/.test(tpl.replace(/\s+/g,' ')), 'nothing is drawn cropped');
+});
+
+test('the editor and the offline bundle open on the manifest placement', () => {
+  // This pins the exact bug the user hit: MythlingEdit.html used to ignore
+  // hdManifest.js and re-guess the feet on every open, so a measured anchor
+  // never showed up in the tool and the three files looked unconnected.
+  const tpl = readFileSync(new URL('../tools/editor-template.html', import.meta.url), 'utf8');
+  const bld = readFileSync(new URL('../tools/build-editor.mjs', import.meta.url), 'utf8');
+  assert.ok(bld.includes('hdManifest.js'), 'the builder reads the live manifest module');
+  assert.ok(tpl.includes('/*__MANIFEST__*/{}'), 'the template has somewhere to inject it');
+  assert.ok(/MANIFEST\[/.test(tpl), 'the editor opens on a saved manifest entry when one exists');
+  assert.ok(/state\.original = snap\(\)/.test(tpl), 'the opening anchor is still remembered for Reset');
+
+  // Every model placement declared in the manifest must be in the built editor
+  // AND in the offline bundle — those two are generated copies, not live links.
+  const man = readFileSync(new URL('../src/data/hdManifest.js', import.meta.url), 'utf8');
+  const entries = [...man.matchAll(/'model:([a-z0-9_]+:\d+)':\s*\{([\s\S]*?)\n\s*\},/g)];
+  assert.ok(entries.length > 0, 'the manifest declares model placements');
+
+  const built = readFileSync(new URL('../MythlingEdit.html', import.meta.url), 'utf8');
+  const injected = /const MANIFEST = (\{[\s\S]*?\});/.exec(built);
+  assert.ok(injected, 'the built editor carries the injected placements');
+  const editorMan = JSON.parse(injected[1]);
+
+  const bundle = readFileSync(new URL('../MythlingsWildbound-Offline.html', import.meta.url), 'utf8');
+  for (const [, key, body] of entries) {
+    const h = /height:\s*(\d+)/.exec(body);
+    const a = /anchor:\s*\{\s*x:\s*(\d+),\s*y:\s*(\d+)\s*\}/.exec(body);
+    assert.ok(h && a, `the ${key} entry declares a height and an anchor`);
+    assert.ok(editorMan[key], `the built editor knows ${key}`);
+    assert.equal(editorMan[key].height, Number(h[1]), `editor height for ${key}`);
+    assert.equal(editorMan[key].anchor.x, Number(a[1]), `editor anchor x for ${key}`);
+    assert.equal(editorMan[key].anchor.y, Number(a[2]), `editor anchor y for ${key}`);
+    assert.ok(bundle.includes(`anchor: { x: ${a[1]}, y: ${a[2]} }`),
+      `the offline bundle carries the ${key} anchor — rebuild it with npm run build:offline`);
+  }
 });
 
 for (const item of queue) {

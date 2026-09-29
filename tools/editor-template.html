@@ -96,7 +96,7 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
     <span class="sep"></span>
     <button class="b ghost" id="btnUndo" title="Ctrl+Z" disabled>&#8630; Undo</button>
     <button class="b ghost" id="btnRedo" title="Ctrl+Shift+Z" disabled>&#8631; Redo</button>
-    <button class="b ghost" id="btnReset" title="Back to the auto-detected anchor" disabled>&#8635; Reset</button>
+    <button class="b ghost" id="btnReset" title="Back to the placement it opened with" disabled>&#8635; Reset</button>
     <span id="history">0 / 0</span>
     <span class="spacer"></span>
     <button class="b" id="btnAdd">Add image&hellip;</button>
@@ -135,7 +135,8 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
       Drag the gold crosshair to the creature's <b>feet</b>, or type the numbers.
       That exact pixel is placed on the ground line, so the picture is never
       cut to fit. <b>Undo</b> walks back through your changes; <b>Reset</b>
-      returns to the auto-detected anchor.
+      returns to where the picture opened (the saved placement when there is
+      one, otherwise the auto-detected feet).
     </div>
 
     <div class="panel-h">Picture</div>
@@ -171,6 +172,7 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
 const RIG_BOUNDS = /*__RIG_BOUNDS__*/{};
 const SPECIES_NAMES = /*__SPECIES_NAMES__*/{};
 const BUILTIN_FILES = /*__ASSET_LIST__*/[];
+const MANIFEST = /*__MANIFEST__*/{};
 
 /* ----------------------------------------------------------------- state -- */
 const state = {
@@ -250,7 +252,7 @@ function resetAll() {
   if (!state.original) return;
   clearTimeout(nudgeTimer);
   apply(state.original); commit();
-  say(`Reset to the auto-detected anchor: x ${state.original.ax}, y ${state.original.ay}.`);
+  say(`Reset to where it opened: x ${state.original.ax}, y ${state.original.ay}.`);
 }
 $('btnUndo').onclick = undo;
 $('btnRedo').onclick = redo;
@@ -335,14 +337,26 @@ function loadImage(img, name) {
   state.species = $('selSpecies').value; state.stage = Number($('inStage').value) || 0;
   const b = boundsFor(state.species, state.stage);
   state.height = b ? b.h : 108;
-  // Open on a measured anchor, not a guessed corner.
-  const f = detectFeet(img);
-  state.anchorX = f ? f.x : Math.round(img.naturalWidth / 2);
-  state.anchorY = f ? f.y : img.naturalHeight;
+  // Open on the placement the game is ACTUALLY using, when there is one \u2014
+  // otherwise the tool re-guesses and the manifest looks disconnected from it.
+  const saved = MANIFEST[`${state.species}:${state.stage}`];
+  if (saved && saved.anchor) {
+    state.height = saved.height || state.height;
+    state.anchorX = saved.anchor.x;
+    state.anchorY = saved.anchor.y;
+  } else {
+    // No manifest entry yet: open on a measured anchor, not a guessed corner.
+    const f = detectFeet(img);
+    state.anchorX = f ? f.x : Math.round(img.naturalWidth / 2);
+    state.anchorY = f ? f.y : img.naturalHeight;
+  }
   state.original = snap();
   renderFileList(); sync(); redraw(); resetHistory();
-  say(`${name} \u2014 ${img.naturalWidth}x${img.naturalHeight}. Feet auto-detected at `
-    + `x ${state.anchorX}, y ${state.anchorY}. Copy it when you are happy.`);
+  say(saved && saved.anchor
+    ? `${name} \u2014 ${img.naturalWidth}x${img.naturalHeight}. Opened on the placement already in `
+      + `src/data/hdManifest.js: x ${state.anchorX}, y ${state.anchorY}, height ${state.height}.`
+    : `${name} \u2014 ${img.naturalWidth}x${img.naturalHeight}. No manifest entry yet \u2014 `
+      + `feet auto-detected at x ${state.anchorX}, y ${state.anchorY}. Copy it when you are happy.`);
 }
 
 /* ---------------------------------------------------------------- inputs -- */
