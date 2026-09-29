@@ -39,12 +39,12 @@ import { LEVEL_CAP, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, SLEEP_MAX_TURNS, DOT_M
 //   shadowDx/Dy  the shadow's offset from the slot's ground spot
 const HD_PLAYER_DX = -16;
 const HD_PLAYER_DY = -8;
-const HD_PLAYER_SINK = 15;
+const HD_PLAYER_SINK = 9;
 const HD_PLAYER_SHADOW_DX = 0;
 const HD_PLAYER_SHADOW_DY = 0;
-const HD_ENEMY_DX = 0;
+const HD_ENEMY_DX = 12;
 const HD_ENEMY_DY = 0;
-const HD_ENEMY_SINK = 15;
+const HD_ENEMY_SINK = 6;
 const HD_ENEMY_SHADOW_DX = 0;
 const HD_ENEMY_SHADOW_DY = 0;
 

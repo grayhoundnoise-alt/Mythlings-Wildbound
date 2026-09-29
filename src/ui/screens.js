@@ -166,6 +166,17 @@ export const INTRO_LINES = [
 ];
 
 // ------------------------------------------------------------------ STARTER SELECT
+// Starter-card placement — tuned by eye in MythlingEdit.html's Starter mode
+// (copy its values block and paste it here). The computed body/feet focus
+// still does the heavy lifting (the panel comes to the picture); these are
+// the user's offsets on top. Shadow and Mythling move independently.
+const HD_STARTER_DX = 0;
+const HD_STARTER_DY = 0;
+const HD_STARTER_GLOW_DX = 0;
+const HD_STARTER_GLOW_DY = 0;
+const HD_STARTER_SHADOW_DX = 0;
+const HD_STARTER_SHADOW_DY = 0;
+
 export function starterScreen({ onChoose, onBack }) {
   let selected = null;
   const cards = {};
@@ -189,23 +200,21 @@ export function starterScreen({ onChoose, onBack }) {
       // over the pedestal edge). The picture itself never moves — its placement
       // is the manifest anchor and stays exactly where the user measured it.
       const fo = still ? hdFocusOffset(id, 0, 'none', 210, 'body') : null;
-      const px = 210 + (fo ? fo.dx : 0);
-      const g = ctx.createRadialGradient(px, 300, 10, px, 300, 190);
+      const px = 210 + (fo ? fo.dx : 0) + HD_STARTER_GLOW_DX;
+      const py = 300 + HD_STARTER_GLOW_DY;
+      const g = ctx.createRadialGradient(px, py, 10, px, py, 190);
       g.addColorStop(0, `${elementGlow(sp.element)}55`);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
       ctx.save();
       ctx.translate(210, 320);
       if (still) {
-        drawCreature(ctx, {
-          speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
-          size: 210, t: 0, facing: 1, shadow: false, pose: { squash: 1 },
-        });
         // Contact shadow under the paws — the shadow belongs to the creature,
         // so it sits on the standing place (the visible feet), not beside it.
+        // Painted FIRST: the Mythling image is always in front of its shadow.
         const sf = hdFocusOffset(id, 0, 'none', 210, 'feet') || { dx: 0, dy: 0 };
         ctx.save();
-        ctx.translate(sf.dx, 3 + sf.dy);
+        ctx.translate(sf.dx + HD_STARTER_SHADOW_DX, 3 + sf.dy + HD_STARTER_SHADOW_DY);
         ctx.globalAlpha *= 0.3;
         const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);
         sg.addColorStop(0, 'rgba(6,16,10,0.75)');
@@ -213,13 +222,22 @@ export function starterScreen({ onChoose, onBack }) {
         ctx.fillStyle = sg;
         ctx.beginPath(); ctx.ellipse(0, 0, 71, 19, 0, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+        drawCreature(ctx, {
+          speciesId: id, stage: 0, mutation: 'none',
+          x: HD_STARTER_DX, y: HD_STARTER_DY,
+          size: 210, t: 0, facing: 1, shadow: false, pose: { squash: 1 },
+        });
       } else {
         const spin = state.auto ? Math.sin(t * 0.7) : Math.sin(state.rot);
         const facing = spin >= 0 ? 1 : -1;
         ctx.scale(Math.max(0.28, Math.abs(spin) * 0.6 + 0.55), 1);
         drawCreature(ctx, {
-          speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
-          size: 210, t, facing, shadow: true, pose: { squash: 1 },
+          speciesId: id, stage: 0, mutation: 'none',
+          x: HD_STARTER_DX, y: HD_STARTER_DY,
+          size: 210, t, facing, shadow: true,
+          shadowX: HD_STARTER_DX + HD_STARTER_SHADOW_DX,
+          shadowY: HD_STARTER_DY + HD_STARTER_SHADOW_DY,
+          pose: { squash: 1 },
         });
       }
       ctx.restore();

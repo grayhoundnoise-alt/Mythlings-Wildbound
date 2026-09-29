@@ -101,6 +101,7 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
     <span class="sep"></span>
     <button class="b primary" id="btnModeModel" title="Place the picture for the manifest">Model</button>
     <button class="b ghost" id="btnModeBattle" title="Tune the battle placement, then copy the values">Battle</button>
+    <button class="b ghost" id="btnModeStarter" title="Tune the starter card, then copy the values">Starter</button>
     <span class="spacer"></span>
     <button class="b" id="btnAdd">Add image&hellip;</button>
     <input type="file" id="fileInput" accept="image/*" class="hidden">
@@ -141,6 +142,22 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
         Drag the Mythling to move it; drag its shadow to move the shadow alone.
         Arrow keys nudge the Mythling (Shift = bigger steps), Alt+arrows the shadow.
         Each side keeps its own values. Copy sends the whole block.
+      </div>
+    </div>
+
+    <div id="starterPanel" hidden>
+      <div class="panel-h">Starter card placement</div>
+      <label class="row" title="the picture's offset on the card"><span class="muted">Mythling X</span><input type="number" id="inSDX" step="1"></label>
+      <label class="row"><span class="muted">Mythling Y</span><input type="number" id="inSDY" step="1"></label>
+      <label class="row" title="the pedestal glow behind the Mythling"><span class="muted">Glow X</span><input type="number" id="inSGX" step="1"></label>
+      <label class="row"><span class="muted">Glow Y</span><input type="number" id="inSGY" step="1"></label>
+      <label class="row" title="the contact shadow's own spot &mdash; it is painted BEHIND the Mythling"><span class="muted">Shadow X</span><input type="number" id="inSSX" step="1"></label>
+      <label class="row"><span class="muted">Shadow Y</span><input type="number" id="inSSY" step="1"></label>
+      <div class="muted" style="margin-top:8px;font-size:11px">
+        Drag the Mythling to move it; drag its shadow to move the shadow alone.
+        Arrow keys nudge the Mythling (Shift = bigger steps), Alt+arrows the shadow.
+        The shadow is always painted behind the Mythling. Copy sends the block
+        for src/ui/screens.js.
       </div>
     </div>
 
@@ -196,7 +213,8 @@ const RIG_BOUNDS = {"spriggo:0":{"x":-69,"y":-96,"w":116,"h":108,"cx":-11,"feetY
 const SPECIES_NAMES = {"spriggo":"Spriggo","aquini":"Aquini","emberu":"Emberu","rivruff":"Rivruff","leaflet":"Leaflet","thornhound":"Thornhound","mosscoil":"Mosscoil","petalwisp":"Petalwisp","tidewyrm":"Tidewyrm","shelldrake":"Shelldrake","currentkit":"Currentkit","emberlynx":"Emberlynx","cinderhawk":"Cinderhawk","magmataur":"Magmataur","ashpup":"Ashpup","pebbleshell":"Pebbleshell","gravelhog":"Gravelhog","quartzling":"Quartzling","rubblekin":"Rubblekin","shalecrawl":"Shalecrawl","voltkit":"Voltkit","staticat":"Staticat","boltpup":"Boltpup","zapwing":"Zapwing","coilstone":"Coilstone","frostpup":"Frostpup","snowkit":"Snowkit","icecarap":"Icecarap","flurrywing":"Flurrywing","frostling":"Frostling","ironbug":"Ironbug","scrapling":"Scrapling","ironhog":"Ironhog","chromeling":"Chromeling","cogfox":"Cogfox","venoviper":"Venoviper","mirenewt":"Mirenewt","stingbug":"Stingbug","venobat":"Venobat","boghound":"Boghound","psykit":"Psykit","dreamwisp":"Dreamwisp","mystfox":"Mystfox","omenwing":"Omenwing","mindram":"Mindram","mirewisp":"Mirewisp","sparkbug":"Sparkbug","cubrawl":"Cubrawl","ironpaw":"Ironpaw","emberfist":"Emberfist","stormkick":"Stormkick","zenram":"Zenram","aetherion":"Aetherion","venomyr":"Venomyr","basaltyr":"Basaltyr"};
 const BUILTIN_FILES = ["spriggo_0.png"];
 const MANIFEST = {"spriggo:0":{"height":108,"anchor":{"x":400,"y":512}}};
-const BATTLE_DEFAULTS = {"player":{"dx":-16,"dy":-8,"sink":15,"sx":0,"sy":0},"enemy":{"dx":0,"dy":0,"sink":15,"sx":0,"sy":0}};
+const BATTLE_DEFAULTS = {"player":{"dx":-16,"dy":-8,"sink":9,"sx":0,"sy":0},"enemy":{"dx":12,"dy":0,"sink":6,"sx":0,"sy":0}};
+const STARTER_DEFAULTS = {"dx":0,"dy":0,"gx":0,"gy":0,"sx":0,"sy":0};
 
 /* ----------------------------------------------------------------- state -- */
 const state = {
@@ -239,6 +257,7 @@ function apply(s) {
 }
 function commit() {
   if (mode === 'battle') { bcommit(); return; }
+  if (mode === 'starter') { scommit(); return; }
   if (hIndex < 0) return;
   const now = snap();
   if (same(now, history[hIndex])) { updateHistoryUI(); return; }
@@ -257,6 +276,13 @@ function commitSoon() {
   nudgeTimer = setTimeout(commit, 650);
 }
 function updateHistoryUI() {
+  if (mode === 'starter') {
+    $('btnUndo').disabled = sIndex <= 0;
+    $('btnRedo').disabled = sIndex < 0 || sIndex >= shistory.length - 1;
+    $('btnReset').disabled = !soriginal || ssnap() === soriginal;
+    $('history').textContent = `${Math.max(0, sIndex)} / ${Math.max(0, shistory.length - 1)}`;
+    return;
+  }
   if (mode === 'battle') {
     $('btnUndo').disabled = bIndex <= 0;
     $('btnRedo').disabled = bIndex < 0 || bIndex >= bhistory.length - 1;
@@ -272,18 +298,21 @@ function updateHistoryUI() {
 }
 function undo() {
   if (mode === 'battle') { bundo(); return; }
+  if (mode === 'starter') { sundo(); return; }
   if (hIndex <= 0) return;
   clearTimeout(nudgeTimer); hIndex--; apply(history[hIndex]); updateHistoryUI();
   say(`Undo \u2014 step ${hIndex} of ${history.length - 1}.`);
 }
 function redo() {
   if (mode === 'battle') { bredo(); return; }
+  if (mode === 'starter') { sredo(); return; }
   if (hIndex < 0 || hIndex >= history.length - 1) return;
   clearTimeout(nudgeTimer); hIndex++; apply(history[hIndex]); updateHistoryUI();
   say(`Redo \u2014 step ${hIndex} of ${history.length - 1}.`);
 }
 function resetAll() {
   if (mode === 'battle') { breset(); return; }
+  if (mode === 'starter') { sreset(); return; }
   if (!state.original) return;
   clearTimeout(nudgeTimer);
   apply(state.original); commit();
@@ -423,6 +452,7 @@ function say(t) { $('status').textContent = t; }
 /* ------------------------------------------------------------------ draw -- */
 function redraw() {
   if (mode === 'battle') { redrawBattle(); return; }
+  if (mode === 'starter') { redrawStarter(); return; }
   const w = state.canvasW, h = state.canvasH;
   cv.width = w; cv.height = h;
   const S = 12;
@@ -590,11 +620,15 @@ function setMode(m) {
   mode = m;
   $('btnModeModel').className = 'b' + (m === 'model' ? ' primary' : ' ghost');
   $('btnModeBattle').className = 'b' + (m === 'battle' ? ' primary' : ' ghost');
+  $('btnModeStarter').className = 'b' + (m === 'starter' ? ' primary' : ' ghost');
   $('modelPanels').hidden = m !== 'model';
   $('battlePanel').hidden = m !== 'battle';
+  $('starterPanel').hidden = m !== 'starter';
   $('copyHead').textContent = m === 'model'
     ? 'Paste this into src/data/hdManifest.js'
-    : 'Paste this into src/scenes/BattleScene.js';
+    : m === 'battle'
+      ? 'Paste this into src/scenes/BattleScene.js'
+      : 'Paste this into src/ui/screens.js';
   $('btnCopyLine').hidden = m !== 'model';
   if (m === 'model') $('anchor').style.display = '';
   redraw();
@@ -607,6 +641,7 @@ function setSide(x) {
 }
 $('btnModeModel').onclick = () => setMode('model');
 $('btnModeBattle').onclick = () => setMode('battle');
+$('btnModeStarter').onclick = () => setMode('starter');
 $('btnSidePlayer').onclick = () => setSide('player');
 $('btnSideEnemy').onclick = () => setSide('enemy');
 
@@ -689,6 +724,203 @@ function battlePointerMove(e) {
   redraw();
 }
 
+/* ------------------------------------------------------------ starter ---- */
+/* Starter mode: the \"Choose your first Mythling\" card. The glow, the
+   Mythling and its contact shadow land exactly where the card draws them —
+   and the shadow is always painted BEHIND the picture. Copy sends the
+   offsets block for src/ui/screens.js. All cards share one placement. */
+const starter = { dx: 0, dy: 0, gx: 0, gy: 0, sx: 0, sy: 0 };
+if (STARTER_DEFAULTS) Object.assign(starter, STARTER_DEFAULTS);
+const CARD_W = 420, CARD_H = 380;
+const focusCache = new Map();
+/* Mirror of hdFocus in src/render/hdImages.js — the same alpha>128 metrics,
+   so the preview's glow/shadow bases match the game's exactly. */
+function focusFor(img) {
+  if (!img) return null;
+  if (focusCache.has(img)) return focusCache.get(img);
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const c = document.createElement('canvas');
+  c.width = iw; c.height = ih;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  let d;
+  try { d = g.getImageData(0, 0, iw, ih).data; } catch { focusCache.set(img, null); return null; }
+  const col = new Float64Array(iw);
+  let x0 = iw, x1 = -1, y0 = ih, y1 = -1;
+  for (let y = 0; y < ih; y++) {
+    for (let x = 0; x < iw; x++) {
+      if (d[(y * iw + x) * 4 + 3] > 128) {
+        col[x]++;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 < 0) { focusCache.set(img, null); return null; }
+  let maxc = 0;
+  for (let x = x0; x <= x1; x++) if (col[x] > maxc) maxc = col[x];
+  let sw = 0, sxx = 0;
+  for (let x = x0; x <= x1; x++) {
+    if (col[x] >= maxc * 0.5) { const w = col[x] * col[x]; sw += w; sxx += x * w; }
+  }
+  const band = Math.max(4, Math.round((y1 - y0) * 0.18));
+  let fw = 0, fx = 0;
+  for (let y = y1 - band; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (d[(y * iw + x) * 4 + 3] > 128) { fx += x; fw++; }
+    }
+  }
+  const out = {
+    bodyX: sw ? sxx / sw : (x0 + x1) / 2,
+    feetX: fw ? fx / fw : (x0 + x1) / 2,
+    feetY: y1,
+  };
+  focusCache.set(img, out);
+  return out;
+}
+function starterScale() {
+  const b = boundsFor(state.species, state.stage);
+  return (state.height * (210 / 100) * (b ? b.scale : 1)) / (state.canvasH || 1);
+}
+function syncStarter() {
+  $('inSDX').value = Math.round(starter.dx); $('inSDY').value = Math.round(starter.dy);
+  $('inSGX').value = Math.round(starter.gx); $('inSGY').value = Math.round(starter.gy);
+  $('inSSX').value = Math.round(starter.sx); $('inSSY').value = Math.round(starter.sy);
+}
+function redrawStarter() {
+  const w = CARD_W, h = CARD_H;
+  cv.width = w; cv.height = h;
+  $('stage').style.width = `${w}px`; $('stage').style.height = `${h}px`;
+  $('anchor').style.display = 'none';
+  $('rigbox').style.display = 'none';
+  ctx.fillStyle = '#0e1b2c';                 // the card's dark panel
+  ctx.fillRect(0, 0, w, h);
+  const b = boundsFor(state.species, state.stage);
+  const f = focusFor(state.img);
+  const sc = starterScale();
+  const ax = state.anchorX, ay = state.anchorY;
+  // pedestal glow — the body focus, as the card recentres it
+  const gx = 210 + (f ? (f.bodyX - ax) * sc : 0) + starter.gx;
+  const gy = 300 + starter.gy;
+  const g = ctx.createRadialGradient(gx, gy, 10, gx, gy, 190);
+  g.addColorStop(0, '#8fe06a55');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  // contact shadow — the feet focus + its own offsets, ALWAYS behind
+  const shx = 210 + (f ? (f.feetX - ax) * sc : 0) + starter.sx;
+  const shy = 323 + (f ? (f.feetY - ay) * sc : 0) + starter.sy;
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  const sg = ctx.createRadialGradient(shx, shy, 2, shx, shy, 76);
+  sg.addColorStop(0, 'rgba(6,16,10,0.75)');
+  sg.addColorStop(1, 'rgba(6,16,10,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.ellipse(shx, shy, 71, 19, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // the Mythling — the game's own drawHdModel maths at size 210
+  if (state.img) {
+    const pl = placementFor(state.canvasW, state.canvasH, b, state.height, ax, ay);
+    const s = (210 / 100) * (b ? b.scale : 1);
+    ctx.save();
+    ctx.translate(210 + starter.dx, 320 + starter.dy);
+    ctx.scale(s, s);
+    ctx.drawImage(state.img, pl.x, pl.y, pl.w, pl.h);
+    ctx.restore();
+  }
+  syncStarter();
+  $('rigInfo').innerHTML = '<b>Starter card</b> &middot; picture size <span class="mono">210</span> &middot; drag the Mythling or its shadow';
+  buildSnippet();
+  updateHistoryUI();
+}
+function starterText() {
+  const t = starter;
+  return `const HD_STARTER_DX = ${Math.round(t.dx)};
+const HD_STARTER_DY = ${Math.round(t.dy)};
+const HD_STARTER_GLOW_DX = ${Math.round(t.gx)};
+const HD_STARTER_GLOW_DY = ${Math.round(t.gy)};
+const HD_STARTER_SHADOW_DX = ${Math.round(t.sx)};
+const HD_STARTER_SHADOW_DY = ${Math.round(t.sy)};`;
+}
+function starterField(id, key) {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    const v = Number(el.value);
+    if (!Number.isFinite(v)) return;
+    starter[key] = v; redraw();
+  });
+  el.addEventListener('change', scommit);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.blur(); });
+}
+starterField('inSDX', 'dx');
+starterField('inSDY', 'dy');
+starterField('inSGX', 'gx');
+starterField('inSGY', 'gy');
+starterField('inSSX', 'sx');
+starterField('inSSY', 'sy');
+
+function overStarterShadow(pt) {
+  const f = focusFor(state.img);
+  const sc = starterScale();
+  const shx = 210 + (f ? (f.feetX - state.anchorX) * sc : 0) + starter.sx;
+  const shy = 323 + (f ? (f.feetY - state.anchorY) * sc : 0) + starter.sy;
+  const dx = (pt.x - shx) / (71 * 1.2), dy = (pt.y - shy) / (19 * 2.4);
+  return dx * dx + dy * dy <= 1;
+}
+function starterPointerDown(e) {
+  if (!state.img) return;
+  drag = true; dragMoved = false;
+  bDrag = overStarterShadow(pointAt(e)) ? 'shadow' : 'model';
+  cv.setPointerCapture(e.pointerId);
+}
+function starterPointerMove(e) {
+  const pt = pointAt(e);
+  const f = focusFor(state.img);
+  const sc = starterScale();
+  const fdx = f ? (f.feetX - state.anchorX) * sc : 0;
+  const fdy = f ? (f.feetY - state.anchorY) * sc : 0;
+  if (bDrag === 'shadow') { starter.sx = pt.x - 210 - fdx; starter.sy = pt.y - 323 - fdy; }
+  else if (bDrag === 'model') { starter.dx = pt.x - 210; starter.dy = pt.y - 320; }
+  dragMoved = true;
+  redraw();
+}
+
+/* starter history: same one-drag-one-step rules */
+let shistory = [], sIndex = -1, soriginal = null, sTimer = null;
+const ssnap = () => JSON.stringify(starter);
+function sapply(v) { Object.assign(starter, JSON.parse(v)); syncStarter(); redraw(); }
+function scommit() {
+  if (sIndex < 0) return;
+  const now = ssnap();
+  if (now === shistory[sIndex]) { updateHistoryUI(); return; }
+  shistory = shistory.slice(0, sIndex + 1);
+  shistory.push(now);
+  if (shistory.length > LIMIT) shistory.shift();
+  sIndex = shistory.length - 1;
+  updateHistoryUI();
+}
+function scommitSoon() {
+  clearTimeout(sTimer);
+  sTimer = setTimeout(scommit, 650);
+}
+function sresetHistory() {
+  shistory = [ssnap()]; sIndex = 0; soriginal = ssnap(); updateHistoryUI();
+}
+function sundo() {
+  if (sIndex <= 0) return;
+  clearTimeout(sTimer); sIndex--; sapply(shistory[sIndex]); updateHistoryUI();
+  say(`Undo \u2014 starter step ${sIndex} of ${shistory.length - 1}.`);
+}
+function sredo() {
+  if (sIndex < 0 || sIndex >= shistory.length - 1) return;
+  clearTimeout(sTimer); sIndex++; sapply(shistory[sIndex]); updateHistoryUI();
+  say(`Redo \u2014 starter step ${sIndex} of ${shistory.length - 1}.`);
+}
+function sreset() {
+  if (!soriginal) return;
+  clearTimeout(sTimer); sapply(soriginal); scommit();
+  say('Starter placement reset to where it opened.');
+}
+
 /* ---------------------------------------------------------------- snippet - */
 function entryText() {
   if (!state.name) return '';
@@ -708,6 +940,7 @@ function entryLine() {
 }
 function buildSnippet() {
   if (mode === 'battle') { $('snippet').value = battleText(); return; }
+  if (mode === 'starter') { $('snippet').value = starterText(); return; }
   $('snippet').value = entryText();
 }
 async function copyText(text, note) {
@@ -721,7 +954,7 @@ async function copyText(text, note) {
     $('copyNote').textContent = 'select-all + Ctrl+C';
   }
 }
-$('btnCopy').onclick = () => copyText(mode === 'battle' ? battleText() : entryText(), 'Copied.');
+$('btnCopy').onclick = () => copyText(mode === 'battle' ? battleText() : mode === 'starter' ? starterText() : entryText(), 'Copied.');
 $('btnCopyLine').onclick = () => copyText(entryLine(), 'One line copied.');
 
 /* ------------------------------------------------------------------ drag -- */
@@ -735,6 +968,7 @@ function pointAt(e) {
 }
 cv.addEventListener('pointerdown', (e) => {
   if (mode === 'battle') { battlePointerDown(e); return; }
+  if (mode === 'starter') { starterPointerDown(e); return; }
   if (!state.img) return;
   drag = true; dragMoved = false;
   cv.setPointerCapture(e.pointerId);
@@ -742,11 +976,18 @@ cv.addEventListener('pointerdown', (e) => {
 });
 cv.addEventListener('pointermove', (e) => {
   if (mode === 'battle') { if (drag) battlePointerMove(e); return; }
+  if (mode === 'starter') { if (drag) starterPointerMove(e); return; }
   if (!drag) return;
   dragMoved = true;
   const p = pointAt(e); state.anchorX = p.x; state.anchorY = p.y; sync(); redraw();
 });
 cv.addEventListener('pointerup', (e) => {
+  if (mode === 'starter') {
+    if (drag && dragMoved) scommit();
+    drag = false; bDrag = null;
+    try { cv.releasePointerCapture(e.pointerId); } catch {}
+    return;
+  }
   if (mode === 'battle') {
     if (drag && dragMoved) bcommit();
     drag = false; bDrag = null;
@@ -775,6 +1016,12 @@ window.addEventListener('keydown', (e) => {
     if (e.altKey) { v.sx += m[0]; v.sy += m[1]; }
     else { v.dx += m[0]; v.dy += m[1]; }
     redraw(); bcommitSoon();
+    return;
+  }
+  if (mode === 'starter') {
+    if (e.altKey) { starter.sx += m[0]; starter.sy += m[1]; }
+    else { starter.dx += m[0]; starter.dy += m[1]; }
+    redraw(); scommitSoon();
     return;
   }
   state.anchorX = Math.max(0, Math.min(state.canvasW, state.anchorX + m[0]));
@@ -813,7 +1060,7 @@ for (const id of Object.keys(SPECIES_NAMES)) {
   sel.appendChild(o);
 }
 sel.value = 'spriggo';
-renderFileList(); redraw(); resetHistory(); bresetHistory();
+renderFileList(); redraw(); resetHistory(); bresetHistory(); sresetHistory();
 say(BUILTIN_FILES.length
   ? `${BUILTIN_FILES.length} image(s) in assets/mythlings. Pick one, place it, then Copy.`
   : 'No built-in images found \u2014 serve the folder over http (npm start), or use Add image.');

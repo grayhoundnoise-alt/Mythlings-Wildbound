@@ -65,15 +65,27 @@ const battleDefaults = {
   player: { dx: cn('HD_PLAYER_DX', -16), dy: cn('HD_PLAYER_DY', -8), sink: cn('HD_PLAYER_SINK', 15), sx: cn('HD_PLAYER_SHADOW_DX', 0), sy: cn('HD_PLAYER_SHADOW_DY', 0) },
   enemy:  { dx: cn('HD_ENEMY_DX', 0), dy: cn('HD_ENEMY_DY', 0), sink: cn('HD_ENEMY_SINK', 15), sx: cn('HD_ENEMY_SHADOW_DX', 0), sy: cn('HD_ENEMY_SHADOW_DY', 0) },
 };
+// The starter card's placement lives the same way — consts inside screens.js.
+const screenSrc = fs.readFileSync(path.join(root, 'src/ui/screens.js'), 'utf8');
+const scn = (name, d) => {
+  const m = new RegExp(`const ${name} = (-?\\d+)`).exec(screenSrc);
+  return m ? Number(m[1]) : d;
+};
+const starterDefaults = {
+  dx: scn('HD_STARTER_DX', 0), dy: scn('HD_STARTER_DY', 0),
+  gx: scn('HD_STARTER_GLOW_DX', 0), gy: scn('HD_STARTER_GLOW_DY', 0),
+  sx: scn('HD_STARTER_SHADOW_DX', 0), sy: scn('HD_STARTER_SHADOW_DY', 0),
+};
 
 const out = template
   .replace('/*__RIG_BOUNDS__*/{}', bounds.trim())
   .replace('/*__SPECIES_NAMES__*/{}', JSON.stringify(names))
   .replace('/*__MANIFEST__*/{}', JSON.stringify(manifest))
   .replace('/*__BATTLE_DEFAULTS__*/null', JSON.stringify(battleDefaults))
+  .replace('/*__STARTER_DEFAULTS__*/null', JSON.stringify(starterDefaults))
   .replace('/*__ASSET_LIST__*/[]', JSON.stringify(files));
 
-for (const token of ['__RIG_BOUNDS__', '__SPECIES_NAMES__', '__ASSET_LIST__', '__MANIFEST__', '__BATTLE_DEFAULTS__']) {
+for (const token of ['__RIG_BOUNDS__', '__SPECIES_NAMES__', '__ASSET_LIST__', '__MANIFEST__', '__BATTLE_DEFAULTS__', '__STARTER_DEFAULTS__']) {
   if (!template.includes(token)) throw new Error(`template is missing the ${token} placeholder`);
   if (out.includes(token)) throw new Error(`template placeholder ${token} was not replaced`);
 }

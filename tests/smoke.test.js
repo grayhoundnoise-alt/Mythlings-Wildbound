@@ -3756,6 +3756,13 @@ test('panels come to the picture, and battle stills sink into the platform', () 
   const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
   assert.ok(/hdFocusOffset\(id, 0, 'none', 210, 'body'\)/.test(sc), 'the pedestal recentres on the body');
   assert.ok(/hdFocusOffset\(id, 0, 'none', 210, 'feet'\)/.test(sc), 'the starter shadow sits on the standing place');
+  // The contact shadow paints BEFORE the still: the Mythling is in front.
+  const shadowIdx = sc.indexOf('ctx.ellipse(0, 0, 71, 19');
+  const stillIdx = sc.indexOf('size: 210, t: 0, facing: 1, shadow: false');
+  assert.ok(shadowIdx > 0 && stillIdx > 0 && shadowIdx < stillIdx,
+    'the starter shadow is painted behind the Mythling');
+  assert.ok(/HD_STARTER_SHADOW_DX/.test(sc) && /HD_STARTER_DX/.test(sc),
+    'the starter card keeps its own tuned placement block');
 
   // Card pictures reframe inside their box (the box IS the canvas there).
   const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');
@@ -3783,6 +3790,27 @@ test('the editor\u2019s Battle mode tunes the same numbers the battle runs', () 
   }
   for (const [k, n] of [['dx', 'HD_ENEMY_DX'], ['dy', 'HD_ENEMY_DY'], ['sink', 'HD_ENEMY_SINK'], ['sx', 'HD_ENEMY_SHADOW_DX'], ['sy', 'HD_ENEMY_SHADOW_DY']]) {
     assert.equal(def.enemy[k], val(n), `the editor opens on ${n}`);
+  }
+});
+
+
+test('the editor\u2019s Starter mode tunes the card the game draws', () => {
+  const ed = readFileSync(new URL('../MythlingEdit.html', import.meta.url), 'utf8');
+  assert.ok(/id="btnModeStarter"/.test(ed) && /Starter card placement/.test(ed),
+    'the editor opens a Starter mode with a placement panel');
+  assert.ok(/Paste this into src\/ui\/screens\.js/.test(ed),
+    'its copy panel sends values for screens.js');
+  assert.ok(/HD_STARTER_SHADOW_DX/.test(ed) && /HD_STARTER_GLOW_DY/.test(ed),
+    'and outputs the starter constants block');
+
+  // It opens on the game's live numbers, not a guess.
+  const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  const val = (n) => Number(new RegExp(`const ${n} = (-?\\d+)`).exec(sc)[1]);
+  const m = /const STARTER_DEFAULTS = (\{[^;]*\});/.exec(ed);
+  assert.ok(m, 'the builder injects the live starter placement');
+  const def = JSON.parse(m[1]);
+  for (const [k, n] of [['dx', 'HD_STARTER_DX'], ['dy', 'HD_STARTER_DY'], ['gx', 'HD_STARTER_GLOW_DX'], ['gy', 'HD_STARTER_GLOW_DY'], ['sx', 'HD_STARTER_SHADOW_DX'], ['sy', 'HD_STARTER_SHADOW_DY']]) {
+    assert.equal(def[k], val(n), `the editor opens on ${n}`);
   }
 });
 
