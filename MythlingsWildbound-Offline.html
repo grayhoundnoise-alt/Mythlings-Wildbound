@@ -12332,12 +12332,13 @@ h3 .name-el { vertical-align: middle; }
     if (shadow) {
       ctx.save();
       ctx.globalAlpha = ctx.globalAlpha * 0.3;
-      const g = ctx.createRadialGradient(x, y + 3, 2, x, y + 3, 36 * s);
+      const shx = o.shadowX ?? x, shy = (o.shadowY ?? y) + 3;
+      const g = ctx.createRadialGradient(shx, shy, 2, shx, shy, 36 * s);
       g.addColorStop(0, "rgba(6,16,10,0.75)");
       g.addColorStop(1, "rgba(6,16,10,0)");
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(x, y + 3, 34 * s, 9 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(shx, shy, 34 * s, 9 * s, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -13011,10 +13012,11 @@ h3 .name-el { vertical-align: middle; }
     if (shadow) {
       ctx.save();
       ctx.globalAlpha = ctx.globalAlpha * 0.3;
-      const g = ctx.createRadialGradient(x, y + 3, 2, x, y + 3, 36 * s);
+      const shx = o.shadowX ?? x, shy = (o.shadowY ?? y) + 3;
+      const g = ctx.createRadialGradient(shx, shy, 2, shx, shy, 36 * s);
       g.addColorStop(0, "rgba(6,16,10,0.75)");
       g.addColorStop(1, "rgba(6,16,10,0)");
-      ell(ctx, x, y + 3, 34 * s, 9 * s, g);
+      ell(ctx, shx, shy, 34 * s, 9 * s, g);
       ctx.restore();
     }
     const mut = getMutation(mutation);
@@ -18407,9 +18409,16 @@ h3 .name-el { vertical-align: middle; }
   }
 
   // src/scenes/BattleScene.js
-  var HD_BATTLE_SINK = 15;
   var HD_PLAYER_DX = -16;
   var HD_PLAYER_DY = -8;
+  var HD_PLAYER_SINK = 15;
+  var HD_PLAYER_SHADOW_DX = 0;
+  var HD_PLAYER_SHADOW_DY = 0;
+  var HD_ENEMY_DX = 0;
+  var HD_ENEMY_DY = 0;
+  var HD_ENEMY_SINK = 15;
+  var HD_ENEMY_SHADOW_DX = 0;
+  var HD_ENEMY_SHADOW_DY = 0;
   var SLOT_POS = {
     player: { x: 0.3, y: 0.8 },
     enemy: { x: 0.72, y: 0.52 }
@@ -19937,12 +19946,14 @@ h3 .name-el { vertical-align: middle; }
           speciesId: em.speciesId,
           stage: em.stage,
           mutation: em.mutation,
-          x: ep.x + ea.lean,
-          y: ep.y,
+          x: ep.x + ea.lean + HD_ENEMY_DX,
+          y: ep.y + HD_ENEMY_DY,
           size: 150,
           t: this.time,
           facing: -1,
-          sink: HD_BATTLE_SINK,
+          sink: HD_ENEMY_SINK,
+          shadowX: ep.x + HD_ENEMY_SHADOW_DX,
+          shadowY: ep.y + HD_ENEMY_SHADOW_DY,
           animTag: "enemy",
           pose: this.creaturePose("enemy")
         });
@@ -19976,7 +19987,9 @@ h3 .name-el { vertical-align: middle; }
           size: 176,
           t: this.time,
           facing: 1,
-          sink: HD_BATTLE_SINK,
+          sink: HD_PLAYER_SINK,
+          shadowX: pp.x + HD_PLAYER_SHADOW_DX,
+          shadowY: pp.y + HD_PLAYER_SHADOW_DY,
           animTag: "player",
           pose: this.creaturePose("player")
         });

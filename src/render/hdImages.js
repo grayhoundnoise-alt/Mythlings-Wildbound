@@ -295,12 +295,17 @@ export function drawHdModel(ctx, img, o) {
   if (shadow) {
     ctx.save();
     ctx.globalAlpha = ctx.globalAlpha * 0.3;
-    const g = ctx.createRadialGradient(x, y + 3, 2, x, y + 3, 36 * s);
+    // The shadow may sit on its own spot (shadowX/shadowY): battle tuning wants
+    // the Mythling to move without dragging its shadow along, and the shadow to
+    // move without carrying the Mythling. Omitted, it stays under the ground
+    // spot as always.
+    const shx = o.shadowX ?? x, shy = (o.shadowY ?? y) + 3;
+    const g = ctx.createRadialGradient(shx, shy, 2, shx, shy, 36 * s);
     g.addColorStop(0, 'rgba(6,16,10,0.75)');
     g.addColorStop(1, 'rgba(6,16,10,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(x, y + 3, 34 * s, 9 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(shx, shy, 34 * s, 9 * s, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }

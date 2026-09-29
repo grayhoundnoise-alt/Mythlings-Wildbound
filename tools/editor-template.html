@@ -98,6 +98,9 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
     <button class="b ghost" id="btnRedo" title="Ctrl+Shift+Z" disabled>&#8631; Redo</button>
     <button class="b ghost" id="btnReset" title="Back to the placement it opened with" disabled>&#8635; Reset</button>
     <span id="history">0 / 0</span>
+    <span class="sep"></span>
+    <button class="b primary" id="btnModeModel" title="Place the picture for the manifest">Model</button>
+    <button class="b ghost" id="btnModeBattle" title="Tune the battle placement, then copy the values">Battle</button>
     <span class="spacer"></span>
     <button class="b" id="btnAdd">Add image&hellip;</button>
     <input type="file" id="fileInput" accept="image/*" class="hidden">
@@ -123,6 +126,25 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
     <label class="row"><span class="muted">Stage</span><input type="number" id="inStage" value="0" min="0" max="3" step="1"></label>
     <div class="notice" id="rigInfo">&mdash;</div>
 
+    <div id="battlePanel" hidden>
+      <div class="panel-h">Battle placement</div>
+      <div class="btns">
+        <button class="b primary" id="btnSidePlayer">Player</button>
+        <button class="b ghost" id="btnSideEnemy">Enemy</button>
+      </div>
+      <label class="row" title="the picture's offset from the platform's ground spot"><span class="muted">Mythling X</span><input type="number" id="inBDX" step="1"></label>
+      <label class="row"><span class="muted">Mythling Y</span><input type="number" id="inBDY" step="1"></label>
+      <label class="row" title="how deep the picture plants &mdash; picture only, the shadow ignores it"><span class="muted">Sink</span><input type="number" id="inBSink" step="1"></label>
+      <label class="row" title="the shadow's own offset &mdash; it does not travel with the Mythling"><span class="muted">Shadow X</span><input type="number" id="inBSX" step="1"></label>
+      <label class="row"><span class="muted">Shadow Y</span><input type="number" id="inBSY" step="1"></label>
+      <div class="muted" style="margin-top:8px;font-size:11px">
+        Drag the Mythling to move it; drag its shadow to move the shadow alone.
+        Arrow keys nudge the Mythling (Shift = bigger steps), Alt+arrows the shadow.
+        Each side keeps its own values. Copy sends the whole block.
+      </div>
+    </div>
+
+    <div id="modelPanels">
     <div class="panel-h">Placement</div>
     <label class="row"><span class="muted">Height</span><input type="number" id="inH2" step="1"></label>
     <label class="row" title="pixels inside the picture"><span class="muted">Anchor X</span><input type="number" id="inAX" step="1"></label>
@@ -152,10 +174,11 @@ button.b:disabled { opacity:.35; cursor:not-allowed; }
       <div class="pv"><div class="cap">LIST ICON &middot; size 52</div><canvas id="pv52" width="110" height="110"></canvas></div>
       <div class="pv"><div class="cap">BATTLE &middot; size 176</div><canvas id="pv176" width="340" height="250"></canvas></div>
     </div>
+    </div>
   </div>
 
   <div id="copy">
-    <div class="panel-h" style="margin:0 0 6px;padding-bottom:4px">Paste this into src/data/hdManifest.js</div>
+    <div class="panel-h" id="copyHead" style="margin:0 0 6px;padding-bottom:4px">Paste this into src/data/hdManifest.js</div>
     <textarea id="snippet" spellcheck="false" readonly></textarea>
     <div class="btns" style="margin-top:7px">
       <button class="b primary" id="btnCopy">Copy</button>
@@ -173,6 +196,7 @@ const RIG_BOUNDS = /*__RIG_BOUNDS__*/{};
 const SPECIES_NAMES = /*__SPECIES_NAMES__*/{};
 const BUILTIN_FILES = /*__ASSET_LIST__*/[];
 const MANIFEST = /*__MANIFEST__*/{};
+const BATTLE_DEFAULTS = /*__BATTLE_DEFAULTS__*/null;
 
 /* ----------------------------------------------------------------- state -- */
 const state = {
@@ -214,6 +238,7 @@ function apply(s) {
   sync(); redraw();
 }
 function commit() {
+  if (mode === 'battle') { bcommit(); return; }
   if (hIndex < 0) return;
   const now = snap();
   if (same(now, history[hIndex])) { updateHistoryUI(); return; }
@@ -232,6 +257,13 @@ function commitSoon() {
   nudgeTimer = setTimeout(commit, 650);
 }
 function updateHistoryUI() {
+  if (mode === 'battle') {
+    $('btnUndo').disabled = bIndex <= 0;
+    $('btnRedo').disabled = bIndex < 0 || bIndex >= bhistory.length - 1;
+    $('btnReset').disabled = !boriginal || bsnap() === boriginal;
+    $('history').textContent = `${Math.max(0, bIndex)} / ${Math.max(0, bhistory.length - 1)}`;
+    return;
+  }
   $('btnUndo').disabled = hIndex <= 0;
   $('btnRedo').disabled = hIndex < 0 || hIndex >= history.length - 1;
   $('btnReset').disabled = !state.img || !state.original
@@ -239,16 +271,19 @@ function updateHistoryUI() {
   $('history').textContent = `${Math.max(0, hIndex)} / ${Math.max(0, history.length - 1)}`;
 }
 function undo() {
+  if (mode === 'battle') { bundo(); return; }
   if (hIndex <= 0) return;
   clearTimeout(nudgeTimer); hIndex--; apply(history[hIndex]); updateHistoryUI();
   say(`Undo \u2014 step ${hIndex} of ${history.length - 1}.`);
 }
 function redo() {
+  if (mode === 'battle') { bredo(); return; }
   if (hIndex < 0 || hIndex >= history.length - 1) return;
   clearTimeout(nudgeTimer); hIndex++; apply(history[hIndex]); updateHistoryUI();
   say(`Redo \u2014 step ${hIndex} of ${history.length - 1}.`);
 }
 function resetAll() {
+  if (mode === 'battle') { breset(); return; }
   if (!state.original) return;
   clearTimeout(nudgeTimer);
   apply(state.original); commit();
@@ -387,6 +422,7 @@ function say(t) { $('status').textContent = t; }
 
 /* ------------------------------------------------------------------ draw -- */
 function redraw() {
+  if (mode === 'battle') { redrawBattle(); return; }
   const w = state.canvasW, h = state.canvasH;
   cv.width = w; cv.height = h;
   const S = 12;
@@ -448,6 +484,211 @@ function drawPreviews() {
   }
 }
 
+/* -------------------------------------------------------------- battle ---- */
+/* Battle mode: how the Mythling stands on its battle platform and where its
+   shadow sits. The two move INDEPENDENTLY — dragging the Mythling must not
+   drag its shadow along (that was the bug), and vice versa. What is tuned
+   here is copied out as the constants block that lives in
+   src/scenes/BattleScene.js. Nothing here touches the manifest. */
+let mode = 'model';                 // 'model' | 'battle'
+let battleSide = 'player';          // which side the panel edits
+const battle = {
+  player: { dx: -16, dy: -8, sink: 15, sx: 0, sy: 0 },
+  enemy:  { dx: 0, dy: 0, sink: 15, sx: 0, sy: 0 },
+};
+if (BATTLE_DEFAULTS) {
+  Object.assign(battle.player, BATTLE_DEFAULTS.player || {});
+  Object.assign(battle.enemy, BATTLE_DEFAULTS.enemy || {});
+}
+const BATTLE_W = 889, BATTLE_H = 465;   // preview canvas — about the battle canvas
+const bgImg = new Image();
+let bgReady = false;
+bgImg.onload = () => { bgReady = true; if (mode === 'battle') redraw(); };
+bgImg.src = 'assets/backgrounds/nature.jpg';
+
+function slotFor(side) {
+  return side === 'player'
+    ? { x: 0.30 * BATTLE_W, y: 0.80 * BATTLE_H }
+    : { x: 0.72 * BATTLE_W, y: 0.52 * BATTLE_H };
+}
+function battleScale() {
+  const b = boundsFor(state.species, state.stage);
+  return ((battleSide === 'player' ? 176 : 150) / 100) * (b ? b.scale : 1);
+}
+function syncBattle() {
+  const st = battle[battleSide];
+  $('inBDX').value = Math.round(st.dx); $('inBDY').value = Math.round(st.dy);
+  $('inBSink').value = Math.round(st.sink);
+  $('inBSX').value = Math.round(st.sx); $('inBSY').value = Math.round(st.sy);
+}
+function redrawBattle() {
+  const w = BATTLE_W, h = BATTLE_H;
+  cv.width = w; cv.height = h;
+  $('stage').style.width = `${w}px`; $('stage').style.height = `${h}px`;
+  $('anchor').style.display = 'none';
+  $('rigbox').style.display = 'none';
+  if (bgReady) ctx.drawImage(bgImg, 0, 0, w, h);
+  else {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#9fe8ff'); g.addColorStop(1, '#e8ffd9');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#7ecb6a'; ctx.fillRect(0, h * 0.45, w, h * 0.55);
+  }
+  const st = battle[battleSide];
+  const slot = slotFor(battleSide);
+  const s = battleScale();
+  const rx = battleSide === 'player' ? 150 : 120;
+  // platform — the game draws these same accent ellipses at the slot, +6 below
+  const px = slot.x, py = slot.y + 6;
+  ctx.save();
+  ctx.globalAlpha = 0.45; ctx.fillStyle = '#3f8f42';
+  ctx.beginPath(); ctx.ellipse(px, py, rx, rx * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath(); ctx.ellipse(px, py, rx * 1.25, rx * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // the shadow — its own spot (the whole point of Battle mode)
+  const shx = slot.x + st.sx, shy = slot.y + st.sy + 3;
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  const sg = ctx.createRadialGradient(shx, shy, 2, shx, shy, 36 * s);
+  sg.addColorStop(0, 'rgba(6,16,10,0.75)');
+  sg.addColorStop(1, 'rgba(6,16,10,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.ellipse(shx, shy, 34 * s, 9 * s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // the Mythling — the game's own drawHdModel maths
+  if (state.img) {
+    const b = boundsFor(state.species, state.stage);
+    const pl = placementFor(state.canvasW, state.canvasH, b, state.height, state.anchorX, state.anchorY);
+    ctx.save();
+    ctx.translate(slot.x + st.dx, slot.y + st.dy);
+    ctx.scale((battleSide === 'player' ? 1 : -1) * s, s);
+    ctx.drawImage(state.img, pl.x, pl.y + st.sink, pl.w, pl.h);
+    ctx.restore();
+  }
+  syncBattle();
+  $('rigInfo').innerHTML = battleSide === 'player'
+    ? '<b>Player</b> &middot; battle size <span class="mono">176</span> &middot; drag the Mythling or its shadow'
+    : '<b>Enemy</b> &middot; battle size <span class="mono">150</span> &middot; drag the Mythling or its shadow';
+  buildSnippet();
+  updateHistoryUI();
+}
+function battleText() {
+  const p = battle.player, e = battle.enemy;
+  return `const HD_PLAYER_DX = ${Math.round(p.dx)};
+const HD_PLAYER_DY = ${Math.round(p.dy)};
+const HD_PLAYER_SINK = ${Math.round(p.sink)};
+const HD_PLAYER_SHADOW_DX = ${Math.round(p.sx)};
+const HD_PLAYER_SHADOW_DY = ${Math.round(p.sy)};
+const HD_ENEMY_DX = ${Math.round(e.dx)};
+const HD_ENEMY_DY = ${Math.round(e.dy)};
+const HD_ENEMY_SINK = ${Math.round(e.sink)};
+const HD_ENEMY_SHADOW_DX = ${Math.round(e.sx)};
+const HD_ENEMY_SHADOW_DY = ${Math.round(e.sy)};`;
+}
+function setMode(m) {
+  mode = m;
+  $('btnModeModel').className = 'b' + (m === 'model' ? ' primary' : ' ghost');
+  $('btnModeBattle').className = 'b' + (m === 'battle' ? ' primary' : ' ghost');
+  $('modelPanels').hidden = m !== 'model';
+  $('battlePanel').hidden = m !== 'battle';
+  $('copyHead').textContent = m === 'model'
+    ? 'Paste this into src/data/hdManifest.js'
+    : 'Paste this into src/scenes/BattleScene.js';
+  $('btnCopyLine').hidden = m !== 'model';
+  if (m === 'model') $('anchor').style.display = '';
+  redraw();
+}
+function setSide(x) {
+  battleSide = x;
+  $('btnSidePlayer').className = 'b' + (x === 'player' ? ' primary' : ' ghost');
+  $('btnSideEnemy').className = 'b' + (x === 'enemy' ? ' primary' : ' ghost');
+  redraw();
+}
+$('btnModeModel').onclick = () => setMode('model');
+$('btnModeBattle').onclick = () => setMode('battle');
+$('btnSidePlayer').onclick = () => setSide('player');
+$('btnSideEnemy').onclick = () => setSide('enemy');
+
+/* battle history: same one-drag-one-step rules as the model placement */
+let bhistory = [], bIndex = -1, boriginal = null, bTimer = null;
+const bsnap = () => JSON.stringify(battle);
+function bapply(s) {
+  const v = JSON.parse(s);
+  Object.assign(battle.player, v.player); Object.assign(battle.enemy, v.enemy);
+  syncBattle(); redraw();
+}
+function bcommit() {
+  if (bIndex < 0) return;
+  const now = bsnap();
+  if (now === bhistory[bIndex]) { updateHistoryUI(); return; }
+  bhistory = bhistory.slice(0, bIndex + 1);
+  bhistory.push(now);
+  if (bhistory.length > LIMIT) bhistory.shift();
+  bIndex = bhistory.length - 1;
+  updateHistoryUI();
+}
+function bcommitSoon() {
+  clearTimeout(bTimer);
+  bTimer = setTimeout(bcommit, 650);
+}
+function bresetHistory() {
+  bhistory = [bsnap()]; bIndex = 0; boriginal = bsnap(); updateHistoryUI();
+}
+function bundo() {
+  if (bIndex <= 0) return;
+  clearTimeout(bTimer); bIndex--; bapply(bhistory[bIndex]); updateHistoryUI();
+  say(`Undo \u2014 battle step ${bIndex} of ${bhistory.length - 1}.`);
+}
+function bredo() {
+  if (bIndex < 0 || bIndex >= bhistory.length - 1) return;
+  clearTimeout(bTimer); bIndex++; bapply(bhistory[bIndex]); updateHistoryUI();
+  say(`Redo \u2014 battle step ${bIndex} of ${bhistory.length - 1}.`);
+}
+function breset() {
+  if (!boriginal) return;
+  clearTimeout(bTimer); bapply(boriginal); bcommit();
+  say('Battle placement reset to where it opened.');
+}
+
+function battleField(id, key) {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    const v = Number(el.value);
+    if (!Number.isFinite(v)) return;
+    battle[battleSide][key] = v; redraw();
+  });
+  el.addEventListener('change', bcommit);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.blur(); });
+}
+battleField('inBDX', 'dx');
+battleField('inBDY', 'dy');
+battleField('inBSink', 'sink');
+battleField('inBSX', 'sx');
+battleField('inBSY', 'sy');
+
+function overShadow(pt) {
+  const st = battle[battleSide], slot = slotFor(battleSide), s = battleScale();
+  const shx = slot.x + st.sx, shy = slot.y + st.sy + 3;
+  const dx = (pt.x - shx) / (34 * s * 1.3), dy = (pt.y - shy) / (9 * s * 2.4);
+  return dx * dx + dy * dy <= 1;
+}
+let bDrag = null;   // 'model' | 'shadow'
+function battlePointerDown(e) {
+  if (!state.img) return;
+  drag = true; dragMoved = false;
+  bDrag = overShadow(pointAt(e)) ? 'shadow' : 'model';
+  cv.setPointerCapture(e.pointerId);
+}
+function battlePointerMove(e) {
+  const pt = pointAt(e);
+  const st = battle[battleSide], slot = slotFor(battleSide);
+  if (bDrag === 'shadow') { st.sx = pt.x - slot.x; st.sy = pt.y - 3 - slot.y; }
+  else if (bDrag === 'model') { st.dx = pt.x - slot.x; st.dy = pt.y - slot.y; }
+  dragMoved = true;
+  redraw();
+}
+
 /* ---------------------------------------------------------------- snippet - */
 function entryText() {
   if (!state.name) return '';
@@ -465,7 +706,10 @@ function entryLine() {
   const rel = BUILTIN_FILES.includes(state.name) ? `assets/mythlings/${state.name}` : state.name;
   return `  'model:${key}': { src: '${rel}', height: ${Math.round(state.height)}, anchor: { x: ${Math.round(state.anchorX)}, y: ${Math.round(state.anchorY)} } },`;
 }
-function buildSnippet() { $('snippet').value = entryText(); }
+function buildSnippet() {
+  if (mode === 'battle') { $('snippet').value = battleText(); return; }
+  $('snippet').value = entryText();
+}
 async function copyText(text, note) {
   if (!text) { $('copyNote').textContent = 'Pick a file first.'; return; }
   try {
@@ -477,7 +721,7 @@ async function copyText(text, note) {
     $('copyNote').textContent = 'select-all + Ctrl+C';
   }
 }
-$('btnCopy').onclick = () => copyText(entryText(), 'Copied.');
+$('btnCopy').onclick = () => copyText(mode === 'battle' ? battleText() : entryText(), 'Copied.');
 $('btnCopyLine').onclick = () => copyText(entryLine(), 'One line copied.');
 
 /* ------------------------------------------------------------------ drag -- */
@@ -490,17 +734,25 @@ function pointAt(e) {
   };
 }
 cv.addEventListener('pointerdown', (e) => {
+  if (mode === 'battle') { battlePointerDown(e); return; }
   if (!state.img) return;
   drag = true; dragMoved = false;
   cv.setPointerCapture(e.pointerId);
   const p = pointAt(e); state.anchorX = p.x; state.anchorY = p.y; sync(); redraw();
 });
 cv.addEventListener('pointermove', (e) => {
+  if (mode === 'battle') { if (drag) battlePointerMove(e); return; }
   if (!drag) return;
   dragMoved = true;
   const p = pointAt(e); state.anchorX = p.x; state.anchorY = p.y; sync(); redraw();
 });
 cv.addEventListener('pointerup', (e) => {
+  if (mode === 'battle') {
+    if (drag && dragMoved) bcommit();
+    drag = false; bDrag = null;
+    try { cv.releasePointerCapture(e.pointerId); } catch {}
+    return;
+  }
   if (drag && dragMoved) commit();          // a whole drag is one undo step
   drag = false;
   try { cv.releasePointerCapture(e.pointerId); } catch {}
@@ -518,6 +770,13 @@ window.addEventListener('keydown', (e) => {
   const m = { ArrowLeft:[-st,0], ArrowRight:[st,0], ArrowUp:[0,-st], ArrowDown:[0,st] }[e.key];
   if (!m) return;
   e.preventDefault();
+  if (mode === 'battle') {
+    const v = battle[battleSide];
+    if (e.altKey) { v.sx += m[0]; v.sy += m[1]; }
+    else { v.dx += m[0]; v.dy += m[1]; }
+    redraw(); bcommitSoon();
+    return;
+  }
   state.anchorX = Math.max(0, Math.min(state.canvasW, state.anchorX + m[0]));
   state.anchorY = Math.max(0, Math.min(state.canvasH, state.anchorY + m[1]));
   sync(); redraw(); commitSoon();            // a run of nudges is one step
@@ -554,7 +813,7 @@ for (const id of Object.keys(SPECIES_NAMES)) {
   sel.appendChild(o);
 }
 sel.value = 'spriggo';
-renderFileList(); redraw(); resetHistory();
+renderFileList(); redraw(); resetHistory(); bresetHistory();
 say(BUILTIN_FILES.length
   ? `${BUILTIN_FILES.length} image(s) in assets/mythlings. Pick one, place it, then Copy.`
   : 'No built-in images found \u2014 serve the folder over http (npm start), or use Add image.');

@@ -566,10 +566,13 @@ export function drawMythling(ctx, o) {
   if (shadow) {
     ctx.save();
     ctx.globalAlpha = ctx.globalAlpha * 0.3;
-    const g = ctx.createRadialGradient(x, y + 3, 2, x, y + 3, 36 * s);
+    // Same contract as drawHdModel: shadowX/shadowY pin the shadow to its own
+    // spot so it does not travel with the body.
+    const shx = o.shadowX ?? x, shy = (o.shadowY ?? y) + 3;
+    const g = ctx.createRadialGradient(shx, shy, 2, shx, shy, 36 * s);
     g.addColorStop(0, 'rgba(6,16,10,0.75)');
     g.addColorStop(1, 'rgba(6,16,10,0)');
-    ell(ctx, x, y + 3, 34 * s, 9 * s, g);
+    ell(ctx, shx, shy, 34 * s, 9 * s, g);
     ctx.restore();
   }
 

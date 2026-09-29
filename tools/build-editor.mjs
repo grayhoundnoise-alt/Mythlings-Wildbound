@@ -52,13 +52,28 @@ for (const [key, entry] of Object.entries(HD_ASSETS)) {
   manifest[`${speciesId}:${stage}`] = { height: entry.height, anchor: entry.anchor };
 }
 
+// Battle placement the game is actually running, so Battle mode opens on the
+// live values instead of a guess. These are consts inside a scene rather than
+// a data module, so this is the one place that reads them with a regex — the
+// smoke test pins the editor and BattleScene.js to the same numbers.
+const battleSrc = fs.readFileSync(path.join(root, 'src/scenes/BattleScene.js'), 'utf8');
+const cn = (name, d) => {
+  const m = new RegExp(`const ${name} = (-?\\d+)`).exec(battleSrc);
+  return m ? Number(m[1]) : d;
+};
+const battleDefaults = {
+  player: { dx: cn('HD_PLAYER_DX', -16), dy: cn('HD_PLAYER_DY', -8), sink: cn('HD_PLAYER_SINK', 15), sx: cn('HD_PLAYER_SHADOW_DX', 0), sy: cn('HD_PLAYER_SHADOW_DY', 0) },
+  enemy:  { dx: cn('HD_ENEMY_DX', 0), dy: cn('HD_ENEMY_DY', 0), sink: cn('HD_ENEMY_SINK', 15), sx: cn('HD_ENEMY_SHADOW_DX', 0), sy: cn('HD_ENEMY_SHADOW_DY', 0) },
+};
+
 const out = template
   .replace('/*__RIG_BOUNDS__*/{}', bounds.trim())
   .replace('/*__SPECIES_NAMES__*/{}', JSON.stringify(names))
   .replace('/*__MANIFEST__*/{}', JSON.stringify(manifest))
+  .replace('/*__BATTLE_DEFAULTS__*/null', JSON.stringify(battleDefaults))
   .replace('/*__ASSET_LIST__*/[]', JSON.stringify(files));
 
-for (const token of ['__RIG_BOUNDS__', '__SPECIES_NAMES__', '__ASSET_LIST__', '__MANIFEST__']) {
+for (const token of ['__RIG_BOUNDS__', '__SPECIES_NAMES__', '__ASSET_LIST__', '__MANIFEST__', '__BATTLE_DEFAULTS__']) {
   if (!template.includes(token)) throw new Error(`template is missing the ${token} placeholder`);
   if (out.includes(token)) throw new Error(`template placeholder ${token} was not replaced`);
 }
@@ -66,4 +81,4 @@ for (const token of ['__RIG_BOUNDS__', '__SPECIES_NAMES__', '__ASSET_LIST__', '_
 const dest = path.join(root, 'MythlingEdit.html');
 fs.writeFileSync(dest, out);
 const placed = Object.keys(manifest).length;
-console.log(`Wrote MythlingEdit.html — ${files.length} image(s) listed, ${Object.keys(names).length} species, ${Object.keys(JSON.parse(bounds)).length} forms mapped, ${placed} placement(s) read from the manifest.`);
+console.log(`Wrote MythlingEdit.html — ${files.length} image(s) listed, ${Object.keys(names).length} species, ${Object.keys(JSON.parse(bounds)).length} forms mapped, ${placed} placement(s) read from the manifest, battle placement read from BattleScene.js.`);

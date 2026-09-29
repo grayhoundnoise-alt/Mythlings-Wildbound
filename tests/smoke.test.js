@@ -3736,12 +3736,20 @@ test('panels come to the picture, and battle stills sink into the platform', () 
   // where the ground spot is.
   assert.ok(/r\.y \+ \(o\.sink \|\| 0\)/.test(hd), 'a still can sink without moving its shadow');
 
+  const rig = readFileSync(new URL('../src/render/creatureRig.js', import.meta.url), 'utf8');
+  assert.ok(/o\.shadowX \?\? x/.test(hd) && /o\.shadowX \?\? x/.test(rig),
+    'both renderers let the shadow travel alone');
+
   const bs = readFileSync(new URL('../src/scenes/BattleScene.js', import.meta.url), 'utf8');
-  assert.ok(/const HD_BATTLE_SINK = \d+/.test(bs), 'the battle depth is one named number');
-  assert.equal((bs.match(/sink: HD_BATTLE_SINK/g) || []).length, 2, 'both battle models sink');
-  assert.ok(/HD_PLAYER_DX = -\d+/.test(bs) && /pp\.x \+ pa\.lean \+ HD_PLAYER_DX/.test(bs),
+  assert.ok(/const HD_PLAYER_SINK = \d+/.test(bs) && /const HD_ENEMY_SINK = \d+/.test(bs),
+    'each side declares its own plant depth');
+  assert.ok(/sink: HD_PLAYER_SINK/.test(bs) && /sink: HD_ENEMY_SINK/.test(bs),
+    'both battle models sink');
+  assert.ok(/shadowX: pp\.x \+ HD_PLAYER_SHADOW_DX/.test(bs) && /shadowY: ep\.y \+ HD_ENEMY_SHADOW_DY/.test(bs),
+    'each side pins its shadow to its own spot');
+  assert.ok(/HD_PLAYER_DX = -?\d+/.test(bs) && /pp\.x \+ pa\.lean \+ HD_PLAYER_DX/.test(bs),
     'the battle player nudges left');
-  assert.ok(/HD_PLAYER_DY = -\d+/.test(bs) && /pp\.y \+ HD_PLAYER_DY/.test(bs),
+  assert.ok(/HD_PLAYER_DY = -?\d+/.test(bs) && /pp\.y \+ HD_PLAYER_DY/.test(bs),
     'the battle player nudges up');
 
   // The starter pedestal moves to the picture — never the other way round.
@@ -3752,6 +3760,30 @@ test('panels come to the picture, and battle stills sink into the platform', () 
   // Card pictures reframe inside their box (the box IS the canvas there).
   const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');
   assert.ok(/hdFocusOffset\([\s\S]*?'block'\)/.test(pm), 'card pictures frame their silhouette');
+});
+
+
+test('the editor\u2019s Battle mode tunes the same numbers the battle runs', () => {
+  const ed = readFileSync(new URL('../MythlingEdit.html', import.meta.url), 'utf8');
+  assert.ok(/id="btnModeBattle"/.test(ed) && /Battle placement/.test(ed),
+    'the editor opens a Battle mode with a placement panel');
+  assert.ok(/Paste this into src\/scenes\/BattleScene\.js/.test(ed),
+    'its copy panel sends values for BattleScene.js');
+  assert.ok(/HD_PLAYER_SHADOW_DX/.test(ed) && /HD_ENEMY_SINK/.test(ed),
+    'and outputs the per-side constants block');
+
+  // It opens on the game\u2019s live numbers, not a guess.
+  const bs = readFileSync(new URL('../src/scenes/BattleScene.js', import.meta.url), 'utf8');
+  const val = (n) => Number(new RegExp(`const ${n} = (-?\\d+)`).exec(bs)[1]);
+  const m = /const BATTLE_DEFAULTS = (\{[^;]*\});/.exec(ed);
+  assert.ok(m, 'the builder injects the live battle placement');
+  const def = JSON.parse(m[1]);
+  for (const [k, n] of [['dx', 'HD_PLAYER_DX'], ['dy', 'HD_PLAYER_DY'], ['sink', 'HD_PLAYER_SINK'], ['sx', 'HD_PLAYER_SHADOW_DX'], ['sy', 'HD_PLAYER_SHADOW_DY']]) {
+    assert.equal(def.player[k], val(n), `the editor opens on ${n}`);
+  }
+  for (const [k, n] of [['dx', 'HD_ENEMY_DX'], ['dy', 'HD_ENEMY_DY'], ['sink', 'HD_ENEMY_SINK'], ['sx', 'HD_ENEMY_SHADOW_DX'], ['sy', 'HD_ENEMY_SHADOW_DY']]) {
+    assert.equal(def.enemy[k], val(n), `the editor opens on ${n}`);
+  }
 });
 
 for (const item of queue) {
