@@ -39,7 +39,7 @@ const HD_BATTLE_SINK = 15;
 // asked for "left and up a little". This lives HERE, never in the manifest —
 // the anchor is shared by every surface. Tweak these two numbers to taste.
 const HD_PLAYER_DX = -16;
-const HD_PLAYER_DY = -30;
+const HD_PLAYER_DY = -8;
 
 const SLOT_POS = {
   player: { x: 0.30, y: 0.80 },
