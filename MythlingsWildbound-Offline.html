@@ -18408,6 +18408,8 @@ h3 .name-el { vertical-align: middle; }
 
   // src/scenes/BattleScene.js
   var HD_BATTLE_SINK = 15;
+  var HD_PLAYER_DX = -16;
+  var HD_PLAYER_DY = -8;
   var SLOT_POS = {
     player: { x: 0.3, y: 0.8 },
     enemy: { x: 0.72, y: 0.52 }
@@ -19969,8 +19971,8 @@ h3 .name-el { vertical-align: middle; }
           speciesId: pm.speciesId,
           stage: pm.stage,
           mutation: pm.mutation,
-          x: pp.x + pa.lean,
-          y: pp.y,
+          x: pp.x + pa.lean + HD_PLAYER_DX,
+          y: pp.y + HD_PLAYER_DY,
           size: 176,
           t: this.time,
           facing: 1,
@@ -22602,8 +22604,9 @@ h3 .name-el { vertical-align: middle; }
             shadow: false,
             pose: { squash: 1 }
           });
+          const sf = hdFocusOffset(id, 0, "none", 210, "feet") || { dx: 0, dy: 0 };
           ctx.save();
-          ctx.translate(px - 210, 3);
+          ctx.translate(sf.dx, 3 + sf.dy);
           ctx.globalAlpha *= 0.3;
           const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);
           sg.addColorStop(0, "rgba(6,16,10,0.75)");

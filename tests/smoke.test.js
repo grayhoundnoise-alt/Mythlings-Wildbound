@@ -3739,10 +3739,15 @@ test('panels come to the picture, and battle stills sink into the platform', () 
   const bs = readFileSync(new URL('../src/scenes/BattleScene.js', import.meta.url), 'utf8');
   assert.ok(/const HD_BATTLE_SINK = \d+/.test(bs), 'the battle depth is one named number');
   assert.equal((bs.match(/sink: HD_BATTLE_SINK/g) || []).length, 2, 'both battle models sink');
+  assert.ok(/HD_PLAYER_DX = -\d+/.test(bs) && /pp\.x \+ pa\.lean \+ HD_PLAYER_DX/.test(bs),
+    'the battle player nudges left');
+  assert.ok(/HD_PLAYER_DY = -\d+/.test(bs) && /pp\.y \+ HD_PLAYER_DY/.test(bs),
+    'the battle player nudges up');
 
   // The starter pedestal moves to the picture — never the other way round.
   const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
   assert.ok(/hdFocusOffset\(id, 0, 'none', 210, 'body'\)/.test(sc), 'the pedestal recentres on the body');
+  assert.ok(/hdFocusOffset\(id, 0, 'none', 210, 'feet'\)/.test(sc), 'the starter shadow sits on the standing place');
 
   // Card pictures reframe inside their box (the box IS the canvas there).
   const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');

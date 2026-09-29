@@ -201,9 +201,11 @@ export function starterScreen({ onChoose, onBack }) {
           speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
           size: 210, t: 0, facing: 1, shadow: false, pose: { squash: 1 },
         });
-        // contact shadow with the pedestal, not pinned to the anchor
+        // Contact shadow under the paws — the shadow belongs to the creature,
+        // so it sits on the standing place (the visible feet), not beside it.
+        const sf = hdFocusOffset(id, 0, 'none', 210, 'feet') || { dx: 0, dy: 0 };
         ctx.save();
-        ctx.translate(px - 210, 3);
+        ctx.translate(sf.dx, 3 + sf.dy);
         ctx.globalAlpha *= 0.3;
         const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);
         sg.addColorStop(0, 'rgba(6,16,10,0.75)');

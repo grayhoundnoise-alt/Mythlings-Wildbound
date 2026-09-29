@@ -34,6 +34,13 @@ import { LEVEL_CAP, DAMAGE_RANDOM_MIN, DAMAGE_RANDOM_MAX, SLEEP_MAX_TURNS, DOT_M
 // user measured this by eye; tweak one number to taste.
 const HD_BATTLE_SINK = 15;
 
+// Battle-only fine placement for the player's Mythling on its platform. The
+// user measured the still sitting right-and-low on the ground ellipse and
+// asked for "left and up a little". This lives HERE, never in the manifest —
+// the anchor is shared by every surface. Tweak these two numbers to taste.
+const HD_PLAYER_DX = -16;
+const HD_PLAYER_DY = -8;
+
 const SLOT_POS = {
   player: { x: 0.30, y: 0.80 },
   enemy: { x: 0.72, y: 0.52 },
@@ -1608,7 +1615,7 @@ export class BattleScene {
       const pm = this.shownMythling('player');
       drawCreature(ctx, {
         speciesId: pm.speciesId, stage: pm.stage, mutation: pm.mutation,
-        x: pp.x + pa.lean, y: pp.y, size: 176, t: this.time, facing: 1,
+        x: pp.x + pa.lean + HD_PLAYER_DX, y: pp.y + HD_PLAYER_DY, size: 176, t: this.time, facing: 1,
         sink: HD_BATTLE_SINK,
         animTag: 'player', pose: this.creaturePose('player'),
       });
