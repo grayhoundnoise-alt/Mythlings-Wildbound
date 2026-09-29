@@ -13,7 +13,8 @@ import { STAT_SHORT, STAT_LABELS, getMood } from '../data/moods.js';
 import { ELEMENTS, ELEMENT_ORDER, speciesElements, attackMatchup, typeProfile } from '../data/elements.js';
 import { BALL_IDS, getItem } from '../data/items.js';
 import { getWeather } from '../data/weather.js';
-import { drawMythling, prewarm } from '../render/creatures.js';
+import { drawCreature, prewarm } from '../render/creatures.js';
+import { hdBackdropFor } from '../render/hdImages.js';
 import { SkillVFX } from '../render/vfx/SkillVFX.js';
 import { paletteFor } from '../data/skillVfx.js';
 import { roundRect } from '../render/worldRenderer.js';
@@ -898,7 +899,7 @@ export class BattleScene {
     const cv = el('canvas', { width: 66, height: 66 });
     const ctx = cv.getContext('2d');
     ctx.save(); ctx.translate(33, 58);
-    drawMythling(ctx, { speciesId: m.speciesId, stage: m.stage, mutation: m.mutation, x: -4, y: 0, size: 52, t: 0, facing: 1, shadow: false });
+    drawCreature(ctx, { speciesId: m.speciesId, stage: m.stage, mutation: m.mutation, x: -4, y: 0, size: 52, t: 0, facing: 1, shadow: false });
     ctx.restore();
     return cv;
   }
@@ -969,7 +970,7 @@ export class BattleScene {
     return p;
   }
 
-  /** What to hand to drawMythling for one side. */
+  /** What to hand to drawCreature for one side. */
   creaturePose(side) {
     const a = this.anim[side];
     const ph = this.animPhase(side);
@@ -1571,7 +1572,7 @@ export class BattleScene {
         const k = ea.scale ?? 1;
         ctx.translate(ea.pull.x, ea.pull.y); ctx.scale(k, k); ctx.translate(-ea.pull.x, -ea.pull.y);
       }
-      drawMythling(ctx, {
+      drawCreature(ctx, {
         speciesId: em.speciesId, stage: em.stage, mutation: em.mutation,
         x: ep.x + ea.lean, y: ep.y, size: 150, t: this.time, facing: -1,
         animTag: 'enemy', pose: this.creaturePose('enemy'),
@@ -1597,7 +1598,7 @@ export class BattleScene {
     const pa = this.anim.player;
     if (pa.alpha > 0.01) {
       const pm = this.shownMythling('player');
-      drawMythling(ctx, {
+      drawCreature(ctx, {
         speciesId: pm.speciesId, stage: pm.stage, mutation: pm.mutation,
         x: pp.x + pa.lean, y: pp.y, size: 176, t: this.time, facing: 1,
         animTag: 'player', pose: this.creaturePose('player'),
@@ -1675,37 +1676,51 @@ export class BattleScene {
     };
     const p = palettes[theme] || palettes.nature;
     const w = this.battle?.weather ? getWeather(this.battle.weather) : null;
-    const sky = ctx.createLinearGradient(0, 0, 0, H * 0.7);
-    if (w) {                                  // the weather repaints the sky
-      sky.addColorStop(0, w.sky[0]); sky.addColorStop(0.55, w.sky[1]); sky.addColorStop(1, w.sky[2]);
+
+    // Secret HD mode: a painted background for this theme, when one exists.
+    // Weather still repaints the sky on top of it exactly as it does over the
+    // painted one, and the full-arena tint in render() lands on it unchanged.
+    const backdrop = hdBackdropFor(theme);
+    if (backdrop) {
+      ctx.drawImage(backdrop, 0, 0, W, H);
+      if (w) {
+        const hsky = ctx.createLinearGradient(0, 0, 0, H * 0.7);
+        hsky.addColorStop(0, w.sky[0]); hsky.addColorStop(0.55, w.sky[1]); hsky.addColorStop(1, w.sky[2]);
+        ctx.fillStyle = hsky; ctx.fillRect(0, 0, W, H * 0.62);
+      }
     } else {
-      sky.addColorStop(0, p.sky[0]); sky.addColorStop(1, p.sky[1]);
-    }
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+      const sky = ctx.createLinearGradient(0, 0, 0, H * 0.7);
+      if (w) {                                  // the weather repaints the sky
+        sky.addColorStop(0, w.sky[0]); sky.addColorStop(0.55, w.sky[1]); sky.addColorStop(1, w.sky[2]);
+      } else {
+        sky.addColorStop(0, p.sky[0]); sky.addColorStop(1, p.sky[1]);
+      }
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-    // background silhouettes
-    ctx.save();
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = p.accent;
-    for (let i = 0; i < 6; i++) {
-      const x = (i / 5) * W;
-      const h = 90 + ((i * 53) % 90);
+      // background silhouettes
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = p.accent;
+      for (let i = 0; i < 6; i++) {
+        const x = (i / 5) * W;
+        const h = 90 + ((i * 53) % 90);
+        ctx.beginPath();
+        ctx.moveTo(x - 120, H * 0.62);
+        ctx.lineTo(x, H * 0.62 - h);
+        ctx.lineTo(x + 120, H * 0.62);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+
+      // ground
+      const gr = ctx.createLinearGradient(0, H * 0.55, 0, H);
+      gr.addColorStop(0, p.ground[0]); gr.addColorStop(1, p.ground[1]);
+      ctx.fillStyle = gr;
       ctx.beginPath();
-      ctx.moveTo(x - 120, H * 0.62);
-      ctx.lineTo(x, H * 0.62 - h);
-      ctx.lineTo(x + 120, H * 0.62);
-      ctx.closePath(); ctx.fill();
+      ctx.moveTo(0, H * 0.62);
+      ctx.quadraticCurveTo(W * 0.5, H * 0.55, W, H * 0.62);
+      ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
     }
-    ctx.restore();
-
-    // ground
-    const gr = ctx.createLinearGradient(0, H * 0.55, 0, H);
-    gr.addColorStop(0, p.ground[0]); gr.addColorStop(1, p.ground[1]);
-    ctx.fillStyle = gr;
-    ctx.beginPath();
-    ctx.moveTo(0, H * 0.62);
-    ctx.quadraticCurveTo(W * 0.5, H * 0.55, W, H * 0.62);
-    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
 
     // platforms
     const plat = (x, y, rx) => {

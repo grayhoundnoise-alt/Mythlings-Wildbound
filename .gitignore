@@ -4,3 +4,10 @@ build/
 .DS_Store
 *.log
 .cache/
+
+# HD image working files. The keyed-in game art (assets/mythlings,
+# assets/backgrounds) IS tracked; the chroma-keyed source and the concept
+# pieces are not — they are large, regenerable, and only useful at the desk.
+# tools/make-hd-image.py rebuilds assets/mythlings/ from assets/_raw/.
+assets/_raw/
+assets/concept/

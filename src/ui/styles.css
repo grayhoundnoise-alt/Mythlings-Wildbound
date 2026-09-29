@@ -1339,3 +1339,37 @@ h3 .name-el { vertical-align: middle; }
 .type-panel .tp-vs.even .tp-vs-word { color: #9fb3c9; }
 .matchup-chip.mini { margin-top: 5px; padding: 2px 7px; font-size: .58rem; gap: 4px; }
 .matchup-chip.mini .ico { width: 10px; height: 10px; }
+
+/* ------------------------------------------------------------------ SECRET HD IMAGES
+   Hidden panel (Ctrl + Enter) and the loading veil shown while it swaps the
+   creature art over. Kept out of the normal Settings screen on purpose. */
+.hd-secret-note { opacity: .6; font-size: 12px; margin: 0 0 12px; }
+
+.hd-veil {
+  position: fixed; inset: 0; z-index: 9998;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 10, 18, .72);
+  backdrop-filter: blur(2px);
+  transition: opacity .16s ease;
+}
+.hd-veil.out { opacity: 0; }
+
+.hd-veil-box {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 22px 34px;
+  border: 1px solid rgba(242, 199, 97, .45);
+  border-radius: 12px;
+  background: rgba(10, 20, 34, .92);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+}
+.hd-veil-spin {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid rgba(242, 199, 97, .25);
+  border-top-color: #f2c761;
+  animation: hd-spin .7s linear infinite;
+}
+.hd-veil-text { color: #f2c761; letter-spacing: .12em; font-size: 12px; }
+@keyframes hd-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .hd-veil-spin { animation-duration: 2.4s; }
+}

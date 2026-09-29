@@ -21,6 +21,34 @@ const js = result.outputFiles[0].text;
 const css = fs.readFileSync(path.join(root, 'src/ui/styles.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
+// ---- HD image assets --------------------------------------------------------
+// file:// cannot fetch a sibling PNG, so the secret HD Images mode would quietly
+// fall back to the animated rig in the offline build. Inline every asset the
+// manifest lists as a base64 data URI, straight into the bundle.
+const manifestSrc = fs.readFileSync(path.join(root, 'src/data/hdManifest.js'), 'utf8');
+let jsOut = js;
+let inlined = 0;
+let inlinedBytes = 0;
+for (const m of manifestSrc.matchAll(/'([a-z]+:[^']+)'\s*:\s*'([^']+)'/g)) {
+  const file = path.join(root, m[2]);
+  if (!fs.existsSync(file)) {
+    console.warn(`  ! HD asset missing, left as a path: ${m[2]}`);
+    continue;
+  }
+  const buf = fs.readFileSync(file);
+  const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[path.extname(file).toLowerCase()];
+  if (!mime) {
+    console.warn(`  ! HD asset has no known image type, left as a path: ${m[2]}`);
+    continue;
+  }
+  const uri = `data:${mime};base64,${buf.toString('base64')}`;
+  // The bundler keeps the manifest's string literals verbatim, so swapping the
+  // path for the data URI is enough. replaceAll, not replace.
+  jsOut = jsOut.split(m[2]).join(uri);
+  inlined++;
+  inlinedBytes += buf.length;
+}
+
 // take the <body> markup from index.html so both versions never drift apart
 const body = html.match(/<body>([\s\S]*?)<script/)[1].trim();
 
@@ -38,7 +66,7 @@ ${css}
 <body>
 ${body}
 <script>
-${js}
+${jsOut}
 </script>
 </body>
 </html>
@@ -47,3 +75,4 @@ ${js}
 fs.writeFileSync(out, single);
 const kb = (Buffer.byteLength(single) / 1024).toFixed(0);
 console.log(`Wrote ${path.relative(root, out)} (${kb} KB) — double-click to play offline.`);
+console.log(`  HD images inlined: ${inlined} asset(s), ${(inlinedBytes / 1024).toFixed(0)} KB of art.`);

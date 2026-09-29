@@ -6,7 +6,7 @@
 // =====================================================================
 import { el, Screens, closeButton, elementChip, elementChips } from './ui.js';
 import { icon, iconSvg } from './icons.js';
-import { drawMythling } from '../render/creatures.js';
+import { drawCreature } from '../render/creatures.js';
 import { SPECIES, SPECIES_IDS, STARTER_IDS, skillsUnlockedAt } from '../data/species.js';
 import { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, buffSummary, skillStrength, isDamageSkill, SKILL_CATEGORY_LABEL, riderSummary, isSupportUltimate } from '../data/skills.js';
 import { MAX_EQUIPPED_SKILLS } from '../core/mythling.js';
@@ -83,7 +83,7 @@ function creature(speciesId, stage = 0, size = 92) {
   const ctx = cv.getContext('2d');
   ctx.save();
   ctx.translate(size / 2, size * 0.9);
-  drawMythling(ctx, {
+  drawCreature(ctx, {
     speciesId, stage, mutation: 'none',
     x: -size * 0.05, y: 0, size: size * 0.8, t: 0, facing: 1, shadow: false,
   });

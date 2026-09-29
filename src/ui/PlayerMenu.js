@@ -22,7 +22,7 @@ import { MAPS, MAP_ORDER } from '../data/maps.js';
 import { ELEMENTS, ELEMENT_ORDER, speciesElements } from '../data/elements.js';
 import { ChestManager } from '../systems/ChestManager.js';
 import { LEVEL_CAP, PARTY_MAX, ULTIMATE_UNLOCK_LEVEL } from '../data/config.js';
-import { drawMythling } from '../render/creatures.js';
+import { drawCreature } from '../render/creatures.js';
 import {
   el, button, bar, hpClass, elementChip, elementChips, rarityChip, mutationChip, toast, modal, closeModal, confirmDialog,
   Screens, panelHeader, closeButton,
@@ -136,7 +136,7 @@ export function mythCanvas(m, size = 66, animated = false) {
     ctx.scale(s, s);
     ctx.save();
     ctx.translate(size / 2, size * 0.88);
-    drawMythling(ctx, {
+    drawCreature(ctx, {
       speciesId: m.speciesId, stage: m.stage ?? 0, mutation: m.mutation || 'none',
       x: -size * 0.06, y: 0, size: size * 0.78, t, facing: 1, shadow: false,
     });

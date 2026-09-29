@@ -94,6 +94,7 @@ Optional headless regression test for the editor (drives the built file in jsdom
 | **Seals** | Locks **the move the foe just used** for 1–2 turns. It cannot be pressed while sealed, so the Mythling falls back on its unlimited Normal attack instead of losing the turn. The unlimited attack can never be sealed, so you are never left with nothing to do |
 | **Cheats** | Press **DEL** any time for the cheat menu: instant Wildcoins, or **GIVE ALL MYTHLINGS (SSS+)** — one of every species at its **highest form, Lv.100, SSS+**, sent straight to Mythling Storage (only as many as your bag has room for; nothing is ever released to make space). Mythling Storage also has a **Release All** button |
 | **Weather** | Two ways in, both limited to the **twelve specialists** (two per element). The **exclusive** (Lv.60, one per element, 42 power, 6 uses, 75 % chance) is the main event. The **light route** (Lv.40) is a weak **Normal** (15 power, 2 uses) and a stat **Buff** (3 uses), both at a 45 % chance — the Normal hits *less* than the element's first attack and the Buff gives the same stat gain as the plain Buffs, so the weather is the only real payoff. Either way it **changes the arena in real time and lasts for the rest of the battle** — until it ends, you run, or another weather replaces it. Skills that **match** the weather's element hit **×1.5 — for both sides**; a Mythling on the field that does not match takes **100 damage every turn (180 if it is weak to the weather)**, flat at every level |
+| **Secret settings** | **Ctrl + Enter**, from anywhere, opens a hidden panel that is not linked from any menu. It holds one switch, **HD Images**, off by default. On, and any Mythling or battle background that has a picture in `assets/` is drawn from that PNG instead of the animated rig; everything else keeps animating, and the roaming map is never touched. Battle keeps its particles, screen shake and the red hit-flash — only the model's own animation goes still. The offline build inlines the art as base64, so `file://` works too |
 | **Mutations** | Shiny ✧ (+1 to every stat) and Darkness ☾ (+2), with their own colours and aura |
 | **Legendaries stand out** | A legendary Mythling never looks like an ordinary card: wherever one appears — party, Mythling Storage, item and food pickers — its card gets a gold frame with a travelling sheen, a breathing aura and a **LEGENDARY** badge. Honours `prefers-reduced-motion` (it still looks legendary when the animation is off) |
 | **Clean stat readout** | Every card and the detail panel lead with the plain numbers — `HP: 1446 · P.ATK: 109 · S.ATK: 205 …` — no bars, no bonus arithmetic. The bars and the Mood/Rational `(+n)` nets stay on the detail panel for anyone who wants the breakdown |
@@ -448,3 +449,45 @@ Lv.60 `Verdantor / Tideron / Inferno / Cascadon / Galecrest` and Lv.80 `Floragon
 Ignidrake / Maelwolf / Zephyrax` stages, their skills, Ultimate tiers II & III, Map 4+, new elements
 and mutations, tournaments, quests, breeding, weather and day/night — the data structures and
 managers already account for them.
+
+---
+
+## Secret: HD Images mode
+
+A hidden panel, opened with **Ctrl + Enter** from any screen, holds a single
+switch: **HD Images**. It is off by default and saves like any other setting.
+
+Turning it on swaps pre-rendered PNGs in for the live creature rig — but only
+where a PNG actually exists. Every other Mythling keeps animating, and the
+roaming overworld map is deliberately left on the rig, because a creature that
+walks and turns cannot be a still.
+
+**How it works.** There is one switch point, `drawCreature()` in
+`src/render/creatures.js`. Every screen that *shows* a Mythling calls it;
+`drawMythling()` stays as the fallback, so a missing asset is a normal state
+rather than an error. Adding a species is dropping a PNG in `assets/mythlings/`
+and adding one line to `src/data/hdManifest.js` — no other file needs to know.
+
+| Asset key | File | Used for |
+|---|---|---|
+| `model:<species>:<stage>` | `assets/mythlings/<species>_<stage>.png` | that Mythling form, transparent |
+| `bg:<mapTheme>` | `assets/backgrounds/<theme>.jpg` | that battle arena |
+
+**In battle**, the creature models go still and the background becomes a
+picture. Particles, screen shake and the weather all still run: weather repaints
+the sky over the image exactly as it does over the painted one, and the
+full-arena tint lands on top unchanged. The hit reaction survives as a **red
+wash** driven by the same `flash` value the rig already computes, so a critical
+still reads harder than a glancing one.
+
+**Offline build.** `file://` cannot fetch a sibling PNG, so
+`tools/build-standalone.mjs` reads the manifest and inlines each asset as a
+base64 data URI. A missing or unreadable asset warns and is left as a path — the
+game then just falls back to the rig, it never breaks.
+
+**Art pipeline.** `tools/make-hd-image.py` turns a chroma-keyed raw drawing into
+a transparent model PNG: it keys out a flat backdrop, ramps the edge so the
+outline stays anti-aliased, trims to the creature and scales it.
+
+This is still a trial: only Spriggo's first form and the nature background have
+art, and Shiny / Darkness variants have none, so those keep animating.

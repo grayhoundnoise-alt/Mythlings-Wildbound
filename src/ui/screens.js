@@ -16,7 +16,7 @@ import { GAME_VERSION, LEVEL_CAP, STARTER_RARITY, BAG_TIERS, bagTier } from '../
 import { GameState, InventoryManager, PlayerManager, PartyManager, StorageManager, bus } from '../systems/GameState.js';
 import { ShopManager } from '../systems/ShopManager.js';
 import { displayName, maxHp, hpPercent, computeStats } from '../core/mythling.js';
-import { drawMythling } from '../render/creatures.js';
+import { drawCreature } from '../render/creatures.js';
 import { AudioManager } from '../systems/AudioManager.js';
 import { coins, formatTime, formatDate } from '../core/utils.js';
 
@@ -132,7 +132,7 @@ function portraitFor(s) {
   const ctx = cv.getContext('2d');
   if (s.starter && SPECIES[s.starter]) {
     ctx.save(); ctx.translate(32, 56);
-    drawMythling(ctx, { speciesId: s.starter, stage: 0, mutation: 'none', x: -4, y: 0, size: 52, t: 0, facing: 1, shadow: false });
+    drawCreature(ctx, { speciesId: s.starter, stage: 0, mutation: 'none', x: -4, y: 0, size: 52, t: 0, facing: 1, shadow: false });
     ctx.restore();
   }
   return cv;
@@ -197,7 +197,7 @@ export function starterScreen({ onChoose, onBack }) {
       const facing = spin >= 0 ? 1 : -1;
       const squash = 0.86 + Math.abs(spin) * 0.14;
       ctx.scale(Math.max(0.28, Math.abs(spin) * 0.6 + 0.55), 1);
-      drawMythling(ctx, {
+      drawCreature(ctx, {
         speciesId: id, stage: 0, mutation: 'none', x: 0, y: 0,
         size: 210, t, facing, shadow: true, pose: { squash: 1 },
       });
@@ -552,7 +552,7 @@ export function evolutionCinematic(mythling, result, onDone) {
     ctx.translate(230, 330);
     const s = 1 + (p < REVEAL ? 0.14 * p : 0.14 * (1 - (p - REVEAL) / 0.14));
     ctx.scale(s, s);
-    drawMythling(ctx, {
+    drawCreature(ctx, {
       speciesId: mythling.speciesId,
       stage: showNewForm(t, p) ? mythling.stage : fromStage,
       mutation: mythling.mutation,

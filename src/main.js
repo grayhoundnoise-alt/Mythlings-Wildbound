@@ -14,6 +14,7 @@ import { EvolutionManager } from './systems/EvolutionManager.js';
 import { ChestManager } from './systems/ChestManager.js';
 import { Battle, BattleType } from './systems/BattleManager.js';
 import { createMythling, displayName, maxHp, hpPercent, restoreAll, restoreUses, speciesOf, isFainted, stageForLevel } from './core/mythling.js';
+import { secretSettingsHotkey, syncHdMode } from './ui/secretSettings.js';
 import { MenuScene } from './scenes/MenuScene.js';
 import { OverworldScene } from './scenes/OverworldScene.js';
 import { BattleScene } from './scenes/BattleScene.js';
@@ -47,6 +48,7 @@ class Game {
     Screens.init();
     Dialogue.init();
     SettingsManager.load();
+    syncHdMode();          // secret HD Images flag -> renderer
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -112,6 +114,8 @@ class Game {
   }
 
   onKeyDown(e) {
+    // Ctrl + Enter opens the hidden settings panel, from any screen and mode.
+    if (secretSettingsHotkey(e)) return;
     const k = e.key.toLowerCase();
     // + / - zoom the world camera
     if (this.mode === 'overworld' && !Dialogue.open && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_')) {

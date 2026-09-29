@@ -12,7 +12,7 @@
 // The left ~36% of the frame is deliberately kept low-contrast and empty of
 // focal detail so the menu column stays readable at every supported size.
 // =============================================================================
-import { drawMythling } from '../render/creatures.js';
+import { drawCreature } from '../render/creatures.js';
 import { makeRng } from '../core/utils.js';
 
 const SKY_TOP = '#1f6fc4';
@@ -677,7 +677,7 @@ export class MenuScene {
       ctx.fillStyle = gl;
       ctx.beginPath(); ctx.arc(x, y - size * 0.3 + fly, size * 0.95, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-      drawMythling(ctx, {
+      drawCreature(ctx, {
         speciesId: a.species, stage: 0, mutation: 'none',
         x, y: y + fly, size, t: t + a.phase, facing: a.facing,
         pose: { expression: a.expression || 'happy' },

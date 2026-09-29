@@ -227,4 +227,8 @@ export const DEFAULT_SETTINGS = {
   damageNumbers: true,
   tutorialHints: true,
   confirmImportantActions: true,
+  // Secret. Only reachable from the hidden panel (Ctrl + Enter). Swaps Mythlings
+  // and battle backgrounds that have a PNG in HD_ASSETS over to stills; the
+  // roaming map and anything without a PNG keep animating.
+  hdImages: false,
 };

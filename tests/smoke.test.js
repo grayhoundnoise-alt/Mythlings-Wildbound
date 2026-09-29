@@ -1,6 +1,6 @@
 // Headless verification of the rules that matter most (no DOM required).
 // Run with:  npm test
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
 // minimal browser shims used by a couple of modules at import time
@@ -3178,6 +3178,95 @@ test('the wiki documents both ways to call weather, and lists the light callers'
   for (const id of LIGHT) {
     assert.ok(stxt.includes(SKILLS[id].name), `${SKILLS[id].name} appears in the Skills tab`);
   }
+});
+
+test('the secret HD Images mode: off by default, and every asset it names exists', async () => {
+  const { DEFAULT_SETTINGS } = await import('../src/data/config.js');
+  const { HD_ASSETS } = await import('../src/data/hdManifest.js');
+  const { hdEnabled, setHdEnabled, hdModelFor, hdBackdropFor } = await import('../src/render/hdImages.js');
+
+  // It has to start OFF: a secret mode must never surprise anyone on first run.
+  assert.equal(DEFAULT_SETTINGS.hdImages, false, 'HD Images is off by default');
+  assert.equal(hdEnabled(), false, 'and the renderer starts in the animated state');
+
+  // A manifest entry pointing at a file that is not there would silently fall
+  // back to the rig, so the art would just never appear. Catch it at test time.
+  const keys = Object.keys(HD_ASSETS);
+  assert.ok(keys.length > 0, 'the manifest is not empty');
+  for (const [key, rel] of Object.entries(HD_ASSETS)) {
+    const p = new URL(`../${rel}`, import.meta.url);
+    assert.ok(existsSync(p), `asset for ${key} exists on disk: ${rel}`);
+    assert.match(key, /^(model|bg):/, `${key} is namespaced`);
+  }
+  // Keys must be well formed, or a lookup can never find its art.
+  for (const key of keys.filter((k) => k.startsWith('model:'))) {
+    const [, speciesId, stage] = key.split(':');
+    assert.ok(SPECIES[speciesId], `model key names a real species: ${speciesId}`);
+    assert.equal(String(stage), '0', 'and a real stage');
+  }
+
+  // Off: no lookup ever returns art, whatever is asked for.
+  assert.equal(hdModelFor('spriggo', 0, 'none'), null, 'off returns no model');
+  assert.equal(hdBackdropFor('nature'), null, 'off returns no backdrop');
+
+  // On, but with no Image available in this environment, the loader must report
+  // "no art" rather than throw — that is the path every un-drawn species takes.
+  setHdEnabled(true);
+  try {
+    assert.equal(hdEnabled(), true, 'the flag flips');
+    // A species with art, and one without, must not behave differently in kind:
+    // both are allowed to return null here, neither may throw.
+    hdModelFor('spriggo', 0, 'none');
+    hdModelFor('aquini', 0, 'none');
+    hdBackdropFor('nature');
+    hdBackdropFor('fire');
+  } finally {
+    setHdEnabled(false);
+  }
+  assert.equal(hdEnabled(), false, 'and flips back off');
+});
+
+test('HD mode only reaches the screens that show a Mythling, never the roaming map', async () => {
+  // Every UI/scene that DISPLAYS a Mythling must go through the drawCreature
+  // switch, or the secret toggle would not affect it.
+  for (const f of ['../src/ui/screens.js', '../src/ui/PlayerMenu.js', '../src/scenes/MenuScene.js',
+    '../src/ui/wiki.js', '../src/scenes/BattleScene.js']) {
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.ok(src.includes('drawCreature('), `${f} draws through the switch`);
+    assert.match(src, /import \{[^}]*\bdrawCreature\b[^}]*\} from '\.\.\/render\/creatures\.js'/,
+      `${f} actually imports drawCreature (a missing import is a runtime crash)`);
+  }
+  // The roaming map deliberately keeps the rig: a creature that walks and turns
+  // cannot be a still.
+  const ow = readFileSync(new URL('../src/scenes/OverworldScene.js', import.meta.url), 'utf8');
+  assert.ok(ow.includes('drawMythling('), 'the overworld still animates');
+  assert.ok(!ow.includes('drawCreature'), 'and is never routed through the HD switch');
+});
+
+test('the secret panel is hidden: Ctrl+Enter only, and not in the settings screen', async () => {
+  const sec = readFileSync(new URL('../src/ui/secretSettings.js', import.meta.url), 'utf8');
+  assert.match(sec, /e\.ctrlKey && e\.key === 'Enter'/, 'the hotkey is Ctrl+Enter and nothing else');
+  assert.ok(!/metaKey|shiftKey|ctrlKey && e\.key === 'e'/.test(sec), 'no accidental second binding');
+
+  // It must be reachable ONLY by the hotkey: no button, no menu entry, and the
+  // normal settings screen must not mention it.
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.ok(main.includes('secretSettingsHotkey(e)'), 'main.js binds the hotkey');
+  const menu = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
+  assert.ok(!menu.includes('hdImages'), 'the main menu never offers it');
+  const pm = readFileSync(new URL('../src/ui/PlayerMenu.js', import.meta.url), 'utf8');
+  const settingsBlock = pm.slice(pm.indexOf('export function settingsPanel'), pm.indexOf('export function settingsPanel') + 4000);
+  assert.ok(!settingsBlock.includes('hdImages'), 'the settings screen never lists it');
+  assert.ok(!settingsBlock.includes('Secret'), 'and gives no hint that it exists');
+});
+
+test('the offline build inlines the HD art so file:// keeps working', async () => {
+  const build = readFileSync(new URL('../tools/build-standalone.mjs', import.meta.url), 'utf8');
+  assert.match(build, /data:\$\{mime\};base64/, 'the bundler writes data URIs');
+  assert.match(build, /hdManifest\.js/, 'and reads the manifest to know what to inline');
+  // A missing file must warn, not throw, or an absent optional asset would
+  // break every build.
+  assert.match(build, /existsSync/, 'it checks the file is there first');
 });
 
 test('every species can be minted at its top form, Lv.100, SSS+', async () => {

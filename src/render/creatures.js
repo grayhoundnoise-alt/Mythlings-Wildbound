@@ -15,12 +15,29 @@ import {
   CreatureAssetLoader, creatureAssets, ANIMATIONS, ANIM_IDS,
 } from './creatureRig.js';
 import { EXPRESSIONS, SPECIES_ART, artFor } from './creatureArt.js';
+import { hdEnabled, hdModelFor, drawHdModel } from './hdImages.js';
 
 export {
   drawMythling, prewarm, CreatureRig, CreatureAnimationController,
   CreatureAssetLoader, creatureAssets, ANIMATIONS, ANIM_IDS,
   EXPRESSIONS, SPECIES_ART, artFor,
 };
+
+/**
+ * The one place that decides "PNG or rig" — every UI and scene that shows a
+ * Mythling calls this instead of drawMythling, so the secret HD Images toggle
+ * switches the whole game at once. Anything without a PNG keeps animating.
+ *
+ * `force: true` skips the lookup and always animates. The roaming overworld
+ * map uses that, because a creature that walks and turns needs the rig.
+ */
+export function drawCreature(ctx, o) {
+  if (!o.force) {
+    const img = hdModelFor(o.speciesId, o.stage ?? 0, o.mutation);
+    if (img) { drawHdModel(ctx, img, o); return; }
+  }
+  drawMythling(ctx, o);
+}
 
 /** Renders a Mythling to an offscreen canvas (used for list icons). */
 export function mythlingIcon(speciesId, stage, mutation, px = 72) {
