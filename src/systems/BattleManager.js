@@ -439,6 +439,9 @@ export class Battle {
       if (skill.utility) this._applyUtility(skill.utility, attacker, defender, events, atkSide, defSide);
       this._applyStatusRiders(skill, attacker, defender, events, atkSide, defSide);
       this._rollWeather(skill, events);
+      // A Buff builds the Ultimate bar by 1. It always resolves (support never
+      // misses), so the point is never lost.
+      if (skill.category === 'buff') this._grantUltimateCharge(attacker, atkSide, events);
       this.cb(defender).lastHit = 0;   // a foe that only buffed / debuffed leaves nothing to retaliate against
       return;
     }
@@ -660,6 +663,21 @@ export class Battle {
   }
 
   /**
+   * One point of Ultimate Charge, and the "READY" call when the bar fills.
+   * Normal and Special attacks grant it when they land; a Buff grants it too,
+   * so choosing a support button is never a dead turn for the Ultimate. Debuffs
+   * still do not: they act on the foe rather than building the Mythling.
+   */
+  _grantUltimateCharge(attacker, atkSide, events) {
+    const c = addUltimateCharge(attacker, 1);
+    events.push({ type: 'charge', side: atkSide, value: c, uid: attacker.uid });
+    if (c === ULTIMATE_MAX_CHARGE && ultimateUnlocked(attacker)) {
+      events.push({ type: 'ultimate-ready', side: atkSide });
+      events.push({ type: 'log', text: `${displayName(attacker)}'s Ultimate is READY! (8/8)`, emphasis: true });
+    }
+  }
+
+  /**
    * Sleep / Seal riders, both landing on the foe. Sleep is capped at
    * SLEEP_MAX_TURNS however often it is re-applied; a Seal locks the move the foe
    * JUST used and can never take away its unlimited Normal attack.
@@ -873,14 +891,9 @@ export class Battle {
       }
     }
 
-    // Ultimate charge for successful damaging Normal/Special attacks only.
+    // Ultimate charge for successful damaging Normal/Special attacks.
     if (!isUltimate && (move.category === 'normal' || move.category === 'special')) {
-      const c = addUltimateCharge(attacker, 1);
-      events.push({ type: 'charge', side: atkSide, value: c, uid: attacker.uid });
-      if (c === ULTIMATE_MAX_CHARGE && ultimateUnlocked(attacker)) {
-        events.push({ type: 'ultimate-ready', side: atkSide });
-        events.push({ type: 'log', text: `${displayName(attacker)}'s Ultimate is READY! (8/8)`, emphasis: true });
-      }
+      this._grantUltimateCharge(attacker, atkSide, events);
     }
 
     // Optional Sleep / Seal riders

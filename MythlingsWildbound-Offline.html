@@ -3904,6 +3904,146 @@ h3 .name-el { vertical-align: middle; }
       weather: { id: "miasma", chance: 0.75 },
       desc: "EXCLUSIVE \u2014 the fen exhales. Calls down Miasma."
     },
+    // ---------- WEATHER: Buff + Normal callers ----------
+    // The six exclusives above are the heavyweight way in. These are the cheap
+    // ways in: a light Normal and a stat Buff, one pair per weather element, for
+    // the species that already carry the matching exclusive.
+    //
+    // Deliberately stingy, because weather is a big swing: x1.5 to matching-
+    // element skills for BOTH sides plus a flat 100 HP a turn to anyone who
+    // does not match, and it lasts the rest of the battle.
+    //   * Normals sit BELOW the 17/30 first rung of every elemental ladder --
+    //     the weather is the payoff, the damage is the entry fee.
+    //   * Only 2 / 3 uses, at a 45% roll, so a battle sees roughly one call.
+    //   * A Buff gives the SAME stat gain as the plain stat Buffs, so it is
+    //     never strictly better -- the weather is the bonus, not a second
+    //     stat boost smuggled in on top.
+    ember_flicker: {
+      id: "ember_flicker",
+      name: "Ember Flicker",
+      category: "normal",
+      damageType: "special",
+      element: "fire",
+      power: 15,
+      uses: 2,
+      weather: { id: "wildfire", chance: 0.45 },
+      desc: "A flicker of flame. May call down Wildfire."
+    },
+    drizzle: {
+      id: "drizzle",
+      name: "Drizzle",
+      category: "normal",
+      damageType: "special",
+      element: "water",
+      power: 15,
+      uses: 2,
+      weather: { id: "monsoon", chance: 0.45 },
+      desc: "A thin rain. May call down Monsoon."
+    },
+    spore_surge: {
+      id: "spore_surge",
+      name: "Spore Surge",
+      category: "normal",
+      damageType: "special",
+      element: "nature",
+      power: 15,
+      uses: 2,
+      weather: { id: "overgrowth", chance: 0.45 },
+      desc: "A heaving wave of spores. May call down Overgrowth."
+    },
+    static_tick: {
+      id: "static_tick",
+      name: "Static Tick",
+      category: "normal",
+      damageType: "special",
+      element: "electric",
+      power: 15,
+      uses: 2,
+      weather: { id: "thunderhead", chance: 0.45 },
+      desc: "A crackling touch. May call down Thunderhead."
+    },
+    frost_sigh: {
+      id: "frost_sigh",
+      name: "Frost Sigh",
+      category: "normal",
+      damageType: "special",
+      element: "ice",
+      power: 15,
+      uses: 2,
+      weather: { id: "blizzard", chance: 0.45 },
+      desc: "A breath of frost. May call down Blizzard."
+    },
+    miasma_puff: {
+      id: "miasma_puff",
+      name: "Miasma Puff",
+      category: "normal",
+      damageType: "special",
+      element: "poison",
+      power: 15,
+      uses: 2,
+      weather: { id: "miasma", chance: 0.45 },
+      desc: "A cloud of spores. May call down Miasma."
+    },
+    cinder_chant: {
+      id: "cinder_chant",
+      name: "Cinder Chant",
+      category: "buff",
+      uses: 3,
+      element: "fire",
+      effects: [{ stat: "patk", amount: 4 }],
+      weather: { id: "wildfire", chance: 0.45 },
+      desc: "P.ATK up. May call down Wildfire."
+    },
+    tidal_chant: {
+      id: "tidal_chant",
+      name: "Tidal Chant",
+      category: "buff",
+      uses: 3,
+      element: "water",
+      effects: [{ stat: "pdef", amount: 4 }],
+      weather: { id: "monsoon", chance: 0.45 },
+      desc: "P.DEF up. May call down Monsoon."
+    },
+    verdant_chant: {
+      id: "verdant_chant",
+      name: "Verdant Chant",
+      category: "buff",
+      uses: 3,
+      element: "nature",
+      effects: [{ stat: "sdef", amount: 4 }],
+      weather: { id: "overgrowth", chance: 0.45 },
+      desc: "S.DEF up. May call down Overgrowth."
+    },
+    voltaic_chant: {
+      id: "voltaic_chant",
+      name: "Voltaic Chant",
+      category: "buff",
+      uses: 3,
+      element: "electric",
+      effects: [{ stat: "spd", amount: 5 }],
+      weather: { id: "thunderhead", chance: 0.45 },
+      desc: "SPEED up. May call down Thunderhead."
+    },
+    rime_chant: {
+      id: "rime_chant",
+      name: "Rime Chant",
+      category: "buff",
+      uses: 3,
+      element: "ice",
+      effects: [{ stat: "satk", amount: 4 }],
+      weather: { id: "blizzard", chance: 0.45 },
+      desc: "S.ATK up. May call down Blizzard."
+    },
+    fen_chant: {
+      id: "fen_chant",
+      name: "Fen Chant",
+      category: "buff",
+      uses: 3,
+      element: "poison",
+      effects: [{ stat: "counter", amount: 4 }],
+      weather: { id: "miasma", chance: 0.45 },
+      desc: "COUNTER up. May call down Miasma."
+    },
     // ---------- WATER / FIRE PHYSICAL (P.ATK) LADDERS ----------
     // Water and Fire were the only elements with no Physical elemental ladder of
     // their own: every one of their specials used Special (S.ATK), so a Water or
@@ -5681,6 +5821,36 @@ h3 .name-el { vertical-align: middle; }
     water: { 1: ["brine_snap"], 20: ["tide_fang"], 60: ["undertow_rush"], 80: ["maelstrom_crush"] },
     fire: { 1: ["ember_claw"], 60: ["furnace_lunge"], 80: ["inferno_maul"] }
   };
+  var WEATHER_UNLOCKS = {
+    fire: { 40: ["ember_flicker", "cinder_chant"] },
+    water: { 40: ["drizzle", "tidal_chant"] },
+    nature: { 40: ["spore_surge", "verdant_chant"] },
+    electric: { 40: ["static_tick", "voltaic_chant"] },
+    ice: { 40: ["frost_sigh", "rime_chant"] },
+    poison: { 40: ["miasma_puff", "fen_chant"] }
+  };
+  var WEATHER_SPECIES = /* @__PURE__ */ new Set([
+    "emberu",
+    "magmataur",
+    "aquini",
+    "tidewyrm",
+    "spriggo",
+    "thornhound",
+    "voltkit",
+    "zapwing",
+    "icecarap",
+    "frostling",
+    "venoviper",
+    "venomyr"
+  ]);
+  function weatherLadderFor(sp) {
+    if (!WEATHER_SPECIES.has(sp.id)) return {};
+    const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
+    for (const el2 of els) {
+      if (WEATHER_UNLOCKS[el2]) return WEATHER_UNLOCKS[el2];
+    }
+    return {};
+  }
   function isPhysicalAttacker(sp) {
     var _a, _b;
     return (((_a = sp.baseStats) == null ? void 0 : _a.patk) ?? 0) > (((_b = sp.baseStats) == null ? void 0 : _b.satk) ?? 0);
@@ -5705,9 +5875,10 @@ h3 .name-el { vertical-align: middle; }
     if (els.includes("poison")) {
       for (const key of Object.keys(POISON_UNLOCKS)) if (level >= Number(key)) out.push(...POISON_UNLOCKS[key]);
     }
-    const ladder = physicalLadderFor(sp);
-    for (const key of Object.keys(ladder)) {
-      if (level >= Number(key)) out.push(...ladder[key]);
+    for (const ladder of [physicalLadderFor(sp), weatherLadderFor(sp)]) {
+      for (const key of Object.keys(ladder)) {
+        if (level >= Number(key)) out.push(...ladder[key]);
+      }
     }
     return out;
   }
@@ -5730,7 +5901,7 @@ h3 .name-el { vertical-align: middle; }
       if (best == null || lv < best) best = lv;
     }
     const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
-    for (const table2 of [els.includes("fire") ? BURN_UNLOCKS : null, els.includes("poison") ? POISON_UNLOCKS : null, physicalLadderFor(sp)]) {
+    for (const table2 of [els.includes("fire") ? BURN_UNLOCKS : null, els.includes("poison") ? POISON_UNLOCKS : null, physicalLadderFor(sp), weatherLadderFor(sp)]) {
       if (!table2) continue;
       for (const key of Object.keys(table2)) {
         if (!table2[key].includes(skillId)) continue;
@@ -8149,6 +8320,7 @@ h3 .name-el { vertical-align: middle; }
         if (skill.utility) this._applyUtility(skill.utility, attacker, defender, events, atkSide, defSide);
         this._applyStatusRiders(skill, attacker, defender, events, atkSide, defSide);
         this._rollWeather(skill, events);
+        if (skill.category === "buff") this._grantUltimateCharge(attacker, atkSide, events);
         this.cb(defender).lastHit = 0;
         return;
       }
@@ -8372,6 +8544,20 @@ h3 .name-el { vertical-align: middle; }
       }
     }
     /**
+     * One point of Ultimate Charge, and the "READY" call when the bar fills.
+     * Normal and Special attacks grant it when they land; a Buff grants it too,
+     * so choosing a support button is never a dead turn for the Ultimate. Debuffs
+     * still do not: they act on the foe rather than building the Mythling.
+     */
+    _grantUltimateCharge(attacker, atkSide, events) {
+      const c = addUltimateCharge(attacker, 1);
+      events.push({ type: "charge", side: atkSide, value: c, uid: attacker.uid });
+      if (c === ULTIMATE_MAX_CHARGE && ultimateUnlocked(attacker)) {
+        events.push({ type: "ultimate-ready", side: atkSide });
+        events.push({ type: "log", text: `${displayName(attacker)}'s Ultimate is READY! (8/8)`, emphasis: true });
+      }
+    }
+    /**
      * Sleep / Seal riders, both landing on the foe. Sleep is capped at
      * SLEEP_MAX_TURNS however often it is re-applied; a Seal locks the move the foe
      * JUST used and can never take away its unlimited Normal attack.
@@ -8561,12 +8747,7 @@ h3 .name-el { vertical-align: middle; }
         }
       }
       if (!isUltimate && (move.category === "normal" || move.category === "special")) {
-        const c = addUltimateCharge(attacker, 1);
-        events.push({ type: "charge", side: atkSide, value: c, uid: attacker.uid });
-        if (c === ULTIMATE_MAX_CHARGE && ultimateUnlocked(attacker)) {
-          events.push({ type: "ultimate-ready", side: atkSide });
-          events.push({ type: "log", text: `${displayName(attacker)}'s Ultimate is READY! (8/8)`, emphasis: true });
-        }
+        this._grantUltimateCharge(attacker, atkSide, events);
       }
       this._applyStatusRiders(move, attacker, defender, events, atkSide, defSide);
       if (move.debuff && this.rng() < move.debuff.chance) {
@@ -19859,9 +20040,15 @@ h3 .name-el { vertical-align: middle; }
       <b>unlimited Normal attack can never be sealed</b>, so you are never left with nothing to do \u2014 and the enemy
       AI will not walk into its own seal either. A Cleanse Tonic unseals it.`),
       h3("Weather", "weather field storm wildfire monsoon blizzard thunderhead overgrowth miasma"),
-      para(`A handful of <b>exclusive</b> skills \u2014 one per element, carried by only a few Mythlings \u2014 can call down a
-      weather. It changes the battlefield <b>in real time</b> and then <b>lasts for the rest of the battle</b>:
-      it only goes away when the fight ends, you run, or another weather replaces it.`),
+      para(`Weather is called in one of two ways, both tied to the same twelve specialists \u2014 the two Mythlings per
+      element that hold the heavy version. It changes the battlefield <b>in real time</b> and then
+      <b>lasts for the rest of the battle</b>: it only goes away when the fight ends, you run, or another
+      weather replaces it.`),
+      bullets([
+        `<b>The exclusive</b> (Lv.60, one per element) \u2014 a strong Special, 42 power, 6 uses, 75% chance. The main event.`,
+        `<b>The light route</b> (Lv.40) \u2014 a weak <b>Normal</b> (15 power, 2 uses) and a stat <b>Buff</b> (3 uses), both at a 45% chance. The Normal hits <i>less</i> than the element's first attack: the weather is the payoff, the damage is only the entry fee. The Buff gives the same stat gain as the plain Buffs, so it is never strictly better.`,
+        `Every one of them is a <b>roll</b>, not a guarantee \u2014 and picking one still costs you the turn.`
+      ]),
       bullets([
         `Skills whose element <b>matches the weather</b> hit <b>x${WEATHER_BOOST}</b> \u2014 for <b>both sides</b>. A dual-element Mythling only needs one of its elements to match to be safe.`,
         `The boost is paid to <b>matching skills only</b>: an element-less move like Bite gets nothing, even in a Mythling that matches the weather.`,
@@ -19870,10 +20057,10 @@ h3 .name-el { vertical-align: middle; }
       ]),
       table(WEATHER_IDS.map((id) => {
         const w = WEATHERS[id];
-        const owners = Object.values(SPECIES).filter((sp) => Object.values(sp.skillUnlocks || {}).some((ids) => ids.some((sid) => {
+        const owners = Object.values(SPECIES).filter((sp) => skillsUnlockedAt(sp.id, 99).some((sid) => {
           var _a, _b;
           return ((_b = (_a = SKILLS[sid]) == null ? void 0 : _a.weather) == null ? void 0 : _b.id) === id;
-        }))).map((sp) => sp.displayName);
+        })).map((sp) => sp.displayName);
         return [`<b style="color:${ELEMENTS[w.element].color}">${w.name}</b>`, `${ELEMENTS[w.element].name} \xB7 ${w.desc}<br><span class="wiki-dim">Raised by: ${owners.join(", ") || "\u2014"}</span>`];
       }), "weather list wildfire monsoon overgrowth thunderhead blizzard miasma")
     ];

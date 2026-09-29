@@ -89,7 +89,7 @@ const { elementMultiplier } = await import('../src/data/elements.js');
 const { moodModifiers, MOODS, STAT_KEYS, RATIONALS, RATIONAL_IDS, rationalModifiers, normalizeMoodId, traitModifiers } = await import('../src/data/moods.js');
 const { counterDodgePercent, COUNTER_MAX_DODGE, CRIT_MAX_PERCENT, RATIONAL_AMOUNT } = await import('../src/data/config.js');
 const { MAPS } = await import('../src/data/maps.js');
-const { SPECIES, SPECIES_IDS } = await import('../src/data/species.js');
+const { SPECIES, SPECIES_IDS, skillsUnlockedAt } = await import('../src/data/species.js');
 
 const { maxHp: maxHpOf } = await import('../src/core/mythling.js');
 const mythlingApi = await import('../src/core/mythling.js');
@@ -807,7 +807,129 @@ test('elite support skills carry two effects; foe-side entries are always debuff
   const r = b.act({ type: 'skill', index: 0 });
   assert.ok(r.events.some((x) => x.type === 'buff' && x.side === 'player' && x.stat === 'patk'), 'own P.ATK up');
   assert.ok(r.events.some((x) => x.type === 'debuff' && x.side === 'enemy' && x.stat === 'pdef'), 'foe P.DEF down');
-  assert.equal(p.ultCharge, 0, 'support skills never charge the Ultimate');
+  assert.equal(p.ultCharge, 1, 'a Buff charges the Ultimate by 1 — support is never a dead turn for it');
+});
+
+test('weather can be called by a Normal and a Buff, not only by the exclusives', () => {
+  const WEATHER_IDS = ['wildfire', 'monsoon', 'overgrowth', 'thunderhead', 'blizzard', 'miasma'];
+  const { getSkill: sk } = SKILLS_MOD;
+
+  // The cheap route: one light Normal + one stat Buff per weather element.
+  const PAIRS = [
+    ['ember_flicker', 'cinder_chant', 'wildfire', 'fire'],
+    ['drizzle', 'tidal_chant', 'monsoon', 'water'],
+    ['spore_surge', 'verdant_chant', 'overgrowth', 'nature'],
+    ['static_tick', 'voltaic_chant', 'thunderhead', 'electric'],
+    ['frost_sigh', 'rime_chant', 'blizzard', 'ice'],
+    ['miasma_puff', 'fen_chant', 'miasma', 'poison'],
+  ];
+  for (const [normal, buff, weatherId, element] of PAIRS) {
+    const n = sk(normal), b = sk(buff);
+    assert.ok(n && b, `${normal} / ${buff} both exist`);
+    assert.equal(n.category, 'normal', `${normal} is a Normal attack`);
+    assert.equal(b.category, 'buff', `${buff} is a Buff`);
+    for (const s of [n, b]) {
+      assert.equal(s.element, element, `${s.id} carries the ${element} element so it gets the x1.5`);
+      assert.deepEqual(s.weather, { id: weatherId, chance: 0.45 }, `${s.id} calls ${weatherId} at 45%`);
+      assert.ok(WEATHER_IDS.includes(s.weather.id), `${s.id} names a real weather`);
+    }
+    // A Normal is a WEAKER attack than the element's first rung (17 power) --
+    // the weather is the payoff, the damage is the entry fee.
+    assert.ok(n.power < 17, `${normal} sits below the 17/30 first rung`);
+    assert.ok(n.uses <= 3 && b.uses <= 3, `${normal}/${buff} are rare, not spammable`);
+    // A Buff must not smuggle in a second stat boost on top of the weather: it
+    // may never beat the best plain Buff for the same stat.
+    const best = Math.max(...Object.values(SKILLS_MOD.SKILLS)
+      .filter((x) => x.category === 'buff' && !x.weather && x.effects?.length === 1
+        && x.effects[0].stat === b.effects[0].stat)
+      .map((x) => x.effects[0].amount));
+    assert.ok(best && b.effects[0].amount <= best,
+      `${buff} raises ${b.effects[0].stat} by ${b.effects[0].amount}, no more than the best plain Buff (${best})`);
+  }
+
+  // Only the twelve specialists may call weather; nobody else gets a free sky.
+  const CALLERS = new Set(PAIRS.flatMap(([n, b]) => [n, b]));
+  const EXCLUSIVES = new Set(['magma_storm', 'monsoon_call', 'worldroot_crown', 'thunder_caller', 'glacial_age', 'miasma_bloom']);
+  const weatherIds = Object.values(SKILLS_MOD.SKILLS).filter((x) => x.weather).map((x) => x.id);
+  let callers = 0;
+  for (const sp of Object.values(SPECIES)) {
+    const known = skillsUnlockedAt(sp.id, 99);
+    const has = weatherIds.filter((id) => known.includes(id));
+    const hasExclusive = has.some((id) => EXCLUSIVES.has(id));
+    if (has.some((id) => CALLERS.has(id))) {
+      callers++;
+      assert.ok(hasExclusive, `${sp.displayName} may call weather only if it holds the exclusive`);
+      assert.ok(has.length >= 3, `${sp.displayName} gets its Normal, its Buff and its exclusive`);
+    } else {
+      assert.equal(has.length, 0, `${sp.displayName} gets no weather caller`);
+    }
+  }
+  assert.equal(callers, 12, 'exactly twelve species may call weather — two per element');
+});
+
+test('a weather Normal or Buff actually raises the weather in battle', () => {
+  // A uniform roll: 0.0 always passes the 45% weather check, 0.99 always fails
+  // it. (0.0 also suppresses the hit itself, so the "still attacks" case uses
+  // 0.99, which fails the weather roll but lands the blow.)
+  const fight = (speciesId, skillId, roll) => {
+    const p = createMythling({ speciesId, level: 50, stage: 1, rational: 'docile' });
+    p.library.push(skillId); p.skills = [skillId];
+    const e = createMythling({ speciesId: 'gravelhog', level: 50, stage: 1, rational: 'docile' });
+    const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'emberwild', rng: () => roll });
+    b.weather = null;
+    const r = b.act({ type: 'skill', index: 0 });
+    return { weather: b.weather, events: r.events, p, e };
+  };
+
+  const hit = fight('emberu', 'ember_flicker', 0.0);
+  assert.equal(hit.weather, 'wildfire', 'a Normal can raise weather');
+  assert.ok(hit.events.some((x) => x.type === 'weather' && x.id === 'wildfire'), 'and it is announced');
+  const miss = fight('emberu', 'ember_flicker', 0.99);
+  assert.equal(miss.weather, null, 'a failed roll raises nothing');
+
+  // A Buff does the same while staying support: it deals no damage, and it
+  // still charges the Ultimate by 1.
+  const buffed = fight('magmataur', 'cinder_chant', 0.0);
+  assert.equal(buffed.weather, 'wildfire', 'a Buff can raise weather');
+  assert.ok(!buffed.events.some((x) => x.type === 'damage'), 'but a Buff still deals no damage');
+  assert.ok(buffed.events.some((x) => x.type === 'buff' && x.stat === 'patk'), 'and still raises its stat');
+  assert.equal(buffed.p.ultCharge, 1, 'and still charges the Ultimate');
+  assert.equal(buffed.events.filter((x) => x.type === 'charge').length, 1, 'exactly one point, not two');
+
+  // The caller is a real attack, not a weather button that does nothing.
+  const landed = fight('emberu', 'ember_flicker', 0.99);
+  assert.ok(landed.events.some((x) => x.type === 'damage'), 'the Normal still attacks');
+  assert.equal(landed.p.ultCharge, 1, 'and still charges the Ultimate');
+});
+
+test('a Buff charges the Ultimate by 1; a Debuff does not', () => {
+  // Picking a support button used to be a dead turn for the Ultimate bar, so a
+  // player who opened with Power Up paid for it with a whole turn of charge.
+  const chargeAfter = (speciesId, skillId) => {
+    const p = createMythling({ speciesId, level: 30, stage: 1, rational: 'docile' });
+    p.library.push(skillId); p.skills = [skillId];
+    const e = createMythling({ speciesId: 'gravelhog', level: 30, stage: 1, rational: 'docile' });
+    const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.5 });
+    const before = p.ultCharge;
+    b.act({ type: 'skill', index: 0 });
+    return p.ultCharge - before;
+  };
+  assert.equal(chargeAfter('spriggo', 'mind_up'), 1, 'a Buff grants a point');
+  assert.equal(chargeAfter('spriggo', 'power_up'), 1, 'every Buff does, whatever it raises');
+  assert.equal(chargeAfter('spriggo', 'vine_lash'), 1, 'a Special attack still grants one');
+  assert.equal(chargeAfter('spriggo', 'bite'), 1, 'a Normal attack still grants one');
+  assert.equal(chargeAfter('spriggo', 'weaken'), 0, 'a Debuff acts on the foe and grants nothing');
+
+  // and the bar still calls READY when the last point comes from a Buff
+  const p = createMythling({ speciesId: 'spriggo', level: 30, stage: 1, rational: 'docile' });
+  p.library.push('mind_up'); p.skills = ['mind_up'];
+  const e = createMythling({ speciesId: 'gravelhog', level: 30, stage: 1, rational: 'docile' });
+  const b = new Battle({ type: BattleType.WILD, party: [p], enemies: [e], mapId: 'verdant_vale', rng: () => 0.5 });
+  p.ultCharge = 7;
+  const { events } = b.act({ type: 'skill', index: 0 });
+  assert.equal(p.ultCharge, 8, 'the eighth point comes from the Buff');
+  assert.ok(events.some((x) => x.type === 'ultimate-ready'), 'and the READY call still fires');
+  assert.ok(events.some((x) => x.type === 'charge' && x.value === 8), 'and the HUD is told the new value');
 });
 
 test('support Ultimates deal no damage and apply two Ultimate-grade effects', () => {
@@ -3025,6 +3147,37 @@ test('the wiki has a tab for Sleep, Seals & Weather', async () => {
   const battle = WIKI_SECTIONS.find((x) => x[0] === 'battle');
   const btxt = walk(battle[3]()).map((n) => `${n.innerHTML || ''} ${n.textContent || ''}`).join(' ');
   assert.ok(/SLEEP, SEALS/.test(btxt), 'and the battle rules signpost it');
+});
+
+test('the wiki documents both ways to call weather, and lists the light callers', async () => {
+  const { WIKI_SECTIONS } = await import('../src/ui/wiki.js');
+  const { SKILLS } = SKILLS_MOD;
+  const walk = (ns) => ns.flatMap((n) => [n, ...((n.children || []).length ? walk(n.children) : [])]);
+  const read = (nodes) => walk(nodes).map((n) => `${n.innerHTML || ''} ${n.textContent || ''}`).join(' ');
+
+  const tab = WIKI_SECTIONS.find((x) => x[0] === 'status');
+  const txt = read(tab[3]());
+  // The old page only mentioned the Lv.60 exclusives, so a player had no way to
+  // learn that a Normal or a Buff could raise the sky too.
+  assert.ok(/light route/i.test(txt), 'the weather tab explains the light (Lv.40) route');
+  for (const n of ['2 uses', '3 uses', '15 power', '45%', '75%']) {
+    assert.ok(txt.includes(n), `and states the real numbers: ${n}`);
+  }
+  // Owner lists must be built from the central grants, or the light callers go
+  // unlisted in the wiki even though the battle grants them.
+  const LIGHT = ['ember_flicker', 'cinder_chant', 'drizzle', 'tidal_chant', 'spore_surge',
+    'verdant_chant', 'static_tick', 'voltaic_chant', 'frost_sigh', 'rime_chant', 'miasma_puff', 'fen_chant'];
+  assert.ok((txt.match(/Raised by:/g) || []).length === 6, 'one owner line per weather');
+  for (const name of ['Emberu', 'Aquini', 'Spriggo', 'Voltkit', 'Icecarap', 'Venoviper']) {
+    assert.ok(txt.includes(name), `${name} is listed as a weather caller`);
+  }
+
+  // and every new skill is findable in the Skills tab
+  const sk = WIKI_SECTIONS.find((x) => x[0] === 'skills');
+  const stxt = read(sk[3]());
+  for (const id of LIGHT) {
+    assert.ok(stxt.includes(SKILLS[id].name), `${SKILLS[id].name} appears in the Skills tab`);
+  }
 });
 
 test('every species can be minted at its top form, Lv.100, SSS+', async () => {

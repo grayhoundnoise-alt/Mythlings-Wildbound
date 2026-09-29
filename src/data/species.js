@@ -1028,6 +1028,42 @@ const ELEMENT_PHYSICAL_UNLOCKS = {
   fire:  { 1: ['ember_claw'], 60: ['furnace_lunge'], 80: ['inferno_maul'] },
 };
 
+/**
+ * WEATHER: the cheap ways to call the sky in.
+ *
+ * The Lv.60 exclusives (Magma Storm, Monsoon Call, ...) are the heavyweight
+ * route. These are the light one: a weak Normal and a stat Buff, one pair per
+ * weather element, both at Lv.40.
+ *
+ * Deliberately limited to the twelve species that already carry the matching
+ * exclusive, so weather stays tied to the specialists instead of spreading to
+ * every Mythling. Granted centrally, like the Burn / Poison / Physical ladders.
+ */
+const WEATHER_UNLOCKS = {
+  fire:     { 40: ['ember_flicker', 'cinder_chant'] },
+  water:    { 40: ['drizzle', 'tidal_chant'] },
+  nature:   { 40: ['spore_surge', 'verdant_chant'] },
+  electric: { 40: ['static_tick', 'voltaic_chant'] },
+  ice:      { 40: ['frost_sigh', 'rime_chant'] },
+  poison:   { 40: ['miasma_puff', 'fen_chant'] },
+};
+
+/** The species allowed to call weather — the two per element that hold the exclusive. */
+const WEATHER_SPECIES = new Set([
+  'emberu', 'magmataur', 'aquini', 'tidewyrm', 'spriggo', 'thornhound',
+  'voltkit', 'zapwing', 'icecarap', 'frostling', 'venoviper', 'venomyr',
+]);
+
+/** The weather pair this species earns, keyed by level. Empty if it cannot call weather. */
+function weatherLadderFor(sp) {
+  if (!WEATHER_SPECIES.has(sp.id)) return {};
+  const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
+  for (const el of els) {
+    if (WEATHER_UNLOCKS[el]) return WEATHER_UNLOCKS[el];
+  }
+  return {};
+}
+
 /** Does this species hit with its fists rather than its mind? */
 function isPhysicalAttacker(sp) {
   return (sp.baseStats?.patk ?? 0) > (sp.baseStats?.satk ?? 0);
@@ -1056,9 +1092,10 @@ function sharedUnlocksFor(sp, level) {
   if (els.includes('poison')) {
     for (const key of Object.keys(POISON_UNLOCKS)) if (level >= Number(key)) out.push(...POISON_UNLOCKS[key]);
   }
-  const ladder = physicalLadderFor(sp);
-  for (const key of Object.keys(ladder)) {
-    if (level >= Number(key)) out.push(...ladder[key]);
+  for (const ladder of [physicalLadderFor(sp), weatherLadderFor(sp)]) {
+    for (const key of Object.keys(ladder)) {
+      if (level >= Number(key)) out.push(...ladder[key]);
+    }
   }
   return out;
 }
@@ -1085,7 +1122,7 @@ export function skillLearnLevel(speciesId, skillId) {
     if (best == null || lv < best) best = lv;
   }
   const els = Array.isArray(sp.elements) && sp.elements.length ? sp.elements : [sp.element];
-  for (const table of [els.includes('fire') ? BURN_UNLOCKS : null, els.includes('poison') ? POISON_UNLOCKS : null, physicalLadderFor(sp)]) {
+  for (const table of [els.includes('fire') ? BURN_UNLOCKS : null, els.includes('poison') ? POISON_UNLOCKS : null, physicalLadderFor(sp), weatherLadderFor(sp)]) {
     if (!table) continue;
     for (const key of Object.keys(table)) {
       if (!table[key].includes(skillId)) continue;

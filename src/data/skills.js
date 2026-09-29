@@ -275,6 +275,52 @@ export const SKILLS = {
   miasma_bloom:     { id: 'miasma_bloom',     name: 'Miasma Bloom',     category: 'special', damageType: 'special', element: 'poison',   power: 42, uses: 6,
                       weather: { id: 'miasma',     chance: 0.75 }, desc: 'EXCLUSIVE — the fen exhales. Calls down Miasma.' },
 
+  // ---------- WEATHER: Buff + Normal callers ----------
+  // The six exclusives above are the heavyweight way in. These are the cheap
+  // ways in: a light Normal and a stat Buff, one pair per weather element, for
+  // the species that already carry the matching exclusive.
+  //
+  // Deliberately stingy, because weather is a big swing: x1.5 to matching-
+  // element skills for BOTH sides plus a flat 100 HP a turn to anyone who
+  // does not match, and it lasts the rest of the battle.
+  //   * Normals sit BELOW the 17/30 first rung of every elemental ladder --
+  //     the weather is the payoff, the damage is the entry fee.
+  //   * Only 2 / 3 uses, at a 45% roll, so a battle sees roughly one call.
+  //   * A Buff gives the SAME stat gain as the plain stat Buffs, so it is
+  //     never strictly better -- the weather is the bonus, not a second
+  //     stat boost smuggled in on top.
+  ember_flicker:   { id: 'ember_flicker',   name: 'Ember Flicker',  category: 'normal', damageType: 'special', element: 'fire',     power: 15, uses: 2,
+                      weather: { id: 'wildfire',   chance: 0.45 }, desc: 'A flicker of flame. May call down Wildfire.' },
+  drizzle:         { id: 'drizzle',         name: 'Drizzle',        category: 'normal', damageType: 'special', element: 'water',    power: 15, uses: 2,
+                      weather: { id: 'monsoon',    chance: 0.45 }, desc: 'A thin rain. May call down Monsoon.' },
+  spore_surge:    { id: 'spore_surge',    name: 'Spore Surge',    category: 'normal', damageType: 'special', element: 'nature',   power: 15, uses: 2,
+                      weather: { id: 'overgrowth', chance: 0.45 }, desc: 'A heaving wave of spores. May call down Overgrowth.' },
+  static_tick:     { id: 'static_tick',     name: 'Static Tick',    category: 'normal', damageType: 'special', element: 'electric', power: 15, uses: 2,
+                      weather: { id: 'thunderhead', chance: 0.45 }, desc: 'A crackling touch. May call down Thunderhead.' },
+  frost_sigh:      { id: 'frost_sigh',      name: 'Frost Sigh',     category: 'normal', damageType: 'special', element: 'ice',      power: 15, uses: 2,
+                      weather: { id: 'blizzard',   chance: 0.45 }, desc: 'A breath of frost. May call down Blizzard.' },
+  miasma_puff:     { id: 'miasma_puff',     name: 'Miasma Puff',    category: 'normal', damageType: 'special', element: 'poison',   power: 15, uses: 2,
+                      weather: { id: 'miasma',     chance: 0.45 }, desc: 'A cloud of spores. May call down Miasma.' },
+
+  cinder_chant:    { id: 'cinder_chant',    name: 'Cinder Chant',   category: 'buff', uses: 3, element: 'fire',
+                      effects: [ { stat: 'patk', amount: 4 } ], weather: { id: 'wildfire',   chance: 0.45 },
+                      desc: 'P.ATK up. May call down Wildfire.' },
+  tidal_chant:     { id: 'tidal_chant',     name: 'Tidal Chant',    category: 'buff', uses: 3, element: 'water',
+                      effects: [ { stat: 'pdef', amount: 4 } ], weather: { id: 'monsoon',    chance: 0.45 },
+                      desc: 'P.DEF up. May call down Monsoon.' },
+  verdant_chant:   { id: 'verdant_chant',   name: 'Verdant Chant',  category: 'buff', uses: 3, element: 'nature',
+                      effects: [ { stat: 'sdef', amount: 4 } ], weather: { id: 'overgrowth', chance: 0.45 },
+                      desc: 'S.DEF up. May call down Overgrowth.' },
+  voltaic_chant:   { id: 'voltaic_chant',   name: 'Voltaic Chant',  category: 'buff', uses: 3, element: 'electric',
+                      effects: [ { stat: 'spd',  amount: 5 } ], weather: { id: 'thunderhead', chance: 0.45 },
+                      desc: 'SPEED up. May call down Thunderhead.' },
+  rime_chant:      { id: 'rime_chant',      name: 'Rime Chant',     category: 'buff', uses: 3, element: 'ice',
+                      effects: [ { stat: 'satk', amount: 4 } ], weather: { id: 'blizzard',   chance: 0.45 },
+                      desc: 'S.ATK up. May call down Blizzard.' },
+  fen_chant:       { id: 'fen_chant',       name: 'Fen Chant',      category: 'buff', uses: 3, element: 'poison',
+                      effects: [ { stat: 'counter', amount: 4 } ], weather: { id: 'miasma',   chance: 0.45 },
+                      desc: 'COUNTER up. May call down Miasma.' },
+
   // ---------- WATER / FIRE PHYSICAL (P.ATK) LADDERS ----------
   // Water and Fire were the only elements with no Physical elemental ladder of
   // their own: every one of their specials used Special (S.ATK), so a Water or

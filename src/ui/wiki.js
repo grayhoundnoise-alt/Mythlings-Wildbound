@@ -7,7 +7,7 @@
 import { el, Screens, closeButton, elementChip, elementChips } from './ui.js';
 import { icon, iconSvg } from './icons.js';
 import { drawMythling } from '../render/creatures.js';
-import { SPECIES, SPECIES_IDS, STARTER_IDS } from '../data/species.js';
+import { SPECIES, SPECIES_IDS, STARTER_IDS, skillsUnlockedAt } from '../data/species.js';
 import { SKILLS, ULTIMATES, ULTIMATE_MAX_CHARGE, MAX_BUFF_STACKS, buffSummary, skillStrength, isDamageSkill, SKILL_CATEGORY_LABEL, riderSummary, isSupportUltimate } from '../data/skills.js';
 import { MAX_EQUIPPED_SKILLS } from '../core/mythling.js';
 import {
@@ -417,9 +417,15 @@ function statusSection() {
       <b>unlimited Normal attack can never be sealed</b>, so you are never left with nothing to do — and the enemy
       AI will not walk into its own seal either. A Cleanse Tonic unseals it.`),
     h3('Weather', 'weather field storm wildfire monsoon blizzard thunderhead overgrowth miasma'),
-    para(`A handful of <b>exclusive</b> skills — one per element, carried by only a few Mythlings — can call down a
-      weather. It changes the battlefield <b>in real time</b> and then <b>lasts for the rest of the battle</b>:
-      it only goes away when the fight ends, you run, or another weather replaces it.`),
+    para(`Weather is called in one of two ways, both tied to the same twelve specialists — the two Mythlings per
+      element that hold the heavy version. It changes the battlefield <b>in real time</b> and then
+      <b>lasts for the rest of the battle</b>: it only goes away when the fight ends, you run, or another
+      weather replaces it.`),
+    bullets([
+      `<b>The exclusive</b> (Lv.60, one per element) — a strong Special, 42 power, 6 uses, 75% chance. The main event.`,
+      `<b>The light route</b> (Lv.40) — a weak <b>Normal</b> (15 power, 2 uses) and a stat <b>Buff</b> (3 uses), both at a 45% chance. The Normal hits <i>less</i> than the element's first attack: the weather is the payoff, the damage is only the entry fee. The Buff gives the same stat gain as the plain Buffs, so it is never strictly better.`,
+      `Every one of them is a <b>roll</b>, not a guarantee — and picking one still costs you the turn.`,
+    ]),
     bullets([
       `Skills whose element <b>matches the weather</b> hit <b>x${WEATHER_BOOST}</b> — for <b>both sides</b>. A dual-element Mythling only needs one of its elements to match to be safe.`,
       `The boost is paid to <b>matching skills only</b>: an element-less move like Bite gets nothing, even in a Mythling that matches the weather.`,
@@ -428,7 +434,11 @@ function statusSection() {
     ]),
     table(WEATHER_IDS.map((id) => {
       const w = WEATHERS[id];
-      const owners = Object.values(SPECIES).filter((sp) => Object.values(sp.skillUnlocks || {}).some((ids) => ids.some((sid) => SKILLS[sid]?.weather?.id === id))).map((sp) => sp.displayName);
+      // skillsUnlockedAt, not sp.skillUnlocks: the light weather callers are
+      // granted centrally, so a per-species scan would miss them.
+      const owners = Object.values(SPECIES)
+        .filter((sp) => skillsUnlockedAt(sp.id, 99).some((sid) => SKILLS[sid]?.weather?.id === id))
+        .map((sp) => sp.displayName);
       return [`<b style="color:${ELEMENTS[w.element].color}">${w.name}</b>`, `${ELEMENTS[w.element].name} · ${w.desc}<br><span class="wiki-dim">Raised by: ${owners.join(', ') || '—'}</span>`];
     }), 'weather list wildfire monsoon overgrowth thunderhead blizzard miasma'),
   ];
