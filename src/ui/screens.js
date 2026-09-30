@@ -169,14 +169,15 @@ export const INTRO_LINES = [
 // Starter-card placement — tuned by eye in MythlingEdit.html's Starter mode
 // (copy its values block and paste it here). The computed body/feet focus
 // still does the heavy lifting (the panel comes to the picture); these are
-// the user's offsets on top. The contact shadow lives ON the paws of the
-// drawn picture; SHADOW_DX/DY nudge the shadow off the paws, alone.
+// the user's offsets on top. The shadow is SEPARATE from the Mythling: it
+// rests on the paws of the picture's own spot and SHADOW_DX/DY move it alone —
+// moving the Mythling never drags the shadow along.
 const HD_STARTER_DX = -22;
 const HD_STARTER_DY = 14;
 const HD_STARTER_GLOW_DX = 0;
 const HD_STARTER_GLOW_DY = 0;
-const HD_STARTER_SHADOW_DX = 40;
-const HD_STARTER_SHADOW_DY = -27;
+const HD_STARTER_SHADOW_DX = -22;
+const HD_STARTER_SHADOW_DY = 14;
 
 export function starterScreen({ onChoose, onBack }) {
   let selected = null;
@@ -218,8 +219,8 @@ export function starterScreen({ onChoose, onBack }) {
         const fe = hdFeetOffset(id, 0, 'none', 210);
         ctx.save();
         ctx.translate(
-          HD_STARTER_DX + fe.dx + HD_STARTER_SHADOW_DX,
-          3 + HD_STARTER_DY + fe.dy + HD_STARTER_SHADOW_DY,
+          fe.dx + HD_STARTER_SHADOW_DX,
+          3 + fe.dy + HD_STARTER_SHADOW_DY,
         );
         ctx.globalAlpha *= 0.3;
         const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);

@@ -22610,8 +22610,8 @@ h3 .name-el { vertical-align: middle; }
   var HD_STARTER_DY = 14;
   var HD_STARTER_GLOW_DX = 0;
   var HD_STARTER_GLOW_DY = 0;
-  var HD_STARTER_SHADOW_DX = 40;
-  var HD_STARTER_SHADOW_DY = -27;
+  var HD_STARTER_SHADOW_DX = -22;
+  var HD_STARTER_SHADOW_DY = 14;
   function starterScreen({ onChoose, onBack }) {
     let selected = null;
     const cards = {};
@@ -22638,8 +22638,8 @@ h3 .name-el { vertical-align: middle; }
           const fe = hdFeetOffset(id, 0, "none", 210);
           ctx.save();
           ctx.translate(
-            HD_STARTER_DX + fe.dx + HD_STARTER_SHADOW_DX,
-            3 + HD_STARTER_DY + fe.dy + HD_STARTER_SHADOW_DY
+            fe.dx + HD_STARTER_SHADOW_DX,
+            3 + fe.dy + HD_STARTER_SHADOW_DY
           );
           ctx.globalAlpha *= 0.3;
           const sg = ctx.createRadialGradient(0, 0, 2, 0, 0, 76);

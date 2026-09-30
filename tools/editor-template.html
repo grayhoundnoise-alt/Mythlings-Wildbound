@@ -784,16 +784,16 @@ function starterScale() {
 }
 /* Where the picture's visible paws sit on the card — the same maths the game's
    contact shadow uses: the anchor lands on the rig's ground spot inside the
-   picture's own offset, and the feet focus sits (feet - anchor) * sc from
-   there. The shadow lives here; its offsets nudge it off the paws. */
+   spot, and the feet focus sits (feet - anchor) * sc from there. The shadow
+   lives here and moves ONLY by its own offsets — never with the Mythling. */
 function starterFeetHome() {
   const b = boundsFor(state.species, state.stage);
   const f = focusFor(state.img);
   const sc = starterScale();
   const s = (210 / 100) * (b ? b.scale : 1);
   return {
-    x: 210 + starter.dx + (b ? b.cx * s : 0) + (f ? (f.feetX - state.anchorX) * sc : 0),
-    y: 323 + starter.dy + (b ? b.feetY * s : 0) + (f ? (f.feetY - state.anchorY) * sc : 0),
+    x: 210 + (b ? b.cx * s : 0) + (f ? (f.feetX - state.anchorX) * sc : 0),
+    y: 323 + (b ? b.feetY * s : 0) + (f ? (f.feetY - state.anchorY) * sc : 0),
   };
 }
 function syncStarter() {

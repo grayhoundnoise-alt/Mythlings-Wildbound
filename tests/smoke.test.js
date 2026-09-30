@@ -3863,7 +3863,7 @@ test('the starter card shows the same picture shape the editor previews (no CSS 
   assert.ok(sc.includes("el('canvas', { width: 420, height: 380 })"), 'the game card draws into the same 420x380 backing');
 });
 
-test('the starter contact shadow lands on the paws, and rides the Mythling', () => {
+test('the starter contact shadow lands on the paws, separate from the Mythling', () => {
   const hd = readFileSync(new URL('../src/render/hdImages.js', import.meta.url), 'utf8');
   const sc = readFileSync(new URL('../src/ui/screens.js', import.meta.url), 'utf8');
   assert.ok(hd.includes('export function hdFeetOffset'), 'the shared paws offset exists');
@@ -3871,8 +3871,9 @@ test('the starter contact shadow lands on the paws, and rides the Mythling', () 
   const i = sc.indexOf('hdFeetOffset(');
   assert.ok(i > 0, 'the card uses the shared paws offset');
   const seg = sc.slice(i - 620, i + 320);
-  assert.ok(seg.includes('HD_STARTER_DX + fe.dx + HD_STARTER_SHADOW_DX'), 'the shadow rides the Mythling and keeps its own nudge');
-  assert.ok(seg.includes('3 + HD_STARTER_DY + fe.dy + HD_STARTER_SHADOW_DY'), 'same for Y');
+  assert.ok(seg.includes('fe.dx + HD_STARTER_SHADOW_DX'), 'the shadow has its own position values');
+  assert.ok(seg.includes('3 + fe.dy + HD_STARTER_SHADOW_DY'), 'same for Y');
+  assert.ok(!seg.includes('HD_STARTER_DX + fe.dx'), 'moving the Mythling never drags the shadow along');
   assert.ok(sc.indexOf('ctx.beginPath(); ctx.ellipse(0, 0, 71, 19') > sc.indexOf('ctx.translate(\n          HD_STARTER_DX'), 'the shadow is still painted before the picture');
 });
 
@@ -3890,8 +3891,8 @@ test('the editor’s starter shadow home matches the game’s paws home', () => 
   const i = ed.indexOf('function starterFeetHome');
   assert.ok(i > 0, 'the editor has the shared paws home');
   const seg = ed.slice(i, i + 640);
-  assert.ok(seg.includes('210 + starter.dx + (b ? b.cx * s : 0)'), 'home X: card origin + Mythling offset + rig ground spot');
-  assert.ok(seg.includes('323 + starter.dy + (b ? b.feetY * s : 0)'), 'home Y: same, with the +3 the card uses');
+  assert.ok(seg.includes('210 + (b ? b.cx * s : 0)'), 'home X: card origin + rig ground spot, no Mythling offset');
+  assert.ok(seg.includes('323 + (b ? b.feetY * s : 0)'), 'home Y: same, with the +3 the card uses');
   // the draw, the hit-test and the drag all consume that one home
   const body = ed.slice(ed.indexOf('function redrawStarter'));
   assert.ok(body.includes('const home = starterFeetHome()'), 'redraw paints the shadow at the home');
