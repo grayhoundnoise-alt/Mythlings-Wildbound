@@ -79,18 +79,23 @@ export function preloadHdAssets() {
   return Promise.all(Object.keys(HD_ASSETS).map((k) => load(srcOf(HD_ASSETS[k]))));
 }
 
+/** Every model lookup goes through one key builder; `view` picks a slot. */
+function modelKey(speciesId, stage, view) {
+  return `model:${speciesId}:${stage}${view ? ':' + view : ''}`;
+}
+
 /** The per-asset placement an image declares, or null when it declares none. */
-function entryFor(speciesId, stage) {
-  const e = HD_ASSETS[`model:${speciesId}:${stage}`];
+function entryFor(speciesId, stage, view) {
+  const e = HD_ASSETS[modelKey(speciesId, stage, view)];
   return e && typeof e === 'object' ? e : null;
 }
 
 // --- lookups -----------------------------------------------------------------
 /** The PNG for this exact form, or null to draw the animated rig instead. */
-export function hdModelFor(speciesId, stage, mutation) {
+export function hdModelFor(speciesId, stage, mutation, view) {
   if (!enabled) return null;
   if (mutation && mutation !== 'none') return null;   // no variant art yet
-  return get(`model:${speciesId}:${stage}`);
+  return get(modelKey(speciesId, stage, view));
 }
 
 /** The battle background for a map theme, or null for the painted one. */
@@ -174,8 +179,8 @@ export function placeImage(iw, ih, b, height = 0, anchor = null) {
   };
 }
 
-export function hdPlacement(img, speciesId, stage = 0) {
-  const e = entryFor(speciesId, stage);
+export function hdPlacement(img, speciesId, stage = 0, view) {
+  const e = entryFor(speciesId, stage, view);
   return placeImage(
     img.naturalWidth, img.naturalHeight,
     rigBounds(speciesId, stage),
@@ -338,7 +343,7 @@ export function drawHdModel(ctx, img, o) {
   // same foot line. The PNG's pixel size is deliberately ignored — it is only
   // artwork at whatever resolution it happens to be, and one file has to serve
   // a 52px list icon and a 190px battle sprite alike.
-  const r = hdPlacement(img, speciesId, stage);
+  const r = hdPlacement(img, speciesId, stage, o.view);
   const src = flash > 0.01 ? tinted(img, flash) : img;
   ctx.drawImage(src, r.x, r.y + (o.sink || 0), r.w, r.h);
   ctx.restore();

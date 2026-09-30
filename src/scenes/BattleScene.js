@@ -1624,6 +1624,7 @@ export class BattleScene {
       drawCreature(ctx, {
         speciesId: pm.speciesId, stage: pm.stage, mutation: pm.mutation,
         x: pp.x + pa.lean + HD_PLAYER_DX, y: pp.y + HD_PLAYER_DY, size: 176, t: this.time, facing: 1,
+        view: 'back',   // YOUR Mythling shows its back to you and faces the enemy
         sink: HD_PLAYER_SINK,
         shadowX: pp.x + HD_PLAYER_SHADOW_DX, shadowY: pp.y + HD_PLAYER_SHADOW_DY,
         animTag: 'player', pose: this.creaturePose('player'),

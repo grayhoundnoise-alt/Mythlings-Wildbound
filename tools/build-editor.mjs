@@ -48,8 +48,8 @@ const { HD_ASSETS } = await import(new URL('../src/data/hdManifest.js', import.m
 const manifest = {};
 for (const [key, entry] of Object.entries(HD_ASSETS)) {
   if (!key.startsWith('model:') || typeof entry !== 'object') continue;
-  const [, speciesId, stage] = key.split(':');
-  manifest[`${speciesId}:${stage}`] = { height: entry.height, anchor: entry.anchor };
+  const [, speciesId, stage, view] = key.split(':');
+  manifest[`${speciesId}:${stage}${view ? ':' + view : ''}`] = { height: entry.height, anchor: entry.anchor };
 }
 
 // Battle placement the game is actually running, so Battle mode opens on the

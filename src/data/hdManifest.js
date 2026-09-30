@@ -24,10 +24,19 @@
 
 export const HD_ASSETS = {
   // ---- Mythling models ----
+  // 'model:spriggo:0' is the FRONT view: the species picture everywhere outside
+  // battle (icons, cards, wiki) AND the enemy's battle art — the battle draws
+  // the enemy with facing -1, which turns it to face the player. The BACK view
+  // is what your own Spriggo shows on the battle field, looking at the enemy.
   'model:spriggo:0': {
-    src: 'assets/mythlings/spriggo_0.png',
+    src: 'assets/mythlings/spriggo_0_front.png',
     height: 108,
-    anchor: { x: 400, y: 512 },
+    anchor: { x: 696, y: 697 },
+  },
+  'model:spriggo:0:back': {
+    src: 'assets/mythlings/spriggo_0_back.png',
+    height: 108,
+    anchor: { x: 715, y: 695 },
   },
 
   // ---- Battle arena backgrounds (weather still paints its sky on top) ----

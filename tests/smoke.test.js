@@ -3267,6 +3267,7 @@ test('an HD still is placed in the rig footprint, not at its own pixel size', as
   // size. Nothing threw — it just looked catastrophically wrong.
   const { artFor, artContext, EXPRESSIONS } = await import('../src/render/creatureArt.js');
   const { hdPlacement } = await import('../src/render/hdImages.js');
+  const { HD_ASSETS } = await import('../src/data/hdManifest.js');
   const img = { naturalWidth: 660, naturalHeight: 512 };
 
   for (const id of ['spriggo', 'aquini', 'emberu', 'rivruff']) {
@@ -3286,8 +3287,13 @@ test('an HD still is placed in the rig footprint, not at its own pixel size', as
     // Height must equal the rig's height: `size` means height, and this is the
     // whole difference between "a Mythling" and "a Mythling filling the screen".
     assert.ok(Math.abs(p.h - rigH) < 0.001, `${id}: still height ${p.h} equals rig height ${rigH}`);
-    // Bottom edge sits on the rig's foot line.
-    assert.ok(Math.abs((p.y + p.h) - maxY) < 0.001, `${id}: still stands on the same foot line`);
+    // The picture's declared ground point \u2014 its manifest anchor, the feet by
+    // default \u2014 lands exactly on the rig's foot line and ground-spot x.
+    const e = HD_ASSETS[`model:${id}:0`];
+    const ax = (e && e.anchor && Number.isFinite(e.anchor.x)) ? e.anchor.x : img.naturalWidth / 2;
+    const ay = (e && e.anchor && Number.isFinite(e.anchor.y)) ? e.anchor.y : img.naturalHeight;
+    assert.ok(Math.abs((p.y + (ay / img.naturalHeight) * p.h) - maxY) < 0.001, `${id}: the ground point stands on the foot line`);
+    assert.ok(Math.abs((p.x + (ax / img.naturalWidth) * p.w) - ((minX + maxX) / 2)) < 0.001, `${id}: and on the ground-spot x`);
     // And it is nowhere near its own pixel size.
     assert.ok(p.h < 200, `${id}: a 512px-tall file must not draw 512 units tall`);
     assert.ok(p.w < 200, `${id}: a 660px-wide file must not draw 660 units wide`);
@@ -3897,6 +3903,39 @@ test('the editor’s starter shadow home matches the game’s paws home', () => 
   const body = ed.slice(ed.indexOf('function redrawStarter'));
   assert.ok(body.includes('const home = starterFeetHome()'), 'redraw paints the shadow at the home');
   assert.ok(ed.includes('overStarterShadow'), 'and the grab test reads the same home');
+});
+
+section('battle views');
+
+test('the manifest has the front slot (picture + enemy) and a back slot (your battle side)', () => {
+  const src = readFileSync(new URL('../src/data/hdManifest.js', import.meta.url), 'utf8');
+  assert.ok(src.includes("'model:spriggo:0'"), 'the default model slot exists');
+  assert.ok(src.includes("'model:spriggo:0:back'"), 'and a back-view slot for the battle field');
+  assert.ok(src.includes('spriggo_0_front.png'), 'the default slot points at the front view');
+  assert.ok(src.includes('spriggo_0_back.png'), 'the back slot points at the back view');
+});
+
+test('HD lookups understand view slots, and the battle player asks for the back view', () => {
+  const hd = readFileSync(new URL('../src/render/hdImages.js', import.meta.url), 'utf8');
+  assert.ok(hd.includes('function modelKey'), 'every model lookup goes through one key builder');
+  assert.ok(hd.includes("${view ? ':' + view : ''}"), 'a view appends :view to the key');
+  assert.ok(hd.includes('hdPlacement(img, speciesId, stage, o.view)'), 'placement reads the same view slot');
+  const cr = readFileSync(new URL('../src/render/creatures.js', import.meta.url), 'utf8');
+  assert.ok(cr.includes('hdModelFor(o.speciesId, o.stage ?? 0, o.mutation, o.view)'), 'drawCreature passes the view through');
+  const bs = readFileSync(new URL('../src/scenes/BattleScene.js', import.meta.url), 'utf8');
+  const pseg = bs.slice(bs.indexOf('pp.x + pa.lean'), bs.indexOf('pp.x + pa.lean') + 400);
+  assert.ok(pseg.includes("view: 'back'"), 'your Mythling draws the back view');
+  const eseg = bs.slice(bs.indexOf('ep.x + ea.lean'), bs.indexOf('ep.x + ea.lean') + 400);
+  assert.ok(!eseg.includes('view:'), 'the enemy draws the default (front) slot, flipped by facing -1');
+});
+
+test('MythlingEdit keeps per-view placements and paste keys apart', () => {
+  const ed = readFileSync(new URL('../tools/editor-template.html', import.meta.url), 'utf8');
+  assert.ok(ed.includes('state.view'), 'the editor tracks which view a file is');
+  const n = (ed.match(/\$\{state\.view \? ':' \+ state\.view : ''\}/g) || []).length;
+  assert.ok(n >= 3, 'manifest lookup and both paste keys are per view');
+  const b = readFileSync(new URL('../tools/build-editor.mjs', import.meta.url), 'utf8');
+  assert.ok(b.includes("view ? ':' + view : ''"), 'the builder injects per-view placements');
 });
 
 for (const item of queue) {

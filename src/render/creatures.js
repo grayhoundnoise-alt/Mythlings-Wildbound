@@ -33,7 +33,7 @@ export {
  */
 export function drawCreature(ctx, o) {
   if (!o.force) {
-    const img = hdModelFor(o.speciesId, o.stage ?? 0, o.mutation);
+    const img = hdModelFor(o.speciesId, o.stage ?? 0, o.mutation, o.view);
     if (img) { drawHdModel(ctx, img, o); return; }
   }
   drawMythling(ctx, o);

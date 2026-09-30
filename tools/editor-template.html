@@ -395,15 +395,16 @@ function loadUrl(url, name) {
 function loadImage(img, name) {
   state.img = img; state.name = name;
   state.canvasW = img.naturalWidth; state.canvasH = img.naturalHeight;
-  const m = /^([a-z0-9_]+?)_(\d+)\./.exec(name);
+  const m = /^([a-z0-9_]+?)_(\d+)(?:_([a-z0-9]+))?\./.exec(name);
   if (m && SPECIES_NAMES[m[1]]) $('selSpecies').value = m[1];
   if (m) $('inStage').value = m[2];
   state.species = $('selSpecies').value; state.stage = Number($('inStage').value) || 0;
+  state.view = m && m[3] ? m[3] : '';   // _front / _back pick a manifest slot
   const b = boundsFor(state.species, state.stage);
   state.height = b ? b.h : 108;
   // Open on the placement the game is ACTUALLY using, when there is one \u2014
   // otherwise the tool re-guesses and the manifest looks disconnected from it.
-  const saved = MANIFEST[`${state.species}:${state.stage}`];
+  const saved = MANIFEST[`${state.species}:${state.stage}${state.view ? ':' + state.view : ''}`];
   if (saved && saved.anchor) {
     state.height = saved.height || state.height;
     state.anchorX = saved.anchor.x;
@@ -937,7 +938,7 @@ function sreset() {
 /* ---------------------------------------------------------------- snippet - */
 function entryText() {
   if (!state.name) return '';
-  const key = `${state.species}:${state.stage}`;
+  const key = `${state.species}:${state.stage}${state.view ? ':' + state.view : ''}`;
   const rel = BUILTIN_FILES.includes(state.name) ? `assets/mythlings/${state.name}` : state.name;
   return `  'model:${key}': {
     src: '${rel}',
@@ -947,7 +948,7 @@ function entryText() {
 }
 function entryLine() {
   if (!state.name) return '';
-  const key = `${state.species}:${state.stage}`;
+  const key = `${state.species}:${state.stage}${state.view ? ':' + state.view : ''}`;
   const rel = BUILTIN_FILES.includes(state.name) ? `assets/mythlings/${state.name}` : state.name;
   return `  'model:${key}': { src: '${rel}', height: ${Math.round(state.height)}, anchor: { x: ${Math.round(state.anchorX)}, y: ${Math.round(state.anchorY)} } },`;
 }
