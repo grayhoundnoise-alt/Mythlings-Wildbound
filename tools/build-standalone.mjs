@@ -21,6 +21,17 @@ const js = result.outputFiles[0].text;
 const css = fs.readFileSync(path.join(root, 'src/ui/styles.css'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
+// Echo the starter placement this build baked in — if this line does not match
+// src/ui/screens.js, the write below never happened (or you are looking at an
+// older copy of the HTML).
+{
+  const sc = fs.readFileSync(path.join(root, 'src/ui/screens.js'), 'utf8');
+  const val = (n) => { const m = new RegExp(`const ${n} = (-?\\d+)`).exec(sc); return m ? m[1] : '?'; };
+  console.log(`  starter placement baked in: Mythling ${val('HD_STARTER_DX')}/${val('HD_STARTER_DY')}` +
+    `, glow ${val('HD_STARTER_GLOW_DX')}/${val('HD_STARTER_GLOW_DY')}` +
+    `, shadow ${val('HD_STARTER_SHADOW_DX')}/${val('HD_STARTER_SHADOW_DY')}`);
+}
+
 // ---- HD image assets --------------------------------------------------------
 // file:// cannot fetch a sibling PNG, so the secret HD Images mode would quietly
 // fall back to the animated rig in the offline build. Inline every asset the
