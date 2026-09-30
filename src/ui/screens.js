@@ -176,8 +176,8 @@ const HD_STARTER_DX = -22;
 const HD_STARTER_DY = 14;
 const HD_STARTER_GLOW_DX = 0;
 const HD_STARTER_GLOW_DY = 0;
-const HD_STARTER_SHADOW_DX = -22;
-const HD_STARTER_SHADOW_DY = 14;
+const HD_STARTER_SHADOW_DX = -15;
+const HD_STARTER_SHADOW_DY = 8;
 
 export function starterScreen({ onChoose, onBack }) {
   let selected = null;
